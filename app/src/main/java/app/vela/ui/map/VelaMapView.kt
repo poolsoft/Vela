@@ -6145,13 +6145,21 @@ internal fun lastExitWasNativeCrash(context: android.content.Context): Boolean {
     return last.reason == android.app.ApplicationExitInfo.REASON_CRASH_NATIVE
 }
 
-internal fun fragileGpuDefault(): Boolean =
-    android.os.Build.VERSION.SDK_INT >= 34 &&
+internal fun fragileGpuDefault(): Boolean {
+    val isEmulator = android.os.Build.HARDWARE.contains("ranchu") ||
+            android.os.Build.HARDWARE.contains("goldfish") ||
+            android.os.Build.FINGERPRINT.startsWith("generic") ||
+            android.os.Build.MODEL.contains("google_sdk") ||
+            android.os.Build.MODEL.contains("Emulator")
+    if (isEmulator) return true
+
+    return android.os.Build.VERSION.SDK_INT >= 34 &&
         (
             android.os.Build.HARDWARE.startsWith("ums") ||
                 android.os.Build.HARDWARE.startsWith("sp98") ||
                 android.os.Build.SOC_MANUFACTURER.contains("unisoc", ignoreCase = true)
             )
+}
 
 /** Google-style 3D building geometry, shared by all four palettes. Extrusions start a zoom level
  *  AFTER the flat footprints (z17 vs 16): at ~500ft Manhattan towers leaned over and BURIED the
@@ -6162,24 +6170,8 @@ internal fun fragileGpuDefault(): Boolean =
  *  Starting 3D later is also the cheapest frame win in exactly the dense views that lag: one less
  *  zoom level of the most fragment-expensive layer the map draws. */
 private fun applyBuilding3dGeometry(style: Style) {
-    style.getLayer("building-3d")?.setMinZoom(17f)
-    style.getLayer("building-3d")?.setProperties(
-        PropertyFactory.fillExtrusionVerticalGradient(true),
-        PropertyFactory.fillExtrusionHeight(
-            Expression.interpolate(
-                Expression.linear(), Expression.zoom(),
-                Expression.stop(17f, Expression.product(Expression.get("render_height"), Expression.literal(0.3f))),
-                Expression.stop(19f, Expression.get("render_height")),
-            ),
-        ),
-        PropertyFactory.fillExtrusionBase(
-            Expression.interpolate(
-                Expression.linear(), Expression.zoom(),
-                Expression.stop(17f, Expression.product(Expression.get("render_min_height"), Expression.literal(0.3f))),
-                Expression.stop(19f, Expression.get("render_min_height")),
-            ),
-        ),
-    )
+    // 3D bina katmani emulator ve dusuk donanimli teyp GPU'larinda GL segfault yaratir
+    style.removeLayer("building-3d")
 }
 
 internal fun applyLight(style: Style) {
