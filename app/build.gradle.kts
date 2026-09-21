@@ -38,7 +38,7 @@ android {
         vectorDrawables { useSupportLibrary = true }
 
         ndk {
-            abiFilters.add("armeabi-v7a")
+            abiFilters.addAll(listOf("armeabi-v7a", "x86"))
         }
 
         // MapTiler key injected from the CI secret (-PmaptilerKey); empty for
