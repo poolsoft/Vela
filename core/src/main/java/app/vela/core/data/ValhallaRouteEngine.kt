@@ -53,7 +53,7 @@ class ValhallaRouteEngine @Inject constructor(
      * Cihazdaki olasi valhalla_tiles.tar dosya konumlarini kontrol edip baslatir.
      */
     fun tryAutoInitialize(): Boolean {
-        if (isReady(TravelMode.DRIVE)) return true
+        if (valhalla != null && tilePath != null) return true
         val tarFile = findRoutingTar() ?: return false
         return initialize(tarFile.absolutePath)
     }
