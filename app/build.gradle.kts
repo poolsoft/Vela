@@ -37,6 +37,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
 
+        ndk {
+            abiFilters.add("armeabi-v7a")
+        }
+
         // MapTiler key injected from the CI secret (-PmaptilerKey); empty for
         // local builds, in which case the app falls back to the keyless
         // OpenFreeMap basemap. Never stored in the repo.
@@ -186,12 +190,10 @@ android {
     }
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
-        // The neural-TTS runtime (ONNX Runtime + sherpa-onnx, from the vendored AAR) ships its .so
-        // for all 4 ABIs; Vela targets arm64 phones, so drop the other ABIs' copies — they'd add
-        // ~65 MB for no device we support. MapLibre and other libs stay multi-ABI (untouched).
+        // 32-bit (armeabi-v7a) teyp icin armeabi-v7a korunup digerleri haric tutuldu.
         jniLibs {
             excludes += listOf(
-                "**/armeabi-v7a/libonnxruntime.so", "**/armeabi-v7a/libsherpa-onnx*.so",
+                "**/arm64-v8a/libonnxruntime.so", "**/arm64-v8a/libsherpa-onnx*.so",
                 "**/x86/libonnxruntime.so", "**/x86/libsherpa-onnx*.so",
                 "**/x86_64/libonnxruntime.so", "**/x86_64/libsherpa-onnx*.so",
             )
