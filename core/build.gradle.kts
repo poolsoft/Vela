@@ -47,6 +47,12 @@ dependencies {
     implementation(files("libs/osmand-java.jar", "libs/osmand-shared-jvm.jar", "libs/gnu-trove-osmand.jar", "libs/kxml2-vela.jar"))
     implementation("commons-logging:commons-logging:1.2")
 
+    // Valhalla Mobile JNI Motoru ve Yapilandirma Bagimliliklari
+    implementation("io.github.rallista:valhalla-mobile:0.3.1")
+    implementation("io.github.rallista:valhalla-models:0.0.9")
+    implementation("io.github.rallista:valhalla-models-config:0.0.9")
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
+
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 

@@ -21,6 +21,9 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
+import app.vela.core.data.CompositeRouteEngine
+import app.vela.core.data.ValhallaRouteEngine
+
 @Module
 @InstallIn(SingletonComponent::class)
 object CoreModule {
@@ -57,14 +60,20 @@ object CoreModule {
     ): MapDataSource = if (VelaConfig.USE_GOOGLE_SOURCE) google else mock
 
     /**
-     * The on-device routing engine: OsmAnd obf region files from **internal** storage
-     * (`filesDir/obf/<id>.obf` + `index.json`, maintained by `ObfStore` in `:app`). When no
-     * installed file covers a trip it returns empty, so `directions()` keeps using OSRM.
+     * The on-device routing engine: Composite routing engine prioritizing
+     * Valhalla (fast hierarchical tile-based) with OsmAnd obf region files
+     * (`filesDir/obf/<id>.obf` + `index.json`) as fallback.
      */
     @Provides
     @Singleton
-    fun routeEngine(@ApplicationContext context: Context): RouteEngine =
-        ObfRouteEngine(File(context.filesDir, "obf"))
+    fun routeEngine(
+        valhallaEngine: ValhallaRouteEngine,
+        @ApplicationContext context: Context,
+    ): RouteEngine =
+        CompositeRouteEngine(
+            valhallaEngine = valhallaEngine,
+            obfEngine = ObfRouteEngine(File(context.filesDir, "obf")),
+        )
 }
 
 /**
