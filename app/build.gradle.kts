@@ -170,6 +170,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            ndk {
+                abiFilters.clear()
+                abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
+            }
             val envSigning = signingConfigs.getByName("releaseFromEnv")
             signingConfig = if (envSigning.storeFile?.exists() == true) {
                 envSigning
