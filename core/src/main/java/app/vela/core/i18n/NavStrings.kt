@@ -2013,6 +2013,114 @@ object NavStringsRegistry {
         "zh-tw" -> ZhTwNavStrings
         "ja" -> JaNavStrings
         "he", "iw" -> HeNavStrings // JDK 17+ normalizes the old code "iw" → "he"; accept both
+        "tr" -> TrNavStrings
         else -> EnNavStrings
+    }
+}
+
+/**
+ * Turkish NavStrings.
+ */
+object TrNavStrings : NavStrings {
+    override val locale: Locale = Locale("tr", "TR")
+
+    private fun modWord(mod: String?): String = when ((mod ?: "").trim().lowercase()) {
+        "left" -> "sola"
+        "right" -> "sağa"
+        "slight left" -> "hafifçe sola"
+        "slight right" -> "hafifçe sağa"
+        "sharp left" -> "keskin sola"
+        "sharp right" -> "keskin sağa"
+        "straight" -> "düz"
+        "uturn" -> "U dönüşü"
+        else -> ""
+    }
+
+    override fun phrase(type: String, mod: String?, road: String?, dest: String?, exitNo: String?, rbExit: Int?): String {
+        val yol = if (road != null) "$road üzerinde " else ""
+        val yon = when {
+            dest != null -> " $dest yönünde"
+            road != null -> " $road yönünde"
+            else -> ""
+        }
+        val m = modWord(mod)
+        return when (type) {
+            "depart" -> if (road != null) "$road üzerinden başlayın" else "Rotaya başlayın"
+            "arrive" -> "Varış noktanıza ulaştınız"
+            "turn", "end of road" -> when (m) {
+                "sola" -> "Sola dönün$yon"
+                "sağa" -> "Sağa dönün$yon"
+                "düz", "" -> "Düz devam edin$yon"
+                "U dönüşü" -> "U dönüşü yapın"
+                else -> "$m dönün$yon"
+            }
+            "continue", "new name" -> when {
+                m == "sola" || m == "sağa" -> "$m yönelin$yon"
+                m.isNotBlank() && m != "düz" -> "$m devam edin$yon"
+                else -> "Düz devam edin$yon"
+            }
+            "merge" -> "Yola katılın$yon"
+            "on ramp", "ramp" -> when {
+                mod?.contains("right") == true -> "Sağdaki bağlantı yoluna girin$yon"
+                mod?.contains("left") == true -> "Soldaki bağlantı yoluna girin$yon"
+                else -> "Bağlantı yoluna girin$yon"
+            }
+            "off ramp" -> if (exitNo != null) "$exitNo numaralı çıkışı kullanın$yon" else "Çıkışı kullanın$yon"
+            "fork" -> when {
+                m.endsWith("sola") -> "Soldan devam edin$yon"
+                m.endsWith("sağa") -> "Sağdan devam edin$yon"
+                m == "düz" -> "Düz devam edin$yon"
+                else -> "Soldan devam edin$yon"
+            }
+            "roundabout", "rotary", "exit roundabout", "exit rotary" ->
+                if (rbExit != null) "Dönel kavşaktan $rbExit. çıkışa girin" else "Dönel kavşağa girin"
+            "roundabout turn" -> when (m) {
+                "sola" -> "Dönel kavşakta sola dönün"
+                "sağa" -> "Dönel kavşakta sağa dönün"
+                else -> "Dönel kavşağa girin"
+            }
+            "uturn" -> "U dönüşü yapın"
+            else -> when (m) {
+                "sola" -> "Sola dönün$yon"
+                "sağa" -> "Sağa dönün$yon"
+                "", "düz" -> "Düz devam edin$yon"
+                else -> "$m dönün$yon"
+            }
+        }
+    }
+
+    override fun spokenDistance(meters: Double, imperial: Boolean): String = if (imperial) {
+        val feet = meters * 3.28084
+        if (feet < 800) "${(if (feet < 100) maxOf(10, (feet / 10).roundToInt() * 10) else (feet / 50).roundToInt() * 50)} fit"
+        else {
+            val miles = (meters / 1609.34 * 10).roundToInt() / 10.0
+            if (miles == 1.0) "1 mil" else "$miles mil"
+        }
+    } else {
+        if (meters < 950) "${(meters / 10).roundToInt() * 10} metre"
+        else {
+            val km = (meters / 100).roundToInt() / 10.0
+            if (km == 1.0) "1 kilometre" else "$km kilometre"
+        }
+    }
+
+    override fun inThen(distancePhrase: String, instruction: String): String = "$distancePhrase sonra, $instruction"
+    override fun arrived(): String = "Varış noktanıza ulaştınız"
+    override fun destinationSide(left: Boolean): String = if (left) "Varış noktanız solda" else "Varış noktanız sağda"
+    override fun startNav(firstInstruction: String): String = "Navigasyon başlatılıyor. $firstInstruction"
+    override fun reachedStop(label: String): String =
+        if (label.isNotBlank()) "$label durağına ulaştınız" else "Durağınıza ulaştınız"
+    override fun fasterRoute(firstInstruction: String): String = "Daha hızlı rota seçildi. $firstInstruction"
+    override fun voiceTest(): String = "Dörtyüz metre sonra sağa dönün, ardından varış noktanız solda."
+    override fun rerouting(): String = "Yeni rota hesaplanıyor"
+    override fun fasterRouteAvailable(minutes: Int): String =
+        if (minutes == 1) "Daha hızlı bir rota bulundu, yaklaşık bir dakika tasarruf sağlar"
+        else "Daha hızlı bir rota bulundu, yaklaşık $minutes dakika tasarruf sağlar"
+    override fun stopsNotIncluded(): String = "Duraklar bu rotaya dahil edilemedi. Denemeye devam edeceğim."
+    override fun destinationAhead(): String = "Varış noktanız ileride"
+    override fun useLanes(side: LaneSide, count: Int): String = when (side) {
+        LaneSide.LEFT -> if (count > 1) "Sol $count şeridi kullanın" else "Sol şeridi kullanın"
+        LaneSide.RIGHT -> if (count > 1) "Sağ $count şeridi kullanın" else "Sağ şeridi kullanın"
+        LaneSide.CENTER -> "Orta şeridi kullanın"
     }
 }

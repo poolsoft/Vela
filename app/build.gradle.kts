@@ -31,14 +31,14 @@ android {
         targetSdk = 35
         // Overridable from CI: -PappVersionCode / -PappVersionName (ci.yml derives
         // them from the run number → 0.3.<run> / 2000+run). Defaults are local/dev only.
-        versionCode = (project.findProperty("appVersionCode") as String?)?.toIntOrNull() ?: 1
+        versionCode = (project.findProperty("appVersionCode") as String?)?.toIntOrNull() ?: 4000
         versionName = (project.findProperty("appVersionName") as String?) ?: "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
 
         ndk {
-            abiFilters.addAll(listOf("armeabi-v7a", "x86"))
+            abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64"))
         }
 
         // MapTiler key injected from the CI secret (-PmaptilerKey); empty for

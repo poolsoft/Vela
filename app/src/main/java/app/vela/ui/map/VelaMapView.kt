@@ -745,7 +745,7 @@ fun VelaMapView(
     val navModeHolder = rememberUpdatedState(navMode)
     val navFollowingHolder = rememberUpdatedState(navFollowing)
     val navNorthUpHolder = rememberUpdatedState(navNorthUp)
-    val navTiltEase = remember { doubleArrayOf(55.0) } // eased so the compass toggle glides, not snaps
+    val navTiltEase = remember { doubleArrayOf(if (isFragileOrEmulator()) 0.0 else 55.0) } // eased so the compass toggle glides, not snaps
     val navPadEase = remember { doubleArrayOf(0.0) } // puck-low top padding as a height fraction, eased on (re)attach
     val wasNavRef = remember { booleanArrayOf(false) } // a drive actually ran - gates the one-shot camera teardown
     val onCompassTapHolder = rememberUpdatedState(onCompassTap)
@@ -849,7 +849,7 @@ fun VelaMapView(
             // a Java crash elsewhere in the app - and two of those flipped a healthy Pixel 4a into
             // TextureView for good, unnoticed: the renderer ran at 89% CPU and the resulting
             // judder was chased as puck jitter for weeks (2026-09-03).
-            if (lastExitWasNativeCrash(context)) {
+            if (!isEmulator() && lastExitWasNativeCrash(context)) {
                 val n = prefs.getInt("map_init_crashes", 0) + 1
                 if (n >= 2) {
                     prefs.edit().putBoolean("texture_render", true).putInt("map_init_crashes", 0)
@@ -862,8 +862,10 @@ fun VelaMapView(
             }
         }
         prefs.edit().putBoolean("map_init_inflight", true).apply()
+        val textureDefault = if (isEmulator()) false else fragileGpuDefault()
+        val textureModeEnabled = if (isEmulator()) false else prefs.getBoolean("texture_render", textureDefault)
         val opts = org.maplibre.android.maps.MapLibreMapOptions.createFromAttributes(context)
-            .textureMode(prefs.getBoolean("texture_render", fragileGpuDefault()))
+            .textureMode(textureModeEnabled)
         MapView(context, opts).apply {
             onCreate(null)
             isFocusable = false
@@ -1280,6 +1282,10 @@ fun VelaMapView(
             else -> "#c4c9d1" // classic-light + modern-light share this outline
         }
         val below = runCatching { style.getLayer("building")?.id }.getOrNull() // beneath OSM buildings so they win wherever OSM has them
+        if (isEmulator()) {
+            // Emulatorde Windows GL koprusu PMTiles kaynaklarinda SIGSEGV verdigi icin overlay eklenmez
+            return@LaunchedEffect
+        }
         buildingOverlays.forEachIndexed { i, uri ->
             runCatching {
                 val srcId = "vela-ovl-src-$i"
@@ -1427,6 +1433,11 @@ fun VelaMapView(
         )
         runCatching { style.layers.filter { it.id.startsWith("vela-places-") }.forEach { style.removeLayer(it) } }
         runCatching { style.sources.filter { it.id.startsWith("vela-places-src-") }.forEach { style.removeSource(it) } }
+        if (isEmulator()) {
+            // Emulatorde Windows host GL koprusu PMTiles SymbolLayer ciziminde SIGSEGV verdigi icin
+            // emulatorde yalnizca standart OSM harita katmanlari cizilir.
+            return@LaunchedEffect
+        }
         placesOverlays.forEachIndexed { i, uri ->
             runCatching {
                 val srcId = "vela-places-src-$i"
@@ -1693,7 +1704,7 @@ fun VelaMapView(
         val style = styleRef ?: return@LaunchedEffect
         runCatching { style.layers.filter { it.id.startsWith("vela-ms-") }.forEach { style.removeLayer(it) } }
         runCatching { style.sources.filter { it.id.startsWith("vela-ms-src-") }.forEach { style.removeSource(it) } }
-        if (!speedOverlayOn) return@LaunchedEffect // no query layer on the browse map
+        if (!speedOverlayOn || isEmulator()) return@LaunchedEffect // no query layer on the browse map or emulator
         maxspeedOverlays.forEachIndexed { i, uri ->
             runCatching {
                 val srcId = "vela-ms-src-$i"
@@ -1830,6 +1841,10 @@ fun VelaMapView(
         // mount AFTER applySatelliteLabels' style-load sweep, so they style themselves).
         val txt = if (satelliteOn) "#ffffff" else if (darkTheme) "#9aa0a6" else "#8a8a8a"
         val halo = if (satelliteOn) "#000000" else if (darkTheme) "#1b2432" else "#ffffff"
+        if (isEmulator()) {
+            // Emulatorde Windows GL koprusu PMTiles kaynaklarinda SIGSEGV verdigi icin overlay eklenmez
+            return@LaunchedEffect
+        }
         addressOverlays.forEachIndexed { i, uri ->
             runCatching {
                 val srcId = "vela-addr-src-$i"
@@ -2291,7 +2306,7 @@ fun VelaMapView(
             wasNavRef[0] = false
             navPuck.kalman.reset() // nav ended — don't carry a stale speed into the next trip
             navUserTilt[0] = Double.NaN // shove-set tilt is a per-drive override
-            navTiltEase[0] = 55.0 // next drive starts at the default pitch, not wherever this one ended
+            navTiltEase[0] = if (isFragileOrEmulator()) 0.0 else 55.0 // next drive starts at the default pitch, not wherever this one ended
             // Camera padding is STICKY MapLibre state: the nav view's puck-low offset (top padding,
             // set on every follow frame + the pre-engage case) would otherwise shift the browse
             // camera's center for the rest of the session. Bearing + tilt are sticky the same way.
@@ -2544,8 +2559,9 @@ fun VelaMapView(
                     val kBrgAdaptive = (1f - kotlin.math.exp(-dtEase / brgTau)).toDouble()
                     camState[2] = (camState[2] + db * kBrgAdaptive + 360.0) % 360.0
                     camState[3] += (tgtZoom - camState[3]) * kZoom
-                    // Tilt: north-up = flat; else a shove-set override wins over the 55 default.
+                    // Tilt: north-up or fragile GPU/emulator = flat; else a shove-set override wins over the 55 default.
                     val tiltTgt = when {
+                        isFragileOrEmulator() -> 0.0
                         navNorthUpHolder.value -> 0.0
                         !navUserTilt[0].isNaN() -> navUserTilt[0]
                         else -> 55.0
@@ -2694,7 +2710,8 @@ fun VelaMapView(
                         )
                         style.getLayer(ROUTE_TAIL_LAYER)?.setProperties(
                             PropertyFactory.visibility(if (tailDone) Property.NONE else Property.VISIBLE),
-                            PropertyFactory.lineGradient(routeGradient(0f, gInt, if (tailDone) emptyList() else remap(tw, total))),
+                            if (isFragileOrEmulator()) PropertyFactory.lineColor(gInt)
+                            else PropertyFactory.lineGradient(routeGradient(0f, gInt, if (tailDone) emptyList() else remap(tw, total))),
                         )
                         aheadAnchor[0] = cutStart[0]
                         style.getSourceAs<GeoJsonSource>(ROUTE_AHEAD_SRC)?.setGeoJson(lineFrom(aheadAnchor[0], tw))
@@ -2717,7 +2734,8 @@ fun VelaMapView(
                             ((cutEnd[0] - a0) / (a1 - a0) - 1.5 / 256.0).toFloat().coerceIn(0f, 0.999f)
                         style.getLayer(ROUTE_AHEAD_LAYER)?.setProperties(
                             PropertyFactory.visibility(Property.VISIBLE),
-                            PropertyFactory.lineGradient(routeGradient(pa, gInt, remap(a0, a1), driven)),
+                            if (isFragileOrEmulator()) PropertyFactory.lineColor(gInt)
+                            else PropertyFactory.lineGradient(routeGradient(pa, gInt, remap(a0, a1), driven)),
                         )
                         val traversed = android.graphics.Color.parseColor(
                             when {
@@ -2728,7 +2746,8 @@ fun VelaMapView(
                         )
                         style.getLayer(ROUTE_LAYER)?.setProperties(
                             PropertyFactory.visibility(if (trailHolder.value) Property.VISIBLE else Property.NONE),
-                            PropertyFactory.lineGradient(routeGradient(0f, traversed, emptyList())),
+                            if (isFragileOrEmulator()) PropertyFactory.lineColor(traversed)
+                            else PropertyFactory.lineGradient(routeGradient(0f, traversed, emptyList())),
                         )
                     }
                     // Per frame: only PAINT moves, and only on the 400 m cut piece, whose 256
@@ -2743,7 +2762,8 @@ fun VelaMapView(
                     val pc = if (c1 - c0 <= 1.0) 0f else ((prog - c0) / (c1 - c0)).toFloat().coerceIn(0.0001f, 0.9999f)
                     style.getLayer(ROUTE_CUT_LAYER)?.setProperties(
                         PropertyFactory.visibility(Property.VISIBLE),
-                        PropertyFactory.lineGradient(routeGradient(pc, gInt, remap(c0, c1), driven)),
+                        if (isFragileOrEmulator()) PropertyFactory.lineColor(gInt)
+                        else PropertyFactory.lineGradient(routeGradient(pc, gInt, remap(c0, c1), driven)),
                     )
                 }
             } else {
@@ -3223,44 +3243,46 @@ fun VelaMapView(
                     // Idle building warm-up: schedule after a beat of stillness; any camera move
                     // cancels it (the move-started listener below).
                     warmPending[0]?.let { warmHandler.removeCallbacks(it) }
-                    val warmRun = Runnable {
-                        val (overlays, naving) = warmCtx.value
-                        val z = map.cameraPosition.zoom
-                        val t = map.cameraPosition.target
-                        if (naving || overlays.isEmpty() || t == null || z < 13.5 || z >= 15.9) return@Runnable
-                        // One warm per ~2 km bucket so sitting still doesn't re-render, and a
-                        // revisit later in the session is already cached anyway.
-                        val bucket = (Math.round(t.latitude / 0.02) shl 20) xor Math.round(t.longitude / 0.02)
-                        if (!warmDoneBuckets.add(bucket)) return@Runnable
-                        val sources = StringBuilder()
-                        val layers = StringBuilder()
-                        overlays.forEachIndexed { i, uri ->
-                            if (i > 0) { sources.append(','); layers.append(',') }
-                            sources.append("\"warm$i\":{\"type\":\"vector\",\"url\":\"").append(uri).append("\"}")
-                            layers.append("{\"id\":\"warm$i\",\"type\":\"fill\",\"source\":\"warm$i\",\"source-layer\":\"building\",\"paint\":{\"fill-color\":\"#000000\"}}")
+                    if (!isFragileOrEmulator()) {
+                        val warmRun = Runnable {
+                            val (overlays, naving) = warmCtx.value
+                            val z = map.cameraPosition.zoom
+                            val t = map.cameraPosition.target
+                            if (naving || overlays.isEmpty() || t == null || z < 13.5 || z >= 15.9) return@Runnable
+                            // One warm per ~2 km bucket so sitting still doesn't re-render, and a
+                            // revisit later in the session is already cached anyway.
+                            val bucket = (Math.round(t.latitude / 0.02) shl 20) xor Math.round(t.longitude / 0.02)
+                            if (!warmDoneBuckets.add(bucket)) return@Runnable
+                            val sources = StringBuilder()
+                            val layers = StringBuilder()
+                            overlays.forEachIndexed { i, uri ->
+                                if (i > 0) { sources.append(','); layers.append(',') }
+                                sources.append("\"warm$i\":{\"type\":\"vector\",\"url\":\"").append(uri).append("\"}")
+                                layers.append("{\"id\":\"warm$i\",\"type\":\"fill\",\"source\":\"warm$i\",\"source-layer\":\"building\",\"paint\":{\"fill-color\":\"#000000\"}}")
+                            }
+                            val styleJson = "{\"version\":8,\"sources\":{$sources},\"layers\":[$layers]}"
+                            runCatching {
+                                warmSnapshotter[0]?.cancel()
+                                val snap = org.maplibre.android.snapshotter.MapSnapshotter(
+                                    context,
+                                    org.maplibre.android.snapshotter.MapSnapshotter.Options(768, 768)
+                                        .withStyleJson(styleJson)
+                                        .withCameraPosition(
+                                            org.maplibre.android.camera.CameraPosition.Builder()
+                                                .target(t).zoom(16.2).build(),
+                                        ),
+                                )
+                                warmSnapshotter[0] = snap
+                                android.util.Log.d("VelaWarm", "warming buildings z16 at bucket=$bucket overlays=${overlays.size}")
+                                snap.start(
+                                    { warmSnapshotter[0] = null; android.util.Log.d("VelaWarm", "warm done") },
+                                    { warmSnapshotter[0] = null; android.util.Log.d("VelaWarm", "warm failed: $it") },
+                                )
+                            }
                         }
-                        val styleJson = "{\"version\":8,\"sources\":{$sources},\"layers\":[$layers]}"
-                        runCatching {
-                            warmSnapshotter[0]?.cancel()
-                            val snap = org.maplibre.android.snapshotter.MapSnapshotter(
-                                context,
-                                org.maplibre.android.snapshotter.MapSnapshotter.Options(768, 768)
-                                    .withStyleJson(styleJson)
-                                    .withCameraPosition(
-                                        org.maplibre.android.camera.CameraPosition.Builder()
-                                            .target(t).zoom(16.2).build(),
-                                    ),
-                            )
-                            warmSnapshotter[0] = snap
-                            android.util.Log.d("VelaWarm", "warming buildings z16 at bucket=$bucket overlays=${overlays.size}")
-                            snap.start(
-                                { warmSnapshotter[0] = null; android.util.Log.d("VelaWarm", "warm done") },
-                                { warmSnapshotter[0] = null; android.util.Log.d("VelaWarm", "warm failed: $it") },
-                            )
-                        }
+                        warmPending[0] = warmRun
+                        warmHandler.postDelayed(warmRun, 2500)
                     }
-                    warmPending[0] = warmRun
-                    warmHandler.postDelayed(warmRun, 2500)
                 }
                 // A finished render means tiles may have arrived after the camera stopped - the
                 // verdict could be stale. ONLY mark dirty here (never probe): this event can fire
@@ -6145,21 +6167,24 @@ internal fun lastExitWasNativeCrash(context: android.content.Context): Boolean {
     return last.reason == android.app.ApplicationExitInfo.REASON_CRASH_NATIVE
 }
 
-internal fun fragileGpuDefault(): Boolean {
-    val isEmulator = android.os.Build.HARDWARE.contains("ranchu") ||
-            android.os.Build.HARDWARE.contains("goldfish") ||
-            android.os.Build.FINGERPRINT.startsWith("generic") ||
-            android.os.Build.MODEL.contains("google_sdk") ||
-            android.os.Build.MODEL.contains("Emulator")
-    if (isEmulator) return true
+internal fun isEmulator(): Boolean =
+    android.os.Build.HARDWARE.contains("ranchu") ||
+        android.os.Build.HARDWARE.contains("goldfish") ||
+        android.os.Build.FINGERPRINT.startsWith("generic") ||
+        android.os.Build.PRODUCT.contains("sdk_gphone") ||
+        android.os.Build.MODEL.contains("sdk_gphone") ||
+        android.os.Build.MODEL.contains("google_sdk") ||
+        android.os.Build.MODEL.contains("Emulator")
 
-    return android.os.Build.VERSION.SDK_INT >= 34 &&
+internal fun fragileGpuDefault(): Boolean =
+    android.os.Build.VERSION.SDK_INT >= 34 &&
         (
             android.os.Build.HARDWARE.startsWith("ums") ||
                 android.os.Build.HARDWARE.startsWith("sp98") ||
                 android.os.Build.SOC_MANUFACTURER.contains("unisoc", ignoreCase = true)
             )
-}
+
+internal fun isFragileOrEmulator(): Boolean = isEmulator() || fragileGpuDefault()
 
 /** Google-style 3D building geometry, shared by all four palettes. Extrusions start a zoom level
  *  AFTER the flat footprints (z17 vs 16): at ~500ft Manhattan towers leaned over and BURIED the
@@ -6170,8 +6195,29 @@ internal fun fragileGpuDefault(): Boolean {
  *  Starting 3D later is also the cheapest frame win in exactly the dense views that lag: one less
  *  zoom level of the most fragment-expensive layer the map draws. */
 private fun applyBuilding3dGeometry(style: Style) {
-    // 3D bina katmani emulator ve dusuk donanimli teyp GPU'larinda GL segfault yaratir
-    style.removeLayer("building-3d")
+    if (isFragileOrEmulator()) {
+        // Emulator ve zayif GPU'larda 2D guvenli mod
+        style.removeLayer("building-3d")
+        return
+    }
+    style.getLayer("building-3d")?.setMinZoom(17f)
+    style.getLayer("building-3d")?.setProperties(
+        PropertyFactory.fillExtrusionVerticalGradient(true),
+        PropertyFactory.fillExtrusionHeight(
+            Expression.interpolate(
+                Expression.linear(), Expression.zoom(),
+                Expression.stop(17f, Expression.product(Expression.get("render_height"), Expression.literal(0.3f))),
+                Expression.stop(19f, Expression.get("render_height")),
+            ),
+        ),
+        PropertyFactory.fillExtrusionBase(
+            Expression.interpolate(
+                Expression.linear(), Expression.zoom(),
+                Expression.stop(17f, Expression.product(Expression.get("render_min_height"), Expression.literal(0.3f))),
+                Expression.stop(19f, Expression.get("render_min_height")),
+            ),
+        ),
+    )
 }
 
 internal fun applyLight(style: Style) {
@@ -7112,7 +7158,8 @@ private fun applyData(
             val seedInt = runCatching { android.graphics.Color.parseColor(routeColor) }.getOrDefault(ROUTE_FREEFLOW)
             style.getLayer(ROUTE_AHEAD_LAYER)?.setProperties(
                 PropertyFactory.visibility(Property.VISIBLE),
-                PropertyFactory.lineGradient(routeGradient(0f, seedInt, trafficSpans)),
+                if (isFragileOrEmulator()) PropertyFactory.lineColor(seedInt)
+                else PropertyFactory.lineGradient(routeGradient(0f, seedInt, trafficSpans)),
             )
         }
         lastAppliedRouteLine = route
@@ -7178,7 +7225,8 @@ private fun applyData(
             lastBrowseGradKey = gradKey
             style.getLayer(ROUTE_LAYER)?.setProperties(
                 PropertyFactory.visibility(Property.VISIBLE),
-                PropertyFactory.lineGradient(routeGradient(p, routeInt, trafficSpans)),
+                if (isFragileOrEmulator()) PropertyFactory.lineColor(routeInt)
+                else PropertyFactory.lineGradient(routeGradient(p, routeInt, trafficSpans)),
             )
         }
     } else {
