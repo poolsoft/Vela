@@ -1,26 +1,26 @@
-# Vela araÃ§ baÅŸlatÄ±cÄ±sÄ±nÄ± ana projeden ayÄ±rma
+# Vela araç başlatıcısını ana projeden ayırma
 
-Bu dalda harita ve navigasyon kodu `app/src/main` iÃ§inde kalÄ±r. AraÃ§ teybine Ã¶zel baÅŸlatÄ±cÄ± `car` derleme tÃ¼rÃ¼ndedir. `standard` tÃ¼rÃ¼nde ana ekran (HOME) kaydÄ±, araÃ§ mÃ¼zik servisleri, bunlarÄ±n izinleri ve araÃ§ arayÃ¼zÃ¼ bulunmaz. Ä°ki tÃ¼rÃ¼n uygulama kimliÄŸi `app.vela` olarak kalÄ±r; bÃ¶ylece araÃ§ta kurulu sÃ¼rÃ¼mÃ¼ gÃ¼ncellerken veriler korunur. AynÄ± cihaza bu iki tÃ¼rden yalnÄ±zca biri kurulabilir.
+Bu dalda harita ve navigasyon kodu `app/src/main` içinde kalır. Araç teybine özel başlatıcı `car` derleme türündedir. `standard` türünde ana ekran (HOME) kaydı, araç müzik servisleri, bunların izinleri ve araç arayüzü bulunmaz. İki türün uygulama kimliği `app.vela` olarak kalır; böylece araçta kurulu sürümü güncellerken veriler korunur. Aynı cihaza bu iki türden yalnızca biri kurulabilir.
 
-Ã‡alÄ±ÅŸma dalÄ±: `codex/vela-car-isolation`. Dal, `feature/vela-auto-v2` dalÄ±nÄ±n `74ea6cd991dd349e486345f877b056db8c172209` noktasÄ±ndan aÃ§Ä±ldÄ±. Dosyalar taÅŸÄ±nmadan Ã¶nce deÄŸiÅŸikliklerin ve Git hazÄ±rlÄ±k alanÄ±nÄ±n tam yedeÄŸi `D:/Projects/CarWorkspace/Vela-backups/Vela-working-tree-20260924-104652.zip` dosyasÄ±na alÄ±ndÄ±. SHA-256: `b292fae07088c6d3ca091ca9685497db9b1b0711ca9fcfdbc108ae859babf08c`. Yedek depo dÄ±ÅŸÄ±nda tutulur. Bu Ã§alÄ±ÅŸma henÃ¼z commit edilmedi veya gÃ¶nderilmedi.
+Çalışma önce `codex/vela-car-isolation` dalında `7d41b2af` olarak kaydedildi. Güncel `upstream/main` (`698f5d85`) ile `codex/vela-upstream-integration` dalında birleştirildi (`f5b89983`). Taşıma öncesi tam çalışma ağacı yedeği `D:/Projects/CarWorkspace/Vela-backups/Vela-working-tree-20260924-104652.zip` dosyasındadır; SHA-256: `b292fae07088c6d3ca091ca9685497db9b1b0711ca9fcfdbc108ae859babf08c`.
 
-## DosyalarÄ±n yeri
+## Dosyaların yeri
 
-- `app/src/main`: harita, rota, ortak ayarlar ve taÅŸÄ±nabilir yedekleme.
-- `app/src/car`: araÃ§ baÅŸlatÄ±cÄ±sÄ±, HOME ve mÃ¼zik servislerinin manifest kayÄ±tlarÄ±, izinleri, gÃ¶rselleri ve araÃ§ ayarlarÄ±nÄ±n yedekleme desteÄŸi.
-- `app/src/standard`: araÃ§ baÅŸlatÄ±cÄ±sÄ± olmadan Ã§alÄ±ÅŸan karÅŸÄ±lÄ±klar. Standart sÃ¼rÃ¼m, araÃ§ sÃ¼rÃ¼mÃ¼nde alÄ±nan yedekten harita ve kiÅŸisel verileri yÃ¼kleyebilir; araÃ§ ayarlarÄ±nÄ± uygulamaz.
+- `app/src/main`: harita, rota, ortak ayarlar ve taşınabilir yedekleme.
+- `app/src/car`: araç başlatıcısı, HOME ve müzik servislerinin manifest kayıtları, izinleri, görselleri ve araç ayarlarının yedekleme desteği.
+- `app/src/standard`: araç başlatıcısı olmadan çalışan karşılıklar. Standart sürüm, araç sürümünde alınan yedekten harita ve kişisel verileri yükleyebilir; araç ayarlarını uygulamaz.
 
-Ortak kod, iki derleme tÃ¼rÃ¼nde ayrÄ± karÅŸÄ±lÄ±ÄŸÄ± bulunan `CarIntegration` ve `LauncherBackupPort` Ã¼zerinden araÃ§ Ã¶zelliklerine ulaÅŸÄ±r. Yeni araÃ§ Ã¶zellikleri `src/car` iÃ§ine eklenmeli. Mevcut Android Auto ekranlarÄ± ortak kodda kalÄ±r; teybin HOME baÅŸlatÄ±cÄ±sÄ±ndan farklÄ±dÄ±r.
+Ortak kod, iki derleme türünde ayrı karşılığı bulunan `CarIntegration` ve `LauncherBackupPort` üzerinden araç özelliklerine ulaşır. Yeni araç özellikleri `src/car` içine eklenmeli. Mevcut Android Auto ekranları ortak kodda kalır; teybin HOME başlatıcısından farklıdır.
 
-## Derleme ve upstream gÃ¼ncellemesi
+## Derleme ve upstream güncellemesi
 
-AraÃ§ sÃ¼rÃ¼mÃ¼nÃ¼ `:app:assembleCarDebug`, standart sÃ¼rÃ¼mÃ¼ `:app:assembleStandardDebug` ile derleyin. YayÄ±n sÃ¼rÃ¼mleri `:app:assembleCarRelease` ve `:app:assembleStandardRelease` gÃ¶revleridir. Forkun otomatik yayÄ±n Ã§Ä±ktÄ±sÄ± araÃ§ sÃ¼rÃ¼mÃ¼dÃ¼r. MÃ¼zik arayÃ¼zÃ¼nÃ¼n statik denetimi: `python tools/check_car_music_contract.py`.
+Araç sürümünü `:app:assembleCarDebug`, standart sürümü `:app:assembleStandardDebug` ile derleyin. Yayın sürümleri `:app:assembleCarRelease` ve `:app:assembleStandardRelease` görevleridir. Forkun otomatik yayın çıktısı araç sürümüdür. Müzik arayüzünün statik denetimi: `python tools/check_car_music_contract.py`.
 
-Her iki sÃ¼rÃ¼mÃ¼ emÃ¼latÃ¶rde ve araÃ§ teybindeki kritik akÄ±ÅŸlarÄ± doÄŸruladÄ±ktan sonra bu dalÄ± commit edin. Forkun `main` dalÄ±nÄ± `upstream/main` ile gÃ¼ncelleyin; ardÄ±ndan bu Ã§alÄ±ÅŸma dalÄ±nÄ± yeni `main` Ã¼zerine birleÅŸtirin. Ã‡akÄ±ÅŸmalarda upstream harita deÄŸiÅŸikliklerini `src/main` iÃ§inde, teybe Ã¶zel deÄŸiÅŸiklikleri `src/car` iÃ§inde tutun. BirleÅŸtirme sonrasÄ±nda iki manifesti ve iki yedekleme karÅŸÄ±lÄ±ÄŸÄ±nÄ± karÅŸÄ±laÅŸtÄ±rÄ±n. Son farklarÄ± ve APK'larÄ± incelemeden GitHub'a gÃ¶ndermeyin. Ã‡alÄ±ÅŸma klasÃ¶rÃ¼ndeki ilgisiz ekran gÃ¶rÃ¼ntÃ¼leri ve ses dosyalarÄ± commit'e eklenmemeli.
+Upstream birleşmesindeki yayın iş akışı, manifest ve harita görünümü çakışmaları çözüldü. Birleşmiş kodla araç ve standart geliştirme APK'ları ile araç yayın APK'sı derlendi. Müzik arayüzünün statik kontrolü geçti. Gerçek teyipte müzik, izin ve yedekten yükleme kabul testleri ayrıca yapılmalı; telefon verileri üzerinde geri yükleme deneyi yapılmadı.
 
-## Kalan doÄŸrulamalar
+## Kalan doğrulamalar
 
-1. Ä°ki hata ayÄ±klama sÃ¼rÃ¼mÃ¼nÃ¼ derleyip temiz emÃ¼latÃ¶re kurun. `standard` sÃ¼rÃ¼mÃ¼nde HOME rolÃ¼ ve araÃ§ mÃ¼zik servisi bulunmadÄ±ÄŸÄ±nÄ±, `car` sÃ¼rÃ¼mÃ¼nde bulunduÄŸunu kontrol edin.
-2. AraÃ§ aÃ§Ä±lÄ±ÅŸÄ±, harita, mÃ¼zik sekmeleri, izinler, uygulama Ã§ekmecesi ve yatay/dikey yerleÅŸimi emÃ¼latÃ¶rde ve teyipte deneyin.
-3. Telefon veya emÃ¼latÃ¶rde yedek alÄ±n; araÃ§ta harita, rota, favoriler ve ayarlarÄ± yÃ¼kleyin. AraÃ§ yedeÄŸini standart sÃ¼rÃ¼me de yÃ¼kleyip araÃ§ ayarlarÄ±nÄ±n uygulanmadÄ±ÄŸÄ±nÄ± kontrol edin.
-4. Ä°lk baÅŸarÄ±lÄ± derlemeden sonra otomatik yayÄ±ndaki APK yolunu, imzalamayÄ± ve baÅŸlangÄ±Ã§ profili Ã¼retimini doÄŸrulayÄ±n.
+1. İki hata ayıklama sürümünü derleyip temiz emülatöre kurun. `standard` sürümünde HOME rolü ve araç müzik servisi bulunmadığını, `car` sürümünde bulunduğunu kontrol edin.
+2. Araç açılışı, harita, müzik sekmeleri, izinler, uygulama çekmecesi ve yatay/dikey yerleşimi emülatörde ve teyipte deneyin.
+3. Telefon veya emülatörde yedek alın; araçta harita, rota, favoriler ve ayarları yükleyin. Araç yedeğini standart sürüme de yükleyip araç ayarlarının uygulanmadığını kontrol edin.
+4. İlk başarılı derlemeden sonra otomatik yayındaki APK yolunu, imzalamayı ve başlangıç profili üretimini doğrulayın.
