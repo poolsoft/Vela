@@ -5,11 +5,11 @@ Durum tanımları: **Kod mevcut** = kaynakta uygulanmış, cihaz kabulü bekler.
 
 ## Bu turdaki somut düzeltmeler
 
-- Büyük oynatıcı kapak, parça bilgisi ve görselleştirici görünümüyle açılır. Playlist yan düğmeyle açılır. XML'de gizli bırakılmış kapak kartı görünür yapıldı; kapak ve arka plan aynı parçayı izler.
-- Sekme bağlayıcısı dosyada duruyordu. İlk açılışı zorla playlist yapan ayar ve gizli kapak tespit edildi; bunların kim tarafından/hangi araçla değiştirildiği Git geçmişinden kanıtlanmadı. Çalışan APK'nın bu kaynakla aynı olduğu da cihazda doğrulanmadı.
+- Büyük oynatıcı listeyle açılır: kayıtlı oynatma sırası varsa **Sıra**, yoksa **Parçalar** seçilir. Yan düğme kapak/görselleştirici ile liste arasında geçiş yapar.
+- Panel yerleşimi ve sekme değişiminde üst panelin yeniden ölçülmesi düzeltildi. Emülatörde ilk açılış, Parçalar, Klasörler, Listeler ve boş/dolu Sıra görünümü doğrulandı.
 - Kütüphane açılınca izin varsa yeniden taranır; aktif sekme saklanır ve belirgin gösterilir. Arama klavyesi açma/kapatma bağlandı.
 - Sıra, parçalar, klasörler ve listeler mevcut veri depolarına bağlıdır. Favoriler boş olsa da görünür. Son çalınanlar ve en çok dinlenenler eklendi. Gerçek oynatma başladığında sayılır; her UI güncellemesi/normal pause-resume tekrar sayılmaz.
-- Parçalar ve klasör içeriği ad, sanatçı, albüm, eklenme tarihi veya çalınma sayısına göre sıralanabilir. Kuyruk ve kayıtlı playlist sırası bu tercihle değiştirilmez.
+- Parçalar ve klasör içeriği ad, sanatçı, albüm, eklenme tarihi veya çalınma sayısına göre sıralanabilir. Sıra ayrı bir kalıcı oynatma listesidir: tek parça veya klasör/liste içeriği eklenebilir, sonraya alınabilir, yukarı/aşağı taşınabilir ve çıkarılabilir. Karışık çalma görünür oynatma sırasını, sıralı çalma kaydedilmiş temel sırayı kullanır.
 - Smart Focus OsmAnd'da zaten vardı. Vela'daki aktarım geliştirilerek elle kaynak kilidi, kaynak başına seçim, diğer MediaSession'ları izleme ve paket başına tek duraklatma eklendi.
 - Seçicide “Kaynağı seç” ve “Seç ve çal” ayrıldı. Aynı kaynağın çalıyor durumunda yeniden PLAY gönderilmez. Hazır olmayan kaynağa geçiş mevcut sesi durdurmaz.
 - Oynatma komutundan sonra beş saniye içinde çalıyor doğrulaması gelmezse kullanıcıya bildirilir. Bu bir donanım onay protokolü veya otomatik geri alma garantisi değildir.
@@ -25,7 +25,7 @@ Durum tanımları: **Kod mevcut** = kaynakta uygulanmış, cihaz kabulü bekler.
 | Özellik | OsmAnd referansı | Vela durumu / kalan |
 | --- | --- | --- |
 | Büyük oynatıcı kapak ve FFT | MusicPlayerFragment | Kod mevcut; harici oturumun gerçek FFT erişimi garanti değil |
-| Playlist düğmesi ve dört sekme | MusicPlayerFragment | Kod mevcut; gerçek dokunma/boş liste/izin dönüşü cihaz kabulü gerekli |
+| Playlist düğmesi ve dört sekme | MusicPlayerFragment | İlk açılış ve dört sekme emülatörde doğrulandı; araç teybi kabulü gerekli |
 | Kuyruk, klasör ve kayıtlı listeler | PlaylistManager ve MusicRepository | Kod mevcut; USB kayıtları korunur |
 | Favoriler | PlaylistManager | Kod mevcut; boş favori listesi de görünür |
 | Son çalınanlar / en çok dinlenenler | PlaylistManager | Kod mevcut; geçmiş en son 200 farklı yerel parçayla sınırlı, harici parça geçmişi tutulmaz |
@@ -76,6 +76,6 @@ Durum tanımları: **Kod mevcut** = kaynakta uygulanmış, cihaz kabulü bekler.
 Kontrol 42 görünüm bağlantısını doğruladı. Bu kontroller Android derlemesi veya davranış testi değildir.
 Talimat gereği Gradle veya Android derlemesi çalıştırılmadı. Emulator/teyp testi yapılmadı.
 
-Cihaz kabulü: ilk müzik açılışı → kapak/FFT; playlist düğmesi → dört sekme; izin ret/ver; liste oluştur/favorile/yeniden aç; başlatılan parçanın geçmişte tek kayıt olması; sıralama kuyruğu değiştirmesin; yerel→harici→radyo; elle duraklat→odak geri gelmesi; telefon bağlanırken radyo devam; ayarlar iki girişten aynı değer; eski yedeği içe aktar; HOME rolü ve geri; dikey/yatay dönüş.
+Cihaz kabulü: ilk müzik açılışı → dolu Sıra, boşsa Parçalar; yan düğme → kapak/FFT ve dört sekme; izin ret/ver; liste oluştur/favorile/yeniden aç; başlatılan parçanın geçmişte tek kayıt olması; sıranın ekleme/taşıma/çıkarma ve karışık/sıralı çalma kalıcılığı; yerel→harici→radyo; elle duraklat→odak geri gelmesi; telefon bağlanırken radyo devam; ayarlar iki girişten aynı değer; eski yedeği içe aktar; HOME rolü ve geri; dikey/yatay dönüş.
 
 [Smart Focus senaryo ve karar belgesi](SMART_FOCUS_SETTINGS_PERMISSIONS_PLAN.md)

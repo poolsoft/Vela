@@ -209,22 +209,25 @@ class InternalMusicPlayer private constructor(private val context: Context) :
 
     fun restoreSavedPlayback(library: List<SesParcasi>, autoPlay: Boolean): Boolean {
         if (_anlikParca.value != null) return true
-        val saved = prefs.getString(KEY_LAST_PATH, null) ?: return true
-        val track = library.firstOrNull { it.libraryKey() == saved } ?: return false
-        val position = prefs.getLong(KEY_LAST_POS, 0L).coerceAtLeast(0L)
-        val keys = runCatching {
-            val array = org.json.JSONArray(prefs.getString("last_queue", "[]"))
+        val byKey = library.associateBy { it.libraryKey() }
+        fun savedKeys(key: String): List<String> = runCatching {
+            val array = org.json.JSONArray(prefs.getString(key, "[]"))
             (0 until array.length()).map { array.getString(it) }
         }.getOrDefault(emptyList())
-        val byKey = library.associateBy { it.libraryKey() }
-        val restored = keys.mapNotNull { byKey[it] }.toMutableList()
-        if (restored.none { it.libraryKey() == track.libraryKey() }) restored.add(track)
+        val queueKeys = savedKeys("last_queue")
+        val baseKeys = savedKeys("last_base_queue").ifEmpty { queueKeys }
         _calismaListesi.clear()
-        _calismaListesi.addAll(restored)
+        _calismaListesi.addAll(baseKeys.mapNotNull { byKey[it] })
         _calmaKuyrugu.clear()
-        _calmaKuyrugu.addAll(restored)
-        suAnkiIndex = restored.indexOfFirst { it.libraryKey() == track.libraryKey() }
-        _kuyruk.value = restored.toList()
+        _calmaKuyrugu.addAll(queueKeys.mapNotNull { byKey[it] }.ifEmpty { _calismaListesi })
+        _kuyruk.value = _calmaKuyrugu.toList()
+        val saved = prefs.getString(KEY_LAST_PATH, null) ?: return true
+        val track = byKey[saved] ?: return false
+        val position = prefs.getLong(KEY_LAST_POS, 0L).coerceAtLeast(0L)
+        if (_calmaKuyrugu.none { it.libraryKey() == saved }) _calmaKuyrugu.add(track)
+        if (_calismaListesi.none { it.libraryKey() == saved }) _calismaListesi.add(track)
+        suAnkiIndex = _calmaKuyrugu.indexOfFirst { it.libraryKey() == saved }
+        _kuyruk.value = _calmaKuyrugu.toList()
         calParca(track, autoPlay && prefs.getBoolean("was_playing", false), position)
         return true
     }
@@ -234,6 +237,64 @@ class InternalMusicPlayer private constructor(private val context: Context) :
             suAnkiIndex = index
             calParca(_calmaKuyrugu[index], otomatikOynat = true)
         }
+    }
+
+    fun kuyrugaEkle(parca: SesParcasi, siradaki: Boolean = false) = kuyrugaEkle(listOf(parca), siradaki)
+
+    fun kuyrugaEkle(parcalar: List<SesParcasi>, siradaki: Boolean = false) {
+        val known = _calismaListesi.mapTo(mutableSetOf()) { it.libraryKey() }
+        val additions = parcalar.filter { known.add(it.libraryKey()) }
+        if (additions.isEmpty()) return
+        val currentKey = _anlikParca.value?.libraryKey()
+        val baseIndex = if (siradaki) _calismaListesi.indexOfFirst { it.libraryKey() == currentKey } + 1
+            else _calismaListesi.size
+        val queueIndex = if (siradaki && suAnkiIndex >= 0) suAnkiIndex + 1 else _calmaKuyrugu.size
+        _calismaListesi.addAll(baseIndex.coerceIn(0, _calismaListesi.size), additions)
+        _calmaKuyrugu.addAll(queueIndex.coerceIn(0, _calmaKuyrugu.size), additions)
+        if (suAnkiIndex >= queueIndex) suAnkiIndex += additions.size
+        kuyruguYayinla()
+    }
+
+    fun kuyruktanKaldir(parca: SesParcasi) {
+        val key = parca.libraryKey()
+        val index = _calmaKuyrugu.indexOfFirst { it.libraryKey() == key }
+        if (index < 0) return
+        val isCurrent = _anlikParca.value?.libraryKey() == key
+        _calismaListesi.removeAll { it.libraryKey() == key }
+        _calmaKuyrugu.removeAt(index)
+        if (isCurrent) {
+            duraklat()
+            if (_calmaKuyrugu.isEmpty()) {
+                durdurVeSifirlaPlayer()
+                _anlikParca.value = null
+                suAnkiIndex = -1
+            } else {
+                suAnkiIndex = -1
+                indexeGoreOynat(index.coerceAtMost(_calmaKuyrugu.lastIndex))
+            }
+        } else if (suAnkiIndex > index) suAnkiIndex--
+        kuyruguYayinla()
+    }
+
+    fun kuyruktaTasi(parca: SesParcasi, delta: Int) {
+        val key = parca.libraryKey()
+        val from = _calmaKuyrugu.indexOfFirst { it.libraryKey() == key }
+        val to = from + delta
+        if (from < 0 || to !in _calmaKuyrugu.indices) return
+        val currentKey = _anlikParca.value?.libraryKey()
+        _calmaKuyrugu.add(to, _calmaKuyrugu.removeAt(from))
+        val baseFrom = _calismaListesi.indexOfFirst { it.libraryKey() == key }
+        val baseTo = baseFrom + delta
+        if (baseFrom >= 0 && baseTo in _calismaListesi.indices)
+            _calismaListesi.add(baseTo, _calismaListesi.removeAt(baseFrom))
+        suAnkiIndex = _calmaKuyrugu.indexOfFirst { it.libraryKey() == currentKey }
+        kuyruguYayinla()
+    }
+
+    private fun kuyruguYayinla() {
+        _kuyruk.value = _calmaKuyrugu.toList()
+        listener?.onKuyrukGuncellendi(_kuyruk.value)
+        kaydetDurum()
     }
 
     private fun calParca(parca: SesParcasi, otomatikOynat: Boolean, startPosition: Long = 0L) {
@@ -421,6 +482,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
 
         _kuyruk.value = _calmaKuyrugu.toList()
         listener?.onKuyrukGuncellendi(_kuyruk.value)
+        kaydetDurum()
     }
 
     override fun onCompletion(mp: MediaPlayer?) {
@@ -472,10 +534,10 @@ class InternalMusicPlayer private constructor(private val context: Context) :
 
     private fun kaydetDurum() {
         val editor = prefs.edit()
-        _anlikParca.value?.let {
-            editor.putString(KEY_LAST_PATH, it.libraryKey())
-        }
+        _anlikParca.value?.let { editor.putString(KEY_LAST_PATH, it.libraryKey()) }
+            ?: editor.remove(KEY_LAST_PATH)
         editor.putString("last_queue", org.json.JSONArray(_calmaKuyrugu.map { it.libraryKey() }).toString())
+        editor.putString("last_base_queue", org.json.JSONArray(_calismaListesi.map { it.libraryKey() }).toString())
         editor.putLong(KEY_LAST_POS, _anlikKonumMs.value)
         editor.putBoolean("was_playing", _caliyorMu.value || pendingPlay)
         editor.apply()

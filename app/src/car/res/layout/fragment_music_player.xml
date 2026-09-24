@@ -124,13 +124,19 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent">
 
-        <!-- DEV NOW PLAYING EKRANI (LİSTE KAPALIYKEN GÖRÜNÜR) -->
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:id="@+id/now_playing_center_panel"
+        <!-- ÜST ALAN: FRAME (Now Playing veya Playlist) -->
+        <FrameLayout
+            android:id="@+id/music_main_content_frame"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:visibility="visible">
+            android:layout_weight="1">
+
+            <!-- DEV NOW PLAYING EKRANI (LİSTE KAPALIYKEN GÖRÜNÜR) -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/now_playing_center_panel"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="visible">
 
             <!-- KAPAK (SOLDA %40 ALAN) -->
             <androidx.cardview.widget.CardView
@@ -238,8 +244,7 @@
             android:id="@+id/track_list_panel"
             android:visibility="gone"
             android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_height="match_parent"
             android:orientation="vertical"
             android:background="#0A0A0E"
             android:paddingStart="8dp"
@@ -453,6 +458,7 @@
                 android:scrollbars="vertical"
                 android:clipToPadding="false"/>
         </LinearLayout>
+        </FrameLayout>
 
         <!-- ALT ALAN: BOTTOM PLAYBACK BAR (%20) -->
         <LinearLayout

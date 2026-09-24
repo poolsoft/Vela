@@ -47,6 +47,13 @@
     <string name="car_music_playlist_name">Çalma listesi adı</string>
     <string name="car_music_name_required">Bir ad girin</string>
     <string name="car_music_add_playlist">Çalma listesine ekle</string>
+    <string name="car_music_add_queue">Çalma sırasına ekle</string>
+    <string name="car_music_add_list_next">Listeyi çalan parçanın sonrasına ekle</string>
+    <string name="car_music_add_list_end">Listeyi çalma sırasının sonuna ekle</string>
+    <string name="car_music_play_next">Sıradaki parça yap</string>
+    <string name="car_music_remove_queue">Çalma sırasından kaldır</string>
+    <string name="car_music_move_up">Yukarı taşı</string>
+    <string name="car_music_move_down">Aşağı taşı</string>
     <string name="car_music_unfavorite">Favorilerden çıkar</string>
     <string name="car_music_favorite">Favorilere ekle</string>
     <string name="car_music_permission">Yerel müziği taramak için ses dosyalarına erişim izni verin.</string>

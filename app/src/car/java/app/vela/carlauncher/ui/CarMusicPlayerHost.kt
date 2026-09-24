@@ -171,6 +171,10 @@ class CarMusicPlayerHost(
             }
             library.refresh()
         }
+        rootView.post {
+            rootView.requestLayout()
+            rootView.invalidate()
+        }
     }
 
     private fun setupListeners() {
@@ -255,6 +259,28 @@ class CarMusicPlayerHost(
     }
 
     private fun setupStateFlows() {
+        val scanAnim = android.view.animation.RotateAnimation(
+            0f, 360f,
+            android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f,
+            android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f
+        ).apply {
+            duration = 1000
+            repeatCount = android.view.animation.Animation.INFINITE
+            interpolator = android.view.animation.LinearInterpolator()
+        }
+
+        scope.launch {
+            app.vela.carlauncher.media.MusicRepository.getInstance(context).taraniyorMu.collectLatest { isScanning ->
+                if (isScanning) {
+                    btnScanMusic?.setColorFilter(0xFF00FFFF.toInt())
+                    btnScanMusic?.startAnimation(scanAnim)
+                } else {
+                    btnScanMusic?.clearAnimation()
+                    btnScanMusic?.setColorFilter(0xFFFFFFFF.toInt())
+                }
+            }
+        }
+
         scope.launch {
             musicManager.sourceStatus.collectLatest { message ->
                 if (message != null) android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()

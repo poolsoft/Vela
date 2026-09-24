@@ -130,12 +130,14 @@ class MusicLibraryController(private val context: Context, private val root: Vie
     }
 
     fun openPlaylists() {
-        tab = Tab.PLAYLISTS
-        viewPrefs.edit().putString("tab", Tab.PLAYLISTS.name).apply()
+        tracks = repository.parcalar.value
+        val hasQueue = manager.internalPlayer.kuyruk.value.isNotEmpty()
+        tab = if (hasQueue) Tab.QUEUE else Tab.TRACKS
         folder = null
         playlistId = null
         search.setText("")
         render()
+        recycler.post { recycler.requestLayout() }
     }
 
     private fun tabViews() = listOf(
@@ -228,10 +230,11 @@ class MusicLibraryController(private val context: Context, private val root: Vie
                 }
             }
         }
+        val isScanning = repository.taraniyorMu.value
         val status = when {
-            repository.taraniyorMu.value -> context.getString(R.string.car_music_scanning)
             repository.lastError.value != null -> repository.lastError.value
-            rows.isEmpty() -> context.getString(if (tab == Tab.QUEUE) R.string.car_music_queue_empty else R.string.car_music_empty)
+            rows.isEmpty() -> context.getString(if (isScanning) R.string.car_music_scanning else if (tab == Tab.QUEUE) R.string.car_music_queue_empty else R.string.car_music_empty)
+            isScanning -> context.getString(R.string.car_music_scanning)
             else -> null
         }
         if (status != null) rows.add(0, LibraryRow(status))

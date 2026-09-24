@@ -98,7 +98,7 @@ fun CarLauncherLayout(
             app.vela.carlauncher.media.MusicRepository.muzikleriTara(context)
     }
     LaunchedEffect(libraryTracks, autoPlay) {
-        if (!playbackRestored)
+        if (!playbackRestored && libraryTracks.isNotEmpty())
             playbackRestored = mediaManager.getMusicManager().restoreSavedPlayback(libraryTracks, autoPlay)
     }
 

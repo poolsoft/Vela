@@ -47,6 +47,13 @@
     <string name="car_music_playlist_name">Playlist name</string>
     <string name="car_music_name_required">Enter a name</string>
     <string name="car_music_add_playlist">Add to playlist</string>
+    <string name="car_music_add_queue">Add to play order</string>
+    <string name="car_music_add_list_next">Add list after current track</string>
+    <string name="car_music_add_list_end">Add list to end of play order</string>
+    <string name="car_music_play_next">Play next</string>
+    <string name="car_music_remove_queue">Remove from play order</string>
+    <string name="car_music_move_up">Move up</string>
+    <string name="car_music_move_down">Move down</string>
     <string name="car_music_unfavorite">Remove favorite</string>
     <string name="car_music_favorite">Add favorite</string>
     <string name="car_music_permission">Allow audio access to scan local music.</string>
