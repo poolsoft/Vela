@@ -15,7 +15,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import app.vela.R
 import app.vela.ui.place.PlaceOverlays
+import androidx.compose.runtime.collectAsState
 import androidx.hilt.navigation.compose.hiltViewModel
+import app.vela.variant.CarIntegration
 import app.vela.ui.map.MapScreen
 import app.vela.ui.map.MapViewModel
 import app.vela.ui.settings.SettingsScreen
@@ -49,6 +51,7 @@ fun VelaRoot(vm: MapViewModel = hiltViewModel()) {
 
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var settingsOpenOffline by rememberSaveable { mutableStateOf(false) }
+    var settingsOpenCar by rememberSaveable { mutableStateOf(false) }
     var settingsOpenVoice by rememberSaveable { mutableStateOf(false) }
     // Location permission launcher for onboarding. The map no longer fires the raw system dialog on
     // its own (see MapScreen); this owns the first ask. A grant starts location immediately (coarse-
@@ -148,21 +151,27 @@ fun VelaRoot(vm: MapViewModel = hiltViewModel()) {
             baseDensity.fontScale,
         ),
     ) {
+    val mapState by vm.state.collectAsState()
+    val speedLimit = mapState.speedLimitKmh ?: mapState.speedLimitOverlayKmh
+    LaunchedEffect(mapState.mySpeed, speedLimit, mapState.compassHeading, mapState.myBearing) {
+        CarIntegration.onMapState(context, mapState)
+    }
+
     Box {
-        // MapScreen stays composed even while Settings is open, and Settings draws OVER it as an
-        // opaque overlay. Swapping the two out instead disposed the remembered MapLibre MapView, so
-        // returning from Settings rebuilt the map from scratch and it snapped back to the stale
-        // center at the default zoom, losing the user's pan/zoom (a reported bug).
-        MapScreen(
-            vm = vm,
-            onOpenSettings = { showSettings = true },
-            // The no-voice heads-up's pill: straight into the voice library.
-            onOpenVoiceSettings = { settingsOpenVoice = true; showSettings = true },
-        )
+        // MapScreen stays composed even while Settings is open or CarMode toggles,
+        // and CarLauncherLayout draws around or passes through it without recreating MapView.
+        CarIntegration.MapContainer(onOpenSettings = { settingsOpenCar = true; showSettings = true }) {
+            MapScreen(
+                vm = vm,
+                onOpenSettings = { showSettings = true },
+                onOpenVoiceSettings = { settingsOpenVoice = true; showSettings = true },
+            )
+        }
         if (showSettings) {
             SettingsScreen(
                 vm = vm,
-                onBack = { showSettings = false; settingsOpenOffline = false; settingsOpenVoice = false },
+                onBack = { showSettings = false; settingsOpenOffline = false; settingsOpenVoice = false; settingsOpenCar = false },
+                openCar = settingsOpenCar,
                 openOffline = settingsOpenOffline,
                 openVoiceLibrary = settingsOpenVoice,
             )

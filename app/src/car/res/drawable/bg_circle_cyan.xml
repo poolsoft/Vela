@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Glow Katmani (Daha buyuk ve yari saydam cyan) -->
+    <item android:id="@+id/play_button_glow" android:top="0dp" android:bottom="0dp" android:left="0dp" android:right="0dp">
+        <shape android:shape="oval">
+            <solid android:color="#2200FFFF" />
+            <stroke android:width="4dp" android:color="#4400FFFF" />
+        </shape>
+    </item>
+    <!-- Ana Buton (En ic katman) -->
+    <item android:id="@+id/play_button_main" android:top="6dp" android:bottom="6dp" android:left="6dp" android:right="6dp">
+        <shape android:shape="oval">
+            <solid android:color="#00FFFF" />
+        </shape>
+    </item>
+</layer-list>

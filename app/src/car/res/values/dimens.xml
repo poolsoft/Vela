@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- APP DOCK -->
+    <dimen name="dock_height">54dp</dimen>
+    <dimen name="dock_icon_size">40dp</dimen>
+    <dimen name="dock_icon_padding">8dp</dimen>
+    <dimen name="dock_clock_text_size">24sp</dimen>
+    <dimen name="dock_music_height">48dp</dimen>
+    <dimen name="dock_music_min_width">140dp</dimen>
+
+    <!-- ANA EKRAN (activity_car_launcher) -->
+    <dimen name="map_margin_top">8dp</dimen>
+    <dimen name="map_margin_side">8dp</dimen>
+    <dimen name="widget_panel_width">350dp</dimen>
+
+    <!-- HAVA DURUMU PANELI -->
+    <dimen name="weather_temp_text_size">56sp</dimen>
+    <dimen name="weather_icon_size">64dp</dimen>
+    <dimen name="weather_condition_text_size">16sp</dimen>
+    <dimen name="weather_feels_text_size">14sp</dimen>
+    <dimen name="weather_detail_icon_size">24dp</dimen>
+    <dimen name="weather_location_text_size">20sp</dimen>
+    <dimen name="weather_section_label_text_size">14sp</dimen>
+    <dimen name="weather_padding">16dp</dimen>
+
+    <!-- WIDGET GENEL -->
+    <dimen name="widget_corner_radius">12dp</dimen>
+    <dimen name="widget_padding">8dp</dimen>
+</resources>

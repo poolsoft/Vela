@@ -10,11 +10,14 @@ import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import app.vela.core.data.MapLinkParser
 import app.vela.ui.AppLocale
+import app.vela.variant.CarIntegration
 import app.vela.ui.VelaRoot
 import app.vela.ui.map.MapViewModel
 import app.vela.ui.theme.VelaTheme
 import app.vela.ui.theme.isAppInDarkTheme
 import dagger.hilt.android.AndroidEntryPoint
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
@@ -48,12 +51,23 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // The 12/24-hour clock setting can change while Vela sits in the background (issue #357).
         app.vela.ui.Clock24.refresh(this)
+        CarIntegration.onResume(this)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        CarIntegration.onPause(this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
         // A language change re-creates this Activity so the whole UI re-reads localized resources.
         AppLocale.onLocaleChanged = { recreate() }
         // Picture-in-picture mini map while navigating (user 2026-07-24, the Google Maps
@@ -74,20 +88,34 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        CarIntegration.onCreated(this)
         handleIntent(intent)
         setContent {
             // Read the theme at the call site (a recomposing scope) and pass it in
             // — reading it inside VelaTheme's default arg didn't reliably invalidate
             // VelaTheme, so MaterialTheme never flipped when the user changed it.
             val dark = isAppInDarkTheme()
+            val durumCubugu by CarIntegration.statusBarVisible.collectAsState()
+            val tamEkran by CarIntegration.immersive.collectAsState()
             // The system status/nav bar ICONS (clock, wifi, battery) must contrast with the
             // MAP under them, which follows Vela's own theme — not the system's. In light mode
             // the map is white, so the icons must go DARK; edge-to-edge alone left them light
             // (white-on-white, unreadable). Flip the appearance whenever the app theme changes.
-            androidx.compose.runtime.LaunchedEffect(dark) {
+            androidx.compose.runtime.LaunchedEffect(dark, durumCubugu, tamEkran) {
                 val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 controller.isAppearanceLightStatusBars = !dark
                 controller.isAppearanceLightNavigationBars = !dark
+                controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                if (tamEkran) {
+                    controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                } else {
+                    controller.show(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                    if (durumCubugu) {
+                        controller.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                    } else {
+                        controller.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                    }
+                }
             }
             androidx.compose.runtime.CompositionLocalProvider(
                 androidx.compose.ui.platform.LocalConfiguration provides
@@ -157,6 +185,7 @@ class MainActivity : ComponentActivity() {
     /** Vela registers for `geo:` URIs and Google-Maps web links so it can be the
      *  system maps handler; turn whichever we got into a search or a dropped pin. */
     private fun handleIntent(intent: Intent?) {
+        CarIntegration.onHomeIntent(intent)
         when (intent?.action) {
             Intent.ACTION_VIEW -> {
                 val data = intent.data?.toString() ?: return
@@ -170,5 +199,13 @@ class MainActivity : ComponentActivity() {
                 vm.openSharedText(text)
             }
         }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        val yonlendirildi = CarIntegration.onKeyDown(this, keyCode)
+        if (yonlendirildi) {
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 }

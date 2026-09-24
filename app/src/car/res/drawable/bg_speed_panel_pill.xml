@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Hap (pill) form: tam yuvarlak kenarlar, koyu yuzey -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/cl_surface" />
+            <corners android:radius="999dp" />
+        </shape>
+    </item>
+
+    <!-- Ince kenar cizgisi -->
+    <item>
+        <shape android:shape="rectangle">
+            <stroke
+                android:width="1dp"
+                android:color="@color/cl_border" />
+            <corners android:radius="999dp" />
+        </shape>
+    </item>
+</layer-list>

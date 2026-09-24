@@ -161,6 +161,9 @@ internal fun AppearanceSettingsScreen(vm: MapViewModel, onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(8.dp))
+        app.vela.variant.CarIntegration.Appearance()
+
+        Spacer(Modifier.height(8.dp))
         // Map color sets: Modern = the Google-app-sampled palette (default), Classic = the
         // archived pre-sample look (white roads, yellow motorways, true greens). The fleet
         // default is remote-pushable via calibration.json; an explicit pick here wins.

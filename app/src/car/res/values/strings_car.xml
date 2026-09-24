@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="car_launcher_tools">Launcher tools</string>
+    <string name="car_tools_saved">Saved</string>
+    <string name="car_tools_failed">The action could not be completed.</string>
+    <string name="car_backup_export">Export launcher backup</string>
+    <string name="car_backup_import">Restore launcher backup</string>
+    <string name="car_backup_invalid">This backup is invalid or unsupported. No settings were changed.</string>
+    <string name="car_backup_scope">Includes launcher settings, shortcuts, playlists and built-in widgets. Android widgets and wallpaper access stay on this device.</string>
+    <string name="car_backup_confirm">Replace launcher settings, shortcuts, playlists and built-in widget layout with this backup? Existing Android widgets are kept.</string>
+    <string name="car_startup_app">App to open with launcher</string>
+    <string name="car_startup_scope">Opens once when the launcher starts in the foreground. Boot-time background launching is not enabled.</string>
+    <string name="car_none">None</string>
+    <string name="car_system_widget_add">Add Android widget</string>
+    <string name="car_system_widget_missing">Widget unavailable. Remove it and add it again.</string>
+    <string name="car_wallpaper_choose">Choose desktop wallpaper</string>
+    <string name="car_wallpaper_clear">Remove wallpaper</string>
+    <string name="car_desktop_text_scale">Desktop text size</string>
+    <string name="car_picture_in_picture">Open picture-in-picture</string>
+    <string name="car_source_internal">Local music</string>
+    <string name="car_music_source">Choose music source</string>
+    <string name="car_antenna_from_lat">Origin latitude</string>
+    <string name="car_antenna_from_lon">Origin longitude</string>
+    <string name="car_antenna_from_alt">Origin altitude (m)</string>
+    <string name="car_antenna_to_lat">Target latitude</string>
+    <string name="car_antenna_to_lon">Target longitude</string>
+    <string name="car_antenna_to_alt">Target altitude (m)</string>
+    <string name="car_antenna_help">Enter both coordinates and altitudes using the same reference. Bearing is relative to true north; elevation is an approximate local line-of-sight angle.</string>
+    <string name="car_antenna_result">Bearing: %1$.1f° · Distance: %2$.2f km · Elevation: %3$.1f°</string>
+    <string name="car_antenna_same_point">Choose two different positions.</string>
+    <string name="car_save">Save</string>
+    <string name="car_music_visualizer_permission">Audio permission is needed to visualize local music playback.</string>
+    <string name="car_music_play_failed">Unable to play this track. Check the storage connection.</string>
+    <string name="car_music_favorites">Favorites</string>
+    <string name="car_music_unknown_folder">Music folder</string>
+    <string name="car_music_track_count">%1$d tracks</string>
+    <string name="car_music_new_playlist">New playlist</string>
+    <string name="car_music_unavailable">Storage unavailable</string>
+    <string name="car_music_remove_track">Remove from playlist</string>
+    <string name="car_music_scanning">Scanning music…</string>
+    <string name="car_music_queue_empty">Playback queue is empty</string>
+    <string name="car_music_empty">No matching tracks</string>
+    <string name="car_music_edit_tracks">Choose tracks</string>
+    <string name="car_music_rename_playlist">Rename playlist</string>
+    <string name="car_music_delete_playlist">Delete playlist?</string>
+    <string name="car_music_playlist_name">Playlist name</string>
+    <string name="car_music_name_required">Enter a name</string>
+    <string name="car_music_add_playlist">Add to playlist</string>
+    <string name="car_music_unfavorite">Remove favorite</string>
+    <string name="car_music_favorite">Add favorite</string>
+    <string name="car_music_permission">Allow audio access to scan local music.</string>
+    <string name="car_music_scan_failed">Music scan failed. Try again.</string>
+    <string name="car_panel_compact">Keep small panel</string>
+    <string name="car_visualizer_small">Small panel visualizer</string>
+    <string name="car_visualizer_large">Large panel visualizer</string>
+    <string name="car_visualizer_rate">Visualizer frame rate</string>
+    <string-array name="car_visualizer_modes">
+        <item>Classic</item>
+        <item>Glow</item>
+        <item>Neon</item>
+        <item>Wave</item>
+        <item>Radial</item>
+        <item>Symmetric</item>
+        <item>Particle</item>
+        <item>Rings</item>
+    </string-array>
+
+    <string name="car_internal_settings">Settings</string>
+    <string name="car_internal_music">Music</string>
+    <string name="car_internal_antenna">Antenna</string>
+    <string name="car_internal_dashboard">Dashboard</string>
+    <string name="car_internal_neon_dashboard">Digital dashboard</string>
+    <string name="car_feature_pending">This tool has not been transferred to Vela yet.</string>
+    <string name="car_app_launch_failed">The app could not be opened.</string>
+    <string name="car_dock_added">Added to dock</string>
+    <string name="car_dock_already_added">Already in dock</string>
+    <string name="car_dock_move_previous">Move earlier</string>
+    <string name="car_dock_move_next">Move later</string>
+    <string name="car_dock_remove">Remove from dock</string>
+    <string name="car_panel_expansion">Panel expansion</string>
+    <string name="car_panel_swap">Resize map</string>
+    <string name="car_panel_overlay">Cover map</string>
+    <string name="car_panel_height">Portrait panel height</string>
+    <string name="car_music_preferred">Preferred music app</string>
+    <string name="car_music_internal">Vela player</string>
+
+    <string name="car_music_now_playing">♫ NOW PLAYING</string>
+    <string name="car_music_scan">Müzikleri Tara</string>
+    <string name="car_pref_title_online_album_art">Online album artwork</string>
+    <string-array name="online_album_art_entries">
+        <item>Off</item>
+        <item>Unmetered networks only</item>
+        <item>All networks</item>
+    </string-array>
+    <string-array name="online_album_art_values" translatable="false">
+        <item>off</item>
+        <item>wifi</item>
+        <item>any</item>
+    </string-array>
+    <!-- Car Launcher Ayarları -->
+    <string name="car_settings_title">Car Settings</string>
+    <string name="car_pref_floating_button_title">Floating Assistant Button</string>
+    <string name="car_pref_floating_button_desc">Shows a movable system menu button on the screen</string>
+    <string name="car_pref_floating_button_size_title">Floating Button Size</string>
+    <string name="car_floating_menu_layout_toggle">Toggle Layout</string>
+    <string name="car_floating_menu_desktop_toggle">Desktop Mode</string>
+    <string name="car_floating_menu_settings">Car Launcher Settings</string>
+    <string name="car_pref_category_language">Language / Dil</string>
+    <string name="car_pref_language_title">App Language</string>
+    <string name="car_pref_language_desc">Change interface language (Requires restart)</string>
+
+    <!-- Floating Button Force GPS -->
+    <string name="car_floating_button_force_gps">Continuous GPS (Floating Button)</string>
+    <string name="car_floating_button_force_gps_desc">Keeps GPS active even in the background to continuously update speed. Consumes more battery.</string>
+
+    <!-- Navigation Directions -->
+    <string name="car_nav_straight">Go straight</string>
+    <string name="car_nav_turn_right">Turn right</string>
+    <string name="car_nav_turn_sharp_right">Turn sharp right</string>
+    <string name="car_nav_turn_slight_right">Turn slight right</string>
+    <string name="car_nav_turn_left">Turn left</string>
+    <string name="car_nav_turn_sharp_left">Turn sharp left</string>
+    <string name="car_nav_turn_slight_left">Turn slight left</string>
+    <string name="car_nav_u_turn">Make a U-turn</string>
+    <string name="car_nav_roundabout">At the roundabout, take the %1$d exit</string>
+    <string name="car_nav_roundabout_no_exit">Enter the roundabout</string>
+    <string name="car_nav_reached_destination">You have reached your destination</string>
+    <string name="car_nav_exit_highway_left">Exit highway to the left</string>
+    <string name="car_nav_exit_highway_right">Exit highway to the right</string>
+    <string name="car_nav_continue">Continue</string>
+    <string name="car_floating_button_mode_off">Off</string>
+    <string name="car_floating_button_mode_background">Show only in background</string>
+    <string name="car_floating_button_mode_always">Always show</string>
+    <string name="car_source_select">Select source</string>
+    <string name="car_source_play">Select and play</string>
+    <string name="car_source_auto">Follow active source automatically</string>
+    <string name="car_source_unavailable">Source is not ready. Current playback was kept.</string>
+    <string name="car_settings_hub">Car and launcher</string>
+    <string name="car_settings_hub_sub">Layout, music, Smart Focus and device permissions</string>
+    <string name="car_permissions_title">Permissions and device</string>
+    <string name="car_permissions_sub">Access is checked again when you return. Android asks for your approval.</string>
+    <string name="car_permission_audio">Music library</string>
+    <string name="car_permission_microphone">Microphone and visualizer</string>
+    <string name="car_permission_bt">Bluetooth connection</string>
+    <string name="car_permission_notifications">Notifications</string>
+    <string name="car_permission_overlay">Floating window</string>
+    <string name="car_permission_settings">Change system settings</string>
+    <string name="car_permission_listener">External player access</string>
+    <string name="car_permission_home">Choose default home app</string>
+    <string name="car_permission_app_settings">Android app settings</string>
+    <string name="car_permission_granted">Granted</string>
+    <string name="car_permission_required">Not granted</string>
+    <string name="car_smart_focus">Smart Focus</string>
+    <string name="car_smart_focus_desc">Follow actual playback while idle. Manual source selection stays locked until automatic tracking is enabled again. A Bluetooth connection alone never changes the source.</string>
+    <string name="car_source_last">Last source</string>
+    <string name="car_startup_source">Source for automatic resume (enable automatic playback below)</string>
+    <string name="car_bt_wait">Startup connection wait: %1$d seconds</string>
+    <string name="car_music_recent">Recently played</string>
+    <string name="car_music_most_played">Most played</string>
+    <string name="car_source_no_confirmation">Playback could not be confirmed. Check the source application.</string>
+    <string name="car_music_sort">Sort tracks</string>
+    <string-array name="car_music_sort_orders">
+        <item>Title</item>
+        <item>Artist</item>
+        <item>Album</item>
+        <item>Recently added</item>
+        <item>Most played</item>
+    </string-array>
+    <string name="car_source_conflict">Another source started but does not support pause. Check the source application.</string>
+</resources>

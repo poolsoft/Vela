@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/dock_content_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp">
+
+    <!-- SOL CONTAINER (Desktop Mode ve Apps) -->
+    <LinearLayout
+        android:id="@+id/left_buttons_container"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginEnd="12dp">
+
+        <ImageButton
+            android:id="@+id/btn_desktop_mode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_desktop_mode"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            app:tint="@color/cl_text_hint"
+            android:padding="8dp"
+            android:layout_marginEnd="8dp"/>
+
+        <ImageButton
+            android:id="@+id/btn_app_list"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Apps"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            android:src="@drawable/ic_apps_9_dots"
+            app:tint="@color/cl_primary"
+            android:padding="8dp" />
+
+    </LinearLayout>
+
+    <!-- DİNAMİK WIDGET ALANI (Müzik / Navigasyon) - Portre modunda varsayılan olarak gizli -->
+    <LinearLayout
+        android:id="@+id/mini_music_container"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_drawer_rounded"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:layout_marginEnd="8dp"
+        android:minWidth="160dp"
+        android:maxWidth="250dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/mini_music_icon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@android:drawable/ic_media_play"
+            app:tint="@color/cl_accent_orange"/>
+
+        <TextView
+            android:id="@+id/mini_music_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Muzik"
+            android:textColor="@color/cl_text_primary"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:ellipsize="marquee"
+            android:singleLine="true"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"/>
+
+        <ImageButton
+            android:id="@+id/mini_btn_play"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@android:drawable/ic_media_play"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:padding="4dp"
+            app:tint="@color/cl_primary"/>
+
+        <ImageButton
+            android:id="@+id/mini_btn_next"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@android:drawable/ic_media_next"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:padding="4dp"
+            android:layout_marginStart="8dp"
+            app:tint="@color/cl_text_secondary"/>
+    </LinearLayout>
+
+    <!-- ORTA CONTAINER (Kısayollar) -->
+    <LinearLayout
+        android:id="@+id/center_content_container"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp">
+
+        <!-- Shortcuts RecyclerView -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/dock_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_vertical"
+            android:orientation="horizontal" />
+
+    </LinearLayout>
+
+    <!-- SAĞ CONTAINER (Asistan ve Saat) -->
+    <LinearLayout
+        android:id="@+id/right_buttons_container"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp">
+
+        <!-- Clock -->
+        <LinearLayout
+            android:id="@+id/clock_settings_container"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="?android:attr/selectableItemBackground"
+            android:paddingStart="8dp"
+            android:paddingEnd="4dp">
+
+            <TextView
+                android:id="@+id/dock_clock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="12:00"
+                android:textColor="@color/cl_m3_light_blue"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:gravity="center_vertical"
+                android:fontFamily="sans-serif-medium"/>
+
+        </LinearLayout>
+
+        <!-- Assistant Button -->
+        <ImageButton
+            android:id="@+id/btn_assistant"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/ic_btn_speak_now"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            android:padding="4dp"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="4dp"
+            app:tint="@color/cl_text_secondary"/>
+
+    </LinearLayout>
+
+    <!-- Hidden Layout Toggle Button -->
+    <ImageButton
+        android:id="@+id/btn_layout_toggle"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+</LinearLayout>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <!-- Simgenin zemininde %60 koyuluktan başlayıp dışa doğru silikleşen bir gölge (glow) hissi -->
+    <gradient
+        android:type="radial"
+        android:gradientRadius="65%"
+        android:startColor="#99000000"
+        android:centerColor="#66000000"
+        android:endColor="#00000000" />
+</shape>

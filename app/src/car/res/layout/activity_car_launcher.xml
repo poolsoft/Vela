@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:fitsSystemWindows="false"
+    android:clipChildren="false">
+
+    <!-- MAP CONTAINER (Exact FrameLayout to prevent DrawerLayout measure crash) -->
+    <app.vela.carlauncher.ui.ExactFrameLayout
+        android:id="@+id/map_container"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_margin="@dimen/map_margin_side"
+        android:layout_marginTop="@dimen/map_margin_top"
+        android:background="@drawable/bg_card_rounded_dark"
+        android:clipToOutline="true"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/app_dock"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/widget_panel"
+        android:elevation="4dp"/>
+
+    <!-- WIDGET PANEL CONTAINER (Icerik Paneli) -->
+    <FrameLayout
+        android:id="@+id/widget_panel"
+        android:layout_width="@dimen/widget_panel_width"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_panel_rounded"
+        android:clipToOutline="true"
+        android:layout_marginTop="0dp"
+        android:elevation="20dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- WIDGET HANDLE (OsmAnd Orijinal: Seffaf Arka Plan, Ince Dikey 3 Beyaz Nokta) -->
+    <ImageButton
+        android:id="@+id/widget_handle"
+        android:layout_width="24dp"
+        android:layout_height="48dp"
+        android:src="@drawable/ic_more_vert"
+        android:background="@android:color/transparent"
+        android:scaleType="fitCenter"
+        android:padding="2dp"
+        android:elevation="25dp"
+        app:tint="#CCFFFFFF"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- APP DOCK (Dinamik Konumlandirma: Alt/Sol/Sag) -->
+    <FrameLayout
+        android:id="@+id/app_dock"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_app_dock_rounded"
+        android:elevation="8dp"
+        android:clipToPadding="false"
+        android:paddingHorizontal="4dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+    </FrameLayout>
+
+    <!-- APP DRAWER OVERLAY -->
+    <FrameLayout
+        android:id="@+id/app_drawer_container"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@android:color/transparent"
+        android:visibility="gone"
+        android:paddingTop="2dp"
+        android:elevation="20dp"
+        android:clickable="true"
+        android:focusable="true"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+
+
+    <!-- NIGHT DIM OVERLAY (Gece Karartma Katmani - Turkce karakter yok) -->
+    <View
+        android:id="@+id/night_dim_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#66000000"
+        android:visibility="gone"
+        android:elevation="100dp"
+        android:clickable="false"
+        android:focusable="false"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Ana Arka Planlar -->
+    <color name="cl_background_deep">#0D0D12</color>       <!-- En alt katman -->
+    <color name="cl_surface">#1C1C1E</color>               <!-- Widget kutu rengi -->
+    <color name="cl_surface_light">#FAFAFA</color>          <!-- Gunduz widget kutu rengi -->
+    <color name="cl_surface_overlay">#CC1C1C1E</color>      <!-- %80 Opak Cam efekti -->
+    <color name="cl_border">#2AFFFFFF</color>               <!-- İnce cam kenarı -->
+    <color name="cl_border_light">#22000000</color>         <!-- Gunduz ince kenar -->
+    <color name="cl_divider">#1AFFFFFF</color>              <!-- Ayırıcı çizgiler -->
+
+    <!-- Vurgu Renkleri -->
+    <color name="cl_primary">#0A84FF</color>                <!-- Apple/Google Mavisi -->
+    <color name="cl_primary_variant">#5E5CE6</color>        <!-- Morumsu Mavi -->
+    <color name="cl_accent_orange">#FF9F0A</color>          <!-- Uyarı/Navigasyon Turuncusu -->
+    <color name="cl_accent_gold">#FFD60A</color>            <!-- Bilgi/Azimut Sarısı -->
+    <color name="cl_success">#32D74B</color>                <!-- Tamam/Bağlı Yeşili -->
+    <color name="cl_danger">#FF453A</color>                 <!-- Hata/Kritik Kırmızı -->
+
+    <!-- Metin Renkleri -->
+    <color name="cl_text_primary">#FFFFFF</color>           <!-- Ana başlıklar -->
+    <color name="cl_text_primary_light">#1A1A1A</color>      <!-- Gunduz ana metin -->
+    <color name="cl_text_secondary">#99EBEBF5</color>       <!-- Açıklamalar (Opak beyaz) -->
+    <color name="cl_text_hint">#48484A</color>              <!-- Pasif/Etiket -->
+    <color name="cl_m3_light_blue">#D2E3FC</color>          <!-- M3 Acik Mavi -->
+
+    <!-- Alias (Eski/Eksik Tanımlar) -->
+    <color name="glass_panel_bg_transparent">@color/cl_surface_overlay</color>
+    <color name="glass_border">@color/cl_border</color>
+</resources>

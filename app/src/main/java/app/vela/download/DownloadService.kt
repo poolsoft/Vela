@@ -93,10 +93,13 @@ class DownloadService : Service() {
         // Labels of in-flight downloads. The service reads this on every (re)start command; poking
         // it with startService/startForegroundService is how begin/end refresh or retire the keeper.
         private val active = mutableListOf<String>()
+        private val revision = java.util.concurrent.atomic.AtomicLong()
+        fun hasActiveWork(): Boolean = synchronized(active) { active.isNotEmpty() }
+        fun workRevision(): Long = revision.get()
 
         /** A download started: keep the process alive until the matching [end]. */
         fun begin(context: Context, label: String) {
-            synchronized(active) { active.add(label) }
+            synchronized(active) { active.add(label); revision.incrementAndGet() }
             poke(context)
         }
 

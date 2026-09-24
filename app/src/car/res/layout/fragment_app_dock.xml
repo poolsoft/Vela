@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/dock_content_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp">
+
+    <!-- SOL CONTAINER (Desktop Mode ve Apps) -->
+    <LinearLayout
+        android:id="@+id/left_buttons_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginEnd="4dp">
+
+        <ImageButton
+            android:id="@+id/btn_desktop_mode"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_desktop_mode"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            app:tint="@color/cl_text_hint"
+        android:padding="12dp"/>
+
+        <ImageButton
+            android:id="@+id/btn_app_list"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Apps"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            android:src="@drawable/dashboard_grid"
+            app:tint="@color/cl_primary"
+        android:padding="12dp"/>
+
+    </LinearLayout>
+
+    <!-- ORTA CONTAINER (Kısayollar ve Mini Müzik Çalar) -->
+    <LinearLayout
+        android:id="@+id/center_content_container"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginStart="4dp"
+        android:layout_marginEnd="4dp">
+
+        <!-- Shortcuts RecyclerView -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/dock_recycler"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+        android:layout_weight="1"/>
+
+        <!-- Mini Music Player -->
+        <LinearLayout
+            android:id="@+id/mini_music_container"
+            android:layout_width="160dp"
+            android:layout_height="match_parent"
+            android:layout_weight="0"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/bg_drawer_rounded"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:minWidth="120dp">
+
+            <ImageView
+                android:id="@+id/mini_music_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@android:drawable/ic_media_play"
+                android:layout_marginStart="2dp"
+                app:tint="@color/cl_accent_orange"/>
+
+            <TextView
+                android:id="@+id/mini_music_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Muzik"
+                android:textColor="@color/cl_text_primary"
+                android:textSize="13sp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:ellipsize="marquee"
+                android:singleLine="true"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"/>
+
+            <ImageButton
+                android:id="@+id/mini_btn_play"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@android:drawable/ic_media_play"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:padding="4dp"
+                app:tint="@color/cl_primary"/>
+
+            <ImageButton
+                android:id="@+id/mini_btn_next"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@android:drawable/ic_media_next"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:padding="4dp"
+                app:tint="@color/cl_text_secondary"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- SAĞ CONTAINER (Asistan ve Saat) -->
+    <LinearLayout
+        android:id="@+id/right_buttons_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginStart="4dp">
+
+        <!-- Assistant Button -->
+        <ImageButton
+            android:id="@+id/btn_assistant"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_btn_speak_now"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            app:tint="@color/cl_text_secondary"
+        android:padding="12dp"/>
+
+        <!-- Clock -->
+        <LinearLayout
+            android:id="@+id/clock_settings_container"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="?android:attr/selectableItemBackground"
+            android:paddingStart="8dp"
+            android:paddingEnd="4dp">
+
+            <TextClock
+                android:id="@+id/dock_clock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="@color/cl_m3_light_blue"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
+        android:format24Hour="HH:mm"
+        android:format12Hour="h:mm"/>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Hidden Layout Toggle Button -->
+    <ImageButton
+        android:id="@+id/btn_layout_toggle"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+</LinearLayout>

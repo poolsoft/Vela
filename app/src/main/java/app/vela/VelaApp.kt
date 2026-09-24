@@ -54,6 +54,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
     }
 
     override fun attachBaseContext(base: Context) {
+        app.vela.backup.BackupRestore.recover(base)
         super.attachBaseContext(AppLocale.wrap(app.vela.ui.AdaptiveDensity.wrap(base)))
     }
 
@@ -98,6 +99,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.ui.SimLocation.init(this)
         app.vela.ui.UiScale.init(this)
         app.vela.ui.AppFont.init(this) // user-supplied UI font (issue #252)
+        app.vela.variant.CarIntegration.init(this)
         app.vela.ui.MapColors.init(this)
         app.vela.ui.LiveReviews.init(this)
         app.vela.ui.ShowReviews.init(this)

@@ -162,7 +162,7 @@ jobs:
           VELA_KEYSTORE_PASSWORD: ${{ secrets.VELA_KEYSTORE_PASSWORD }}
           VELA_KEY_ALIAS: ${{ secrets.VELA_KEY_ALIAS }}
         run: >
-          ./gradlew :app:assembleRelease --no-daemon
+          ./gradlew :app:assembleCarRelease --no-daemon
           -PappVersionName=${{ steps.ver.outputs.name }}
           -PappVersionCode=${{ steps.ver.outputs.code }}
           -PmaptilerKey=${{ secrets.MAPTILER_KEY }}
@@ -171,7 +171,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vela-maps-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/car/release/app-car-release.apk
           if-no-files-found: error
 
       - name: Publish canary build (rolling release)
@@ -185,7 +185,7 @@ jobs:
         run: |
           VER="${{ steps.ver.outputs.name }}"
           CODE="${{ steps.ver.outputs.code }}"
-          cp app/build/outputs/apk/release/app-release.apk vela-maps-canary.apk
+          cp app/build/outputs/apk/car/release/app-car-release.apk vela-maps-canary.apk
           SUBJ="$(git log -1 --no-merges --pretty=%s)"
           # The in-app What's new dialog shows this body verbatim, so the first line is a label,
           # not a warning paragraph (user 2026-09-15).
@@ -217,7 +217,7 @@ jobs:
             exit 0
           fi
           VER="0.4.${{ github.run_number }}"
-          cp app/build/outputs/apk/release/app-release.apk "vela-maps-v${VER}.apk"
+          cp app/build/outputs/apk/car/release/app-car-release.apk "vela-maps-v${VER}.apk"
           # Build the changelog from the commit subjects since the previous release. Our commit
           # subjects are written as plain-language changelog lines, so this reads as real release
           # notes (what Obtainium shows people), not a raw hash dump.

@@ -11,11 +11,11 @@ Standard Android toolchain:
 
 ```bash
 # debug build (compile check / local install)
-./gradlew :app:assembleDebug
+./gradlew :app:assembleCarDebug
 
 # the real distribution build - R8 + resource shrinking.
 # Always ship release: debug builds visibly lag during map scroll/nav.
-./gradlew :app:assembleRelease
+./gradlew :app:assembleCarRelease
 
 # unit tests for the pure logic (polyline codec, nav engine)
 ./gradlew :core:test
@@ -32,6 +32,8 @@ pipeline details (secrets, channels, versioning) live in
 [`CLAUDE.md`](../CLAUDE.md). Out of the box the app talks to the live Google
 source over the keyless OpenFreeMap basemap; `MockMapDataSource` is the
 offline fallback.
+
+The car launcher is the `car` product flavor. To build Vela without the launcher, use `:app:assembleStandardDebug` or `:app:assembleStandardRelease`. The two flavors keep the same app ID; install one at a time on a device.
 
 ## Architecture
 

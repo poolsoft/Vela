@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/dock_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp"
+    android:paddingBottom="4dp">
+
+    <!-- App List Button (Top) - Uses dashboard_grid (Apps) -->
+    <ImageButton
+        android:id="@+id/btn_app_list"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="App List"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/dashboard_grid"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:tint="#FFFFFF"
+        android:visibility="visible" />
+
+    <!-- Shortcuts RecyclerView (Center, fills vertical space) -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/dock_recycler"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:orientation="vertical"
+        app:layout_constraintTop_toBottomOf="@id/btn_app_list"
+        app:layout_constraintBottom_toTopOf="@id/btn_desktop_mode"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Desktop Mode Toggle Button -->
+    <ImageButton
+        android:id="@+id/btn_desktop_mode"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Toggle Desktop"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_desktop_mode"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:tint="#88FFFFFF" />
+
+    <!-- Layout Toggle Button (Bottom) - Uses sort_by_size (Layout/Grid) -->
+    <ImageButton
+        android:id="@+id/btn_layout_toggle"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Toggle Layout"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
+        android:src="@android:drawable/ic_menu_sort_by_size"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:tint="#FFFFFF"
+        android:visibility="gone" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

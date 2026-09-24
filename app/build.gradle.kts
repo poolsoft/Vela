@@ -148,6 +148,12 @@ android {
         )
     }
 
+    flavorDimensions += "experience"
+    productFlavors {
+        create("standard") { dimension = "experience" }
+        create("car") { dimension = "experience" }
+    }
+
     // Real release signing comes from CI env vars; local dev falls back to the
     // debug keystore so `adb install` still works.
     //   VELA_KEYSTORE_PATH / VELA_KEYSTORE_PASSWORD / VELA_KEY_ALIAS (=vela)
@@ -212,6 +218,7 @@ dependencies {
     "baselineProfile"(project(":baselineprofile"))
 
     implementation(project(":core"))
+    implementation(libs.kotlinx.serialization.json)
 
     // sherpa-onnx: in-process neural TTS runtime (runs the downloaded Kokoro model). Vendored AAR
     // (no official Maven artifact; the JitPack coordinate doesn't resolve). Lives in :app because a
@@ -248,6 +255,13 @@ dependencies {
     implementation(libs.maplibre.android)
     implementation(libs.androidx.car.app) // Android Auto (projection): templates + car surface
     implementation(libs.androidx.car.app.projected) // projected host connector (phone → car)
+
+    // CoMaps_Auto_V2 XML Layout Bagimliliklari
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.2.0")
+    implementation("androidx.cardview:cardview:1.0.0")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("androidx.preference:preference-ktx:1.2.1")
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

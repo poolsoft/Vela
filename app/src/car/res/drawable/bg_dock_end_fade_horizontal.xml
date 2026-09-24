@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Yatay dock icin: sol (transparan) -> sag (koyu) gradient. Listenin sonunda icon'lari yutarak devam olduğunu gosterir. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:startColor="#00000000"
+        android:endColor="#CC000000"
+        android:angle="0" />
+</shape>

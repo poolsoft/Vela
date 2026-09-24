@@ -1,6 +1,6 @@
 // Baseline-profile GENERATOR module. Runs the app on a device, records the classes/methods the
 // hot paths touch (startup, map pan, settings scroll), and writes them to
-// app/src/release/generated/baselineProfiles/ - which is COMMITTED, so every CI release build
+// app/src/carRelease/generated/baselineProfiles/ - which is COMMITTED, so every CI release build
 // bakes it and androidx.profileinstaller AOT-compiles those paths at install time. Sideloaded
 // installs (Obtainium) get no Play cloud profiles; without this every nightly ran
 // interpreter-cold until overnight background dexopt.
@@ -8,7 +8,7 @@
 // Regenerate (any API 33+ device, e.g. the wired test phone; release keystore env so the
 // nonMinified variant installs over the existing app):
 //   VELA_KEYSTORE_PATH=... VELA_KEYSTORE_PASSWORD=... VELA_KEY_ALIAS=vela \
-//     ./gradlew :app:generateBaselineProfile
+//     ./gradlew :app:generateCarReleaseBaselineProfile
 plugins {
     alias(libs.plugins.android.test)
     alias(libs.plugins.kotlin.android)
@@ -29,6 +29,11 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     targetProjectPath = ":app"
+    flavorDimensions += "experience"
+    productFlavors {
+        create("car") { dimension = "experience" }
+        create("standard") { dimension = "experience" }
+    }
 
     testOptions.managedDevices.localDevices.create("pixel6Api34") {
         device = "Pixel 6"

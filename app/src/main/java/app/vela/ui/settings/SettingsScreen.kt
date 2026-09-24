@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.vela.variant.CarIntegration
 import app.vela.ui.map.MapViewModel
 import app.vela.ui.settings.sections.AboutSettingsScreen
 import app.vela.ui.settings.sections.AppearanceSettingsScreen
@@ -16,6 +17,7 @@ import app.vela.ui.settings.sections.DiagnosticsSettingsScreen
 import app.vela.ui.settings.sections.MapSettingsScreen
 import app.vela.ui.settings.sections.NavigationSettingsScreen
 import app.vela.ui.settings.sections.OfflineSettingsScreen
+import app.vela.ui.settings.sections.PortableBackupSettings
 import app.vela.ui.settings.sections.PlacesSettingsScreen
 import app.vela.ui.settings.sections.SavedPlacesSettingsScreen
 import app.vela.ui.settings.sections.SearchSettingsScreen
@@ -24,7 +26,7 @@ import app.vela.ui.settings.sections.VoiceSettingsScreen
 /** The Settings pages. HUB is the category list; everything else is one sub-screen (spoke). */
 internal enum class SettingsSection {
     HUB, APPEARANCE, MAP, PLACES, NAVIGATION, VOICE, SEARCH, OFFLINE, SAVED_PLACES,
-    PRIVACY, DIAGNOSTICS, ABOUT,
+    PRIVACY, DIAGNOSTICS, ABOUT, CAR, PERMISSIONS, BACKUP,
 }
 
 /**
@@ -37,9 +39,10 @@ internal enum class SettingsSection {
  * (this replaces the old measure-and-scroll-to-section dance on the single page).
  */
 @Composable
-fun SettingsScreen(vm: MapViewModel, onBack: () -> Unit, openOffline: Boolean = false, openVoiceLibrary: Boolean = false) {
+fun SettingsScreen(vm: MapViewModel, onBack: () -> Unit, openOffline: Boolean = false, openVoiceLibrary: Boolean = false, openCar: Boolean = false) {
     val state by vm.state.collectAsStateWithLifecycle()
     val startSection = when {
+        openCar -> SettingsSection.CAR
         openOffline -> SettingsSection.OFFLINE
         openVoiceLibrary -> SettingsSection.VOICE
         else -> SettingsSection.HUB
@@ -66,6 +69,13 @@ fun SettingsScreen(vm: MapViewModel, onBack: () -> Unit, openOffline: Boolean = 
             onOpen = { s, label -> highlight = label; section = s },
             onBack = onBack,
         )
+        SettingsSection.CAR -> CarIntegration.Settings(
+            onBack = toHub,
+            onPermissions = { cameFrom = section; section = SettingsSection.PERMISSIONS },
+            onBackup = { cameFrom = section; section = SettingsSection.BACKUP },
+        )
+        SettingsSection.PERMISSIONS -> CarIntegration.Permissions(onBack = toHub)
+        SettingsSection.BACKUP -> PortableBackupSettings(onBack = toHub)
         SettingsSection.APPEARANCE -> AppearanceSettingsScreen(vm, onBack = toHub)
         SettingsSection.MAP -> MapSettingsScreen(onBack = toHub)
         SettingsSection.PLACES -> PlacesSettingsScreen(onBack = toHub)

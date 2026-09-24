@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="car_launcher_tools">Launcher araçları</string>
+    <string name="car_tools_saved">Kaydedildi</string>
+    <string name="car_tools_failed">İşlem tamamlanamadı.</string>
+    <string name="car_backup_export">Launcher yedeğini dışa aktar</string>
+    <string name="car_backup_import">Launcher yedeğini geri yükle</string>
+    <string name="car_backup_invalid">Yedek geçersiz veya desteklenmiyor. Ayarlar değiştirilmedi.</string>
+    <string name="car_backup_scope">Launcher ayarları, kısayollar, listeler ve dahili widget düzeni dahildir. Android widget ve duvar kâğıdı erişimleri bu cihazda kalır.</string>
+    <string name="car_backup_confirm">Launcher ayarları, kısayollar, listeler ve dahili widget düzeni bu yedekle değiştirilsin mi? Mevcut Android widget’lar korunur.</string>
+    <string name="car_startup_app">Launcher açılışında başlatılacak uygulama</string>
+    <string name="car_startup_scope">Launcher ön planda açıldığında bir kez başlatılır. Cihaz açılışında arka plandan uygulama başlatılmaz.</string>
+    <string name="car_none">Yok</string>
+    <string name="car_system_widget_add">Android widget ekle</string>
+    <string name="car_system_widget_missing">Widget kullanılamıyor. Silip yeniden ekleyin.</string>
+    <string name="car_wallpaper_choose">Masaüstü duvar kâğıdı seç</string>
+    <string name="car_wallpaper_clear">Duvar kâğıdını kaldır</string>
+    <string name="car_desktop_text_scale">Masaüstü yazı boyutu</string>
+    <string name="car_picture_in_picture">Küçük kayan pencereyi aç</string>
+    <string name="car_source_internal">Yerel müzik</string>
+    <string name="car_music_source">Müzik kaynağı seç</string>
+    <string name="car_antenna_from_lat">Başlangıç enlemi</string>
+    <string name="car_antenna_from_lon">Başlangıç boylamı</string>
+    <string name="car_antenna_from_alt">Başlangıç yüksekliği (m)</string>
+    <string name="car_antenna_to_lat">Hedef enlemi</string>
+    <string name="car_antenna_to_lon">Hedef boylamı</string>
+    <string name="car_antenna_to_alt">Hedef yüksekliği (m)</string>
+    <string name="car_antenna_help">İki noktanın koordinat ve yüksekliklerini aynı referansla girin. Yön gerçek kuzeye göredir; yükseliş açısı kısa mesafe için yaklaşık değerdir.</string>
+    <string name="car_antenna_result">Yön: %1$.1f° · Mesafe: %2$.2f km · Yükseliş: %3$.1f°</string>
+    <string name="car_antenna_same_point">İki farklı konum seçin.</string>
+    <string name="car_save">Kaydet</string>
+    <string name="car_music_visualizer_permission">Yerel müzik görselleştiricisi için ses izni gerekiyor.</string>
+    <string name="car_music_play_failed">Parça çalınamadı. Depolama bağlantısını kontrol edin.</string>
+    <string name="car_music_favorites">Favoriler</string>
+    <string name="car_music_unknown_folder">Müzik klasörü</string>
+    <string name="car_music_track_count">%1$d parça</string>
+    <string name="car_music_new_playlist">Yeni çalma listesi</string>
+    <string name="car_music_unavailable">Depolama bağlı değil</string>
+    <string name="car_music_remove_track">Listeden kaldır</string>
+    <string name="car_music_scanning">Müzik taranıyor…</string>
+    <string name="car_music_queue_empty">Çalma sırası boş</string>
+    <string name="car_music_empty">Eşleşen parça yok</string>
+    <string name="car_music_edit_tracks">Parçaları seç</string>
+    <string name="car_music_rename_playlist">Listeyi yeniden adlandır</string>
+    <string name="car_music_delete_playlist">Liste silinsin mi?</string>
+    <string name="car_music_playlist_name">Çalma listesi adı</string>
+    <string name="car_music_name_required">Bir ad girin</string>
+    <string name="car_music_add_playlist">Çalma listesine ekle</string>
+    <string name="car_music_unfavorite">Favorilerden çıkar</string>
+    <string name="car_music_favorite">Favorilere ekle</string>
+    <string name="car_music_permission">Yerel müziği taramak için ses dosyalarına erişim izni verin.</string>
+    <string name="car_music_scan_failed">Müzik taranamadı. Tekrar deneyin.</string>
+    <string name="car_panel_compact">Küçük panelde tut</string>
+    <string name="car_visualizer_small">Küçük panel görselleştiricisi</string>
+    <string name="car_visualizer_large">Büyük panel görselleştiricisi</string>
+    <string name="car_visualizer_rate">Görselleştirici kare hızı</string>
+    <string-array name="car_visualizer_modes">
+        <item>Klasik</item>
+        <item>Parıltı</item>
+        <item>Neon</item>
+        <item>Dalga</item>
+        <item>Radyal</item>
+        <item>Simetrik</item>
+        <item>Parçacık</item>
+        <item>Halkalar</item>
+    </string-array>
+
+    <string name="car_internal_settings">Ayarlar</string>
+    <string name="car_internal_music">Müzik</string>
+    <string name="car_internal_antenna">Anten</string>
+    <string name="car_internal_dashboard">Dashboard</string>
+    <string name="car_internal_neon_dashboard">Dijital Gösterge</string>
+    <string name="car_feature_pending">Bu araç henüz Vela’ya aktarılmadı.</string>
+    <string name="car_app_launch_failed">Uygulama açılamadı.</string>
+    <string name="car_dock_added">Dock’a eklendi</string>
+    <string name="car_dock_already_added">Zaten dock’ta</string>
+    <string name="car_dock_move_previous">Öne taşı</string>
+    <string name="car_dock_move_next">Arkaya taşı</string>
+    <string name="car_dock_remove">Dock’tan kaldır</string>
+    <string name="car_panel_expansion">Panel genişleme biçimi</string>
+    <string name="car_panel_swap">Haritayı küçült</string>
+    <string name="car_panel_overlay">Haritanın üzerine aç</string>
+    <string name="car_panel_height">Dikey panel yüksekliği</string>
+    <string name="car_music_preferred">Tercih edilen müzik uygulaması</string>
+    <string name="car_music_internal">Vela müzik çalar</string>
+
+    <string name="car_music_now_playing">♫ ŞU AN ÇALAN</string>
+    <string name="car_pref_title_online_album_art">Çevrimiçi albüm kapağı</string>
+    <string-array name="online_album_art_entries">
+        <item>Kapalı</item>
+        <item>Yalnız ölçülmeyen ağ</item>
+        <item>Tüm ağlar</item>
+    </string-array>
+    <!-- Car Launcher Ayarları -->
+    <string name="car_settings_title">Araç Ayarları</string>
+    <string name="car_pref_floating_button_title">Yüzen Yardımcı Buton (Floating Button)</string>
+    <string name="car_pref_floating_button_desc">Ekranda taşınabilir sistem menü butonu gösterir</string>
+    <string name="car_pref_floating_button_size_title">Yüzen Buton Boyutu</string>
+    <string name="car_floating_menu_layout_toggle">Görünümü Değiştir</string>
+    <string name="car_floating_menu_desktop_toggle">Masaüstü Modu (Desktop)</string>
+    <string name="car_floating_menu_settings">Car Launcher Ayarları</string>
+    <string name="car_pref_category_language">Dil / Language</string>
+    <string name="car_pref_language_title">Uygulama Dili</string>
+    <string name="car_pref_language_desc">Arayüz dilini değiştirin (Yeniden başlatma gerektirir)</string>
+
+    <!-- Floating Button Force GPS -->
+    <string name="car_floating_button_force_gps">Sürekli GPS</string>
+    <string name="car_floating_button_force_gps_desc">Arka planda dahi hızı güncellemek için GPS\'i açık tutar. Daha fazla batarya harcar.</string>
+
+    <!-- Navigation Directions -->
+    <string name="car_nav_straight">Düz devam edin</string>
+    <string name="car_nav_turn_right">Sağa dönün</string>
+    <string name="car_nav_turn_sharp_right">Keskin sağa dönün</string>
+    <string name="car_nav_turn_slight_right">Hafif sağa dönün</string>
+    <string name="car_nav_turn_left">Sola dönün</string>
+    <string name="car_nav_turn_sharp_left">Keskin sola dönün</string>
+    <string name="car_nav_turn_slight_left">Hafif sola dönün</string>
+    <string name="car_nav_u_turn">U dönüşü yapın</string>
+    <string name="car_nav_roundabout">Döner kavşaktan %1$d. çıkıştan çıkın</string>
+    <string name="car_nav_roundabout_no_exit">Döner kavşağa girin</string>
+    <string name="car_nav_reached_destination">Hedefinize ulaştınız</string>
+    <string name="car_nav_exit_highway_left">Otobandan sola çıkın</string>
+    <string name="car_nav_exit_highway_right">Otobandan sağa çıkın</string>
+    <string name="car_nav_continue">Devam edin</string>
+    <string name="car_floating_button_mode_off">Kapalı</string>
+    <string name="car_floating_button_mode_background">Sadece arka plandayken göster</string>
+    <string name="car_floating_button_mode_always">Her zaman göster</string>
+    <string name="car_source_select">Kaynağı seç</string>
+    <string name="car_source_play">Seç ve çal</string>
+    <string name="car_source_auto">Etkin kaynağı otomatik izle</string>
+    <string name="car_source_unavailable">Kaynak hazır değil. Mevcut oynatma korundu.</string>
+    <string name="car_settings_hub">Araç ve launcher</string>
+    <string name="car_settings_hub_sub">Yerleşim, müzik, Smart Focus ve cihaz izinleri</string>
+    <string name="car_permissions_title">İzinler ve cihaz</string>
+    <string name="car_permissions_sub">Dönüşte erişim yeniden kontrol edilir. Onayı Android ister.</string>
+    <string name="car_permission_audio">Müzik kütüphanesi</string>
+    <string name="car_permission_microphone">Mikrofon ve görselleştirici</string>
+    <string name="car_permission_bt">Bluetooth bağlantısı</string>
+    <string name="car_permission_notifications">Bildirimler</string>
+    <string name="car_permission_overlay">Yüzen pencere</string>
+    <string name="car_permission_settings">Sistem ayarlarını değiştirme</string>
+    <string name="car_permission_listener">Harici oynatıcı erişimi</string>
+    <string name="car_permission_home">Varsayılan ana ekranı seç</string>
+    <string name="car_permission_app_settings">Android uygulama ayarları</string>
+    <string name="car_permission_granted">Verildi</string>
+    <string name="car_permission_required">Verilmedi</string>
+    <string name="car_smart_focus">Smart Focus</string>
+    <string name="car_smart_focus_desc">Boştayken gerçek oynatmayı izle. Elle seçilen kaynak, otomatik izleme yeniden açılana kadar korunur. Yalnızca BT bağlanması kaynağı değiştirmez.</string>
+    <string name="car_source_last">Son kaynak</string>
+    <string name="car_startup_source">Otomatik devam kaynağı (aşağıdaki otomatik oynatmayı etkinleştirin)</string>
+    <string name="car_bt_wait">Açılışta bağlantı bekleme: %1$d saniye</string>
+    <string name="car_music_recent">Son çalınanlar</string>
+    <string name="car_music_most_played">En çok dinlenenler</string>
+    <string name="car_source_no_confirmation">Oynatma doğrulanamadı. Kaynak uygulamasını kontrol edin.</string>
+    <string name="car_music_sort">Parçaları sırala</string>
+    <string-array name="car_music_sort_orders">
+        <item>Parça adı</item>
+        <item>Sanatçı</item>
+        <item>Albüm</item>
+        <item>Yeni eklenenler</item>
+        <item>En çok dinlenenler</item>
+    </string-array>
+    <string name="car_source_conflict">Başka kaynak başladı ancak duraklatma desteklemiyor. Kaynak uygulamasını kontrol edin.</string>
+</resources>

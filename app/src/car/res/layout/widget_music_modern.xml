@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="120dp"
+    android:background="@drawable/bg_panel_rounded"
+    android:clipToOutline="true">
+
+    <!-- Album Kapagi Arka Plan -->
+    <ImageView
+        android:id="@+id/widget_album_art"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:scaleType="centerCrop"
+        android:alpha="0.4"
+        android:src="@drawable/bg_track_art_placeholder"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
+    <!-- Cam Efekti Arka Plan -->
+    <View
+        android:id="@+id/widget_glass_layer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#33000000"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
+    <!-- App Icon (Header) -->
+    <ImageView
+        android:id="@+id/widget_app_icon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_margin="12dp"
+        android:src="@android:drawable/ic_media_play"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Track Title -->
+    <TextView
+        android:id="@+id/widget_track_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:text="Parça Adı"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:ellipsize="end"
+        android:maxLines="1"
+        app:layout_constraintStart_toEndOf="@id/widget_app_icon"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/widget_app_icon"
+        app:layout_constraintBottom_toBottomOf="@id/widget_app_icon" />
+
+    <!-- Artist -->
+    <TextView
+        android:id="@+id/widget_track_artist"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Sanatçı"
+        android:textColor="#BBBBBB"
+        android:textSize="14sp"
+        app:layout_constraintStart_toStartOf="@id/widget_track_title"
+        app:layout_constraintEnd_toEndOf="@id/widget_track_title"
+        app:layout_constraintTop_toBottomOf="@id/widget_track_title" />
+
+    <!-- Visualizer -->
+    <app.vela.carlauncher.widgets.MusicVisualizerView
+        android:id="@+id/widget_visualizer"
+        android:layout_width="0dp"
+        android:layout_height="40dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Kontroller -->
+    <LinearLayout
+        android:id="@+id/controls_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginBottom="8dp"
+        app:layout_constraintBottom_toTopOf="@id/widget_visualizer"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/widget_btn_prev"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_media_previous"
+            app:tint="#FFFFFF" />
+
+        <ImageButton
+            android:id="@+id/widget_btn_play"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginHorizontal="16dp"
+            android:background="@drawable/bg_circle_button"
+            android:backgroundTint="@color/cl_primary"
+            android:src="@android:drawable/ic_media_play"
+            app:tint="#FFFFFF" />
+
+        <ImageButton
+            android:id="@+id/widget_btn_next"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_media_next"
+            app:tint="#FFFFFF" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

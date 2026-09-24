@@ -92,6 +92,9 @@ internal fun SettingsHub(
             modifier = topRow.fillMaxWidth().padding(vertical = 4.dp).dpadFieldEscape(),
         )
         val sectionTitles = mapOf(
+            SettingsSection.CAR to stringResource(app.vela.variant.CarIntegration.settingsTitle),
+            SettingsSection.PERMISSIONS to stringResource(app.vela.variant.CarIntegration.permissionsTitle),
+            SettingsSection.BACKUP to stringResource(R.string.backup_title),
             SettingsSection.APPEARANCE to stringResource(R.string.settings_appearance),
             SettingsSection.MAP to stringResource(R.string.settings_map),
             SettingsSection.PLACES to stringResource(R.string.settings_places),
@@ -106,7 +109,10 @@ internal fun SettingsHub(
         )
         if (searchQuery.isNotBlank()) {
             val matches = SEARCH_INDEX.map { (res, section) -> stringResource(res) to section }
-                .filter { it.first.contains(searchQuery.trim(), ignoreCase = true) }
+                .filter { (label, section) ->
+                    (app.vela.variant.CarIntegration.available || section !in setOf(SettingsSection.CAR, SettingsSection.PERMISSIONS)) &&
+                        label.contains(searchQuery.trim(), ignoreCase = true)
+                }
                 .take(10)
             if (matches.isEmpty()) {
                 Text(
@@ -147,11 +153,34 @@ internal fun SettingsHub(
             if (section == returnTo) m = m.dpadAutoFocus(returnFocus)
             return m
         }
+        if (app.vela.variant.CarIntegration.available) {
+        HubRow(
+            icon = Icons.Outlined.Palette,
+            title = stringResource(app.vela.variant.CarIntegration.settingsTitle),
+            subtitle = stringResource(app.vela.variant.CarIntegration.settingsSubtitle),
+            modifier = rowModifier(SettingsSection.CAR, first = true),
+            onClick = { onOpen(SettingsSection.CAR, null) },
+        )
+        HubRow(
+            icon = Icons.Outlined.Shield,
+            title = stringResource(app.vela.variant.CarIntegration.permissionsTitle),
+            subtitle = stringResource(app.vela.variant.CarIntegration.permissionsSubtitle),
+            modifier = rowModifier(SettingsSection.PERMISSIONS, first = false),
+            onClick = { onOpen(SettingsSection.PERMISSIONS, null) },
+        )
+        }
+        HubRow(
+            icon = Icons.Outlined.CloudDownload,
+            title = stringResource(R.string.backup_title),
+            subtitle = stringResource(R.string.backup_hub_sub),
+            modifier = rowModifier(SettingsSection.BACKUP, first = false),
+            onClick = { onOpen(SettingsSection.BACKUP, null) },
+        )
         HubRow(
             icon = Icons.Outlined.Palette,
             title = stringResource(R.string.settings_appearance),
             subtitle = stringResource(R.string.settings_hub_appearance_sub),
-            modifier = rowModifier(SettingsSection.APPEARANCE, first = true),
+            modifier = rowModifier(SettingsSection.APPEARANCE, first = false),
             onClick = { onOpen(SettingsSection.APPEARANCE, null) },
         )
         HubRow(
@@ -278,6 +307,7 @@ private fun HubRow(
  * When a section gains a row, add its label here - the search only knows what's listed.
  */
 private val SEARCH_INDEX: List<Pair<Int, SettingsSection>> = listOf(
+    R.string.backup_title to SettingsSection.BACKUP,
     // Appearance
     R.string.settings_follow_system to SettingsSection.APPEARANCE,
     R.string.settings_theme_light to SettingsSection.APPEARANCE,
@@ -368,6 +398,9 @@ private val SEARCH_INDEX: List<Pair<Int, SettingsSection>> = listOf(
     R.string.settings_cameras_group to SettingsSection.NAVIGATION,
     R.string.voice_capture_examples_title to SettingsSection.SEARCH,
     // About
+    app.vela.variant.CarIntegration.settingsTitle to SettingsSection.CAR,
+    app.vela.variant.CarIntegration.settingsSubtitle to SettingsSection.CAR,
+    app.vela.variant.CarIntegration.permissionsTitle to SettingsSection.PERMISSIONS,
     R.string.settings_support to SettingsSection.ABOUT,
     R.string.settings_version to SettingsSection.ABOUT,
     R.string.settings_update_auto to SettingsSection.ABOUT,
