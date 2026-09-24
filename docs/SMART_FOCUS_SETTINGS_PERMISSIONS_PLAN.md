@@ -1,4 +1,4 @@
-# Vela — Smart Focus, ortak ayarlar ve izin planı
+# Vela - Smart Focus, ortak ayarlar ve izin planı
 
 Tarih: 23 Eylül 2026. Durum: üzerinde karar verilecek taslak.
 Bu belge davranış önerisidir; aşağıdaki senaryoların tamamı uygulanmış değildir. Bu çalışma uygulama kodunu veya cihaz izinlerini değiştirmez.
@@ -40,7 +40,7 @@ BT için iki kurulum ayrılmalı: Vela teypte çalışıp telefondan ses alabili
 
 | Profil | Açılış | Telefon bağlanınca | Kaynak bulunamazsa |
 | --- | --- | --- | --- |
-| Elle kullanım — ilk kurulum önerisi | Son ekran ve parça hazırlanır; ses başlamaz | Sadece bağlantı gösterilir | Bekle, kullanıcıya oynat/seç seçeneği sun |
+| Elle kullanım - ilk kurulum önerisi | Son ekran ve parça hazırlanır; ses başlamaz | Sadece bağlantı gösterilir | Bekle, kullanıcıya oynat/seç seçeneği sun |
 | Son kaynaktan devam | Otomatik devam açıksa ve son durum çalıyorsa aynı kaynağı hazırla | Son kaynak BT ise bekleyen geçişi tamamla | Sessiz bekle; isteğe bağlı yedek kaynak |
 | BT öncelikli | Medya bağlantısı için önerilen 8 saniye bekle | Otomatik devam koşulları sağlanıyorsa bir oynat isteği gönder | Süre sonunda yalnızca kullanıcı seçmişse yedek kaynak |
 | Radyo öncelikli | Otomatik devam açıksa son istasyonu aç | Radyoyu kesme; elle BT seçilirse geç | Radyo yoksa hata göster; yedek kaynak isteğe bağlı |
@@ -266,7 +266,7 @@ Notlarım ve değiştirmek istediğim senaryolar:
 - OsmAnd: OsmAnd/AndroidManifest-carlauncher.xml, OsmAnd/build.gradle, src-carlauncher içindeki music/MusicManager.java.
 - Önceki iş listesi: [Car Launcher aktarım planı](CAR_LAUNCHER_TRANSFER_PLAN.md).
 
-## 13. Uygulama güncellemesi — 24 Eylül 2026
+## 13. Uygulama güncellemesi - 24 Eylül 2026
 
 Smart Focus OsmAnd müzik oynatıcısında zaten vardı; bu çalışma Vela aktarımını geliştirdi. Bölüm 1, uygulama öncesi inceleme kaydıdır. İlk görünüm artık kapak/parça/görselleştirici; playlist düğmeyle açılır.
 Elle kaynak kilidi, ayrı Seç ve çal, gerçek MediaSession gözleme, OEM BT komutları, ortak ayar merkezi, izin durum ekranı ve HOME rolü eklendi. Son çalınanlar, en çok dinlenenler ve beş sıralama seçeneği aktarıldı.

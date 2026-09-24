@@ -670,7 +670,7 @@
     <string name="car_mute">Sessize al</string>
     <string name="car_unmute">Sesi aç</string>
     <string name="car_faster_route">Daha hızlı −%1$d dk</string>
-    <string name="car_no_route">Uygun rota yok — konumunuzu kontrol edin</string>
+    <string name="car_no_route">Uygun rota yok - konumunuzu kontrol edin</string>
     <string name="map_parking_saved">Park yeri kaydedildi</string>
     <string name="map_parking_no_fix">GPS konumu bekleniyor</string>
     <string name="map_parking_cleared">Park yeri temizlendi</string>

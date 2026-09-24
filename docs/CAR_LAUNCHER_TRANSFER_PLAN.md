@@ -19,7 +19,7 @@ Bu envanter kaynak kod incelemesine dayanır. Sınıf veya ekran bulunması, öz
 
 Durum: kod düzeltmeleri uygulandı; cihaz kabul kontrolü bekliyor.
 
-## Aşama 0 — Mevcut düzeltmelerin cihaz kabulü
+## Aşama 0 - Mevcut düzeltmelerin cihaz kabulü
 
 1. Split → tam harita → masaüstü → kapat → split akışını dene; masaüstünü döngüden çıkarıp tekrar dene.
 2. Normal, map_only ve desktop başlangıçlarını ayrı ayrı kontrol et.
@@ -30,7 +30,7 @@ Durum: kod düzeltmeleri uygulandı; cihaz kabul kontrolü bekliyor.
 
 Kabul: çift mod değişimi, eski medya bilgisi, yanlış panel açılması ve biriken host nesneleri görülmemesi. Bu kontroller bu turda cihaz üzerinde yapılmadı.
 
-## Aşama 1 uygulama kaydı — 23 Eylül 2026
+## Aşama 1 uygulama kaydı - 23 Eylül 2026
 
 Kodda tamamlananlar (cihaz kabulü bekliyor):
 
@@ -49,7 +49,7 @@ Statik doğrulama: XML/resource referansları, UTF-8/BOM ve delimiter kontroller
 
 Sonraki iş: Aşama 1'in eski metin/tema uyarlamasını tamamlamak ve kabul senaryolarını cihazda doğrulamak; ardından Aşama 2 müzik işlevleri. Aşama 2 kütüphane ve oynatma düzeltmeleri aşağıdaki ek kayıtta; Aşama 3–5 henüz uygulanmadı.
 
-## Aşama 1 — Ekran ve ayar bağlantılarını tamamlama
+## Aşama 1 - Ekran ve ayar bağlantılarını tamamlama
 
 Öncelik: yüksek. Bağımlılık: Aşama 0.
 
@@ -63,7 +63,7 @@ Sonraki iş: Aşama 1'in eski metin/tema uyarlamasını tamamlamak ve kabul sena
 
 Kabul: her görünen ayar somut davranış değiştirir ve yeniden açılışta korunur; dahili/harici kısayollar çalışır; dikey-yatay dönüşte panel durumu kaybolmaz.
 
-## Aşama 2 — Müzik işlevlerinde eşdeğerlik
+## Aşama 2 - Müzik işlevlerinde eşdeğerlik
 
 Öncelik: yüksek. Bağımlılık: Aşama 1.
 
@@ -76,7 +76,7 @@ Kabul: her görünen ayar somut davranış değiştirir ve yeniden açılışta 
 
 Kabul: yerel, MediaSession, Bluetooth ve desteklenen teyp kaynaklarında aynı kontrol davranışı; gerçek klasör/playlist kalıcılığı; ses kesintisi ve USB çıkarılmasında güvenli toparlanma. Donanım adaptörleri ilgili ünitede denenmeden tamamlandı sayılmaz.
 
-## Aşama 3 — Gerçek hava durumu ve araç verileri
+## Aşama 3 - Gerçek hava durumu ve araç verileri
 
 Öncelik: yüksek. Bağımlılık: Aşama 1; araç adaptörleri için Aşama 2.
 
@@ -88,7 +88,7 @@ Kabul: yerel, MediaSession, Bluetooth ve desteklenen teyp kaynaklarında aynı k
 
 Kabul: ağ/konum/OBD bağlantısı kesildiğinde yanlış güncel veri gösterilmez; kaynak değişimleri ve zaman aşımı tutarlı; gerçek araç ölçümleriyle doğrulama.
 
-## Aşama 4 — Launcher yardımcı özellikleri ve kişiselleştirme
+## Aşama 4 - Launcher yardımcı özellikleri ve kişiselleştirme
 
 Öncelik: orta. Bağımlılık: Aşama 1–3.
 
@@ -101,7 +101,7 @@ Kabul: ağ/konum/OBD bağlantısı kesildiğinde yanlış güncel veri gösteril
 
 Kabul: yedek round-trip aynı düzeni getirir; bozuk yedek veri kaybettirmez; widget silinince sistem kaynağı bırakılır; açılış davranışı ilgili cihazda doğrulanır.
 
-## Aşama 5 — Uyumluluk ve saha doğrulaması
+## Aşama 5 - Uyumluluk ve saha doğrulaması
 
 Öncelik: yayın öncesi. Her aşamada kısmi kontrol, sonunda bütünleşik kontrol.
 
@@ -118,7 +118,7 @@ Kabul: hedef cihaz matrisi ve sonuçları kayıtlı; doğrulanmayan cihaz/özell
 0 → 1 → 2 → 3 → 4 → 5. Hava durumu işi, ekran bağlantıları tamamlandıktan sonra müzik donanım adaptörlerinden bağımsız yürütülebilir. Sonraki çalışma Aşama 2 kalan işleri ve cihaz kabulünü ele almalı; bu belge diğer aşamaların uygulanmış olduğu anlamına gelmez.
 
 
-## Aşama 2 uygulama kaydı — müzik kütüphanesi ve kontroller
+## Aşama 2 uygulama kaydı - müzik kütüphanesi ve kontroller
 
 Kodda tamamlananlar; derleme ve cihaz kabulü henüz yapılmadı:
 
@@ -146,7 +146,7 @@ Cihaz kabul sırası:
 6. Harici oynatıcıya geç; başlık/kapak/ilerleme ve kontroller aynı kaynağı izlemeli.
 
 
-## Dikey/yatay yerleşim ve müziğe devam etme — 23 Eylül 2026
+## Dikey/yatay yerleşim ve müziğe devam etme - 23 Eylül 2026
 
 - Yerleşim yönü host alanının ölçülen en/boy oranından belirlenir; dock yönü ve panel kısıtları birlikte güncellenir.
 - Dock kısayolları kalan alan içinde kaydırılır. Dar ekranda mini oynatıcı ve yardımcı mikrofon alanı kısayolları sıkıştırmaz.

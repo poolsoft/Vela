@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Araba Teybi Landscape override (1280x480, w600dp+) -->
 <resources>
-    <!-- APP DOCK — ince tut, dikey alan az -->
+    <!-- APP DOCK - ince tut, dikey alan az -->
     <dimen name="dock_height">44dp</dimen>
     <dimen name="dock_icon_size">32dp</dimen>
     <dimen name="dock_icon_padding">4dp</dimen>
@@ -9,7 +9,7 @@
     <dimen name="dock_music_height">36dp</dimen>
     <dimen name="dock_music_min_width">110dp</dimen>
 
-    <!-- ANA EKRAN — ust marjin minimum -->
+    <!-- ANA EKRAN - ust marjin minimum -->
     <dimen name="map_margin_top">4dp</dimen>
     <dimen name="map_margin_side">6dp</dimen>
     <dimen name="widget_panel_width">380dp</dimen>

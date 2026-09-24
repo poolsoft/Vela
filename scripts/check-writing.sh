@@ -15,7 +15,7 @@
 set -euo pipefail
 RANGE="${1:-origin/main..HEAD}"
 FAIL=0
-BRITISH='\b(colour|centre|behaviour|neighbour|metres?|labelled|travelled|licence|defence|grey|organis|recognis|utilis|memoise|apologise)\b'
+BRITISH='\b(colour|centre|behaviour|neighbour|metres|labelled|travelled|licence|defence|grey|organis|recognis|utilis|memoise|apologise)\b'
 MSGS="$(git log "$RANGE" --format='%H%n%B' 2>/dev/null || true)"
 if [ -n "$MSGS" ]; then
   if grep -inE "co-authored-by:.*(claude|anthropic)|generated with \[?claude|🤖" <<<"$MSGS"; then

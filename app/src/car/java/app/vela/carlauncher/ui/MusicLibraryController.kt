@@ -307,7 +307,7 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         val available = tracks.toList()
         val checked = BooleanArray(available.size) { available[it].libraryKey() in item.trackKeys }
         show(AlertDialog.Builder(context).setTitle(R.string.car_music_edit_tracks)
-            .setMultiChoiceItems(available.map { it.baslik + " — " + it.sanatci }.toTypedArray(), checked) { _, index, value -> checked[index] = value }
+            .setMultiChoiceItems(available.map { it.baslik + " - " + it.sanatci }.toTypedArray(), checked) { _, index, value -> checked[index] = value }
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val keys = available.map { it.libraryKey() }.toSet()
