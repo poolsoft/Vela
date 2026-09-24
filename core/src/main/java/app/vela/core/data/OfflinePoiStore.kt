@@ -61,6 +61,37 @@ class OfflinePoiStore @Inject constructor(
         .rawQuery("SELECT COUNT(*) FROM poi", null)
         .use { if (it.moveToFirst()) it.getInt(0) else 0 }
 
+    /** Every POI within [radiusM] of [loc], nearest first: the businesses AT a typed address. A
+     *  pack POI often has no `addr:*` of its own (most US chains do not in OSM), so an address
+     *  search could find the house point but never the shop standing on it (user 2026-09-19). */
+    fun near(loc: LatLng, radiusM: Double, limit: Int = 6): List<Place> {
+        val dLat = radiusM / 111_000.0
+        val dLng = dLat / Math.cos(Math.toRadians(loc.lat)).coerceAtLeast(0.2)
+        val args = arrayOf((loc.lat - dLat).toString(), (loc.lat + dLat).toString(), (loc.lng - dLng).toString(), (loc.lng + dLng).toString())
+        val sql = "SELECT id,name,lat,lng,category,address,phone,website,hours FROM poi WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?"
+        val rows = ArrayList<Place>()
+        fun query(db: android.database.sqlite.SQLiteDatabase) {
+            runCatching {
+                db.rawQuery(sql, args).use { c ->
+                    while (c.moveToNext()) {
+                        val at = LatLng(c.getDouble(2), c.getDouble(3))
+                        val d = loc.distanceTo(at)
+                        if (d > radiusM) continue
+                        rows.add(Place(
+                            id = c.getString(0), name = c.getString(1), location = at, category = c.getString(4),
+                            address = c.getString(5), phone = c.getString(6), website = c.getString(7),
+                            hours = app.vela.core.util.OsmHours.lines(c.getString(8)), // packs keep OSM's raw tag
+                            distanceMeters = d,
+                        ))
+                    }
+                }
+            }
+        }
+        query(helper.readableDatabase)
+        OfflinePacks.dbs.forEach(::query)
+        return rows.distinctBy { it.id }.sortedBy { it.distanceMeters }.take(limit)
+    }
+
     /** Name/category match, nearest first. Robust to a few things a plain LIKE misses:
      *  - Category words ("gas", "coffee", "food", the map's chips) are expanded to the OSM tag values
      *    we actually store — a gas station is category "Fuel" (from `amenity=fuel`), not "gas".
@@ -106,7 +137,7 @@ class OfflinePoiStore @Inject constructor(
                                 address = c.getString(5),
                                 phone = c.getString(6),
                                 website = c.getString(7),
-                                hours = c.getString(8)?.split("\n")?.filter { it.isNotBlank() } ?: emptyList(),
+                                hours = app.vela.core.util.OsmHours.lines(c.getString(8)), // packs keep OSM's raw tag
                                 distanceMeters = near?.distanceTo(loc),
                             ),
                         )
@@ -121,11 +152,18 @@ class OfflinePoiStore @Inject constructor(
         // Rank by how many query words hit the name/category (so "mexican restaurant" leads with the
         // Mexican restaurant, not a random one), then by distance.
         val qWords = (if (words.size > 1) words else listOf(term)).map { it.lowercase() }
+        // TRANSIT STOPS GO LAST unless the query asks for transit. US stops are named by their
+        // corner ("Russell Blvd & Anderson Rd"), so any query carrying a street or a town
+        // word matched hundreds of them and a business search offline read as a list of
+        // intersections (user 2026-09-21, a parts store the pack did not have). They still show,
+        // after everything else.
+        val transitQuery = TRANSIT_QUERY_WORDS.any { term.lowercase().contains(it) }
         return rows.distinctBy { it.id }.sortedWith(
-            compareByDescending<Place> { p ->
-                val hay = (p.name + " " + (p.category ?: "") + " " + (p.address ?: "")).lowercase()
-                qWords.count { hay.contains(it) }
-            }.thenBy { it.distanceMeters ?: Double.MAX_VALUE },
+            compareBy<Place> { p -> if (!transitQuery && (p.category ?: "").lowercase() in TRANSIT_STOP_CATS) 1 else 0 }
+                .thenByDescending { p ->
+                    val hay = (p.name + " " + (p.category ?: "") + " " + (p.address ?: "")).lowercase()
+                    qWords.count { hay.contains(it) }
+                }.thenBy { it.distanceMeters ?: Double.MAX_VALUE },
         ).take(limit)
     }
 
@@ -194,6 +232,10 @@ class OfflinePoiStore @Inject constructor(
 
         /** Exact key first, then the word minus a trailing "s", so typed plurals ("cafes", "gyms")
          *  reach the singular entry. Irregular plurals need their own key ("groceries"). */
+        /** Pack categories that are transit stops (public_transport=* and amenity=bus_station). */
+        internal val TRANSIT_STOP_CATS = setOf("platform", "stop position", "stop area", "station", "bus station", "bus stop")
+        internal val TRANSIT_QUERY_WORDS = listOf("bus", "stop", "station", "transit", "train", "tram", "platform", "metro", "light rail", "subway", "ferry")
+
         internal fun categoryKeywords(query: String): List<String> {
             val key = query.trim().lowercase()
             return CATEGORY_KEYWORDS[key]

@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -138,6 +139,7 @@ internal class NavController(
                     lastRecordedRoute = null
                     clearNavRouteControls()
                     routeCamMeters = emptyList(); routeCamKey = null; spokenCams = emptySet()
+                    app.vela.car.CarBridge.clear()
                     clearRouteFlock()
                     speeding.reset()
                 }
@@ -292,6 +294,7 @@ internal class NavController(
         )
         host.flashStatus(msg, 15_000L)
         voice.speak(msg)
+        app.vela.car.CarBridge.toast(msg)
     }
 
     /** A minute-of-day in the user's clock format (locale + the system 12/24-hour setting). */
@@ -327,7 +330,7 @@ internal class NavController(
                 // doesn't), so a demo of a bike route must buzz like the real ride would. And the
                 // stops (2026-09-14): a demo used to start the session without them, so per-stop
                 // cues and the mid-drive stops editor (#402) had nothing to work with.
-                val demoStops = _state.value.directionsWaypoints.map { NavSession.NavStop(it.location, it.name) }
+                val demoStops = navStopsFor(route, _state.value.directionsWaypoints)
                 navSession.start(route, dest, label, engine, demoStops, _state.value.travelMode)
                 replayOwnsNav = true
                 // Demo mode presents as REAL nav, so the ongoing turn notification is part of
@@ -394,7 +397,7 @@ internal class NavController(
         // Stops are stored in travel order (swapDirections reverses the list itself) → per-stop arrival
         // cues + reroute-through-remaining.
         val s = _state.value
-        val stops = s.directionsWaypoints.map { NavSession.NavStop(it.location, it.name) }
+        val stops = navStopsFor(route, s.directionsWaypoints)
         // Robust host.destination lines for the ARRIVE step: name, else address, else the raw
         // coordinates (offline routing can have any of those missing); the address rides along
         // only when it says something the primary line doesn't.
@@ -485,6 +488,16 @@ internal class NavController(
 
     /** The labels of the stops still ahead, for the nav sheet's Stops row. */
     fun navRemainingStopLabels(): List<String> = navSession.remainingStops().map { it.label }
+
+    /** The drive's stop list for [route]: the user's stops, or, for a route the camera pass built
+     *  through side-street points (issue #600), its whole waypoint plan with those points as SILENT
+     *  stops, so a reroute or recheck keeps the detour instead of routing back past the cameras. */
+    private fun navStopsFor(route: Route, waypoints: List<app.vela.core.model.Place>): List<NavSession.NavStop> =
+        if (route.detourPlan.isEmpty()) waypoints.map { NavSession.NavStop(it.location, it.name) }
+        else route.detourPlan.map { p ->
+            waypoints.firstOrNull { it.location == p }?.let { NavSession.NavStop(it.location, it.name) }
+                ?: NavSession.NavStop(p, "", silent = true)
+        }
     fun navRemainingStops(): List<app.vela.core.nav.NavSession.NavStop> = navSession.remainingStops()
 
     /** In-nav stop insert: hand the pick to the session (it replans the drive through it) and
@@ -681,17 +694,27 @@ internal class NavController(
         val dest = resumeDest ?: return
         val label = _state.value.resumeNavLabel.orEmpty()
         val mode = resumeMode
-        val origin = _state.value.myLocation
-        if (origin == null) { host.showStatus(appContext.getString(R.string.mapvm_resume_waiting_gps)); return }
+        if (_state.value.myLocation == null) { host.showStatus(appContext.getString(R.string.mapvm_resume_waiting_gps)); return }
         _state.update { it.copy(resumeNavLabel = null) }
         scope.launch {
+            // Route from a FRESH fix, not the launch seed. A cold start shows the LAST KNOWN
+            // position first (where the process died, minutes and miles ago), and routing from it
+            // drew the blue line from there over the road already driven since (user 2026-09-19,
+            // "resuming redraws the blue line over the entirety of the route"). Wait for the first
+            // fix that arrives after the tap, briefly; past the wait the seed is what there is.
+            host.startLocation()
+            val seedFix = _state.value.myFixRaw
+            val fresh = kotlinx.coroutines.withTimeoutOrNull(RESUME_FRESH_FIX_WAIT_MS) {
+                _state.first { it.myFixRaw != null && it.myFixRaw != seedFix }
+            }
+            val origin = fresh?.myLocation ?: _state.value.myLocation
+            if (origin == null) { host.showStatus(appContext.getString(R.string.mapvm_resume_waiting_gps)); return@launch }
             val routes = runCatching { dataSource.directions(origin, dest, mode, emptyList()) }.getOrDefault(emptyList())
             var route = routes.firstOrNull()
             if (route?.provisional == true) route = host.nameIfNeeded(route)
             if (route == null) { host.showStatus(appContext.getString(R.string.mapvm_resume_failed)); clearPersistedNav(); return@launch }
             host.destination = dest
             _state.update { it.copy(activeRoute = route, routes = routes) }
-            host.startLocation()
             // No address survives a process kill (only the label was persisted); destinationDisplay
             // still guarantees SOMETHING shows on the arrive step (label, else the coordinates).
             val (resumedName, _) = NavSession.destinationDisplay(label, null, dest)
@@ -913,6 +936,7 @@ internal class NavController(
             }
             if (routeCamKey == key) {
                 routeCamMeters = meters
+                app.vela.car.CarBridge.speedCameras.value = cams.map { it.loc }
                 diag.record("speedcam", "${meters.size} camera(s) on route", "corridor")
             }
         }
@@ -984,6 +1008,7 @@ internal class NavController(
         )
         if (app.vela.ui.FlockNavAlert.card.value) host.flashStatus(msg, 6000L)
         if (app.vela.ui.FlockNavAlert.voice.value) voice.speak(msg)
+        app.vela.car.CarBridge.toast(msg)
     }
 
     /** Say so when you have been over the posted limit for a few seconds (issue #404, opt-in).
@@ -996,6 +1021,7 @@ internal class NavController(
         val speedKmh = st.mySpeed?.let { it.toDouble() * 3.6 }
         if (!speeding.update(speedKmh, limit, android.os.SystemClock.elapsedRealtime())) return
         voice.speak(appContext.getString(R.string.nav_speeding_alert))
+        app.vela.car.CarBridge.toast(appContext.getString(R.string.nav_speeding_alert))
         tripStore.note("K", "speeding alert: ${speedKmh?.toInt()} km/h, limit ${limit?.toInt()}")
     }
 
@@ -1008,6 +1034,7 @@ internal class NavController(
         ) ?: return
         spokenCams = spokenCams + i
         voice.speak(appContext.getString(R.string.nav_speed_camera_ahead))
+        app.vela.car.CarBridge.toast(appContext.getString(R.string.nav_speed_camera_ahead))
     }
 
     private fun refreshNavRouteControls(route: app.vela.core.model.Route) {
@@ -1073,6 +1100,7 @@ internal class NavController(
             host.controlsBox = null // the box cache is superseded; the post-nav viewport refresh repaints fresh
             host.cancelViewportControls() // and kill a box fetch still inside its settle, or it lands on top of this
             _state.update { it.copy(trafficControls = kept) }
+            app.vela.car.CarBridge.controls.value = kept
         }
     }
 
@@ -1086,4 +1114,5 @@ internal class NavController(
 
 }
 
-
+/** How long a resume waits for a fix newer than the launch seed before routing from the seed. */
+private const val RESUME_FRESH_FIX_WAIT_MS = 8_000L

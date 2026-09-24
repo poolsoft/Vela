@@ -186,16 +186,22 @@ jobs:
           VER="${{ steps.ver.outputs.name }}"
           CODE="${{ steps.ver.outputs.code }}"
           cp app/build/outputs/apk/car/release/app-car-release.apk vela-maps-canary.apk
-          SUBJ="$(git log -1 --no-merges --pretty=%s)"
+          # The newest change a USER can see (docs-only and comment-only commits are skipped,
+          # scripts/changelog.sh), falling back to the plain subject when nothing qualifies.
+          SUBJ="$(bash scripts/changelog.sh --latest HEAD)"
+          [ -z "$SUBJ" ] && SUBJ="$(git log -1 --no-merges --pretty=%s)"
           # The in-app What's new dialog shows this body verbatim, so the first line is a label,
           # not a warning paragraph (user 2026-09-15).
           NOTES="$(printf 'Canary branch.\n\nversionName: %s\nversionCode: %s\n\nLatest change: %s\n' "$VER" "$CODE" "$SUBJ")"
-          if gh release view canary >/dev/null 2>&1; then
-            gh release upload canary vela-maps-canary.apk --clobber
-            gh release edit canary --prerelease --title "Vela canary" --notes "$NOTES"
-          else
-            gh release create canary --prerelease --title "Vela canary" --notes "$NOTES" vela-maps-canary.apk
-          fi
+          # RECREATED on every push, not edited (2026-09-22): GitHub lists releases by creation
+          # date, so an edited-in-place release created in August sat fifteen rows down, under
+          # every nightly and every data release, and "where is canary 1753" was the question.
+          # Deleting and recreating moves it to the top, names it after the build, and moves the
+          # tag to the pushed commit; the download URL (releases/download/canary/...) and the
+          # updater's releases/tags/canary lookup are unchanged, with a few seconds of 404
+          # during the swap that the updater reads as "nothing newer".
+          gh release delete canary --yes --cleanup-tag 2>/dev/null || true
+          gh release create canary --prerelease --target "$GITHUB_SHA" --title "Vela $VER" --notes "$NOTES" vela-maps-canary.apk
 
       - name: Publish nightly (prerelease)
         # The nightly channel: ONE prerelease per day from the cron (or an on-demand
@@ -223,16 +229,20 @@ jobs:
           # notes (what Obtainium shows people), not a raw hash dump.
           PREV="$LAST"
           if [ -n "$PREV" ]; then
-            LOG="$(git log --no-merges --pretty=format:'- %s' "${PREV}..HEAD")"
+            LOG="$(bash scripts/changelog.sh "${PREV}..HEAD")"
             COMPARE="**Full changelog:** https://github.com/${{ github.repository }}/compare/${PREV}...v${VER}"
           else
-            LOG="$(git log --no-merges --pretty=format:'- %s' -n 20 HEAD)"
+            LOG="$(bash scripts/changelog.sh -n 20 HEAD)"
             COMPARE=""
           fi
           [ -z "$LOG" ] && LOG="- Maintenance and internal changes"
-          NOTES="$(printf 'What'\''s changed in %s\n\n%s\n\n%s\n' "$VER" "$LOG" "$COMPARE")"
+          # The title and the first line say NIGHTLY: the release page listed nightlies and
+          # stables with the same "Vela 0.4.N" title and only the prerelease badge apart, and the
+          # in-app What's new dialog shows the body verbatim, so people could not tell which
+          # channel they were reading (user 2026-09-21). promote-stable.yml retitles and rewrites.
+          NOTES="$(printf 'Nightly build.\n\nWhat'\''s changed in %s\n\n%s\n\n%s\n' "$VER" "$LOG" "$COMPARE")"
           gh release create "v${VER}" \
-            --title "Vela $VER" \
+            --title "Vela $VER nightly" \
             --target "$GITHUB_SHA" \
             --prerelease \
             --notes "$NOTES" \

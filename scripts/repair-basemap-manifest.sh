@@ -2,7 +2,7 @@
 # Build basemap-manifest.json from whatever basemap-*.pmtiles archives sit on the basemap-tiles
 # release: name from tools/routing-regions.json, size from the release, bounds from the first 127
 # bytes of each archive (one range request each, and only for an archive whose size is new to the
-# manifest, so a normal run makes a handful).
+# manifest or that was uploaded after the rev it carries, so a normal run makes a handful).
 #
 # This is the bake's MERGE as well as its repair, and deriving from the release rather than folding
 # a batch of per-run fragments is what makes it safe: the manifest is a function of what is
@@ -23,19 +23,22 @@ REV="${1:-$(date -u +%Y%m%d)}"
 ENTRIES="${2:-}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
-gh release view "$TAG" --repo "$REPO" --json assets -q '.assets[] | select(.name | startswith("basemap-") and endswith(".pmtiles")) | "\(.name) \(.size)"' > "$WORK/assets.txt"
+gh release view "$TAG" --repo "$REPO" --json assets -q '.assets[] | select(.name | startswith("basemap-") and endswith(".pmtiles")) | "\(.name) \(.size) \(.updatedAt | .[0:10] | gsub("-"; ""))"' > "$WORK/assets.txt"
 gh release download "$TAG" --repo "$REPO" -p basemap-manifest.json -O "$WORK/old.json" 2>/dev/null || echo '{"regions":[]}' > "$WORK/old.json"
 : > "$WORK/entries.ndjson"
-while read -r NAME SIZE; do
+while read -r NAME SIZE UPDATED; do
   ID="${NAME#basemap-}"; ID="${ID%.pmtiles}"
   URL="https://github.com/$REPO/releases/download/$TAG/$NAME"
-  # keep an existing entry's rev when the archive is unchanged (same size)
+  # keep an existing entry's rev when the archive is unchanged: same size AND not uploaded after
+  # that rev. Size alone missed a rebake that happened to land on the same byte count, which then
+  # kept the old rev and was never offered as an update.
   OLD=$(jq -c --arg id "$ID" '.regions[] | select(.id == $id)' "$WORK/old.json")
-  if [ -n "$OLD" ] && [ "$(jq -r '.sizeMb' <<<"$OLD")" = "$(echo "scale=2; $SIZE/1000000" | bc)" ]; then
+  if [ -n "$OLD" ] && [ "$(jq -r '.sizeMb' <<<"$OLD")" = "$(echo "scale=2; $SIZE/1000000" | bc)" ] \
+     && [ "${UPDATED:-0}" -le "$(jq -r '.rev // 0' <<<"$OLD")" ]; then
     printf '%s\n' "$OLD" >> "$WORK/entries.ndjson"; continue
   fi
   curl -sL -r 0-126 "$URL" -o "$WORK/head.bin"
-  BBOX=$(python3 "$HERE/pmtiles-bbox.py" "$WORK/head.bin") || { echo "skip $ID (no header)"; continue; }
+  BBOX=$(python3 "$HERE/pmtiles-bbox.py" "$WORK/head.bin" | python3 "$HERE/clamp-bbox.py" "$ID") || { echo "skip $ID (no header)"; continue; }
   REGION_NAME=$(jq -r --arg id "$ID" '.regions[] | select(.id == $id) | .name' tools/routing-regions.json)
   jq -nc --arg id "$ID" --arg name "${REGION_NAME:-$ID}" --arg url "$URL" \
     --argjson sizeMb "$(echo "scale=2; $SIZE/1000000" | bc)" --argjson bbox "$BBOX" --argjson rev "$REV" \
@@ -53,5 +56,25 @@ if [ -n "$ENTRIES" ] && ls "$ENTRIES"/*.json >/dev/null 2>&1; then
 else
   jq -s '{regions: (. | sort_by(.name))}' "$WORK/entries.ndjson" > "$WORK/basemap-manifest.json"
 fi
-gh release upload "$TAG" "$WORK/basemap-manifest.json" --clobber --repo "$REPO"
+# Several merges finishing together race on the ONE manifest asset: --clobber deletes and
+# re-uploads, so a concurrent merge sees "already exists" (422) or a 404 for the asset it was
+# replacing (2026-09-22, two of nine parallel runs). Every merge derives the full manifest from
+# the release, so the loser only has to try again a few seconds later.
+upload_manifest() {
+  local f="$1" try
+  for try in 1 2 3 4 5; do
+    gh release upload "$TAG" "$f" --clobber --repo "$REPO" && return 0
+    echo "manifest upload lost a race (try $try); retrying"
+    sleep $((RANDOM % 15 + 5))
+  done
+  return 1
+}
+upload_manifest "$WORK/basemap-manifest.json"
 echo "basemap manifest now lists $(jq '.regions | length' "$WORK/basemap-manifest.json") regions"
+# An archive uploaded while this ran is not in the listing; without a concurrency group a
+# merge can be overtaken by a newer upload, so run once more when the release moved.
+gh release view "$TAG" --repo "$REPO" --json assets -q '.assets[] | select(.name | startswith("basemap-") and endswith(".pmtiles")) | "\(.name) \(.size) \(.updatedAt | .[0:10] | gsub("-"; ""))"' > "$WORK/assets.after"
+if ! diff -q "$WORK/assets.txt" "$WORK/assets.after" >/dev/null && [ "${VELA_REPAIR_AGAIN:-0}" = "0" ]; then
+  echo "the release changed during the merge; rebuilding once more"
+  VELA_REPAIR_AGAIN=1 exec bash "$0" "$REV" "$ENTRIES"
+fi

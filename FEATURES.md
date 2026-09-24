@@ -58,6 +58,21 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
   camera per route; cameras within 40 m of each other along the route are one alert ("License
   plate cameras ahead"). Uses the bundled camera data, so no network. The voice follows the
   spoken-directions mute.
+- ✅ **Google routes your trips with stops (2026-09-21).** A trip with stops used to be routed
+  through them by the open router alone, with Google's direct origin-to-destination time painted
+  on as a speed ratio; Google is now asked for the trip through the stops, so its traffic chooses
+  the roads and its time is the one shown, and the open router names the turns along Google's
+  line. The route chooser checks that Google's line really passes every stop before trusting it.
+- ✅ **Side streets around plate cameras (2026-09-21, issue #600).** Settings, Navigation, Cameras:
+  "Try side streets around cameras", nested under "Avoid surveillance cameras", off by default.
+  When every route still passes cameras, the chooser tries a point just off the road at each
+  camera cluster (up to three, nearest first) and routes through it; a route that passes fewer
+  cameras inside the same detour limit (the lesser of 25% or 10 minutes) goes to the top of the
+  list with its camera badge. Google routes and prices each candidate with traffic; at most six
+  extra route requests per trip. Starting a drive on that route keeps the detour through reroutes
+  and rechecks (the detour points ride along as silent stops: never spoken, never listed). A
+  mid-drive edit of the stops keeps the detour: the silent points still ahead are merged back into
+  the edited list in route order.
 - ✅ **Plate cameras are counted by the way they face (2026-09-16).** A plate reader sees traffic
   moving along its road, not across it, so a camera with a known facing only counts for a route
   when it points within 50 degrees of that route's direction (either way) at the nearest stretch.
@@ -422,6 +437,36 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 - ✅ Compass kept clear of the status bar (inset-aware margins)
 - ✅ Tap a labeled POI **or a search-result pin** to open it; camera frames all results after a search. Tapping a POI also reads `name:latin`/`name:en` (not just `name`), and an **unnamed** POI icon (an apartment gym, an unnamed park/playground) **reverse-geocodes to a pin + address** instead of being a dead tap. When several Google listings share the same spot (e.g. a co-branded "SpeeDee Midas" with a sparse **Midas** *and* a rich **SpeeDee** profile), the tap now opens the **most-reviewed = canonical** one rather than whichever happens to be a few feet nearer
 - ✅ Bottom sheets (place sheet, steps) **fill to the screen edge** - content is padded off the gesture/nav bar, but the sheet background no longer stops short and lets the map peek through at the very bottom
+- ✅ **House numbers in Germany and the Netherlands (issue #257 round two, 2026-09-22).** They
+  were hidden by an Alaska bounding box that crossed the antimeridian and so "covered" every
+  point between 49.8 N and 73 N, which switched the map to the (empty there) address overlay.
+  Fixed in the live manifests, the catalogs, the bake scripts and the region-cover rule.
+- ✅ **Tapped places load like Google's (2026-09-22).** Tapping a place opens its sheet with the
+  name at once and pulsing placeholders for the photos, rating, details and body while the
+  listing is looked up; when it lands, the details fade in and the sheet stays put instead of
+  re-opening. If the lookup hangs, the map's own data shows after a few seconds. What the map's
+  own data already knows shows immediately (category, address, phone, website, and hours where
+  OpenStreetMap or a chain's store locator has them, including from downloaded place packs), and
+  Google's listing replaces it in place. The lookup itself is about three times faster: it asks
+  for one page of results instead of three.
+- ✅ **"Where is this place from?" (2026-09-22).** A tapped map place that is not yet (or never
+  becomes) a Google listing says so in small gray text under its name: "From Overture",
+  "From AllThePlaces (chain)" or "From OpenStreetMap", then "checking Google" or "not matched on
+  Google". An OpenStreetMap row's line opens its node, so a wrong place can be fixed at the source.
+- ✅ **Taps check the house number (2026-09-22).** When a tapped place and a Google listing both
+  have a street number and they differ, the listing is not linked, so a station can no longer open
+  the one across the intersection.
+- ✅ **Open-data hours read like Google's and compute open or closed (2026-09-22).** OpenStreetMap
+  and store-locator hours are converted for about 98% of real listings (it was 86%), including
+  comma-separated days, holidays and sunrise-to-sunset parks, so the sheet shows the week and says
+  "Open" or "Closed" even with Google off. The places data also keeps OpenStreetMap's hours when
+  another source already had the same shop, and a chain's store-locator hours now survive the same
+  way. Open-data addresses carry the city, state and ZIP ("… , Davis, CA 95616") instead of the
+  street line alone.
+- ✅ **Fuel stations (and fire, police, charging stations) link again (2026-09-22).** Their open
+  data category contains "station", which sent the lookup down the transit-stop path, and it
+  never linked. And a fuel row named for its site rather than its brand now finds the gas
+  listing beside the building its name points at.
 - ✅ **Tap a house number or a building to open its address (2026-07-08, user request).** A single tap on a **house-number label** (the map's own `addr:housenumber` or the streamed address overlay) opens a pin + place sheet **snapped to that exact number** - tapping a numbered label opens exactly that house number, not a neighbor's. This matters because Google's reverse-geocode snaps to the nearest addressable point and routinely returns a different house (device: the raw geocode of a tapped label came back a few doors off); so the tap LEADS with the number on the label and uses the geocode only for the street/city. A tap on a plain **building footprint** (no number showing) reverse-geocodes the building to its address the same way. A real business on that spot still opens as the business. Empty land has no footprint, so a tap there does nothing and only a **long-press** drops a raw pin (below). Device-verified in a residential suburb (a tapped number opened exactly that house; a bare footprint reverse-geocoded to its own address)
 - ✅ **Long-press the map** → drop a pin, reverse-geocode it to an address (Nominatim/OSM, keyless), then get Directions - works even where no building is drawn. When the point **doesn't snap to a street address** (a bare road, open land, or a failed geocode) the sheet surfaces the **lat/lng coordinates prominently** (a `MyLocation`-iconed row, tappable to copy) beside the road name we already show - Google-style. A house-numbered snap ("1020 Olive Dr") or a real business POI shows its address instead, so no clutter; the snap is detected by the name's first token being a pure-digit house number (a numbered street like "120th St" keeps its "th", so it reads as unsnapped → coordinates)
 - ✅ Keyless **OpenFreeMap Liberty** basemap (active, loaded by URL - the setup that renders on-device, no key): **Google-style POI markers + category-colored labels**, a **clean Google-style road treatment** - white road fills on light-gray land with the **casings faded out** (minor-road casing == the land, so streets are crisp white lines with **no outline**), soft-yellow motorways, **neutralized landuse** (no tan residential/commercial blobs), and **flattened fill-patterns** (Liberty's fern-hatch wetlands + dotted pedestrian plazas → flat fills, like Google) - plus light/dark recolor, all at **runtime** (tuned live in a MapLibre GL JS harness against Google, on-device-verified light + dark)
@@ -437,6 +482,31 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 - ✅ **The turn list opens on the turn you are driving to (2026-09-16).** Swiping up the nav bar (or tapping the list button) lands on the current step instead of the first one. Steps you have already driven are still there one scroll up, grayed out, along with any stop band before them. The directions preview from the route chooser still starts at the top with nothing grayed, and under a D-pad focus lands on the current step.
 - ✅ **Stops stand out in the turn list (2026-09-16, issue #519).** On a trip with stops, the step list draws a tinted "Stop: name" band where each leg begins, between the arrival of one leg and the first turn of the next, so a long list reads leg by leg. Names come from the planned stops, or the stops still ahead while driving.
 - ✅ **Traffic overlay draws over buildings (2026-09-16, issue #521).** At street zoom the gray building footprints and the 3D extrusions painted over the congestion colors; the traffic raster now sits above the buildings and still below every icon and label.
+- ✅ **Use Vela without Google, one switch (2026-09-21).** Settings > Privacy > "Use Vela without
+  Google" stops every request to a Google host: search goes to OpenStreetMap and your downloaded
+  regions, places come from Vela's data, routes come from the open router, and Street View, the
+  traffic overlay, satellite close-ups, transit directions, reviews and photos are off. Replaces
+  the four-toggle recipe the FAQ used to give, and reaches the surfaces those toggles could not.
+- ✅ **English names on the map in Japan and other non-Latin countries (2026-09-22).** With the
+  app in a Latin-script language, Vela's places show their English or romanized name where
+  OpenStreetMap has one, including every branch of a chain it names once, and the map's own shop
+  labels show one readable line instead of two. The places bake also stopped adding OSM
+  duplicates of shops it already had in those countries, and uses OSM's pin for them.
+- ✅ **A name typed while looking far away finds the place near you (2026-09-22).** When the map
+  is over another city and nothing there carries the name you typed, Vela also looks around you
+  and shows the match.
+- ✅ **Shared Google Maps links open (2026-09-22).** A short `maps.app.goo.gl` link someone sends
+  now opens the place, with Google on or off: Vela asks Google's link shortener once, with no
+  cookies, reads where the link points, and searches the place from its name and pin. With "Use
+  Vela without Google" on, "Open shared Google Maps links" (on by default) can turn that one
+  request off, and a short link then shows a toast. Shared lists still need Google.
+- ✅ **Delete all offline data, and deleting actually frees space (2026-09-21, issue #601).**
+  Offline maps > Storage has a "Delete all offline data" button: every saved area, every
+  downloaded region (routing, places, map), the building and address overlays, the road features
+  and the browsing cache go, and the map database is packed so the file shrinks. Deleting a single
+  saved area and clearing the map cache pack it too; before this, MapLibre kept the file at its
+  largest size after a delete, so a phone could report gigabytes of map data with every list
+  empty. Voices and speech models are kept.
 - ✅ **Offline maps: storage first (2026-09-16, issue #518).** The storage breakdown and Clear map cache moved above the state and country catalog, so what the phone already holds is visible before the list of downloads.
 - ✅ **Place titles stay in your language's script (2026-09-15).** Tapping a place abroad used to retitle the sheet with Google's local-script name (a Hebrew title over a pin the map labeled in English). The sheet now keeps the map's own label when Google's name is in another script than the app language, and takes Google's name when it is in yours.
 - ✅ **Open in another map app (2026-09-15).** The place sheet's share menu hands the place to any
@@ -1112,7 +1182,7 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 - ✅ **Pause the drive** (user 2026-09-18): pull into a station you just spotted and the app stops arguing with you. Pause keeps the route, the stops and the figures exactly as they are, and stops everything that reacts to where you go: no rerouting, no "make a U-turn", no voice over your music, no faster-route offers. The arrow still follows you, and the arrival time keeps sliding, because what the stop is costing you is worth seeing. Resume picks the drive back up, rerouting from where you are if the stop took you off the route, and driving away resumes it by itself once you are moving and back on the line. On the map and in the notification, since the decision to pull in is made from behind the wheel. Google Maps still cannot do this.
 - ✅ **A CI check that catches a location leak before it is public** (2026-09-18): every push and pull request is scanned for a private list of place names kept in a repository secret, not in the repo, because a list of terms never to commit is itself the thing you must not commit. It reports the file and the line, never the matched word, and it travels with the repository rather than with one laptop's git hooks.
 - ✅ **Wider streets, and street names a zoom earlier** (user 2026-09-18): residential streets draw wider through the mid zooms where the map is read most (about 7dp at z16 against 5.9 before, casing to match), and minor street names start at z14 instead of z15. Vela's zoom number reads about one lower than Google's for the same visible area, so a label gated at 15 was arriving a level late next to theirs; street labels are also a point larger from z16.
-- ✅ **Google-mode places rank by what kind of place they are, not just review count** (user 2026-09-18): Google returns no ranking of its own (its answer is a merge of about 13 per-category searches), so review count used to decide everything and a busy taco window could take the label off the hospital behind it. The same category scale the open-data bake uses now shifts the ranking: hospitals, supermarkets, malls, campuses and airports up, places with no category at all down, an ordinary shop exactly where it was, so the two places sources finally agree about what a plaza's anchor is.
+- ✅ **Google-mode places rank by what kind of place they are, not just review count** (user 2026-09-18): Google returns no ranking of its own (its answer is a merge of 15 per-category searches), so review count used to decide everything and a busy taco window could take the label off the hospital behind it. The same category scale the open-data bake uses now shifts the ranking: hospitals, supermarkets, malls, campuses and airports up, places with no category at all down, an ordinary shop exactly where it was, so the two places sources finally agree about what a plaza's anchor is.
 - ✅ **The book** (2026-09-18): `docs/book/` explains Vela subsystem by subsystem with the real numbers in it - which dataset a pin came from and what made it win the label, when every hosted dataset is rebuilt and how your phone picks up a new build, what counts as a camera on your route and what the avoid rule will and will not trade. Three chapters to start (places, data and rebakes, cameras), a stated shape for the rest, and a rule that a behavior change updates its chapter in the same commit.
 - ✅ **The places-source rows say what each mode costs you** (2026-09-18): the Vela data row now says what decides which places lead (the kind of place first: hospitals, supermarkets, malls and campuses, then brand and detail), the Google row says its own ranking is review count, so the busiest name in a plaza takes the label even when it is not the anchor store, and the Both row warns that Google's extras land a beat after the map and can take a label as they arrive.
 - ✅ **Tapping a shop opens the shop, not the bus stop beside it** (user 2026-09-18): two separate things could hand your tap to a transit stop. A stop icon anywhere in the tap's reach used to outrank every business in it, so a fuel station on a corner opened the departures board however dead-on the tap was; the stop competes by distance now, like everything else. And the lookup itself could answer with a stop: Google lists stops and intersections as places, they sit meters away on the same corner, and when nothing in Google's answer matched the tapped name the app took the nearest thing it found. A tap on a business now never resolves into a stop or a junction, and a listing that does not match the name has to be on the same lot, or the tapped place simply keeps its own name and details.
@@ -1174,7 +1244,7 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 - ✅ **The start and the destination are editable too (issue #516, 2026-09-17)** - the trip editor that lets you drag or drop ANY row, the start and the destination included, is now what every route chooser opens. It was behind the chooser experiment while the plain editor pinned both ends. Dragging the destination above the start reverses the trip; the last two rows keep their remove buttons disabled, since a trip needs two ends.
 - ✅ **Tap a place while driving to add it as a stop (2026-09-17, experimental)** - a switch under Settings > Navigation, off by default and marked as an experiment: adding a stop mid-drive re-plans through Google, so the ETA has to re-settle and there is more that can go wrong than with a stop picked before you set off. With it on, fuel, food and charging places stay on the map during a drive, and tapping one offers it in a card above the bar: a second tap on "Add stop" adds it to the trip. A stray touch at speed changes nothing. Because navigation hides places on purpose, turning this on also turns on Show places, and turning it back off undoes exactly that.
 - ✅ **Alternate routes live with the ETA (2026-09-17)** - the Google-style chooser carries an "N other routes" line right under the time. It opens a list in place, each route with its time, how much longer it is than the fastest, its distance, the roads it uses and its camera count, with the fewest-camera route named as such when camera avoidance is on, and Back returns to the summary. With one route the line says so. While the list is open each route's bubble on the map carries the same detail, distance and the difference, instead of the time alone.
-- ✅ **Shops sit where OpenStreetMap says (2026-09-17)** - the places bake now reads the region's OpenStreetMap extract and takes OSM's coordinate for a shop whose name matches within 30 to 120 m, ahead of the chain locator and ahead of the bulk data's parcel point. OSM maps a shop at the shop, and when it is wrong anyone can fix it in a minute and every map benefits.
+- ✅ **Shops sit where OpenStreetMap says (2026-09-17)** - the places bake now reads the region's OpenStreetMap extract and takes OSM's coordinate for a shop whose name matches within about 150 m (widened 2026-09-22 from 30 to 120 m), ahead of the chain locator and ahead of the bulk data's parcel point. OSM maps a shop at the shop, and when it is wrong anyone can fix it in a minute and every map benefits.
 - ✅ **The exit you take wears a green callout (2026-09-17)** - while navigating, the exit your route leaves at gets a green bubble with its number, placed on the ramp rather than on the freeway beside it, in the language of the signs on the road; the exits you drive past keep the basemap's own shields. The number is read out of the maneuver ("Take exit 528 toward ..."), including the phrasings other languages use.
 - ✅ **One camera badge per corner (2026-09-17)** - a junction with a plate camera on each approach drew a pile of overlapping badges. It now draws one badge with every head's beam fanning from it and a small "x4" for the count. The route's camera count still counts the real heads.
 - ✅ **Street callouts skip the spots with no room (2026-09-17)** - a cross-street bubble that cannot clear the road you are driving, on either side, is not drawn at all, and every callout disappears once you are past it instead of trailing behind the car into the bottom bar.
@@ -1185,7 +1255,7 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 - ✅ **Cross-street callouts place better (2026-09-17)** - a callout now steps farther from your road, on whichever side has room, instead of clipping the road you are driving, and a batch that found no labels (its tiles still loading) retries instead of waiting for the next 400 m of driving.
 - ✅ **Route time bubbles in the classic chooser, and a way back to it (2026-09-17)** - both route choosers now label every route on the map with its time (the bubbles keep apart so parallel alternates stay readable); the Google-style chooser gets a "Compare routes" button that opens the classic list with each route's length, main roads and camera count, and Back returns to it. Opening that list no longer lands the map zoomed in on the destination.
 - ✅ **Offline routing offer for your area (2026-09-17)** - once, after setup, Vela offers the routing download for the region around Home (or around you with no Home saved), with its real size, so reroutes can use the on-device engine and directions work with no signal. Region sizes in Settings > Offline maps now count the places and map files the download brings along, and a region download takes only its own places and map files (a Northern California download also pulled the whole-state places file, a test bake and Nevada's files).
-- ✅ **OpenStreetMap shops too (2026-09-17)** - an opt-in switch under Settings > Places: with Vela data on, the shops, restaurants and other businesses mapped in OpenStreetMap draw alongside Vela's places, with doubles dropped by name. They come from the streamed map tiles, so an OpenStreetMap edit shows up when the tiles are rebuilt, with no Vela bake. The storage row for voices and speech models in Offline now opens the Voice page.
+- ✅ **OpenStreetMap shops too (2026-09-17)** - a switch under Settings > Places, on by default: with Vela data on, the shops, restaurants and other businesses mapped in OpenStreetMap draw alongside Vela's places, with doubles dropped by name. They come from the streamed map tiles, so an OpenStreetMap edit shows up when the tiles are rebuilt, with no Vela bake. The storage row for voices and speech models in Offline now opens the Voice page.
 - ✅ **Settings grouped by topic (2026-09-17)** - Places (was Place pages) now holds where places come from, what the map draws for them and the place-page toggles; Map is only how the map looks; every camera row and the live traffic re-check sit under Navigation; parking history moved to Saved places; the demo drive, simulated location and the route chooser experiment moved to Diagnostics; "Data source & privacy" is now Privacy. The settings search follows every move.
 - ✅ **The mic shows what it understands (discussion #365, 2026-09-14)** - the listening dialog lists the command shapes (home and work, go to an address, A to B, nearest X, what is my ETA) so nobody has to guess them; anything else still runs as a plain search. Settings > Search carries the full list too (2026-09-17), grouped by command, in the app language, and every phrase on it is checked against the parser by a unit test
 - ✅ **A tapped town label stays in its state (issue #429, 2026-09-14)** - tapping Salem, Arkansas on the map used to open Salem, Massachusetts, because the name lookup took the most prominent hit anywhere. A tapped label now only resolves to a listing near the tap, and keeps the label itself otherwise
@@ -1640,6 +1710,36 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
   terminus), the way Google presents an intersection stop. Transit directions are unaffected: they
   already walk you to the exact boarding coordinate of the specific curb. Stops whose names carry
   the direction (NB/SB station styles) never merge.
+- ✅ **Same-business rule in every app language (2026-09-22).** Descriptor words, legal forms and
+  street abbreviations for all 13 languages are read as descriptors whatever the phone's language,
+  accents fold across scripts, and Chinese, Japanese, Korean and Thai names compare as strings with
+  their suffixes (店, 薬局, 銀行, 지점) stripped. The bake's word list carries the same union.
+- ✅ **Same-business rule, city pass (2026-09-22).** Brand prefixes ("Bank of America Financial
+  Center" / "Bank of America ATM"), phrases inside longer names ("23rd Street Dental"), plurals,
+  "Dr."/"Doctors", street words no longer counting as identity, and neighborhood words shared
+  across the places on screen treated as generic. Checked against Google over Midtown Manhattan
+  (81% of Google's places linked) and downtown Houston (83%).
+- ✅ **One same-business rule for taps, twins and the bake (2026-09-21).** Descriptor tails ("Circle K
+  | Gas Station", "U.S. Bank Branch", "CVS" vs "CVS Pharmacy"), spelling variants ("&"/"and",
+  "St"/"Street", accents, "DDS Inc.", "by Wyndham") and agreeing identifying words now read as one
+  business, while shared generic words ("Russell Park Apartments" vs "Orchard Park Apartments") no
+  longer do; the bake keeps one row per business (a gas station listed twice, a store and the
+  counter inside it). Derived from a Google-versus-archive study over the Davis fixture, then
+  Midtown, Houston, Berlin and Tokyo: one generic table per app language, legal forms and street
+  abbreviations per language, CJK names compared as strings, Europe's four-letter brands, glued
+  names, and a tap on a label in another script (a Japanese map on an English phone) that looks
+  the listing up in the label's own language when the English answer does not name it.
+- ✅ **Offline maps page: Downloaded list + alphabetical country tree (2026-09-22, #601).** What is on
+  the phone (saved areas and installed regions) sits right under the storage figures and the delete
+  button; the catalog is one A to Z list where a split country (Germany, Canada, the United States
+  with its states and territories) is a row that expands to its pieces and downloads them all in one
+  tap.
+- ✅ **About says who installed Vela (2026-09-22).** The version group shows the install source, so a
+  phone set up for Android Auto through King Installer or AAEnabler can see that the Play install
+  source is still in place before and after an update.
+- ✅ **Offline departure board (2026-09-21).** Every board fetched is kept on the phone, so a stop
+  tapped with no connection shows the routes, headsigns and colors it had last time with a "last
+  seen" line instead of nothing (`TransitBoardCache`).
 - ✅ **Live stop departure board (2026-07-12, keyless + device-verified).** The board is
   **ownership-gated (2026-07-16)**: it renders only on the place it was fetched for, so a
   previously viewed stop's departures can never linger onto an unrelated place (a saved/recent
@@ -1764,6 +1864,17 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
   mis-voweled "take" ("tyke") when the whole ramp sentence was phonemized in one breath; the
   spoken text now inserts a comma before "toward", so the maneuver clause and the sign
   destination are separate beats (Google pauses there too). Banner text unchanged.
+- ✅ **Car screen round three (2026-09-22, awaiting a head-unit check).** Pause/Resume from the car
+  with a "Paused" card, search along the route (fuel, food, coffee, the phone's quick categories)
+  with a pick becoming the next stop, camera/speeding/closing-soon alerts as car toasts, a
+  "Continue on <road>" card while the next turn is far, an overview toggle, and the route's
+  lights, stop signs, speed cameras and plate cameras drawn on the car map.
+- ✅ **Car screen round two (2026-09-21, awaiting a head-unit check).** Vela's own map theme on
+  the car map, the library's multi-source watermark replaced by one OpenStreetMap credit, the puck
+  framed inside the visible area (it hung off the bottom edge), the phone's smooth between-fix
+  glide and an eased zoom instead of per-fix snaps, and Vela's voice for drives started from the car.
+- ✅ **Car-screen puck sized to the screen (2026-09-21).** A fortieth of the short side instead of a
+  fixed 22 px radius, which was a fifth of a 480 px head unit's height.
 - ✅ **Android Auto, full car-side navigation (2026-07-08, PR #17 by jacobjeger; replaces the first cut).**
   Vela registers as a navigation-category templated car app (sideloads appear once AA's developer "Unknown
   sources" switch is on). The car now runs the WHOLE flow by itself: a home screen (Home/Work, recents,
@@ -1813,6 +1924,19 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
   cleared the instant nav ends, the toggle is turned off, or the map screen leaves
   composition, so the display sleeps normally everywhere else (no battery drain when
   you're not driving)
+- ✅ **Music gets a beat to pause before the first word (2026-09-21).** A fresh audio-focus grant
+  leads the first sample by 350 ms; players that pause on a duck used to be spoken over.
+- ✅ **Resume after a process kill routes from a fresh fix (2026-09-21).** The resumed drive waits
+  up to 8 s for a fix newer than the launch seed, so the line no longer starts where the app died.
+- ✅ **Offline routes no longer announce a turn on a road that only bends and renames (2026-09-21).**
+  Turns OsmAnd itself would skip, and lefts or rights with under 20 degrees of measured turn (a
+  divided road rejoining its two-way continuation), are folded as renames; verified on the
+  reported stretch against the state's own obf.
+- ✅ **A paused drive draws its route in slate (2026-09-21)** so the hold shows on the map, not
+  only in the bar; traffic spans keep their colors.
+- ✅ **The car-screen puck follows the puck-size setting (2026-09-21).**
+- ✅ **Offline search puts transit stops last unless the query asks for transit (2026-09-21)**:
+  US stops are named by their corner, so a street or town word used to fill the list with them.
 - ✅ Spoken guidance via AOSP TextToSpeech (engine-selectable) - **tuned for the
   car**: a measured speech rate (0.97) + neutral pitch, and on init it auto-selects
   the **highest-quality offline voice** for the locale (engines often default to a
@@ -2048,6 +2172,17 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
   Photon/local address hit whenever ANY Google suggestion sat within a block of it (on a
   commercial road, something always does) now only drops it when the Google entry carries
   the same house number. Address hits lead the list: local pack, then Photon, then Google.
+- ✅ **Typed suggestions are Google's own autocomplete (2026-09-22).** The keyless
+  search-as-you-type request the maps web page fires, with the viewport as the bias, so a
+  partial address finally ranks by where you are: a bare house number lists the houses with
+  that number on the streets around you (it used to answer with a ZIP code in another state), and a full
+  address in another city ("459 Ralston") shows the street with its city instead of nothing.
+  Bare query rows ("Starbucks", "cvs pharmacy hours") run as a search. Pressing Enter on a
+  typed house address the results could not place now geocodes it the same way. Offline and
+  with Google off, the old local-pack + OpenStreetMap path is unchanged.
+- ✅ **The fill-in arrow on suggestions (2026-09-22).** Google's north-west arrow on every
+  suggestion row puts the row's primary text (the name, or an address's street line) into the
+  search box without searching, cursor at the end, so it can be refined by hand.
 - ✅ **Arrival speaks ONE line (2026-07-15).** "Your destination is on the right" when the
   route knows the side; "You have arrived" only as the fallback when it doesn't - they no
   longer stack.
@@ -2215,6 +2350,13 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 - 🟡 BeaconDB WiFi positioning - NETWORK-provider coarse fixes are already used for the browse dot when GPS has been quiet (never during nav); an explicit opt-in and any deeper use are still open
 
 ## Offline
+- ✅ **Offline search finds the shop at a typed address and shows addresses on results
+  (2026-09-21).** An address query leads with the businesses standing at that address (from the
+  place pack, 40 m), then the house point; the first 20 results with no address of their own are
+  filled from the address index, the way the sheet already did on select.
+- ✅ **No more style reloads while panning along a download's border (2026-09-21, issue #552).** An
+  offline basemap is mounted only once the whole visible view sits inside its data, and unmounted
+  as soon as the center leaves it, so the view near a border streams instead of flipping.
 - ✅ **A downloaded region can no longer blank the map (2026-09-18, issue #552).** Two things were
   wrong at once. The bake let planetiler inherit the extract's header bounding box, which for 37 of
   413 regions claims far more ground than the archive holds (one reached seven degrees into the next

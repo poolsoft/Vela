@@ -88,11 +88,15 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
             app.vela.core.data.RoutingPrefs.avoidFerries = p.getBoolean("avoid_ferries", false)
         }
         app.vela.ui.FlockRouteAlert.init(this) // load the persisted "warn about cameras on route" toggle
+        app.vela.ui.FlockDetour.init(this) // side-street detours around cameras (issue #600), nested under it
         app.vela.ui.FlockNavAlert.init(this) // plate-camera card + spoken alert while navigating, off by default
         // Parse the bundled on-device ALPR/Flock camera dataset off the main thread (map layer draws
         // instantly, route counts are reliable), then refresh from the hosted manifest so the data updates
         // without an app release (weekly CI cron re-hosts a newer version; a bump swaps it in on next launch).
         CoroutineScope(Dispatchers.IO).launch {
+            // The catalog regions' real boundaries (issue #599): until this lands, region picks
+            // fall back to their boxes, which is what they always were.
+            app.vela.offline.RegionPolys.ensureLoaded(this@VelaApp)
             app.vela.data.FlockCameras.ensureLoaded(this@VelaApp)
             app.vela.data.FlockCameras.refresh(this@VelaApp, app.vela.BuildConfig.FLOCK_MANIFEST_URL)
         }
@@ -106,6 +110,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.ui.LoadPhotos.init(this)
         app.vela.ui.HideAdult.init(this)
         app.vela.ui.HideExternalLinks.init(this)
+        app.vela.ui.GoogleFree.init(this) // "Use Vela without Google": mirrors into the :core NoGoogle flag
         app.vela.ui.Buildings3d.init(this)
         app.vela.ui.RouteTrail.init(this)
         app.vela.ui.RoadLabel.init(this)

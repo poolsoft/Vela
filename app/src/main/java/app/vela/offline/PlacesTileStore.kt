@@ -55,9 +55,21 @@ class BasemapTileStore @Inject constructor(
      *  network", which only the OSM-derived part of the bake does.
      *  A probe that cannot answer (an unreadable file, a format this reader does not know, a zoom
      *  outside the archive) leaves the old rule in charge, so this can only ever improve the pick. */
-    fun installedFor(center: LatLng?): File? {
+    fun installedFor(center: LatLng?, mounted: File? = null, view: List<LatLng> = emptyList(), keepMounted: Boolean = false): File? {
         val c = center ?: return null
         val index = readIndexPublic()
+        // OFFLINE THE MOUNTED ARCHIVE STAYS WHILE ANY OF THE VIEW IS IN IT (issue #552, fourth
+        // round, 2026-09-22). The eager unmount below is right online, where the streamed tiles
+        // take over the moment the center leaves the data; offline nothing takes over, so on a
+        // recorded pan from Scranton across the New York line the whole screen went blank for
+        // twelve seconds, the Pennsylvania half included, until the pan back remounted the file.
+        // With [keepMounted] the archive in use is kept as long as its roads still reach the
+        // center, the ring around it or any corner of the viewport; only a view entirely outside
+        // its data lets go of it.
+        if (keepMounted && mounted != null && mounted.name != "$WORLD_ID.pmtiles" && mounted.exists()) {
+            val (mx, my) = PmtilesReader.tileOf(c.lat, c.lng, COVERAGE_PROBE_Z)
+            if (viewTouches(mounted, mx, my, view)) return mounted
+        }
         // The WORLD archive is never a normal candidate: it covers every point on earth, so the
         // area sort would rank it last anyway, and the roads probe below would reject it outright
         // (it carries no transportation layer at any zoom). It is the explicit last resort instead.
@@ -75,10 +87,27 @@ class BasemapTileStore @Inject constructor(
         // (HirschBerge). A definite no from everything that could cover the point means NOTHING
         // here is worth mounting; only an archive we could not READ leaves the old rule in charge,
         // because that is the case where asking told us nothing.
+        // HYSTERESIS AT THE EDGE (issue #552, third round). A swap reloads the whole style, so
+        // it must not happen on every camera idle while the view wanders along a download's
+        // border. Unmounting stays eager (the center tile has no roads: stream, never draw gray
+        // over tiles the network can supply), but MOUNTING a candidate that is not already the one
+        // in use needs the whole VISIBLE VIEW to hold roads: the corners of the viewport ([view])
+        // and the ring of z12 tiles around the center. The reporter's video was at a 200 km wide
+        // zoom, where a fixed ring is a rounding error; keying on the corners means an archive is
+        // mounted only once the border has left the screen, and once the border shows the view
+        // keeps streaming instead of flipping the style every couple of seconds.
+        // ONLINE THE ARCHIVE IS MOUNTED ONLY WHILE THE WHOLE VIEW IS INSIDE IT (issue #552, fourth
+        // round, the online half). The mounted archive used to be kept until the CENTER tile left
+        // its data, so with a border on screen the far side drew nothing while the center was
+        // still inside, and a pan along the border, with the center wobbling across it, reloaded
+        // the style at every crossing (the reporter's video: gray, then network, then gray). Now
+        // the archive is in use exactly when the ring and the corners are all inside it: the
+        // moment a border comes on screen the view streams, and it keeps streaming, one reload
+        // each way, none while the border stays in view. Offline is the [keepMounted] rule above.
         var unreadable = false
         for ((_, f) in covering) {
             when (coverage(f, tx, ty)) {
-                true -> return f
+                true -> if (ringCovered(f, tx, ty) && cornersCovered(f, view)) return f
                 null -> unreadable = true
                 false -> Unit
             }
@@ -104,13 +133,39 @@ class BasemapTileStore @Inject constructor(
         // filters it out of the candidate list by id.
         return download(
             Region(WORLD_ID, "World", url, 0.0, -85.0, -180.0, 85.0, 180.0),
-            onProgress,
+            onProgress = onProgress,
         )
     }
 
     private fun probeKey(f: File, x: Int, y: Int) = "${f.name}|$x|$y"
 
     /** True with roads, false definitely without, null when the file could not answer. */
+    /** Every z12 tile around (x, y) holds roads in [f], "cannot tell" counted as yes so an
+     *  unreadable neighbor never blocks a mount the center tile earned. */
+    private fun ringCovered(f: File, x: Int, y: Int): Boolean {
+        for (dx in -1..1) for (dy in -1..1) {
+            if (dx == 0 && dy == 0) continue
+            if (coverage(f, x + dx, y + dy) == false) return false
+        }
+        return true
+    }
+
+    /** Roads of [f] reach the center tile, one of the eight around it, or a viewport corner. */
+    private fun viewTouches(f: File, x: Int, y: Int, view: List<LatLng>): Boolean {
+        if (coverage(f, x, y) == true) return true
+        for (dx in -1..1) for (dy in -1..1) if (coverage(f, x + dx, y + dy) == true) return true
+        return view.any { p ->
+            val (cx, cy) = PmtilesReader.tileOf(p.lat, p.lng, COVERAGE_PROBE_Z)
+            coverage(f, cx, cy) == true
+        }
+    }
+
+    /** Every viewport corner's z12 tile holds roads in [f]; "cannot tell" counts as yes. */
+    private fun cornersCovered(f: File, view: List<LatLng>): Boolean = view.none { p ->
+        val (x, y) = PmtilesReader.tileOf(p.lat, p.lng, COVERAGE_PROBE_Z)
+        coverage(f, x, y) == false
+    }
+
     private fun coverage(f: File, x: Int, y: Int): Boolean? {
         coverageCache.get(probeKey(f, x, y))?.let { return it }
         val answer = PmtilesReader.hasRoads(f, COVERAGE_PROBE_Z, x, y)
@@ -162,8 +217,13 @@ abstract class PmtilesRegionStore(
     data class Delta(val fromRev: Int, val url: String, val sizeMb: Double)
 
     data class Region(val id: String, val name: String, val url: String, val sizeMb: Double, val s: Double, val w: Double, val n: Double, val e: Double, val rev: Int = 0, val delta: Delta? = null) {
-        fun covers(p: LatLng) = p.lat in s..n && p.lng in w..e
+        /** The region's real boundary where [RegionPolys] has one (the places and basemap catalogs
+         *  share the routing catalog's ids), else the box (issue #599). */
+        fun covers(lat: Double, lng: Double): Boolean =
+            RegionPolys.covers(id, lat, lng) ?: RegionPolys.boxCovers(s, w, n, e, lat, lng)
+        fun covers(p: LatLng) = covers(p.lat, p.lng)
         fun area() = (n - s) * (e - w)
+        fun boxArea() = area()
     }
 
     private val root = File(context.filesDir, folder)
@@ -225,24 +285,34 @@ abstract class PmtilesRegionStore(
      *  manifest region covering it. One, not every match: regions nest (a city test box inside its
      *  state), and two archives on the style drew every business in the overlap twice. An installed
      *  archive with no index entry (a dropped-in test file) counts as covering everything. */
+    /** The bake date (`rev`, YYYYMMDD) of the archive [sourcesFor] last picked, 0 when unknown. The
+     *  app hides the basemap's own points only over an archive baked with the one-set bake. */
+    @Volatile var lastPickRev: Int = 0
+        private set
+
     suspend fun sourcesFor(center: LatLng?, manifestUrl: String): List<String> {
         val local = installed()
-        val c = center ?: return local.values.take(1).map { "pmtiles://file://${it.absolutePath}" }
+        lastPickRev = 0
+        val c = center ?: return local.entries.take(1).map { (id, f) -> lastPickRev = installedRev(id); "pmtiles://file://${f.absolutePath}" }
         val index = readIndex()
         val localPick = local.entries
             .filter { (id, _) -> index[id]?.let { b -> c.lat in b[0]..b[2] && c.lng in b[1]..b[3] } ?: true }
             .minByOrNull { (id, _) -> index[id]?.let { b -> (b[2] - b[0]) * (b[3] - b[1]) } ?: Double.MAX_VALUE }
-        if (localPick != null) return listOf("pmtiles://file://${localPick.value.absolutePath}")
+        if (localPick != null) { lastPickRev = installedRev(localPick.key); return listOf("pmtiles://file://${localPick.value.absolutePath}") }
         val streamed = runCatching { manifest(manifestUrl) }.getOrDefault(emptyList())
             .filter { it.covers(c) }
             .minByOrNull { it.area() } ?: return emptyList()
+        lastPickRev = streamed.rev
         return listOf("pmtiles://${streamed.url}")
     }
 
     /** Download [region]'s archive for offline use. True when installed (or already was). */
-    suspend fun download(region: Region, onProgress: (Int) -> Unit): Boolean = withContext(Dispatchers.IO) {
+    /** [replace] downloads a fresh copy over an installed archive: the new file lands in `.tmp` and
+     *  is renamed over the old one only when complete and verified, so a failed or canceled update
+     *  leaves the region as it was (the Update button used to delete first, 2026-09-22). */
+    suspend fun download(region: Region, replace: Boolean = false, onProgress: (Int) -> Unit): Boolean = withContext(Dispatchers.IO) {
         downloadMutex.withLock {
-            if (fileFor(region.id).exists()) { onProgress(100); return@withLock true }
+            if (!replace && fileFor(region.id).exists()) { onProgress(100); return@withLock true }
             root.mkdirs()
             val file = fileFor(region.id)
             val tmp = File(root, "${region.id}.pmtiles.tmp")

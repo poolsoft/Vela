@@ -159,7 +159,11 @@ class NavSession @Inject constructor(
     private var planRoute: Route? = null // the route [stopMarks] were computed against
 
     /** An intermediate stop on a multi-stop trip. */
-    data class NavStop(val location: LatLng, val label: String)
+    /** A stop on the drive. [silent] marks a side-street detour point the camera pass added (issue
+     *  #600): routed through like a stop, so a reroute or recheck keeps the detour, but never
+     *  spoken, never listed, never a leg divider. A mid-drive stops EDIT hands back the VISIBLE
+     *  list; [withSilentVias] puts the silent points still ahead back into it in route order. */
+    data class NavStop(val location: LatLng, val label: String, val silent: Boolean = false)
 
     /** Fold a light-ENRICHED copy of the current route in after nav has already started, so
      *  START never waits on the Overpass traffic-signal fetch (that blocked nav start for up to
@@ -214,6 +218,11 @@ class NavSession @Inject constructor(
         // Google's markup gives "Head toward F St"; add the cardinal so guidance
         // says "Head east on F St" like Google's own voice.
         val first = Heading.withCardinal(route.maneuvers.firstOrNull()?.instruction.orEmpty(), route.polyline)
+        // The opener is the first thing the voice says on every drive, so it honors the
+        // spoken-street-names switch too (issue #596). The BANNER keeps `first`: the switch is
+        // about what is read aloud, never about what is shown.
+        val firstSpoken =
+            Heading.withCardinal(route.maneuvers.firstOrNull()?.spokenInstruction().orEmpty(), route.polyline)
         _state.value = State(
             navigating = true,
             route = route,
@@ -238,7 +247,7 @@ class NavSession @Inject constructor(
         // speakOpener (not speak): briefly hold the opener until the first road's real romanized name
         // has loaded from the map tiles, so a foreign street isn't read as an ICU skeleton at T=0 while
         // the nav-zoom tiles are still loading (issue #184). Falls through to speaking after a short cap.
-        voice.speakOpener(app.vela.core.i18n.NavStringsRegistry.current().startNav(first))
+        voice.speakOpener(app.vela.core.i18n.NavStringsRegistry.current().startNav(firstSpoken))
         diag.record(
             "nav",
             "start → ${destinationLabel.ifBlank { "destination" }} " +
@@ -278,16 +287,32 @@ class NavSession @Inject constructor(
         setStops(listOf(stop) + remaining, loc, "add stop mid-nav → ${stop.label}", "stop-added")
     }
 
-    /** The stops still ahead on the drive, in order (the ones already passed are dropped). */
-    fun remainingStops(): List<NavStop> = synchronized(stopLock) { stops.drop(passedStops) }
+    /** [visible] (an edited stop list from the UI, which never sees silent stops) with the silent
+     *  detour vias still ahead put back in, each where it falls along the current plan route
+     *  relative to the visible stops (a visible stop not on that route keeps its list position).
+     *  Without this the first stops edit of a drive silently threw the camera detour away. */
+    private fun withSilentVias(visible: List<NavStop>): List<NavStop> {
+        val (silent, plan) = synchronized(stopLock) { stops.drop(passedStops).filter { it.silent } to planRoute }
+        if (silent.isEmpty()) return visible
+        if (plan == null) return visible + silent
+        val vMarks = NavEngine.stopMarks(plan, visible.map { it.location })
+        val sMarks = NavEngine.stopMarks(plan, silent.map { it.location })
+        val vias = silent.indices.mapNotNull { i -> sMarks[i]?.let { it to silent[i] } }
+        return CameraDetour.mergeOrdered(visible.indices.map { i -> vMarks[i] to visible[i] }, vias)
+    }
+
+    /** The stops still ahead on the drive, in order (the ones already passed are dropped). The
+     *  VISIBLE ones: a silent detour via is routed through but is not a stop to anyone. */
+    fun remainingStops(): List<NavStop> = synchronized(stopLock) { stops.drop(passedStops).filter { !it.silent } }
 
     /** Replace the stops still ahead with [newRemaining] (the stops editor's Done during nav,
      *  issue #402: reorder, remove, add, then ONE replan from [loc]) and replan the drive through
      *  them. The same user-ordered reroute as [addStop]: no cooldown, no back-on-course discard,
      *  and the new list is the plan at once, so even a failed fetch keeps it for the next
      *  reroute/recheck. */
-    fun setStops(newRemaining: List<NavStop>, loc: LatLng, reason: String, swapReason: String = "stops-edited") {
+    fun setStops(newVisible: List<NavStop>, loc: LatLng, reason: String, swapReason: String = "stops-edited") {
         val dest = destination ?: return
+        val newRemaining = withSilentVias(newVisible)
         synchronized(stopLock) {
             stops = newRemaining
             stopMarks = List(newRemaining.size) { null } // measured against no route yet: cues hold
@@ -429,7 +454,7 @@ class NavSession @Inject constructor(
                 val mark = stopMarks.getOrNull(passedStops)
                 if (mark == null) { passedStops++; continue }
                 if (traveledM >= mark - STOP_ARRIVE_TOL_M) {
-                    toSpeak += stops[passedStops].label
+                    if (!stops[passedStops].silent) toSpeak += stops[passedStops].label
                     passedStops++
                 } else break
             }
@@ -514,6 +539,9 @@ class NavSession @Inject constructor(
         val faster = _state.value.fasterRoute ?: return
         lastSwapReason = "faster"
         val first = faster.maneuvers.firstOrNull()?.instruction.orEmpty()
+        // Spoken half of the same split as the opener: the card keeps the road name, the voice
+        // drops it when the user asked for that (issue #596).
+        val firstSpoken = faster.maneuvers.firstOrNull()?.spokenInstruction().orEmpty()
         // The faster candidate was routed through the remaining stops (maybeRecheck rejects candidates
         // that don't cover them) → adopt them + recompute marks, atomically with the plan-route swap.
         synchronized(stopLock) {
@@ -540,7 +568,7 @@ class NavSession @Inject constructor(
                 fasterSavingSeconds = 0.0,
             )
         }
-        voice.speak(app.vela.core.i18n.NavStringsRegistry.current().fasterRoute(first), interrupt = true)
+        voice.speak(app.vela.core.i18n.NavStringsRegistry.current().fasterRoute(firstSpoken), interrupt = true)
         note("accepted faster route (${faster.maneuvers.size} steps)")
     }
 

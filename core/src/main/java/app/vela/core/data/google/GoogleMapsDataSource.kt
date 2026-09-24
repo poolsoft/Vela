@@ -9,6 +9,7 @@ import app.vela.core.data.CategoryFilter
 import app.vela.core.data.LowDataMode
 import app.vela.core.data.LowRamMode
 import app.vela.core.data.MapDataSource
+import app.vela.core.data.SuggestResult
 import app.vela.core.data.RerouteFallback
 import app.vela.core.data.RouteBudget
 import app.vela.core.data.RouteEngine
@@ -59,10 +60,9 @@ import javax.inject.Singleton
 /**
  * The real extractor, calibrated against maps.google.com (2026-06-15).
  *
- * Search turned out to need NO pb at all — a plain `/search?tbm=map&q=…` returns
- * the full results JSON, with viewport bias achieved by appending "near lat,lng"
- * to the query. Directions needs a pb (built by [DirectionsPb]) but no session
- * token. Both are the same endpoints google.com/maps calls from a browser, so
+ * Search is `/search?tbm=map&q=…` plus a pb built by [SearchPb] from the calibrated
+ * template, which carries the viewport (center + span) and the page offset.
+ * Directions needs a pb (built by [DirectionsPb]) but no session token. Both are the same endpoints google.com/maps calls from a browser, so
  * they work without Play Services — good for GrapheneOS.
  */
 @Singleton
@@ -174,8 +174,8 @@ class GoogleMapsDataSource @Inject constructor(
     /** One result page: [offset] rows in, over a [viewport]-centered window [spanMeters] tall. A
      *  parse drift on page 0 is thrown (and recorded) so the caller can surface it; on any later
      *  page it yields an empty list, because a later page drifting must never kill page 0. */
-    private suspend fun searchPage(query: String, viewport: LatLng, spanMeters: Double?, rankFrom: LatLng?, offset: Int, cal: app.vela.core.config.Calibration): List<Place> {
-        val url = "${cal.searchEndpoint}&q=${query.enc()}&pb=${SearchPb.build(query, viewport, cal.searchPb, spanMeters, offset).enc()}".localized()
+    private suspend fun searchPage(query: String, viewport: LatLng, spanMeters: Double?, rankFrom: LatLng?, offset: Int, cal: app.vela.core.config.Calibration, lang: String? = null): List<Place> {
+        val url = "${cal.searchEndpoint}&q=${query.enc()}&pb=${SearchPb.build(query, viewport, cal.searchPb, spanMeters, offset).enc()}".localized(lang)
         val raw = get(url)
         // A remote transforms.js can fully re-parse a reshaped response (searchOverride);
         // otherwise the compiled parser runs. Either way, an optional transformPlaces
@@ -197,14 +197,30 @@ class GoogleMapsDataSource @Inject constructor(
     private fun placeKey(p: Place) =
         p.featureId ?: "${p.name.lowercase()}|${(p.location.lat * 2000).toInt()}|${(p.location.lng * 2000).toInt()}"
 
-    override suspend fun search(query: String, near: LatLng?, spanMeters: Double?, rankFrom: LatLng?): SearchResult = io {
+    override suspend fun search(query: String, near: LatLng?, spanMeters: Double?, rankFrom: LatLng?, lang: String?): SearchResult = io {
+        // Without Google (NoGoogle): the OpenStreetMap geocoder answers, biased around the user.
+        // It knows names and addresses, not categories; the downloaded place packs cover those
+        // where a region is installed (the view model runs them only when offline, or when this
+        // search throws or comes back empty).
+        if (app.vela.core.data.NoGoogle.enabled) {
+            val bias = rankFrom ?: near
+            val lang = java.util.Locale.getDefault().language
+            // Photon's own ranking (importance, softly biased to the user) leads, so a city or a
+            // landmark across the state is found; the suggest path's hard metro box is appended
+            // for the partial-address case. Checked on a device the other way round: the box
+            // led with fuzzy address rows two states away and the city itself never showed.
+            val ranked = app.vela.core.data.PhotonGeocoder.suggest(http, query, bias, lang, limit = 20, hardBox = false)
+            val nearby = app.vela.core.data.PhotonGeocoder.suggest(http, query, bias, lang, limit = 10)
+            val places = (ranked + nearby).distinctBy { it.id }
+            return@io SearchResult(query, places)
+        }
         session.ensure()
         // Results are viewport-driven, so a location is required; callers
         // normally pass the user's location, with a fallback for the rare null.
         val viewport = near ?: DEFAULT_VIEWPORT
         val cal = calibration.current()
-        val firstUrl = "${cal.searchEndpoint}&q=${query.enc()}&pb=${SearchPb.build(query, viewport, cal.searchPb, spanMeters).enc()}".localized()
-        suspend fun page(offset: Int): List<Place> = searchPage(query, viewport, spanMeters, rankFrom, offset, cal)
+        val firstUrl = "${cal.searchEndpoint}&q=${query.enc()}&pb=${SearchPb.build(query, viewport, cal.searchPb, spanMeters).enc()}".localized(lang)
+        suspend fun page(offset: Int): List<Place> = searchPage(query, viewport, spanMeters, rankFrom, offset, cal, lang)
         // NEARBY PASS (2026-09-13): Google's keyless ranking is prominence-heavy over the WHOLE
         // window, so at town zoom the outlet next to the user loses its slot to better-known
         // places across the visible area and misses all three pages; the ambient merge below
@@ -217,7 +233,7 @@ class GoogleMapsDataSource @Inject constructor(
             (spanMeters == null || (rankFrom.distanceTo(viewport) <= spanMeters / 2 && spanMeters > NEARBY_SPAN_M * 1.5))
         val (nearby, first) = kotlinx.coroutines.coroutineScope {
             val n = async {
-                if (nearbyWanted) runCatching { searchPage(query, rankFrom!!, NEARBY_SPAN_M, rankFrom, 0, cal) }.getOrDefault(emptyList())
+                if (nearbyWanted) runCatching { searchPage(query, rankFrom!!, NEARBY_SPAN_M, rankFrom, 0, cal, lang) }.getOrDefault(emptyList())
                 else emptyList()
             }
             val f = async { page(0) }
@@ -256,10 +272,52 @@ class GoogleMapsDataSource @Inject constructor(
         SearchResult(query, CategoryFilter.applyIfEnabled(jsTransforms.refineSearch(places)))
     }
 
+    /** The tap resolve's search: page one only. A chain's name fills the page, and [search] then
+     *  fetched pages two and three too, a second round trip that could only add branches farther
+     *  from the tap than the ones already on page one (measured 2026-09-22 on the 4a: 4.3 s of a
+     *  4.7 s tap). Without Google, the OSM geocoder answers as [search] does. */
+    override suspend fun searchOnce(query: String, near: LatLng, lang: String?): List<Place> = io {
+        if (app.vela.core.data.NoGoogle.enabled) return@io search(query, near, null, null, lang).places
+        session.ensure()
+        val cal = calibration.current()
+        val places = searchPage(query, near, null, null, 0, cal, lang)
+        CategoryFilter.applyIfEnabled(jsTransforms.refineSearch(places))
+    }
+
+    /**
+     * Google's own autocomplete (see [SuggestParser]) for the typed suggestions. Not the
+     * calibrated search endpoint: that one ranks a partial address by prominence over the
+     * window and answered a bare five-digit house number with a same-looking ZIP code in
+     * another state while houses with that number sat a mile away. The bias is the viewport center and span, the same window the
+     * search uses; hl/gl follow the app language and the phone's region like every other
+     * request. Without Google the OSM geocoder answers as before (the view model's path).
+     */
+    override suspend fun suggest(query: String, near: LatLng?, spanMeters: Double?, lang: String?): SuggestResult = io {
+        if (app.vela.core.data.NoGoogle.enabled) return@io SuggestResult(emptyList(), emptyList())
+        session.ensure()
+        val at = near ?: DEFAULT_VIEWPORT
+        val span = (spanMeters ?: SUGGEST_SPAN_M).coerceIn(2_000.0, 500_000.0).toInt()
+        val pb = "!2i5!4m12!1m3!1d$span!2d${at.lng}!3d${at.lat}!2m3!1f0!2f0!3f0!3m2!1i1080!2i2000!4f13.1" +
+            "!7i20!10b1!12m6!1m2!18b1!30b1!2m2!1i203!2i100!19m4!1m3!1i1!2i1!3i1!20m1!1e1"
+        val url = "https://www.google.com/s?tbm=map&gs_ri=maps&suggest=p&authuser=0&hl=en&gl=us&pb=${pb.enc()}&q=${query.enc()}&tch=1&ech=1".localized(lang)
+        val raw = try { get(url) } catch (e: Exception) {
+            android.util.Log.w("VelaSuggest", "\"$query\": ${e.javaClass.simpleName} ${e.message}")
+            throw e
+        }
+        val parsed = SuggestParser.parse(raw)
+        // One line per keystroke pause, like VelaUpdate/VelaWeb: what the autocomplete answered,
+        // and the head of the body when it answered nothing (a consent page, a block, a reshape).
+        android.util.Log.i("VelaSuggest", "\"$query\" span $span → ${parsed.places.size} places, ${parsed.queries.size} queries" +
+            if (parsed.places.isEmpty() && parsed.queries.isEmpty()) " body[${raw.length}]=${raw.take(120).replace('\n', ' ')}" else "")
+        diag.record("suggest", "\"$query\" near ${at.lat},${at.lng} span $span → ${parsed.places.size} places, ${parsed.queries.size} queries", url)
+        SuggestResult(parsed.places, parsed.queries)
+    }
+
     /** Pages [fromPage] onward of the same query, for the results list's "More results" row
      *  (2026-09-13). Same window, same ranking point; the pages fetch concurrently and a
      *  failing one is just missing. Dedupe against what is already shown is the caller's. */
     override suspend fun searchMore(query: String, near: LatLng?, spanMeters: Double?, rankFrom: LatLng?, fromPage: Int, pages: Int): List<Place> = io {
+        if (app.vela.core.data.NoGoogle.enabled) return@io emptyList()
         session.ensure()
         val viewport = near ?: DEFAULT_VIEWPORT
         val cal = calibration.current()
@@ -274,6 +332,7 @@ class GoogleMapsDataSource @Inject constructor(
     }
 
     override suspend fun nearbyPlaces(center: LatLng, spanMeters: Double, onPartial: ((List<Place>) -> Unit)?): List<Place> = io {
+        if (app.vela.core.data.NoGoogle.enabled) return@io emptyList()
         session.ensure()
         val cal = calibration.current()
         // The wide default search (!1d≈25229, !4f13.1) returns the ~20 most prominent places over a
@@ -452,6 +511,7 @@ class GoogleMapsDataSource @Inject constructor(
     }
 
     override suspend fun reviews(featureId: String): List<Review> = io {
+        if (app.vela.core.data.NoGoogle.enabled) return@io emptyList()
         // /maps/preview/review/listentitiesreviews — a keyless GET. The feature id
         // "0xHIGH:0xLOW" splits into two unsigned-64 decimals (1y/2y); 2i/3i page,
         // 3e1 sorts by most-relevant. The 1s session token can be any string.
@@ -467,6 +527,7 @@ class GoogleMapsDataSource @Inject constructor(
     }
 
     override suspend fun placePhotos(featureId: String): List<app.vela.core.model.Photo> = io {
+        if (app.vela.core.data.NoGoogle.enabled) return@io emptyList()
         // batchexecute `hspqX` (/MapsPhotoService.ListEntityPhotos) — a keyless POST
         // (no `at` token, just the warmed session cookies). The feature id goes in
         // the proto verbatim ([2][0]); the response carries the full gallery, URL at
@@ -482,6 +543,7 @@ class GoogleMapsDataSource @Inject constructor(
     }
 
     override suspend fun streetView(location: LatLng, preferStreet: String?): app.vela.core.model.StreetViewPano? = io {
+        if (app.vela.core.data.NoGoogle.enabled) return@io null
         // Keyless nearest-pano lookup - the JS Maps API's own GeoPhotoService.SingleImageSearch,
         // authorized by referer (the get() helper already sends it). The parser returns null with no
         // imagery near the point.
@@ -525,6 +587,7 @@ class GoogleMapsDataSource @Inject constructor(
     }
 
     override suspend fun streetViewByPano(panoId: String): app.vela.core.model.StreetViewPano? = io {
+        if (app.vela.core.data.NoGoogle.enabled) return@io null
         // Epoch-exact pano fetch (walking): photometa/v1 by id, keyless. Same parser - it handles
         // the )]}' guard and the extra nesting. Lat/lng fall back to the response's own position.
         val cal = calibration.current()
@@ -533,6 +596,7 @@ class GoogleMapsDataSource @Inject constructor(
     }
 
     override suspend fun streetViewTile(panoId: String, x: Int, y: Int, zoom: Int): ByteArray? = io {
+        if (app.vela.core.data.NoGoogle.enabled) return@io null
         // The consumer equirect tile endpoint (what maps.google.com renders) - keyless, JPEG,
         // needs only the Google referer. Fixed template, no calibration: the panoid + x/y/zoom
         // fully address a tile in the standard SV pyramid.
@@ -587,9 +651,14 @@ class GoogleMapsDataSource @Inject constructor(
         if (mode == TravelMode.BICYCLE && RoutingPrefs.bikeSafe) {
             bikeSafeRoutes(origin, destination, waypoints, avoidTolls, avoidHighways, avoidFerries, urgent)?.let { return@io it }
         }
-        // Multi-stop: route OSRM straight THROUGH the stops (routeVia filters the spurious per-via
-        // arrive/depart into one continuous trip), then overlay Google's live in-traffic ETA ratio for the
-        // whole origin→dest so the time is traffic-aware. A waypointed trip is a single path — no alternates.
+        // Multi-stop (rebuilt 2026-09-21, issue #600): Google is asked for the trip THROUGH the stops
+        // (DirectionsPb.withWaypoints) and the open router is routed through them too. Same course =
+        // the open route with Google's real through-the-stops time and spans; Google left the course
+        // (traffic, an avoid) = the open router is snapped along Google's line leg by leg, with the
+        // stops as vias between the samples, exactly as the single-destination path snaps below.
+        // Before this Google was only ever asked for the DIRECT trip and its answer calibrated a
+        // speed; every trip with stops was the open router's free-flow choice with a ratio on it.
+        // A waypointed trip is a single path: neither router returns alternates for one.
         if (waypoints.isNotEmpty()) {
             return@io coroutineScope {
                 val viaD = async {
@@ -600,8 +669,8 @@ class GoogleMapsDataSource @Inject constructor(
                 }
                 // Same urgent grace as the single-destination path below (issue #397).
                 val gD = if (bounded) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).async {
-                    googleDirectionsRetried(origin, destination, mode, tries, avoidTolls, avoidHighways, avoidFerries)
-                } else async { googleDirectionsRetried(origin, destination, mode, tries, avoidTolls, avoidHighways, avoidFerries) }
+                    googleDirectionsRetried(origin, destination, mode, tries, avoidTolls, avoidHighways, avoidFerries, waypoints)
+                } else async { googleDirectionsRetried(origin, destination, mode, tries, avoidTolls, avoidHighways, avoidFerries, waypoints) }
                 val via = viaD.await().firstOrNull()
                 if (bounded && via == null) {
                     // Bounded + open router empty (issue #557): Google's direct route if it is back,
@@ -636,30 +705,80 @@ class GoogleMapsDataSource @Inject constructor(
                 // (which reaches the destination but loses the stops).
                 val onDevice = if (via == null && routeEngine.isReady(mode))
                     chainOnDevice(listOf(origin) + waypoints + destination, mode, avoidTolls, avoidHighways, avoidFerries) else null
+                // Google is awaited only on the branches that read it (the on-device fallback with no
+                // open route never waited for it, and still does not).
+                val g: Route? = if (via != null || onDevice == null) googleOrGrace().firstOrNull() else null
+                // THE GUARD: Google's line has to pass every stop, or the reply is the direct trip
+                // (a template without the waypoint groups, or a drift) and gets the old direct-trip
+                // handling, never adopted as if it called at the stops.
+                val gStops = g?.takeIf { it.polyline.size >= 5 && RouteGeometry.stopsOnLine(it.polyline, waypoints) }
+                val avoidWantedHere = (avoidTolls || avoidHighways || avoidFerries) && mode == TravelMode.DRIVE
+                var divergentStops = false
+                var snapKeptStops = false
+                var honoredByGoogle = false
                 var result = when {
-                    // Calibrated like a single-destination trip (review 2026-09-12): the ratio-only
-                    // overlay this used to take reproduced issue #227 verbatim the moment one stop was
-                    // added, and the nav recheck's etaScale jumped by up to 2.5x when the last stop
-                    // was passed and the recheck switched to the calibrated path. Google's keyless
-                    // answer is the DIRECT trip, so the bias is measured as a speed ratio (the
-                    // distance difference cancels) and Google's congestion spans stay off a route
-                    // that takes other roads.
-                    via != null -> googleOrGrace().firstOrNull().let { g -> listOf(applyTraffic(via, g, freeFlowCal = speedCal(via, g))) }
+                    via != null && gStops != null -> {
+                        divergentStops = RouteGeometry.divergent(via, gStops)
+                        var snapped: Route? = null
+                        if (divergentStops && (!urgent || avoidWantedHere)) {
+                            val pts = RouteGeometry.sampleViasThrough(gStops.polyline, waypoints)
+                            if (pts != null) {
+                                val all = listOf(origin) + pts + destination
+                                // The real stops' positions in the via list: exempt from the strict
+                                // snap-distance refusal (a stop in a lot is a stop, not an appendix).
+                                val loose = all.indices.filter { i -> i in 1 until all.lastIndex && waypoints.any { it == all[i] } }.toSet()
+                                snapped = RouteGeometry.routeVia(
+                                    http, all, mode, avoidTolls, avoidHighways, avoidFerries, departBearingDeg,
+                                    strictVias = true, looseVias = loose, tries = tries, callTimeoutMs = osrmTryMs, budget = budget,
+                                ).firstOrNull()?.takeIf { r ->
+                                    r.polyline.lastOrNull()?.let { it.distanceTo(destination) <= SNAP_REACH_M } == true &&
+                                        r.distanceMeters <= gStops.distanceMeters * SNAP_LENGTH_SLACK + SNAP_LENGTH_SLACK_M &&
+                                        !spurWithTurn(r, gStops.polyline)
+                                }
+                            }
+                        }
+                        // One calibration from whichever open route follows Google's course, the
+                        // single-destination rule: both now cover the same trip through the same stops.
+                        val basis = if (!divergentStops) via else snapped
+                        val cal = basis?.takeIf { it.durationSeconds > 0 && gStops.durationSeconds > 0 }?.let { b ->
+                            val dScale = if (gStops.distanceMeters > 0) b.distanceMeters / gStops.distanceMeters else 1.0
+                            ((gStops.durationSeconds * dScale) / b.durationSeconds).coerceIn(0.5, 3.0)
+                        }
+                        val gEta = gStops.durationInTrafficSeconds ?: gStops.durationSeconds
+                        snapKeptStops = snapped != null &&
+                            (avoidWantedHere || gEta <= via.durationSeconds * (cal ?: 1.0) * SNAP_ETA_MARGIN)
+                        when {
+                            !divergentStops -> { honoredByGoogle = true; listOf(applyTraffic(via, gStops, freeFlowCal = cal)) }
+                            snapKeptStops -> { honoredByGoogle = true; listOf(applyTraffic(snapped!!, gStops, freeFlowCal = cal)) }
+                            // Avoid on and the open router could not be led along Google's avoiding
+                            // course: Google's own (abbreviated) route through the stops beats a
+                            // plain one that ignores the avoid, the single-destination rule.
+                            avoidWantedHere -> { honoredByGoogle = true; listOf(gStops.copy(abbreviatedSteps = true, source = RouteSource.GOOGLE_ABBREVIATED)) }
+                            // Google's detour was not worth it: the open route, its speed rebased on
+                            // Google's through-the-stops time, spans transferred where the roads overlap.
+                            else -> listOf(applyTraffic(via, gStops, freeFlowCal = speedCal(via, gStops)))
+                        }
+                    }
+                    // Google answered with the direct trip (or not at all): the old calibration, a
+                    // speed ratio so the distance difference cancels, spans kept off other roads.
+                    via != null -> listOf(applyTraffic(via, g, freeFlowCal = speedCal(via, g)))
                     onDevice != null -> listOf(onDevice)
-                    else -> googleOrGrace().take(1).map { it.copy(abbreviatedSteps = true, source = RouteSource.GOOGLE_ABBREVIATED) }
+                    else -> listOfNotNull(g).map { it.copy(abbreviatedSteps = true, source = RouteSource.GOOGLE_ABBREVIATED) }
                 }
-                // Google's direct route honors avoid (DirectionsPb.withAvoid); the open router's
-                // via route and its on-device fallback do not - only those get the note.
-                if ((avoidTolls || avoidHighways || avoidFerries) && mode == TravelMode.DRIVE && via != null) {
+                // The open router cannot exclude; only a result that left Google's avoiding course
+                // (or never had one) gets the note.
+                if (avoidWantedHere && via != null && !honoredByGoogle) {
                     result = result.map { it.copy(avoidNotHonored = true) }
                 }
-                diag.record(
-                    "directions",
-                    "$mode multi-stop ×${waypoints.size} → via=${via != null} onDevice=${onDevice != null} " +
-                        "googleDirect=${result.isNotEmpty() && via == null && onDevice == null}" +
-                        if (via == null && onDevice == null) " (STOPS DROPPED if google won)" else "",
-                    "",
-                )
+                val line = "$mode multi-stop ×${waypoints.size} → via=${via != null} onDevice=${onDevice != null} " +
+                    "googleStops=${when { g == null -> "none"; gStops != null -> "honored"; else -> "IGNORED" }} " +
+                    "divergent=$divergentStops snapKept=$snapKeptStops " +
+                    "googleDirect=${result.isNotEmpty() && via == null && onDevice == null}" +
+                    if (via == null && onDevice == null && gStops == null) " (STOPS DROPPED if google won)" else ""
+                diag.record("directions", line, "")
+                // Mirrored to logcat (no coordinates in it): the diag ring needs an opt-in and an
+                // export, and whether Google took the stops is the first thing to check in the field.
+                runCatching { android.util.Log.d("VelaDirections", line) }
                 result
             }
         }
@@ -873,7 +992,12 @@ class GoogleMapsDataSource @Inject constructor(
                 if (avoidFallbackToGoogle) return@coroutineScope google.map { it.copy(abbreviatedSteps = true, source = RouteSource.GOOGLE_ABBREVIATED) }
                 // With avoid on, the open router's unrestricted routes are not offered as alternates.
                 val primary = if (snapWorthIt) (listOf(trafficRoute!!) + (if (avoidWanted) emptyList() else open)).map { applyTraffic(it, gTop, freeFlowCal) }
-                    else open.map { applyTraffic(it, gTop, freeFlowCal) }
+                    // Avoid on and the open router's top route already follows Google's avoiding
+                    // course: that one route IS the avoiding route, but the open router's OTHER
+                    // routes were computed with no avoid at all (it cannot exclude), so they are
+                    // not offered, the same rule as the snapped branch. Before this they were, and
+                    // with Google having honored the avoid, without the "may still use" note.
+                    else (if (avoidWanted && gTop != null) open.take(1) else open).map { applyTraffic(it, gTop, freeFlowCal) }
                 // ALTERNATES to choose from = Google's OWN alternate routes (the real, traffic-aware ones you
                 // miss). Kept PROVISIONAL: their polyline + live ETA are shown now, but turn-by-turn is named
                 // only when you PICK one to drive ([nameRoute]) — so the picker loads fast and we never snap a
@@ -1080,9 +1204,6 @@ class GoogleMapsDataSource @Inject constructor(
         )
     }
 
-    /** Lighter traffic overlay for a multi-stop route: scale the ETA by Google's in-traffic ratio for a
-     *  traffic-aware time, but DON'T map the congestion spans — Google's direct origin→dest path differs
-     *  from the through-the-stops path, so its span offsets wouldn't line up. ETA only. */
     /** Free-flow calibration for a route that does NOT follow Google's course (a stops trip is
      *  routed through its stops while Google's keyless answer is the direct trip): compare average
      *  SPEEDS instead of times, so the distance difference cancels and what is left is the speed
@@ -1101,8 +1222,9 @@ class GoogleMapsDataSource @Inject constructor(
     override suspend fun nameRoute(route: Route, origin: LatLng, destination: LatLng, mode: TravelMode, avoidTolls: Boolean, avoidHighways: Boolean, avoidFerries: Boolean): Route = io {
         if (!route.provisional || route.polyline.size < 3) return@io route.copy(provisional = false)
         val vias = listOf(origin) + RouteGeometry.sampleVias(route.polyline) + destination
-        // The avoid flags ride along even on a snap: the vias FORCE Google's chosen path, but
-        // exclude keeps OSRM from bridging between vias over a road class the user opted out of.
+        // The avoid flags ride along on the snap, but they add nothing on the public server:
+        // OSRM_SUPPORTS_EXCLUDE is off, so no `exclude=` is sent and the vias alone hold the
+        // snap to Google's chosen path.
         val named = RouteGeometry.routeVia(http, vias, mode, avoidTolls, avoidHighways, avoidFerries).firstOrNull()
             ?.takeIf { it.polyline.lastOrNull()?.let { p -> p.distanceTo(destination) <= SNAP_REACH_M } == true }
         // Keep the route's OWN time figures through the snap. The picker sorted and displayed this
@@ -1130,11 +1252,11 @@ class GoogleMapsDataSource @Inject constructor(
      *  drastically between restarts (user real-drive report 2026-07-14). Two short backoff
      *  retries recover the routine blips; a genuinely unreachable Google still degrades to
      *  free-flow exactly as before, just honestly rarer. */
-    private suspend fun googleDirectionsRetried(origin: LatLng, destination: LatLng, mode: TravelMode, tries: Int = 3, avoidTolls: Boolean = false, avoidHighways: Boolean = false, avoidFerries: Boolean = false): List<Route> {
+    private suspend fun googleDirectionsRetried(origin: LatLng, destination: LatLng, mode: TravelMode, tries: Int = 3, avoidTolls: Boolean = false, avoidHighways: Boolean = false, avoidFerries: Boolean = false, waypoints: List<LatLng> = emptyList()): List<Route> {
         var routes: List<Route> = emptyList()
         for (attempt in 0 until tries) {
             if (attempt > 0) kotlinx.coroutines.delay(300L * attempt)
-            routes = runCatching { googleDirections(origin, destination, mode, avoidTolls, avoidHighways, avoidFerries) }.getOrNull().orEmpty()
+            routes = runCatching { googleDirections(origin, destination, mode, avoidTolls, avoidHighways, avoidFerries, waypoints) }.getOrNull().orEmpty()
             if (routes.isNotEmpty()) return routes
         }
         diag.record("directions", "google directions empty after $tries attempt(s) — trafficless fetch")
@@ -1144,10 +1266,14 @@ class GoogleMapsDataSource @Inject constructor(
     /** Google's keyless directions — now the FALLBACK router (OSRM unreachable) and the
      *  live-traffic source (ETA / duration-in-traffic / congestion spans). Its step list is
      *  abbreviated for long routes, which is exactly why OSRM is primary. */
-    private suspend fun googleDirections(origin: LatLng, destination: LatLng, mode: TravelMode, avoidTolls: Boolean = false, avoidHighways: Boolean = false, avoidFerries: Boolean = false): List<Route> {
+    private suspend fun googleDirections(origin: LatLng, destination: LatLng, mode: TravelMode, avoidTolls: Boolean = false, avoidHighways: Boolean = false, avoidFerries: Boolean = false, waypoints: List<LatLng> = emptyList()): List<Route> {
+        // Without Google the open router's answer stands alone: no traffic, no Google alternates,
+        // no abbreviated fallback. Every caller already handles an empty reply as "Google did not
+        // answer", which is exactly the state this is.
+        if (app.vela.core.data.NoGoogle.enabled) return emptyList()
         session.ensure()
         val cal = calibration.current()
-        val pb = DirectionsPb.build(origin, destination, mode, cal.directionsPb, avoidTolls, avoidHighways, avoidFerries)
+        val pb = DirectionsPb.build(origin, destination, mode, cal.directionsPb, avoidTolls, avoidHighways, avoidFerries, waypoints)
         val url = "${cal.directionsEndpoint}&pb=${pb.enc()}"
         val routes = try {
             DirectionsParser.parse(GoogleResponse.parse(get(url)), cal.directionsPaths)
@@ -1172,6 +1298,8 @@ class GoogleMapsDataSource @Inject constructor(
      *  can't break the URL builder (only the parser paths, which are documented in
      *  [EntityListParser]). Calibrated live 2026-07-08. */
     override suspend fun importList(shareUrl: String): app.vela.core.model.ImportedList? = io {
+        // The link resolves on Google's own servers, so "Use Vela without Google" refuses it.
+        if (app.vela.core.data.NoGoogle.enabled) return@io null
         runCatching {
             session.ensure()
             val html = get(shareUrl.trim())
@@ -1261,8 +1389,11 @@ class GoogleMapsDataSource @Inject constructor(
      *  and boolean can't disagree. `Locale.getDefault()` reflects the in-app language override
      *  (AppLocale sets it) or the system locale. **No-op for English → English users are
      *  byte-for-byte unchanged.** */
-    private fun String.localized(): String {
+    private fun String.localized(force: String? = null): String {
         val out = regionalized()
+        // A caller's own language (the tap resolve, for a label in another script) wins outright;
+        // its status text is parsed against that language's table where there is one.
+        if (force != null) return out.replace("hl=en", "hl=$force")
         val locale = java.util.Locale.getDefault()
         val lang = locale.language.lowercase()
         // Only rewrite to a language the STATUS parser can read (SearchParser.STATUS_LANGS). For any
@@ -1295,8 +1426,10 @@ class GoogleMapsDataSource @Inject constructor(
     }
 
     private companion object {
-        // Cap on waiting for the on-device avoid route: the obf engine answers in ~200 ms, but the
-        // obf engine can take many seconds on a long route, and the route chooser must not hang.
+        // Cap on waiting for the on-device avoid route: the obf engine can take many seconds on a
+        // long route, and the route chooser must not hang.
+        /** The autocomplete window when the caller has no viewport: a town, like the web page's default. */
+        const val SUGGEST_SPAN_M = 20_000.0
         const val AVOID_ONDEVICE_TIMEOUT_MS = 4_000L
         /** A mid-drive reroute waits this long for Google's traffic once the open router has answered. */
         const val URGENT_GOOGLE_GRACE_MS = 2_500L

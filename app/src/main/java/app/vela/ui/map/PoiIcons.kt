@@ -46,6 +46,14 @@ object PoiIcons {
     /** The category color for a dot group (the ambient mini-dot tier tints circles with it). */
     fun colorFor(group: String): String = GROUPS.firstOrNull { it.first == group }?.third ?: "#5F6368"
 
+    /** The map's own marker for [group] (the same glyph and color the ambient icon uses), for the
+     *  car's list rows; null when the icon font is not available. */
+    fun groupMarker(context: Context, group: String): Bitmap? {
+        val tf = typeface(context) ?: return null
+        val (_, codepoint, color) = GROUPS.firstOrNull { it.first == group } ?: GROUPS.first { it.first == "default" }
+        return marker(tf, codepoint, color)
+    }
+
     /** [colorFor] as a style expression over a feature's baked `group` property, for tile-sourced
      *  layers (the open places dots) that carry no per-feature `dotColor`. */
     fun groupColor(): Expression = Expression.match(
@@ -477,7 +485,7 @@ object PoiIcons {
      *  and color the POI label text by category like Google — saturated in light, PASTEL TINTS in
      *  dark (Google's dark labels are lightened category colors, not the full-saturation ones,
      *  which vanish against a dark map — ground-truthed vs the Maps app; see [labelColor]). */
-    fun applyToLiberty(style: Style, dark: Boolean) {
+    fun applyToLiberty(style: StyleLayers, dark: Boolean) {
         runCatching {
             val icon = Expression.raw(match("\"vela-poi-default\"") { "\"vela-poi-$it\"" })
             val fallback = if (dark) "#C8CDD4" else "#5F6368"

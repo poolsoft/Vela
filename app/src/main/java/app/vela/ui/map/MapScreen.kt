@@ -53,6 +53,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.NorthWest
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Person
@@ -252,6 +253,12 @@ private const val PUCK_LABEL_GAP_PX = 62
  *  bottom-left corner: the box's height plus its 16 dp margin and a couple of dp of air. */
 private val SPEED_BOX_LIFT_DP = 78.dp
 
+/** The nav FAB column: a stack of 56 dp buttons hard against the right edge with this much air
+ *  outside it. VelaMapView steps MapLibre's compass in by [NAV_FAB_COLUMN_DP] in landscape so the
+ *  two cannot overlap, which is the only reason these are shared constants rather than literals. */
+internal val NAV_FAB_EDGE_DP = 16.dp
+internal val NAV_FAB_COLUMN_DP = 56.dp + NAV_FAB_EDGE_DP
+
 // The route chooser's body cap on short screens (issue #400): the map strip that must stay
 // visible between the endpoints card and the chooser, the chooser's own header (handle + mode
 // chips) above the body, and the least the body may shrink to.
@@ -427,12 +434,13 @@ fun MapScreen(
     // on-screen zoom buttons. mapDpad is the key→camera seam into VelaMapView.
     val dpadMode = rememberDpadMode()
     val dpadFirst = rememberDpadFirstDevice()
-    // Which control the nav bar's right slot carries. The step-list button wins it whenever it was
-    // asked for (Prefer buttons, or a keypad-first phone): those people asked for a discrete target
-    // and pause has one in the right-edge stack either way. Otherwise the slot, which is an empty
-    // spacer on a touch phone, takes PAUSE and the stack keeps a plain mute button.
+    // What the nav bar's right slot carries. The step-list button shows whenever it was asked for
+    // (Prefer buttons, or a keypad-first phone). Pause takes the slot too when "Pause in the bar"
+    // is on, so someone with Prefer buttons gets BOTH and the figures shrink to fit (FitText); a
+    // silent choice between them meant the pause default never reached the people who asked for
+    // buttons. A keypad-first phone keeps pause in the right-edge stack, where the key path is.
     val navListButton = app.vela.ui.PreferButtons.on.value || dpadFirst
-    val navPauseInBar = app.vela.ui.PauseInBar.on.value && !navListButton
+    val navPauseInBar = app.vela.ui.PauseInBar.on.value && !dpadFirst
     val mapDpad = remember { MapDpadController() }
     var mapFocused by remember { mutableStateOf(false) }
     var mapEngaged by remember { mutableStateOf(false) } // arrows pan only while engaged (docs/dpad.md)
@@ -717,7 +725,7 @@ fun MapScreen(
                 ?.trim()?.trimEnd('.', '!', '?', ',', ';', ':')?.trim()
             if (!heard.isNullOrEmpty()) {
                 focusManager.clearFocus()
-                vm.onQueryChange(heard)
+                vm.fillQuery(heard)
                 vm.search()
             }
         }
@@ -1395,6 +1403,7 @@ fun MapScreen(
                         query = state.query,
                         searching = state.searching,
                         onQueryChange = vm::onQueryChange,
+                        fillTick = state.queryEdits,
                         onSearch = {
                             focusManager.clearFocus()
                             vm.search()
@@ -1403,6 +1412,7 @@ fun MapScreen(
                         onClear = vm::clearSearch,
                         onFocusChange = {
                             searchFocused = it
+                            if (it) vm.warmAsrForSearch() // the speech model loads when you reach for search, not at launch
                             // Focus opens the entry page; a touch blur closes it. Under
                             // D-pad, blur must NOT close (focus walks the rows) — BACK /
                             // a run search / a pick close it instead.
@@ -1542,7 +1552,7 @@ fun MapScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(end = 16.dp, bottom = navBarClearance),
+                    .padding(end = NAV_FAB_EDGE_DP, bottom = navBarClearance),
             ) {
                 if (state.navCameraDetached || state.previewStepIndex != null || navZoomOverride) {
                     FloatingActionButton(
@@ -2066,6 +2076,9 @@ fun MapScreen(
             state.selected != null && !searchOpen && state.pickOnMap == null &&
                 state.streetView == null && !state.streetViewLoading -> PlaceSheet(
                 place = state.selected!!,
+                resolving = state.tapResolvingFor != null && state.tapResolvingFor == state.selected?.id,
+                unlinked = state.tapUnlinkedFor != null && state.tapUnlinkedFor == state.selected?.id,
+                sheetKey = state.selected!!.id.let { id -> state.sheetAlias?.takeIf { it.first == id }?.second ?: id },
                 onExpandedChange = { placeSheetExpanded = it },
                 isSaved = state.saved.any { it.id == state.selected!!.id },
                 reviews = state.reviews,
@@ -2081,6 +2094,7 @@ fun MapScreen(
                     ?.takeIf { state.stopDeparturesFor != null && state.stopDeparturesFor == state.selected?.id },
                 stopDeparturesLoading = state.stopDeparturesLoading &&
                     state.stopDeparturesFor != null && state.stopDeparturesFor == state.selected?.id,
+                stopDeparturesCachedAt = state.stopDeparturesCachedAt?.takeIf { state.stopDeparturesFor == state.selected?.id },
                 onTapRoute = vm::openRouteDetail,
                 onClose = vm::clearSelection,
                 onToggleSave = vm::toggleSave,
@@ -2856,6 +2870,11 @@ fun MapScreen(
 /** Route line color by congestion: blue when free-flowing, amber/red when the
  *  live traffic-aware time runs meaningfully over the typical time. Walk/bike and
  *  traffic-less routes stay the default blue. */
+/** The ahead line while the drive is paused: a muted lavender, distinct from the live blue, the
+ *  congestion amber and red and the driven gray, and visible on both themes (a slate gray was
+ *  tried first and vanished into the dark map's road fill). */
+private const val ROUTE_PAUSED_COLOR = "#9C8AD6"
+
 private fun routeTrafficColor(route: app.vela.core.model.Route?): String =
     when (val ratio = route?.trafficRatio) {
         null -> "#1F6FEB"
@@ -2910,7 +2929,7 @@ private fun ambientShownOf(state: MapUiState): List<Place> =
 // same value the view model ranked and capped on (AmbientStability), so a refined pool cannot
 // resize or reorder what is already on screen.
 private fun ambientMarkersOf(state: MapUiState): List<MapMarker> =
-    ambientShownOf(state).map { MapMarker(it.name, it.location, it.category, AmbientStability.prominenceOf(it)) }
+    ambientShownOf(state).map { MapMarker(it.name, it.location, it.category, AmbientStability.prominenceOf(it), houseNumber = app.vela.core.util.PlaceNames.houseNumber(it.address)) }
 
 private fun markersOf(state: MapUiState, filteredIds: Set<String>?): List<MapMarker> =
     displayedPlaces(state)
@@ -3600,7 +3619,9 @@ private fun MapSurface(
         cameraBottomInsetPx = cameraBottomInset,
         cameraLeftInsetPx = cameraLeftInset,
         routePolyline = state.activeRoute?.polyline ?: emptyList(),
-        routeColor = routeTrafficColor(state.activeRoute),
+        // A PAUSED drive draws its line in slate (user 2026-09-21): the map should say the
+        // guidance is on hold without reading the bar. Traffic spans keep their colors.
+        routeColor = if (state.navPaused) ROUTE_PAUSED_COLOR else routeTrafficColor(state.activeRoute),
         routeDashed = state.travelMode == app.vela.core.model.TravelMode.WALK ||
             state.travelMode == app.vela.core.model.TravelMode.BICYCLE,
         routeTrafficSpans = routeTrafficSpans(state.activeRoute),
@@ -3720,6 +3741,7 @@ private fun MapSurface(
         ambientClosed = if (state.navigating) emptyList() else state.ambientClosed.map { MapMarker(it.name, it.location, it.category) },
         onOpenPlaceClosed = vm::onOpenPlaceClosed,
         placesPending = state.placesPending,
+        placesOneSet = state.placesOneSet,
         osmBusinesses = app.vela.ui.MapPoiPrefs.osmBusinesses.value,
         // The exit you are taking, for the green callout on the map: only a numbered exit off
         // a ramp or a fork, and only while its own step is the one being guided.
@@ -3904,6 +3926,12 @@ private fun SearchEntryHost(state: MapUiState, vm: MapViewModel, focusManager: a
             focusManager.clearFocus()
             vm.pickLocalSuggestion(it)
         },
+        querySuggestions = state.querySuggestions,
+        onPickQuery = {
+            focusManager.clearFocus()
+            vm.searchRecent(it)
+        },
+        onFillQuery = vm::fillQuery,
         onRemoveLocal = vm::removeLocalSuggestion,
         lists = state.lists,
         onAddToList = { place, listId -> vm.addPlaceToList(listId, place) },
@@ -4073,6 +4101,9 @@ private fun SearchEntryContent(
     suggestions: List<Place>,
     localSuggestions: List<app.vela.ui.map.LocalSuggestion>,
     onPickLocal: (app.vela.ui.map.LocalSuggestion) -> Unit,
+    querySuggestions: List<String> = emptyList(),
+    onPickQuery: (String) -> Unit = {},
+    onFillQuery: (String) -> Unit = {},
     onRemoveLocal: (app.vela.ui.map.LocalSuggestion) -> Unit,
     lists: List<app.vela.core.model.PlaceList> = emptyList(),
     onAddToList: (Place, String) -> Unit = { _, _ -> },
@@ -4107,7 +4138,7 @@ private fun SearchEntryContent(
 ) {
     // While typing, live place suggestions take over the page (Google-style). The user's OWN
     // history + list matches (issue #180) lead, instant and offline, then the network results.
-    if (localSuggestions.isNotEmpty() || suggestions.isNotEmpty()) {
+    if (localSuggestions.isNotEmpty() || suggestions.isNotEmpty() || querySuggestions.isNotEmpty()) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp),
         ) {
@@ -4135,6 +4166,7 @@ private fun SearchEntryContent(
                     leading = if (isContact) ({ ContactAvatar(s.photoUri) }) else null,
                     badge = if (isContact) listOfNotNull(stringResource(R.string.suggestion_contact_badge), s.badge).joinToString(" · ") else null,
                     onClick = { onPickLocal(s) },
+                    onFill = if (isContact) null else ({ onFillQuery(s.label) }),
                     onLongClick = { menuOpen = true },
                     trailing = {
                         SuggestionOverflow(
@@ -4160,6 +4192,10 @@ private fun SearchEntryContent(
                     label = p.name,
                     sublabel = p.address ?: p.category,
                     onClick = { onPickSuggestion(p) },
+                    // The primary line only (the name, or the street line of an address): the
+                    // arrow is for refining, and a whole "name, city, state" left nothing to
+                    // refine (user 2026-09-22). Google fills the full line; we do not.
+                    onFill = { onFillQuery(p.name) },
                     onLongClick = { menuOpen = true },
                     trailing = {
                         SuggestionOverflow(
@@ -4174,6 +4210,18 @@ private fun SearchEntryContent(
                             onCreateWith = { name -> onCreateListWith(p, name) },
                         )
                     },
+                )
+                Divider()
+            }
+            // Bare query rows from the autocomplete ("Starbucks", "cvs pharmacy hours"): a
+            // search, not a place, so a plain search icon and no overflow menu.
+            querySuggestions.forEach { q ->
+                SuggestionRow(
+                    icon = Icons.Default.Search,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    label = q,
+                    onClick = { onPickQuery(q) },
+                    onFill = { onFillQuery(q) },
                 )
                 Divider()
             }
@@ -4250,6 +4298,7 @@ private fun SearchEntryContent(
                             label = entry.place.name,
                             sublabel = entry.place.address,
                             onClick = { onPickRecentPlace(entry.place) },
+                            onFill = { onFillQuery(entry.place.name) },
                             onLongClick = { menuOpen = true },
                             trailing = {
                                 SuggestionOverflow(
@@ -4273,6 +4322,7 @@ private fun SearchEntryContent(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             label = entry.query,
                             onClick = { onPickRecent(entry.query) },
+                            onFill = { onFillQuery(entry.query) },
                             onLongClick = { menuOpen = true },
                             trailing = {
                                 SuggestionOverflow(
@@ -4671,8 +4721,11 @@ private fun SuggestionRow(
     leading: (@Composable () -> Unit)? = null,
     /** A small chip after the label ("Contact · Home"). */
     badge: String? = null,
+    /** Google's "put it in the box" arrow: the row's text goes into the search field without
+     *  searching, so a long address or a name can be finished by hand (user 2026-09-22). */
+    onFill: (() -> Unit)? = null,
 ) {
-    val hasTrailing = onRemove != null || trailing != null
+    val hasTrailing = onRemove != null || trailing != null || onFill != null
     Row(
         Modifier.fillMaxWidth().dpadHighlight(RoundedCornerShape(6.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
@@ -4717,6 +4770,15 @@ private fun SuggestionRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+        if (onFill != null) {
+            app.vela.ui.place.HeaderCircleButton(
+                Icons.Filled.NorthWest,
+                stringResource(R.string.search_fill_cd),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                bg = MaterialTheme.colorScheme.onSurfaceVariant,
+                size = 32.dp,
+            ) { onFill() }
         }
         // A trailing slot (the ⋮ overflow + its menu) wins over the bare X when provided; both
         // are their own D-pad focus stops with a ring, reached after the row itself.

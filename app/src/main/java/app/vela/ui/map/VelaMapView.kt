@@ -180,11 +180,13 @@ private const val LOCAL_BASEMAP_SRC = "vela-basemap" // the installed offline ba
  *  archive's id when an installed region drives the map. Every helper that reads or extends the
  *  basemap (theme, hillshade, house numbers, contrast layers, satellite roads, the road-name
  *  dictionary) goes through this, so the offline map gets the same dressing as the online one. */
-private fun basemapSrc(style: Style): String? = when {
+private fun basemapSrc(style: StyleLayers): String? = when {
     style.getSource("openmaptiles") != null -> "openmaptiles"
     style.getSource(LOCAL_BASEMAP_SRC) != null -> LOCAL_BASEMAP_SRC
     else -> null
 }
+private fun basemapSrc(style: Style): String? = basemapSrc(StyleHost(style))
+
 private val localBasemapLayerIds = HashSet<String>() // the JSON layers re-pointed at it, re-attached after load
 private const val AMBIENT_LAYER = "vela-ambient"
 private const val AMBIENT_DOT_LAYER = "vela-ambient-dots"
@@ -296,7 +298,7 @@ private const val TRAFFIC_TILES =
 
 /** A tappable search-result pin on the map. [prominence] (0 = unknown/low) drives the ambient dot's
  *  size + keep-distance so anchor stores read bigger and show from farther, Google-style. */
-data class MapMarker(val name: String, val location: LatLng, val category: String? = null, val prominence: Double = 0.0, val rating: Double? = null, val fuelPrice: String? = null)
+data class MapMarker(val name: String, val location: LatLng, val category: String? = null, val prominence: Double = 0.0, val rating: Double? = null, val fuelPrice: String? = null, val houseNumber: String? = null)
 
 // Last marker/ambient lists actually pushed to the GeoJSON sources, so applyData can skip a redundant
 // setGeoJson (a full symbol re-tessellation) when they're unchanged. Nulled on style reload (the fresh
@@ -335,13 +337,18 @@ private const val DEDUPE_NAME_M = 80.0 // agreeing names within this range = the
 // The SAME name (after normalizing) reaches farther: Overture often pins a store at its parcel's
 // centroid, out in the parking lot, which put a chain's second copy past 80 m (user 2026-09-17).
 private const val DEDUPE_SAME_NAME_M = 150.0
-private fun normName(s: String) = s.lowercase().replace(NAME_PUNCT, " ").split(NAME_SPACES).filter { it.isNotEmpty() }.joinToString(" ")
-private class Twin(val name: String, val norm: String, val at: LatLng)
-private fun twinOf(n: String, ll: LatLng, set: List<Twin>): Boolean {
+private fun normName(s: String) = app.vela.core.util.PlaceNames.normalized(s)
+private class Twin(val name: String, val norm: String, val at: LatLng, val kind: String? = null, val hn: String? = null)
+private fun twinOf(n: String, kind: String?, hn: String?, ll: LatLng, set: List<Twin>, localGeneric: Set<String>): Boolean {
     val norm = normName(n)
     return set.any { m ->
         val d = m.at.distanceTo(ll)
-        (d < DEDUPE_SAME_NAME_M && norm.isNotEmpty() && norm == m.norm) || (d < DEDUPE_NAME_M && namesAgree(n, m.name))
+        (d < DEDUPE_SAME_NAME_M && norm.isNotEmpty() && norm == m.norm) ||
+            // One forecourt per lot, named after different things by the two sources (a Chevron in
+            // the archive, the operator's name on Google, user 2026-09-22): the same station. Two
+            // across the street from each other differ by house number and are left alone.
+            app.vela.core.util.PlaceNames.sameFuelLot(kind, m.kind, d, hn, m.hn) ||
+            (d < DEDUPE_NAME_M && app.vela.core.util.PlaceNames.sameBusiness(n, kind, m.name, m.kind, localGeneric))
     }
 }
 
@@ -364,7 +371,9 @@ private fun hideOpenTwins(map: MapLibreMap, style: Style, pois: List<MapMarker>,
     val shown = runCatching { map.queryRenderedFeatures(screen, AMBIENT_LAYER, AMBIENT_DOT_LAYER) }.getOrNull().orEmpty().mapNotNull { f ->
         val n = f.getStringProperty("name") ?: return@mapNotNull null
         val pt = f.geometry() as? Point ?: return@mapNotNull null
-        Twin(n, normName(n), LatLng(pt.latitude(), pt.longitude()))
+        val kind = runCatching { f.getStringProperty("icon") }.getOrNull()?.removePrefix("vela-poi-")
+        val hn = runCatching { f.getStringProperty("hn") }.getOrNull()
+        Twin(n, normName(n), LatLng(pt.latitude(), pt.longitude()), kind, hn)
     }
     val gone = closed.mapNotNull { c ->
         val norm = normName(c.name)
@@ -372,14 +381,22 @@ private fun hideOpenTwins(map: MapLibreMap, style: Style, pois: List<MapMarker>,
         if (pois.any { o -> normName(o.name) == norm && o.location.distanceTo(c.location) < DEDUPE_SAME_NAME_M }) null
         else Twin(c.name, norm, c.location)
     }
+    // Words shared by three or more names on screen are the neighborhood's, not a business's
+    // ("Bryant Park", "Flatiron", "Memorial Heights"): generic for these comparisons.
+    val localGeneric = app.vela.core.util.PlaceNames.localGeneric(shown.map { it.name } + rendered.mapNotNull { it.getStringProperty("name") })
     val displaced = HashSet<String>()
     rendered.forEach { f ->
         val id = f.getStringProperty("id") ?: return@forEach
         val n = f.getStringProperty("name") ?: return@forEach
         val pt = f.geometry() as? Point ?: return@forEach
         val ll = LatLng(pt.latitude(), pt.longitude())
-        if (gone.isNotEmpty() && gone.any { m -> m.at.distanceTo(ll) < DEDUPE_NAME_M && namesAgree(n, m.name) }) onClosed(id)
-        else if (twinOf(n, ll, shown)) displaced += id
+        val kind = runCatching { f.getStringProperty("group") }.getOrNull()
+        val hn = app.vela.core.util.PlaceNames.houseNumber(runCatching { f.getStringProperty("addr") }.getOrNull())
+        // The baked English name too: Google answers in English under hl=en, so a Japanese tile
+        // name never agreed with its own Google twin (2026-09-22).
+        val en = runCatching { f.getStringProperty("name_en") }.getOrNull()?.takeIf { it.isNotBlank() }
+        if (gone.isNotEmpty() && gone.any { m -> m.at.distanceTo(ll) < DEDUPE_NAME_M && (namesAgree(n, m.name) || (en != null && namesAgree(en, m.name))) }) onClosed(id)
+        else if (twinOf(n, kind, hn, ll, shown, localGeneric) || (en != null && twinOf(en, kind, hn, ll, shown, localGeneric))) displaced += id
     }
     // A twin already hidden is no longer RENDERED, so the query above cannot see it, and dropping
     // it from the set would flip it back on until the next pass. So re-check the hidden ones
@@ -395,7 +412,11 @@ private fun hideOpenTwins(map: MapLibreMap, style: Style, pois: List<MapMarker>,
                 val id = f.getStringProperty("id") ?: return@forEach
                 val n = f.getStringProperty("name") ?: return@forEach
                 val pt = f.geometry() as? Point ?: return@forEach
-                if (twinOf(n, LatLng(pt.latitude(), pt.longitude()), shown)) displaced += id
+                val kind = runCatching { f.getStringProperty("group") }.getOrNull()
+                val hn = app.vela.core.util.PlaceNames.houseNumber(runCatching { f.getStringProperty("addr") }.getOrNull())
+                val en = runCatching { f.getStringProperty("name_en") }.getOrNull()?.takeIf { it.isNotBlank() }
+                val at = LatLng(pt.latitude(), pt.longitude())
+                if (twinOf(n, kind, hn, at, shown, localGeneric) || (en != null && twinOf(en, kind, hn, at, shown, localGeneric))) displaced += id
             }
         }
     }
@@ -642,6 +663,7 @@ fun VelaMapView(
     ambientClosed: List<MapMarker> = emptyList(), // permanently closed places in Google's last nearby answer (Both mode purge)
     onOpenPlaceClosed: (id: String) -> Unit = {}, // an open place matched one of [ambientClosed]: hide it for good
     placesPending: Boolean = false, // the open places source is on but its lookup has not answered yet
+    placesOneSet: Boolean = false, // the covering places archive carries OSM's landmarks: hide the basemap's point layers
     osmBusinesses: Boolean = false, // draw OSM's businesses under the open places layer too (deduped by name)
     navExitCallout: Pair<LatLng, String>? = null, // the exit you are taking: green bubble with its number
     navTapPlaces: Boolean = false, // drive nav: show the divert-worthy places and let a tap offer one as a stop
@@ -683,7 +705,13 @@ fun VelaMapView(
     // to a generous fixed offset until the first measurement lands (or if it's somehow 0).
     val statusBarTopPx = WindowInsets.statusBars.getTop(density)
     val gap8Px = with(density) { 8.dp.roundToPx() }
+    val landscapeNow = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     val compassTopPx = when {
+        // LANDSCAPE NAV: the banner is a left COLUMN (issue #297), so it does not cover the
+        // top-right at all and there is nothing to drop below - sitting the compass under the
+        // banner's measured bottom just floated it down the middle of the right edge, into the
+        // FAB stack. Straight under the status bar instead; the stack is cleared sideways below.
+        navMode && landscapeNow -> statusBarTopPx + gap8Px
         navMode && navBannerBottomPx > 0 -> navBannerBottomPx + gap8Px
         navMode -> statusBarTopPx + with(density) { 176.dp.roundToPx() }
         // Browse: below the floating search bar AND the category-chip row - 8dp under the
@@ -697,7 +725,7 @@ fun VelaMapView(
         // slots rise a row too - the stacked offsets pushed the compass down into the
         // parking/locate FABs on a ~390dp-tall landscape phone (user 2026-07-15).
         else -> statusBarTopPx + with(density) {
-            val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
+            val landscape = landscapeNow
             val layersOn = app.vela.ui.LayersButton.on.value
             when {
                 layersOn && landscape -> 140.dp
@@ -707,7 +735,12 @@ fun VelaMapView(
             }.roundToPx()
         }
     }
-    val compassRightPx = with(density) { 8.dp.roundToPx() }
+    // The nav FAB stack (overview, mute, search, and re-center when detached) grows UP the right
+    // edge from the bottom bar. Portrait it never gets near the compass; a landscape phone is only
+    // ~390 dp tall, so four 56 dp buttons reach the status bar and sat right on it (user
+    // 2026-09-19). Step the compass in by the column's width so the two cannot meet, whatever the
+    // stack currently holds.
+    val compassRightPx = with(density) { (if (navMode && landscapeNow) 8.dp + NAV_FAB_COLUMN_DP else 8.dp).roundToPx() }
     val poiTap = rememberUpdatedState(onPoiTap)
     val openPlaceTap = rememberUpdatedState(onOpenPlaceTap)
     val mapTap = rememberUpdatedState(onMapTap)
@@ -799,6 +832,10 @@ fun VelaMapView(
     val trailOn = app.vela.ui.RouteTrail.on.value
     val trailHolder = rememberUpdatedState(trailOn)
     LaunchedEffect(trailOn) { splitReset[0] = true; lastGradM[0] = -1e9 } // -1e9 so the block runs even while stopped
+    // A route COLOR change (pause turns the line slate, resume turns it back) re-anchors too: the
+    // ahead line's gradient is only re-uploaded when the cut piece slides, so without this only
+    // the 400 m around the arrow changed color and the rest stayed blue (4a, 2026-09-21).
+    LaunchedEffect(routeColor) { splitReset[0] = true; lastGradM[0] = -1e9 }
     val mPerPxHolder = remember { doubleArrayOf(10.0) } // meters/pixel at the camera (scale-bar feed) —
                                                         // sizes the split-update throttle to sub-pixel
     val lastScaleReport = remember { doubleArrayOf(-1.0) } // last mpp PUSHED to compose (gate, see reportScale)
@@ -1247,7 +1284,8 @@ fun VelaMapView(
     // zooms instead. Both slot directly above the base imagery, below the ghost roads + labels.
     LaunchedEffect(satelliteOn, satDeep, styleRef) {
         val style = styleRef ?: return@LaunchedEffect
-        runCatching { ensureSatelliteDeep(style, satelliteOn, satDeep) }
+        // -1 is the Google imagery fallback where Esri tops out; without Google, no deep layer.
+        runCatching { ensureSatelliteDeep(style, satelliteOn, if (satDeep == -1 && app.vela.ui.GoogleFree.on.value) 0 else satDeep) }
     }
 
     // Transit itinerary preview (issue #233): draw/clear the expanded chooser row's legs.
@@ -1408,6 +1446,11 @@ fun VelaMapView(
             ),
         )
     }
+    LaunchedEffect(placesOneSet, styleRef) {
+        osmOneSet = placesOneSet
+        lastOsmPoiVis = null // applyData re-decides the basemap point layers' visibility
+        styleRef?.let { st -> if (placesOneSet) OSM_POI_LAYERS.forEach { id -> st.getLayer(id)?.setProperties(PropertyFactory.visibility(Property.NONE)) } }
+    }
     LaunchedEffect(placesPending, styleRef, osmBusinesses) {
         val style = styleRef ?: return@LaunchedEffect
         val hide = (placesOverlays.isNotEmpty() || placesPending) && !osmBusinesses
@@ -1451,11 +1494,17 @@ fun VelaMapView(
                     Expression.any(
                         Expression.lte(Expression.coalesce(Expression.get(rankProp), Expression.literal(0)), Expression.literal(n)),
                         Expression.gte(Expression.get("prominence"), Expression.literal(prom)),
+                        // A LANDMARK the bake admitted (its own per-cell budget: Bryant Park, Grand
+                        // Central, a hospital) always gets its icon and name at the zoom it arrives.
+                        Expression.eq(Expression.coalesce(Expression.get("landmark"), Expression.literal(0)), Expression.literal(1)),
                     ),
                     value, Expression.literal(""),
                 )
                 val icon = Expression.get("icon") // "vela-poi-<group>", baked
-                val name = Expression.get("name")
+                // A Latin-script UI reads the baked English name where the place has one (name_en,
+                // carried from OSM for a non-Latin name, 2026-09-22), else the local name.
+                val name = if (uiWantsLatinLabels()) Expression.coalesce(Expression.get("name_en"), Expression.get("name"))
+                    else Expression.get("name")
                 // The per-block icon budget. `frank` is the ~100 m rank; an archive baked before it
                 // existed falls back to the 400 m `rank` with a 4x looser cut (it used to pass every
                 // place, so a pre-frank city drew every tenant from z17.5, measured in Midtown).
@@ -2961,16 +3010,20 @@ fun VelaMapView(
                         fun prop(k: String) = if (hit.hasProperty(k)) hit.getStringProperty(k)?.takeIf { it.isNotBlank() && it != "null" } else null
                         val place = app.vela.core.model.Place(
                             id = "overture:" + (prop("id") ?: nameOf(hit)!!.hashCode().toString()),
-                            name = nameOf(hit)!!,
+                            // The baked English name for a Latin-script UI (what the label showed);
+                            // it is also what Google answers with under hl=en, so the lookup agrees.
+                            name = (if (uiWantsLatinLabels()) prop("name_en") else null) ?: nameOf(hit)!!,
                             location = LatLng(pt.latitude(), pt.longitude()),
                             category = prop("class"),
-                            address = prop("addr"),
+                            // The street line plus the tile's `loc` (city, region, postcode), baked
+                            // apart because the bake joins on the street line (2026-09-22).
+                            address = listOfNotNull(prop("addr"), prop("loc")).joinToString(", ").ifBlank { null },
                             phone = prop("phone"),
                             website = prop("website"),
                             // `hours` (OSM opening_hours syntax, baked from AllThePlaces for chain
                             // rows) as Google-style day lines so the sheet shows them and computes
                             // open/closed offline; the raw string when the syntax is exotic.
-                            hours = prop("hours")?.let { app.vela.core.util.OsmHours.toDayLines(it) ?: listOf(it) } ?: emptyList(),
+                            hours = app.vela.core.util.OsmHours.lines(prop("hours")),
                         )
                         openPlaceTap.value(place)
                         return@handleTap true
@@ -3741,13 +3794,14 @@ fun VelaMapView(
                 splitReset[0] = true
                 PoiIcons.satellite = satelliteOn
                 PoiIcons.addTo(context, style)
-                if (applyKeylessTheme) applyMapTheme(style, darkTheme, amoled) else tuneMapTiler(style, darkTheme)
+                if (applyKeylessTheme) applyMapTheme(StyleHost(style), darkTheme, amoled) else tuneMapTiler(style, darkTheme)
                 if (satelliteOn) applySatelliteLabels(style)
                 emphasizeShields(context, style)
                 applyData(map, style, context, darkTheme, ambientCoversView, routePolyline, routeColor, routeDashed, routeTrafficSpans, alternates, altColor, markers, ambientPois, trafficControls, flockCameras, speedCameras, transitStops, mePaint, meBearing, myAccuracyM, locationStale, previewTarget, routeProgress, navMode, navDriveMode, parkingSpot, savedPins, poisEnabled, svPose)
                 ensureSatellite(style, satelliteOn)
                 ensureNavRoadLabels(style, navMode, darkTheme, context.resources.displayMetrics.density, navLabelExclude)
-                ensureTraffic(style, trafficOn)
+                // The traffic raster is Google's tile server; off entirely without Google.
+                ensureTraffic(style, trafficOn && !app.vela.ui.GoogleFree.on.value)
                 ensureTransit(style, transitOn)
                 ensureTopography(style, topographyOn)
             }
@@ -4826,7 +4880,11 @@ private fun ensureLayers(style: Style) {
         )
         style.addLayer(
             SymbolLayer(TRANSIT_STOPS_LAYER, TRANSIT_STOPS_SRC).apply {
-                setMinZoom(15f)
+                // One step closer than the stops are FETCHED (user 2026-09-22, Midtown at 1000 ft was
+                // a carpet of bus badges; Google holds them back too). The fetch still starts at
+                // TRANSIT_STOPS_MIN_ZOOM (15) on purpose: while stops are loaded the basemap's own
+                // OSM bus icons stay hidden, so z15 shows neither instead of the basemap's.
+                setMinZoom(16f)
                 setProperties(
                     PropertyFactory.iconImage(TRANSIT_STOP_IMG),
                     PropertyFactory.iconSize(stopSize),
@@ -4972,9 +5030,18 @@ private var lastPassedFilterM = -1.0
 private var navLabelAts: List<Double> = emptyList() // the uploaded callouts' distances along the route, ascending
 private const val NAV_XLABEL_DROP_BEHIND_M = 12.0 // a callout is gone once the puck is this far past it
 private const val NAV_XLABEL_OFFSET_M = 35.0
-private val NAV_XLABEL_OFFSETS = doubleArrayOf(1.0, 1.8, 3.0) // tried in turn until the bubble clears the route
-private const val NAV_XLABEL_CLEAR_M = 30.0
-private const val NAV_XLABEL_MIN_CLEAR_M = 18.0 // below this the bubble would sit on the driven road
+// Tried in turn until the bubble clears the route. The rungs are close together on purpose: the
+// clearance a given step buys depends on the angle the street crosses at, and a coarse ladder
+// overshot a perpendicular street by a whole block to win a few meters.
+private val NAV_XLABEL_OFFSETS = doubleArrayOf(1.0, 1.4, 1.8, 2.4, 3.0)
+// CLEARANCE IS MEASURED TO THE BUBBLE'S ANCHOR, WHICH IS THE TIP OF ITS TAIL - the chip body sits
+// above that point and is far wider than it, so the gap on screen is always smaller than the number
+// here, and more so with the camera tilted. 30 m measured clear still drew chips over the blue line
+// (user drive 2026-09-19). These are deliberately a walk-back and not a reset: the callouts were
+// moved close to the route on purpose in 2026-09-16, because line-center placement had been putting
+// them a block away, and the fix for overlap is a few more meters, not the old behavior.
+private const val NAV_XLABEL_CLEAR_M = 44.0
+private const val NAV_XLABEL_MIN_CLEAR_M = 26.0 // below this the bubble would sit on the driven road
 
 /** Google-style floating road labels during NAV: horizontal, viewport-aligned name chips over the
  *  roads you're crossing or driving beside - far more legible than the line-following basemap
@@ -5116,6 +5183,10 @@ private val OSM_BUSINESS_CLASSES = arrayOf(
 // small runtime dedupe that remains).
 private val OPEN_NONBUSINESS_GROUPS = arrayOf("culture", "civic", "edu", "sport", "health", "park", "default")
 private var osmHideBusiness = false
+/** The covering places archive is a ONE-SET bake (its tiles carry OSM's parks, temples, schools and
+ *  museums, ranked and budgeted with the shops): the basemap's own copy of those points (Liberty's
+ *  poi_r*) hides outright. In Shinjuku those layers were half the frame cost of a pan on a 4a. */
+private var osmOneSet = false
 private var osmBusinessesOn = false // the "OpenStreetMap shops too" setting, read by osmFillIn
 private var ambientClosedNow: List<MapMarker> = emptyList() // latest composition's ambientClosed, read by the twin pass
 private var openPlaceClosedCb: (String) -> Unit = {}
@@ -5315,12 +5386,28 @@ private fun roadLabelTextField(): Expression =
         Expression.get("name")
     }
 
-/** The OpenMapTiles field for the UI language, with the one code that differs from the tag OSM
- *  uses: Android still reports Hebrew as `iw`, the tiles carry `name:he`. */
-private fun uiLangTagField(): Expression {
-    val lang = app.vela.ui.AppLocale.effective().language.lowercase()
-    return Expression.get("name:" + if (lang == "iw") "he" else lang)
+/** The OpenMapTiles name fields for the UI language, most specific first.
+ *
+ *  Two codes do not map straight through. Android still reports Hebrew as `iw` while the tiles
+ *  carry `name:he`. And Chinese splits by SCRIPT, not by language: a Traditional reader asking for
+ *  `name:zh` gets Simplified where the tiles carry it, so `name:zh-Hant` is tried first for them
+ *  and falls through where OSM has not tagged it. Same script split [NavStringsRegistry.tagOf]
+ *  makes for the nav tables. */
+private fun uiLangTagFields(): List<Expression> {
+    val locale = app.vela.ui.AppLocale.effective()
+    val lang = locale.language.lowercase()
+    val tags = when {
+        lang == "iw" -> listOf("he")
+        lang == "zh" && isTraditionalChinese(locale) -> listOf("zh-Hant", "zh")
+        else -> listOf(lang)
+    }
+    return tags.map { Expression.get("name:$it") }
 }
+
+/** Traditional where the locale says so by script, or by one of the regions that use it. */
+private fun isTraditionalChinese(locale: java.util.Locale): Boolean =
+    locale.script.equals("Hant", ignoreCase = true) ||
+        locale.country.uppercase() in setOf("TW", "HK", "MO")
 
 /** The textField for a PLACE label (country, state, city, town, village).
  *
@@ -5329,26 +5416,32 @@ private fun uiLangTagField(): Expression {
  *  name, in the reader's own language. The UI language wins where the tiles carry it; a Latin-script
  *  reader then falls back through the English name (both spellings OpenMapTiles and Liberty use) and
  *  the romanized one, and everyone lands on the local `name` when nothing else is there. */
-private fun placeLabelTextField(): Expression =
-    if (uiWantsLatinLabels()) {
-        Expression.coalesce(
-            uiLangTagField(),
+private fun placeLabelTextField(): Expression {
+    val own = uiLangTagFields()
+    val rest = if (uiWantsLatinLabels()) {
+        listOf(
             Expression.get("name:en"),
             Expression.get("name_en"),
             Expression.get("name:latin"),
             Expression.get("name"),
         )
     } else {
-        Expression.coalesce(uiLangTagField(), Expression.get("name"))
+        // No transliteration for a reader of another script: their own tag, then the local name.
+        listOf(Expression.get("name"))
     }
+    return Expression.coalesce(*(own + rest).toTypedArray())
+}
 
-/** Liberty's `place` source-layer labels, coarsest first. */
+/** Liberty's `place` source-layer labels, coarsest first, plus its shop and transit labels
+ *  (2026-09-22): those stacked name:latin over name:nonlatin, two lines per shop in Tokyo, the
+ *  local line unreadable to an English reader and twice the text to place in the densest views. */
 private val PLACE_LABEL_LAYERS = listOf(
     "label_country_1", "label_country_2", "label_country_3", "label_state",
     "label_city_capital", "label_city", "label_town", "label_village", "label_other",
+    "poi_r1", "poi_r7", "poi_r20", "poi_transit",
 )
 
-private fun applyPlaceLabelLanguage(style: Style) {
+private fun applyPlaceLabelLanguage(style: StyleLayers) {
     val field = placeLabelTextField()
     PLACE_LABEL_LAYERS.forEach { id ->
         runCatching { style.getLayer(id)?.setProperties(PropertyFactory.textField(field)) }
@@ -5945,12 +6038,9 @@ private fun emphasizeShields(context: android.content.Context, style: Style) {
 private val NAME_PUNCT = Regex("[^\\p{L}\\p{N} ]")
 private val NAME_SPACES = Regex("\\s+")
 
-private fun namesAgree(a: String, b: String): Boolean {
-    fun words(s: String) = s.lowercase().replace(NAME_PUNCT, " ").split(NAME_SPACES).filter { it.length > 1 }.toSet()
-    val x = words(a); val y = words(b)
-    if (x.isEmpty() || y.isEmpty()) return false
-    return x.intersect(y).size >= minOf(x.size, y.size).coerceAtMost(2)
-}
+/** The shared same-business rule (`core/util/PlaceNames`): the old two-shared-words test read
+ *  "Russell Park Apartments" and "Orchard Park Apartments" as one place and hid the open twin. */
+private fun namesAgree(a: String, b: String): Boolean = app.vela.core.util.PlaceNames.agree(a, b)
 
 /** The style JSON with its `openmaptiles` vector source pointed at [archive] (a `pmtiles://file://`
  *  URI of a planetiler bake in the same OpenMapTiles schema OpenFreeMap serves), so an installed
@@ -6012,7 +6102,7 @@ private fun firstSymbolLayerId(style: Style): String? =
  * This costs frames - every label is glyph layout plus a collision pass over four anchors - so it
  * is the kind of change to check with `scripts/map-fps.sh` if a dense city starts feeling worse.
  */
-private fun widenStreets(style: Style) {
+private fun widenStreets(style: StyleLayers) {
     runCatching {
         // Minor streets: visible from z12.5 instead of z13.5, and about 60% fatter through the
         // town zooms, converging on the style's own 18 px by z20 so close zoom is untouched.
@@ -6039,7 +6129,7 @@ private fun widenStreets(style: Style) {
     }
 }
 
-private fun applyMapTheme(style: Style, dark: Boolean, amoled: Boolean = false) {
+internal fun applyMapTheme(style: StyleLayers, dark: Boolean, amoled: Boolean = false) {
     val basemapSource = basemapSrc(style) ?: return
     // Two compiled color sets, picked in Settings -> Appearance (MapColors): "modern" is the
     // Google-app pixel-sampled palette, "classic" the archived pre-sample look (SPEC 6.2md).
@@ -6194,10 +6284,9 @@ internal fun isFragileOrEmulator(): Boolean = isEmulator() || fragileGpuDefault(
  *  buildings instead of one merged blob (the palettes had shut side shading off entirely).
  *  Starting 3D later is also the cheapest frame win in exactly the dense views that lag: one less
  *  zoom level of the most fragment-expensive layer the map draws. */
-private fun applyBuilding3dGeometry(style: Style) {
+private fun applyBuilding3dGeometry(style: StyleLayers) {
     if (isFragileOrEmulator()) {
-        // Emulator ve zayif GPU'larda 2D guvenli mod
-        style.removeLayer("building-3d")
+        style.getLayer("building-3d")?.setProperties(PropertyFactory.visibility(Property.NONE))
         return
     }
     style.getLayer("building-3d")?.setMinZoom(17f)
@@ -6220,7 +6309,7 @@ private fun applyBuilding3dGeometry(style: Style) {
     )
 }
 
-internal fun applyLight(style: Style) {
+internal fun applyLight(style: StyleLayers) {
     // Road-name labels get a wide white halo so they stay readable over the dotted walk
     // line / route line beneath them (dark path does the same; see the symbol pass there),
     // and the BOLD font stack - Google boldens street names on the map (user 2026-07-11).
@@ -6328,7 +6417,7 @@ internal fun applyLight(style: Style) {
 }
 
 /** Google-Maps-dark-ish palette applied over the OpenMapTiles layers. */
-internal fun applyDark(style: Style) {
+internal fun applyDark(style: StyleLayers) {
     // Every dark value below is PIXEL-SAMPLED from Google Maps (the app) on the attached
     // Pixel 9, 2026-07-11: land #162640, water #000d2a, vegetation #0d3847, buildings
     // #1c3b69 (alt shade #2e3d6d), minor roads #3d5a77, arterials/motorway #476789.
@@ -6431,7 +6520,7 @@ internal fun applyDark(style: Style) {
  * instead of falling back to Liberty's light defaults.
  * Called from applyMapTheme when ThemeMode.AMOLED is active.
  */
-internal fun applyAmoled(style: Style) {
+internal fun applyAmoled(style: StyleLayers) {
     applyDark(style)
 
     val black = "#000000"
@@ -6504,7 +6593,7 @@ internal fun applyAmoled(style: Style) {
  * the twin layers that arrived after the archive (trails/bike/pitch/commercial)
  * get harmonious colors so nothing renders unstyled.
  */
-internal fun applyClassicLight(style: Style) {
+internal fun applyClassicLight(style: StyleLayers) {
     listOf("highway-name-path", "highway-name-minor", "highway-name-major").forEach {
         style.getLayer(it)?.setProperties(
             PropertyFactory.textField(roadLabelTextField()), // romanize for a Latin-script UI (issue #184)
@@ -6576,7 +6665,7 @@ internal fun applyClassicLight(style: Style) {
 }
 
 /** CLASSIC dark: the archived pre-pixel-sample night palette (see applyClassicLight). */
-internal fun applyClassicDark(style: Style) {
+internal fun applyClassicDark(style: StyleLayers) {
     // Classic dark = a NEUTRAL charcoal-slate identity, deliberately UNLIKE Modern's Google-navy
     // dark (Modern pixel-samples #162640 land / #1c3b69 buildings / blue roads). The two used to
     // differ, but once Modern was re-sampled to Google's blue, classic's old #242f3e blue-gray read
@@ -7301,6 +7390,7 @@ private fun applyData(
                         val group = PoiIcons.groupFor(m.name, m.category)
                         addStringProperty("name", m.name)
                         addStringProperty("icon", "vela-poi-$group")
+                        m.houseNumber?.let { addStringProperty("hn", it) } // the fuel-lot rule's tie-break
                         addStringProperty("dotColor", PoiIcons.colorFor(group)) // mini-dot tier tint
                         addNumberProperty(AMBIENT_INDEX_PROP, i)
                         // Collision priority must be STABLE across the streamed partial paints: it used
@@ -7376,7 +7466,7 @@ private fun applyData(
         placesPreviewLandmarks = previewing
         applyOpenPlacesHidden(style)
     }
-    val osmPoiVis = if (!poisEnabled || previewing || (!navMode && (ambientCoversView || markers.size > 1))) Property.NONE else Property.VISIBLE
+    val osmPoiVis = if (!poisEnabled || previewing || osmOneSet || (!navMode && (ambientCoversView || markers.size > 1))) Property.NONE else Property.VISIBLE
     if (osmPoiVis != lastOsmPoiVis) {
         listOf("poi_r1", "poi_r7", "poi_r20").forEach { id ->
             style.getLayer(id)?.setProperties(PropertyFactory.visibility(osmPoiVis))
@@ -7431,10 +7521,11 @@ private fun applyData(
     style.getLayer(SPEEDCAM_LAYER)?.setMinZoom(if (route.isEmpty()) 13f else 11f)
 
     // ALPR/Flock cameras → icon features (identity-gated like the controls). Empty when the layer's
-    // off or zoomed out, which clears the source. Two uploads per change: the raw per-camera set
-    // (street-zoom detail + cones) and its 40 m-clustered twin (one badge per install below street
-    // zoom - a Flock corner mounts several single-direction heads). The route "passes N cameras"
-    // count stays on raw nodes on purpose; only the DRAWN badges merge.
+    // off or zoomed out, which clears the source. Two uploads per change, both built from the same
+    // 40 m clusters (a Flock corner mounts several single-direction heads): the street-zoom detail
+    // set (one counted badge per cluster + one cone per head) and the plain badge per cluster
+    // drawn below street zoom. The route "passes N cameras" count stays on raw nodes on purpose;
+    // only the DRAWN badges merge.
     if (flockCameras != lastAppliedFlock) {
         // ONE badge per install, at every zoom (user 2026-09-17: a junction with a head on each
         // approach drew four overlapping badges). The heads' facing cones all fan from that one
@@ -7615,7 +7706,7 @@ private fun arrowBitmap(): Bitmap {
 /** Navigation puck: a WHITE chevron inside a filled BRIGHT-NAVY circle with a soft drop shadow
  *  and NO white ring (user 2026-07-11: bigger, drop the ring, brighter navy blue). Points up
  *  (north) so `iconRotate(bearing)` aims it down the heading. */
-private fun navPuckBitmap(
+internal fun navPuckBitmap(
     scale: Float = app.vela.ui.PuckStyle.scale(),
     whiteDisc: Boolean = app.vela.ui.PuckStyle.whiteDisc(),
 ): Bitmap {

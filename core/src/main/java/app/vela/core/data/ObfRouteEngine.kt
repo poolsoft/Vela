@@ -38,7 +38,9 @@ import java.util.concurrent.ConcurrentHashMap
  * The trade against GraphHopper CH is calc time: no precomputed shortcuts, so a cross-city route
  * costs seconds instead of ~200 ms. Offline is Vela's FALLBACK router (online OSRM is primary), so
  * download size wins over calc speed here (user call, 2026-07-23). OsmAnd's HH precomputed mode is
- * the follow-up if long routes measure too slow on-device.
+ * a prerequisite for long offline routes, not an optimization: without it a long route can exceed
+ * [MEMORY_MB] and fail outright, so until the bake generates HH, offline obf routing is a
+ * city/metro feature.
  */
 class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
 
@@ -289,7 +291,7 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
                     ?.takeIf { it.isNotBlank() }?.split(';', ',')?.first()?.trim()?.takeIf { it.isNotEmpty() }
                 val dest = runCatching { obj.getDestinationName(null, false, forward) }.getOrNull()?.takeIf { it.isNotBlank() }
                 val road = name ?: ref
-                val type = if (isFirst) ManeuverType.DEPART else obfType(turn!!)
+                val type = if (isFirst) ManeuverType.DEPART else spokenType(turn!!)
                 val rbExit = turn?.takeIf { it.isRoundAbout }?.exitOut?.takeIf { it > 0 }
                 val at = LatLng(
                     MapUtils.get31LatitudeY(obj.getPoint31YTile(seg.startPointIndex)),
@@ -391,6 +393,29 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
         @Volatile private var cachedBuilder: RoutingConfiguration.Builder? = null
         private fun builder(): RoutingConfiguration.Builder =
             cachedBuilder ?: RoutingConfiguration.getDefault().also { cachedBuilder = it }
+
+        /** [obfType], except that a turn OsmAnd itself would not announce is a CONTINUE. The
+         *  router sets `skipToSpeak` on a turn type it emitted for the road's own bend when there
+         *  is nothing to choose at that point (the road curves left and changes its name, no side
+         *  road worth the name), and OsmAnd's voice skips those. Vela mapped the bare type, so an
+         *  offline drive said "turn left onto X" on a road that only renamed itself (user
+         *  2026-09-19). As CONTINUE it folds into the previous maneuver as a rename
+         *  (`RouteGeometry.foldRenames`), which is what the online routers produce there.
+         *  Roundabouts keep their type: the exit is the instruction.
+         *  And a LEFT or RIGHT with under [STRAIGHT_TURN_DEG] of actual turn is a rename too:
+         *  probed on a real state file, OsmAnd emitted `Turn left` with a turn angle of 0.7 and
+         *  0.005 degrees where a one-way carriageway joins its two-way continuation under lane
+         *  markings (`+TL|C|C|C`), `skipToSpeak` false, and the drive is dead straight. The
+         *  angle is what the router measured; a real left is tens of degrees. */
+        internal fun spokenType(t: TurnType): ManeuverType = when {
+            t.isRoundAbout -> obfType(t)
+            t.isSkipToSpeak -> ManeuverType.CONTINUE
+            (t.value == TurnType.TL || t.value == TurnType.TR) && kotlin.math.abs(t.turnAngle) < STRAIGHT_TURN_DEG -> ManeuverType.CONTINUE
+            else -> obfType(t)
+        }
+
+        /** A left/right turn type carrying less actual turn than this is the road continuing. */
+        const val STRAIGHT_TURN_DEG = 20f
 
         /** OsmAnd [TurnType] -> Vela [ManeuverType]. Roundabouts map by flag (value carries the
          *  exit); KL/KR are lane keeps = our KEEP_*; TU/TRU both read as a u-turn. */

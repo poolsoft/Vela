@@ -122,6 +122,8 @@
     <string name="exp_chooser_along" translatable="false">Add a stop along the way</string>
     <string name="exp_chooser_share_text" translatable="false">Directions to %1$s: %2$s, %3$s</string>
     <string name="settings_flock_route_alert" translatable="false">Avoid surveillance cameras</string>
+    <string name="settings_flock_detour" translatable="false">Try side streets around cameras</string>
+    <string name="settings_flock_detour_hint" translatable="false">When every route still passes cameras, tries a point just off the road at each camera and routes through it, the way you would by long-pressing the map. A route that passes fewer cameras within the same small detour goes to the top of the list. Costs a few extra route requests per trip. Off by default.</string>
     <string name="settings_flock_route_alert_hint" translatable="false">Counts the license-plate reader (Flock) cameras on each route (a camera aimed across the road is left out, since it reads cross traffic) and auto-picks a lower-camera one when it costs only a little longer. It never sends you far out of the way, so where cameras are unavoidable it just shows the counts and leaves the choice to you. Long-press the map to route through a point yourself. Off by default.</string>
     <string name="dir_cameras_on_route" translatable="false">%1$d cameras on this route</string> <!-- format -->
 
@@ -192,8 +194,17 @@
     <string name="settings_clear_map_cache">Clear map cache</string>
     <string name="settings_clear_map_cache_hint">Frees the tiles the map cached while browsing. Saved areas are kept.</string>
     <string name="settings_map_cache_cleared">Map cache cleared</string>
+    <string name="settings_delete_offline_all">Delete all offline data</string>
+    <string name="settings_delete_offline_all_hint">Removes every saved area, every downloaded region (routing, places, map), the building and address overlays and the browsing cache, and shrinks the map database. Voices are kept. Use this if the storage figures above do not add up to what you can see in the lists.</string>
+    <string name="settings_delete_offline_all_title">Delete all offline data?</string>
+    <string name="settings_delete_offline_all_body">About %1$s of downloaded maps, routing and places will be removed. Saved places, trips and voices are kept.</string>
+    <string name="mapvm_offline_all_deleted">Offline data deleted</string>
     <string name="settings_routing_remove">Remove offline routing</string>
     <string name="settings_download">Download</string>
+    <string name="settings_region_whole_or_pieces">One file, or %1$d pieces below</string> <!-- format -->
+    <string name="settings_downloaded_title">Downloaded</string>
+    <string name="settings_downloaded_none">Nothing downloaded yet. Save the area you are looking at above, or pick a state or country below.</string>
+    <string name="settings_downloaded_area">Saved area</string>
     <string name="settings_region_group_title">All of %1$s</string> <!-- format -->
     <string name="settings_region_group_size">%1$d pieces, about %2$s once installed</string> <!-- format -->
     <string name="settings_region_group_partial">%1$d of %2$d pieces installed, about %3$s for all</string> <!-- format -->
@@ -254,6 +265,8 @@
     <string name="settings_clear_history_confirm_body">Recent searches, recent places, parking history and every recorded trip will be deleted. This cannot be undone. Saved places and lists are not affected.</string>
     <string name="settings_clear_history_done">History cleared</string>
     <string name="settings_privacy_button">What data Google receives</string>
+    <string name="settings_google_free">Use Vela without Google</string>
+    <string name="settings_google_free_hint">Nothing is sent to Google. Search uses OpenStreetMap and your downloaded regions, places on the map come from Vela\'s own data, and routes come from the open router with no live traffic. You lose reviews, photos, opening hours, live arrival times, Street View, transit directions and the satellite close-ups; downloaded regions still work fully offline.</string>
     <string name="settings_diagnostics">Diagnostics</string>
     <string name="settings_diagnostics_hint">Off by default. When on, Vela keeps a short local log you can export and hand to a developer. Nothing is uploaded, and turning it off wipes the log.</string>
     <string name="settings_share_diagnostics">Share diagnostics</string>
@@ -320,6 +333,9 @@
     <string name="donate_no_browser">No browser installed to open the donate page</string>
     <string name="settings_version">Version</string>
     <string name="settings_version_line">Vela %1$s  (build %2$d)</string> <!-- format -->
+    <string name="settings_installer_play">Installed by %1$s. This install is set up for Android Auto; an in-app update would undo that, so update through the same installer.</string>
+    <string name="settings_installer_none">Sideloaded (no installer recorded). Android Auto will not list this install.</string>
+    <string name="settings_installer_other">Installed by %1$s. Android Auto will not list this install.</string>
     <string name="settings_version_copied">Version copied</string>
     <string name="settings_collapse">Collapse</string>
     <string name="settings_expand">Expand</string>
@@ -360,6 +376,12 @@
     <string name="place_call">Call</string>
     <string name="place_website">Website</string>
     <string name="place_hours_not_listed">Hours not listed</string>
+    <string name="place_source_overture">Overture</string>
+    <string name="place_source_atp">AllThePlaces (%1$s)</string>
+    <string name="place_source_osm">OpenStreetMap</string>
+    <string name="place_origin_checking">From %1$s · checking Google</string>
+    <string name="place_origin_unlinked">From %1$s · not matched on Google</string>
+    <string name="place_origin_plain">From %1$s</string>
     <string name="place_loading_popular_times">Loading popular times &amp; details…</string>
     <string name="place_also_at_location">Also at this location</string>
     <string name="place_open">Open</string>
@@ -596,6 +618,7 @@
 
     <!-- search: SearchBar.kt -->
     <string name="search_close_cd">Close search</string>
+    <string name="search_fill_cd">Put in search box</string>
     <string name="search_placeholder">Search</string>
     <string name="search_offline">Offline</string>
     <string name="search_clear_cd">Clear search</string>
@@ -622,7 +645,7 @@
     <string name="mapscreen_system_voices">System voices</string>
     <string name="settings_spoken_directions">Spoken directions</string>
     <string name="settings_spoken_road_names">Say street names</string>
-    <string name="settings_spoken_road_names_hint">Off, turns are announced without the street name: "Turn left" instead of "Turn left onto Maple Street". The map and the step list still show it.</string>
+    <string name="settings_spoken_road_names_hint">Off, turns are announced without the street name: \"Turn left\" instead of \"Turn left onto Maple Street\". The map and the step list still show it.</string>
     <string name="mapvm_voice_lang_missing">Spoken directions need a %1$s voice. Get one in Settings → Voice</string>
     <!-- Shown when the language has no bundled Vela voice (e.g. Japanese) AND the phone has no
          system voice for it either, so we point at the phone's own voice settings instead. -->
@@ -708,6 +731,7 @@
     <string name="place_transit_scheduled">Scheduled</string>
     <string name="place_transit_cancelled">Canceled</string>
     <string name="place_departures">Departures</string>
+    <string name="place_transit_cached">Last seen %1$s. No connection, so times may have changed.</string>
     <string name="place_every">Every %1$s</string> <!-- format -->
     <string name="transit_nav_arrived">You have arrived.</string>
     <string name="transit_nav_walk">Walk %1$s</string> <!-- format -->
@@ -731,6 +755,13 @@
     <string name="car_mute">Mute</string>
     <string name="car_unmute">Unmute</string>
     <string name="car_faster_route">Faster −%1$d min</string>
+    <string name="car_pause">Pause</string>
+    <string name="car_resume">Resume</string>
+    <string name="car_paused">Paused</string>
+    <string name="car_along_route">Search along route</string>
+    <string name="car_along_none">Nothing found nearby</string>
+    <string name="car_stop_added">Added %1$s as the next stop</string>
+    <string name="car_continue_on">Continue on %1$s</string>
     <string name="car_no_route">No route available — check your location</string>
     <string name="map_parking_saved">Parking spot saved</string>
     <string name="map_parking_no_fix">Waiting for a location fix</string>
@@ -742,6 +773,11 @@
     <string name="map_parking_earlier">Earlier spots</string>
     <string name="map_parking_clear">Clear parking</string>
     <string name="map_parking_moved">Parking moved here</string>
+    <string name="map_import_needs_google">A shared Google Maps list can\'t open while Vela runs without Google.</string>
+    <string name="map_link_needs_google">\"Open shared Google Maps links\" is off in Settings > Privacy.</string>
+    <string name="map_link_unreadable">Couldn\'t open that link.</string>
+    <string name="settings_google_free_links">Open shared Google Maps links</string>
+    <string name="settings_google_free_links_hint">A short Google Maps link (maps.app.goo.gl) doesn\'t say where it points. With this on, Vela asks Google\'s link shortener once, with no cookies, and opens the place with the open sources. Full google.com/maps links open without asking. Shared lists still need Google.</string>
     <string name="map_import_failed">Couldn\'t import that list. Check the link and try again.</string>
     <string name="place_clear_parking">Clear parking</string>
     <string name="parking_history_title">Parking history</string>
@@ -921,12 +957,12 @@
     <string name="settings_faster_auto_hint">When a faster route comes up mid drive, it is taken if you do not answer within a few seconds. Turn this off and an unanswered offer is dismissed instead. Either way the offer never stays on the map waiting.</string>
     <string name="settings_pause_in_bar">Pause button on the navigation bar</string>
     <string name="settings_pause_in_bar_hint">Puts pause beside the trip figures, where the step list button would be, and leaves mute with the map buttons. Off puts both on one button at the right of the map. Swipe up or use the arrow to open the step list either way.</string>
-    <string name="settings_pause_in_bar_hint_buttons">The step list button has this spot while "Prefer buttons over swipes" is on, so pause stays with the map buttons.</string>
+    <string name="settings_pause_in_bar_hint_buttons">With \"Prefer buttons over swipes\" on, the bar carries pause and the step list button side by side, and the trip figures shrink to fit.</string>
     <string name="nav_steps_handle_cd">Show steps</string>
     <string name="settings_route_trail">Road behind you</string>
     <string name="settings_route_trail_hint">Keeps the part of the route you have already driven drawn in gray behind the arrow. Off hides it, so only the road ahead is drawn.</string>
     <string name="settings_bike_safe">Bike routes prefer bike lanes and quiet streets</string>
-    <string name="settings_bike_safe_hint">Cycling routes favour signed cycle routes, bike lanes and residential streets over the fastest road, the way Google routes bikes. Uses the offline map where you have one downloaded, otherwise an open router online. Off gives the plain fastest bike route.</string>
+    <string name="settings_bike_safe_hint">Cycling routes favor signed cycle routes, bike lanes and residential streets over the fastest road, the way Google routes bikes. Uses the offline map where you have one downloaded, otherwise an open router online. Off gives the plain fastest bike route.</string>
     <string name="settings_route_picker">Google-style route picker</string>
     <string name="settings_route_picker_hint">Shows one route at a time, with the others behind a tap and their times on the map, and Start along the bottom. Turn it off for Vela\'s classic panel, which lists every route at once.</string>
     <string name="settings_route_bar">Road ahead bar</string>

@@ -55,7 +55,9 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import app.vela.R
 
@@ -64,6 +66,8 @@ fun SearchBar(
     query: String,
     searching: Boolean,
     onQueryChange: (String) -> Unit,
+    /** Bumped whenever [query] was set from outside the keyboard (fill-in arrow, voice): the cursor moves to the end. */
+    fillTick: Int = 0,
     onSearch: () -> Unit,
     onOpenSettings: () -> Unit,
     onClear: () -> Unit = {},
@@ -171,9 +175,24 @@ fun SearchBar(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // The TEXT stays controlled by [query] (the shown value is always the caller's;
+                // the field keeps only the selection), so a frame where the view model's echo has
+                // not landed yet cannot wipe what was just typed. The cursor jumps to the END only
+                // on [fillTick]: a suggestion's fill-in arrow or voice input set the text from
+                // outside, and typing continues after it rather than in the middle (2026-09-22).
+                var field by remember { mutableStateOf(TextFieldValue(query, TextRange(query.length))) }
+                LaunchedEffect(fillTick) {
+                    if (fillTick > 0) field = TextFieldValue(query, TextRange(query.length))
+                }
                 BasicTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
+                    value = field.copy(text = query, selection = field.selection.let {
+                        // A shorter outside text (the X clearing it) must not leave the cursor past the end.
+                        TextRange(it.start.coerceIn(0, query.length), it.end.coerceIn(0, query.length))
+                    }),
+                    onValueChange = { v ->
+                        field = v
+                        if (v.text != query) onQueryChange(v.text)
+                    },
                     // Until armed in dpadMode the field is DISABLED, so it doesn't swallow a TOUCH tap
                     // (a live but unfocusable field ate the tap and did nothing — the "can't tap the
                     // search bar" bug on hybrid touch+keypad phones, Qin F21). Disabled lets the tap

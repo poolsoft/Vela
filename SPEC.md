@@ -116,7 +116,22 @@ Two Gradle modules with a strict boundary.
 
 The `:app` module may read `:core`; `:core` may not read `:app`. Where `:core` needs a user
 setting, `:app` writes a plain flag into `:core` (`CategoryFilter.enabled`, `LowRamMode`,
-`LowDataMode`, `RoutingPrefs`) rather than `:core` reading a Compose holder.
+`LowDataMode`, `NoGoogle`, `RoutingPrefs`) rather than `:core` reading a Compose holder.
+
+- **Use Vela without Google** (`NoGoogle.enabled`, set from Settings > Privacy) is enforced at
+  the data source: search answers from the OpenStreetMap geocoder (Photon, 20 results, biased
+  around the user), the page-2 search, the ambient fan-out, reviews and photos answer empty,
+  Street View answers null, and the Google directions call answers empty, so every route is the
+  open router's with no traffic, no Google alternates and no abbreviated fallback. The app gates
+  its own Google surfaces on the same setting: the hidden WebView fetchers return null at
+  `HiddenWebView.request`, the traffic raster is not added, the satellite Google fallback draws
+  no deep layer, the tap lookup and the ambient fan-out are skipped, and the Street View pill and
+  the full-screen reviews page are hidden. A short Google Maps link (`maps.app.goo.gl`)
+  is resolved by ONE cookieless request to Google's shortener that reads the redirect and stops
+  (`ShortLinks.resolve`), only while "Open shared Google Maps links" (`GoogleFree.resolveLinks`, pref
+  `google_free_resolve_links`, default on) is on; off, it is refused with a toast. The target is
+  parsed on the phone and searched through the open sources. A shared list is refused under the
+  switch (`importList` returns null), because its places exist only on Google's servers.
 
 ### 2.2 Module tree
 
@@ -154,7 +169,7 @@ setting, `:app` writes a plain flag into `:core` (`CategoryFilter.enabled`, `Low
   search/         QueryIntents, VoiceCommandExamples
   replay/         TripLog, TripScrub, NavReplay, DemoTrace
   i18n/           NavStrings tables and registry
-  util/           SunTimes, NameScript, OsmHours, ClockFormat
+  util/           SunTimes, NameScript, OsmHours (OSM opening_hours to the sheet's day lines; `lines()` is the one entry point for every open source), ClockFormat
   diag/           DiagLog, DiagScrub
 
 :app
@@ -344,7 +359,8 @@ so a recalibrated template survives.
   in the same session return byte-identical degraded bodies. The page DOM walk replaces it.
 - Per-photo upload dates. The RPC that carries them returns zero photos to an automated
   browser even with the page's own fresh token, and the place page does not embed photo URLs
-  at walk time. The date-join plumbing stays in place and inert.
+  at walk time. The date-join plumbing stays in place and inert, and the RPC is not sent: the
+  `photoDatesRpc` tuning dial (default 0) turns it back on from the signed calibration.
 - Review "helpful" counts, which are login-gated to zero for logged-out sessions.
 - EV charger detail (type marker only), the recently-opened badge, and live incidents (Google
   serves binary vector tiles; Waze's feed is reCAPTCHA-gated).
@@ -381,9 +397,38 @@ Constraints:
 - The UA is a **desktop** string on purpose. Mobile web Maps serves different markup and
   endpoints, so switching is a recalibration of every parser, not a header edit. The
   `Sec-CH-UA-Mobile: ?0` and `"Windows"` platform hints track it.
-- **Do not push a `userAgent` through calibration yet.** Six WebView scrapes still set
-  `userAgentString` from the compiled constant; until they read `CalibrationStore`, a pushed UA
-  makes one client present two Chrome versions, which is worse than being stale.
+- **The six WebViews present the same identity (`app/web/WebViewIdentity`, 2026-09-22).** Every
+  hidden WebView (the five fetchers and the reviews panel) applies the calibrated `userAgent`
+  and user-agent metadata built from `secChUa` (the brands, mobile `?0`, platform Windows,
+  x86 64-bit, a matching full-version list) through androidx.webkit, feature-gated. Measured on
+  a device with a header echo before this: a WebView with an overridden UA string still sent its
+  own hints, `"Android WebView";v="153"`, `sec-ch-ua-mobile: ?1`, `sec-ch-ua-platform:
+  "Android"`, under the Windows Chrome UA, and the high-entropy ones (`sec-ch-ua-model: "K"`,
+  platform version 10.0.0) when asked. After: Chrome 153 brands, `?0`, Windows, x86, 64, on
+  Vanadium 153. A pushed `userAgent` now reaches the OkHttp client and the WebViews together.
+- **`X-Requested-With: <package name>` goes out on EVERY WebView request and no app can stop
+  it.** Chromium's removal of the header (M112, a deprecation trial) was abandoned: its feature
+  list marks the androidx allow-list API "disabled since the XRW origin trial ended", and
+  WebView's own tests assert the header is the package name on main-frame and sub-resource
+  requests, on Google's WebView as on Vanadium (where the API reports unsupported). So the
+  WebView-backed features (reviews, photos, popular times, transit directions, the stop-board
+  fallback, the reviews page) tell google.com "app.vela" by name; search, directions and the
+  ambient fan-out (OkHttp) do not. `loadUrl(url, headers)` could replace it on the document
+  request only, and the page's own script requests (the review feed's POSTs) would still carry
+  it, so that half-measure is not taken. The `VelaWeb identity:` log line records the WebView
+  package and whether each switch took.
+- The compiled UA tracks Chrome's CURRENT stable on Windows (chromiumdash `fetch_releases`,
+  channel Stable, platform Windows); it was one major ahead of stable for a week, which is a
+  browser that does not exist. Recalibrate it to the shipping major, not the next one.
+- google.com's `Accept-CH` asks for `Downlink` and `RTT` only (checked 2026-09-22), so the XHR
+  header set carries both (`Downlink: 10`, `RTT: 50`, Chrome's rounded values on a good link) and
+  the document fetch does not, the order a real session has. The high-entropy UA hints are not
+  requested there, so only the low-entropy three matter and the WebView metadata's full version,
+  platform version and architecture are plausible rather than load-bearing.
+- Residuals that are not fixed and not worth chasing: Chrome sends `X-Client-Data` (its
+  variations proto) to Google origins and neither client here does; the WebView and OkHttp keep
+  separate cookie jars, so one phone is two sessions from one IP; the two clients differ in the
+  TLS and HTTP/2 fingerprints below.
 - Do not chase a TLS fingerprint. Matching Chrome's JA3/JA4 and HTTP/2 frame ordering needs a
   custom TLS stack, permanent maintenance and native dependencies, and it breaks reproducible
   F-Droid builds. The defense is diffusion (every user on their own IP), not disguise.
@@ -513,8 +558,9 @@ Google's in-traffic figure; `trafficRatio` stays traffic-versus-typical so the c
 words do not turn red from OSRM optimism. One calibration is computed per response and applied
 to every OSRM-derived route in it, because the alternates share the speed-model bias. The basis
 is whichever route follows Google's course: the top OSRM route when it does, otherwise the
-via-snap. Multi-stop trips compare average speeds instead (Google's answer is the direct trip,
-so distance cancels) and go through the same function with spans off.
+via-snap. A multi-stop trip whose Google reply went through the stops is calibrated the same
+way; only a reply that missed a stop (the direct trip) compares average speeds instead, so the
+distance difference cancels, and goes through the same function with spans off.
 
 **The divergence snap.** When Google's route strays more than 700 meters from OSRM's line
 (`RouteGeometry.divergent`), Google is routing around a jam. `sampleVias` takes about 12
@@ -581,9 +627,19 @@ traffic overlay for bicycle routes.
 
 ### 4.4 Multi-stop
 
-`directions(origin, dest, mode, waypoints)` reuses `routeVia` through origin, stops and
-destination, with the per-via arrive/depart filtered into one continuous trip. A waypointed
-trip returns a single route; alternates and the divergence snap are skipped.
+`directions(origin, dest, mode, waypoints)` asks Google for the trip through the stops
+(`DirectionsPb.withWaypoints`: one more top-level `!1m4!3m2!3d<lat>!4d<lng>!6e2` group per stop
+between the origin and destination groups; no enclosing count changes) and routes the open
+router through them with `routeVia`, the per-via arrive/depart filtered into one continuous
+trip. `RouteGeometry.stopsOnLine` (250 m to the nearest vertex of Google's line, in trip order)
+decides whether Google honored the stops; a reply that missed one is handled as the direct trip
+it is. When both follow the same course the open route carries Google's time and spans; when
+Google's course diverges the open router is snapped along Google's line leg by leg
+(`sampleViasThrough`: each leg's samples with the real stop between them, the stops exempt from
+the strict via-snap refusal through `routeVia(looseVias)`), kept on the single-destination reach,
+length, spur and ETA-margin rules; with an avoid on and no usable snap, Google's own route through
+the stops is returned as abbreviated steps. A waypointed trip returns a single route; neither
+router offers alternates for one.
 `NavEngine.stopMarks(route, stops)` projects each waypoint onto the line to its along-route
 pass mark (null past 150 m off the line); `NavSession` holds the stops, the marks and a passed
 counter and speaks one cue per stop in order. Reroutes and rechecks fetch with
@@ -599,6 +655,14 @@ names (`Route.roadNamesLatin`).
 
 - Region files are baked off-device (`scripts/build-obf-region.sh` plus `VelaObfShim`) and
   hosted as release assets with a manifest; the catalog is `tools/routing-regions.json`.
+- **A turn OsmAnd marks `skipToSpeak` is a CONTINUE (`ObfRouteEngine.spokenType`).** The router
+  emits a turn type for the road's own bend when nothing is there to choose, and OsmAnd's voice
+  skips it; mapping the bare type spoke "turn left onto X" where a road only curved and renamed.
+  As CONTINUE it folds into the previous maneuver as a rename. Roundabouts keep their type.
+  **A left or right carrying under `STRAIGHT_TURN_DEG` (20) of measured turn is a CONTINUE too:**
+  where a one-way carriageway joins its two-way continuation under lane markings the router
+  emits `Turn left` with a turn angle of well under a degree and `skipToSpeak` false (measured on
+  a state file). The angle is the router's own measurement; a real left is tens of degrees.
 - A trip routes on the **smallest installed region box covering both endpoints**; boxes
   overlap at borders, so selection falls through to the next smallest. A trip that does not fit
   one region falls back online.
@@ -819,6 +883,13 @@ renderer then sat at 89 percent of a core. The Developer row states the date it 
 
 ### 4.8 Route line rendering
 
+- **A paused drive draws the ahead line in `ROUTE_PAUSED_COLOR` (`#9C8AD6`, a muted lavender)**
+  and the live traffic color returns on resume. Distinct from the live blue, the congestion amber
+  and red and the driven gray, and visible on both themes; a slate gray was tried first and
+  vanished into the dark map's road fill. A route color change re-anchors the split
+  (`splitReset`) the way the trail toggle does, because the ahead line's gradient is only
+  re-uploaded when the cut piece slides; without that only the 400 m around the arrow changed.
+
 - The line is inserted **above all road and bridge geometry and below labels**: anchor to the
   first symbol layer after the last `bridge_*` layer, not simply the first symbol layer, which
   in Liberty is the one-way arrow beneath the bridges.
@@ -874,6 +945,17 @@ renderer then sat at 89 percent of a core. The Developer row states the date it 
 - **Avoid surveillance cameras** re-ranks the alternates already offered, preferring the
   fewest-camera route within a small detour (at most the lesser of 25 percent of the ETA and 10
   minutes). It does not graph-route around cameras.
+- **Try side streets around cameras** (off by default, nested under the re-rank) adds one
+  candidate route when the leading route still passes cameras: `CameraDetour` groups the lead
+  route's cameras into clusters (join distance 40 m, nearest first, at most 3) and offers the
+  points 150 m to the left and right of the road at each; the chooser routes the trip through the
+  left then the right point (merged into the stops in travel order), keeps a candidate whose camera
+  count drops within the same detour cap, builds the next cluster on it, and sends at most 6 route
+  requests per trip. A kept route leads the list with its badge and carries its waypoint plan
+  (`Route.detourPlan`); a drive started on it carries the detour points as silent stops, which
+  every reroute and recheck routes through and nothing speaks or lists. A mid-drive stops edit
+  keeps the detour: `NavSession.withSilentVias` puts the silent points still ahead back in, each
+  where it falls along the current plan route relative to the edited stops. Drive mode only.
 - **Speeding alert** (off by default): the voice fires after 4 s continuously over the posted
   limit, re-arms after 8 s back under, at most once per 45 s, with the same 5 km/h tolerance the
   badge uses so the two never contradict each other.
@@ -881,10 +963,26 @@ renderer then sat at 89 percent of a core. The Developer row states the date it 
   basemap layer. Per crossing street, the pass computes where it meets the route window (first
   proper crossing in route order, else a T-junction end within 25 m, 60 m for a next-turn
   target), moves `NAV_XLABEL_OFFSET_M` (35 m) up that street to the side that ends farther from
-  the route, trying 1x, 1.8x and 3x offsets on both sides and keeping the first with clearance,
-  and uploads points with a `tier` property carrying the class split and zoom gates. The pass
+  the route, trying a ladder of offsets on both sides and keeping the first with clearance,
+  and uploads points with a `tier` property carrying the class split and zoom gates. Clearance is
+  measured from the route to the bubble's ANCHOR, which is the tip of its tail; the chip body sits
+  above that point and is wider than it, so the on-screen gap is always smaller than
+  `NAV_XLABEL_CLEAR_M` (44 m) and shrinks further with camera tilt. Below `NAV_XLABEL_MIN_CLEAR_M`
+  (26 m) no callout is drawn at all, because a chip clipping the road you are driving is worse than
+  a missing street name. The pass
   runs once per 400 m quantum of progress or when the upcoming turn targets change, never on a
   short timer, and a quantum is only marked done once something was placed.
+
+- **A region covers a point by its boundary polygon, not its bounding box.** `assets/region_polys.json`
+  (baked by `scripts/region-polys.py` from the Geofabrik `.poly` beside each catalog extract,
+  simplified to about 5 km, 425 regions, about 300 KB) is loaded once at app start into
+  `RegionPolys`. `RoutingRegion.covers(lat, lng)` and `PmtilesRegionStore.Region.covers(lat, lng)`
+  test the polygon when one exists and the box otherwise, and every region-for-a-point decision
+  (the viewport download's routing, places, basemap and overlay picks, the streaming unions, the
+  routing offer, the update kinds, the saved-area pack lookup, the road-features region, the Offline
+  settings row) goes through them; the tie-break among covering regions remains the smallest box.
+  A box is not coverage: an extract's box includes every outlying island and claim, so Vietnam's
+  reached Hong Kong and Kansas's crosses the Missouri River.
 
 ### 4.10 Trips, replay and demo mode
 
@@ -969,8 +1067,9 @@ The same pass purges closures: an open icon matching a permanently-closed Google
 80 m, with no open listing of that name within 150 m, is added to the persisted closed set.
 
 **OSM basemap business POIs** (`poi_r1`, `poi_r7`, `poi_r20`) are hidden outright under an open
-places source unless "OpenStreetMap shops too" is on, because the three open datasets cover
-businesses far better. Everything else OSM draws (museums, attractions, parks, schools, civic
+places source when "OpenStreetMap shops too" (on by default) is turned off, because the three
+open datasets cover businesses far better; with it on, `osmFillIn` drops an OSM business by name
+wherever an open icon already draws it. Everything else OSM draws (museums, attractions, parks, schools, civic
 buildings, places of worship, transit) stays, and `osmFillIn` drops by name only the
 non-business OSM points an open icon of a non-business group already draws within 80 m. That
 pass is viewport-only and rendered-only on both sides, grow-only within a source set (capped at
@@ -993,7 +1092,24 @@ over Overture Places (public S3 parquet or a local extract) and writes PMTiles.
   wins ties. Chains carry OSM-syntax `hours`.
 - **OSM positions** win. The region's Geofabrik extract is filtered with `osmium tags-filter`
   to named business nodes and exported to geojsonseq (strip the 0x1e record separator before
-  jq); `osm_snap` moves a baked row onto OSM's coordinate on a whole-name match at 30-120 m.
+  jq); `osm_snap` moves a baked row onto OSM's coordinate anywhere inside the duplicate box (~150 m;
+  120 m for a chain) on the whole name or the core name (generic words removed), mutual best
+  match only, so each node and each row pair at most once. The name keys keep letters of EVERY
+  script (`[^\p{L}\p{N}]` is the separator, like `PlaceNames.PUNCT`); a Latin-only key made every
+  name rule a no-op in non-Latin regions. A non-Latin place carries `name_en` (side table
+  `names_en`: the OSM row's own tags, its name pair, or the chain dictionary `endict`), shown for
+  a Latin-script UI on the places layer and the sheet, and used by the Both-mode twin test.
+  The minzoom cell budgets are CAPS: prominence buys at most crank 6 at z14, rank 8 at z15, rank
+  24 at z16 (it used to bypass the budget entirely); z17 carries every place. Prominence gains
+  `srcbonus` (+0.6 OSM pair, +0.6 chain-locator match, +0.8 Wikidata) and the category prior puts
+  food at 2.6 and offices at 0.5.
+  ONE SET (branch places-one-set): OSM landmarks (tourism museum/attraction/gallery/zoo/theme park/
+  aquarium/viewpoint, amenity place_of_worship/school/college/university/library/hospital/townhall/
+  community_centre/theatre/arts_centre/courthouse/police/fire_station, leisure park/stadium/
+  sports_centre/water_park/garden/nature_reserve, historic monument/memorial/castle/ruins/
+  archaeological_site; points and polygons) are baked in; `landmark` rows have their own `lrank`
+  budget per 1.6 km cell ordered by notability (size, Wikidata); the app hides `poi_r*` over an
+  archive whose `rev` >= calibration `tuning.placesOneSetRev` (default off).
   Order of preference: OSM, then the AllThePlaces locator, then Overture's parcel point.
   Tenants never move.
 - **Parks come from OpenStreetMap, so nothing else may filter them out.** The bake drops the park
@@ -1024,6 +1140,29 @@ over Overture Places (public S3 parquet or a local extract) and writes PMTiles.
   can edit, and the tile's `origin` property says `osm`. Ways and relations stay out: a building's
   centroid is the same guess as the parcel point. Measured on a small country: 766 business nodes in
   the box, 521 added after dedupe.
+- **AllThePlaces is the newest weekly run at bake time (2026-09-22)**: `build-places-region.sh`
+  reads `data.alltheplaces.xyz/runs/latest.json` unless `ATP_RUN` pins one, with the last pinned
+  id as the fallback when the fetch fails. It had been a fixed id, so every bake carried the same
+  week-old locator data.
+- **One row per business (2026-09-21).** The source dedupes only ever compared a NEW source against
+  what was there, and Overture itself carries a business twice (a gas station under "Chevron" and
+  "Chevron Station Davis", a shop under "SpeeDee" and "SpeeDee-Midas", a store and the counter
+  inside it named after the store). After the last source is in, rows with the same snap key
+  within ~60 m collapse onto one leader: not a kiosk category first, then the higher confidence,
+  then the row that knows more (address, phone, website, hours); a hash join on the key with the
+  box as the residual. The snap key mirrors `PlaceNames.normalized` (accents, parentheticals, "&",
+  possessives, legal suffixes, store numbers) so a row the bake keeps is one the app can match.
+  Fuel rows also key by their HOUSE NUMBER (`fuel@<number>`, within the same 60 m box): a station
+  is one per lot and its rows spell the road three ways. **And the VARIANT family folds too
+  (2026-09-22):** a CORE KEY is the snap key minus every word in `tools/place-generic-words.txt`
+  (the app's `PlaceNames.GENERIC`, pinned equal by `PlaceNamesTest`; the bake anti-joins the
+  unnested tokens because DuckDB refuses a subquery inside a lambda), and rows with the same
+  non-empty core key within the box fold onto one leader: "Chevron Gas Station" onto "Chevron",
+  "Walgreens Pharmacy" onto "Walgreens", "Starbucks Coffee Company" onto "Starbucks", "The Toasted
+  Yolk Cafe" onto "Toasted Yolk". A core key that is only a street number or a single word under
+  five letters is not a name and stays out (the app's strong-core rule), so "38th Street Deli" and
+  "38th St Grocery" stay two rows, as do "Fine Art Gallery" and "Modern Art Gallery" (empty cores).
+  The OVERLAP family stays app-side: it needs the kinds and the pool's shared words.
 - **Whether a rebake is worth a delta is measured, not assumed.** `scripts/archive-churn.py` reads
   both archives' PMTiles directories, hashes every tile, and reports per zoom what is identical,
   changed, added and dropped plus a real `zstd --patch-from` delta; `places-churn.yml` bakes a region
@@ -1122,7 +1261,7 @@ entries missing counts) and refetches the fan-out once about 1.2 s later, prepen
 places so `distinctBy` keeps the rich copy. Before diagnosing a flat-looking ambient layer,
 check whether the pool's counts are null.
 
-**Fan-out discipline.** `nearbyPlaces` fires about 13 category requests, each parsed whole into
+**Fan-out discipline.** `nearbyPlaces` fires 15 category requests (8 on the lean path), each parsed whole into
 a JsonElement tree of roughly 30 MB in a dense area. The fan-out is bounded by a `Semaphore(4)`
 (`ambientFanoutPermits`, read at construction), which took a fresh-launch burst from about
 400 MB of transient parse trees to about 64 MB and 13 percent janky frames to 2.3 percent. Do
@@ -1185,23 +1324,116 @@ tenant's DOT is drawn on its own point, so a dot meters away routinely measures 
 than the icon under it. With no icon under the finger the box rules still run, so a dot stays
 tappable.
 
-The named-POI resolve is **name-agreeing first**: the pool is the listings whose name shares the
-tapped label's words (`nameAgrees`, word-set overlap needing the shorter name's tokens, cap 2).
+The named-POI resolve is **name-agreeing first**: the pool is the listings whose name is the same
+business as the tapped label under the shared rule below (`PlaceNames.agree`, with the town out of
+the listing's address as a generic word).
 Only an empty pool falls back, and the fallback is bounded twice: a non-transit tap never adopts
 a listing whose category is transit or map furniture (`JUNCTION_CATEGORIES`), and a listing that
 does not agree by name must be within `NO_NAME_MATCH_M` (60 m) rather than anywhere inside the
 1.5 km cap. Nothing left to adopt means the tapped label keeps its own name and point.
 
+The order of the pool is: name matches within the 1.5 km cap (a name match farther away never
+blocks the fallbacks, since a brand's other stations miles off otherwise emptied every nearby
+option), a cross-script second search, a listing of the tapped kind within 60 m already in the
+results, `kindBesideAnchor` (one extra search for the tapped kind around the nearest name-agreeing
+listing on the lot, nearest same-kind hit within 60 m of that anchor), then anything within 60 m.
+
+**The house number gates it.** Distance cannot tell a fuel station from the one across the
+junction, 40 to 80 m apart. When the tapped row has an address with a leading house number and a
+candidate does too, a different number rules the candidate out of every fallback without a name
+match and out of name matches beyond `SAME_LOT_M`; on the lot a mismatch is tolerated (open data
+numbers are sometimes wrong) and an agreeing number wins. Either side without a number decides
+nothing.
+
 The pick must also be near the tap: a settlement label accepts a hit within 30 km, any other
 label within 1.5 km, transit stops unbounded. A clear-dominance duplicate override
 (`canonical.reviews >= 2 * nearest.reviews + 5`) runs **within** the pool only.
 
-**A listing whose name IS the tapped name beats a nearer one.** `nameAgrees` has to be loose enough
-to match a co-branded pair, so every listing a brand owns on that lot qualifies - the store, its
-fuel station, its pharmacy, its coffee counter - and the pick was then whichever sat nearest the
-tapped point. The pool is filtered to exact normalized-name matches when any exist (lowercase, no
-punctuation, trailing store number dropped, the same rule the bake's snap key uses), and only falls
-back to the loose pool when none do.
+**A listing whose name IS the tapped name beats a nearer one.** The agree rule has to admit a
+co-branded pair, so every listing a brand owns on that lot qualifies - the store, its fuel station,
+its pharmacy, its coffee counter - and the pick was then whichever sat nearest the tapped point.
+The pool is filtered to exact normalized-name matches (`PlaceNames.same`) when any exist, and only
+falls back to the loose pool when none do.
+
+**The same-business rule (`core/util/PlaceNames`, 2026-09-21)** is ONE rule for the tap resolve,
+the Both-mode twin hiding and, mirrored in SQL, the bake's dedupe; three private copies had drifted
+and every drift was a duplicate icon or a wrong tap. It was derived from a side by side of Google's
+answers and the open archive over the Davis fixture (495 Google places in the archive's box: 290
+exact after normalization, the rest of the real twins in the three families below, and the false
+positives the old two-shared-words rule produced). `normalized` folds accents, drops parentheticals,
+reads "&" as "and", keeps a possessive on its word, drops legal suffixes (LLC, Inc, DDS Inc), chain
+tails ("by Wyndham", "an Ascend Collection Hotel"), a leading "The" or "Dr" and a trailing store
+number, expands street abbreviations (St, Ave, NY) and joins dotted initials ("U.S." is "us").
+`match(a, b, extraGeneric)` answers EXACT (normalized equal), VARIANT (one name is the other plus
+only generic words: "Circle K | Gas Station", "U.S. Bank Branch", "CVS" against "CVS Pharmacy",
+"Hilton Garden Inn Davis Downtown", "Petco Grooming"), OVERLAP (nested with non-generic extra
+words, "SpeeDee-Midas" over "SpeeDee", or not nested but two identifying words in common, "Davis
+Dental Creations" plus the dentist's surname) or NONE. `GENERIC` is the list of words that
+describe a business rather than name it (category, structure and place words, street types), and
+a caller adds the town out of an address plus `localGeneric(names)`, the words three or more names
+in the pool it compares against share (a neighborhood, a mall, a landmark: "Bryant Park",
+"Flatiron", "Memorial Heights"), which is the IDF the app cannot compute globally. Three more
+families came out of a Midtown Manhattan and downtown Houston side by side (2026-09-22): a BRAND
+PREFIX of two or more words with an identifying one among them ("Bank of America Financial
+Center" and "Bank of America ATM"); the shorter name, less generic words at its ends, as a PHRASE
+inside the longer (three words carry it even when the only identifying one is a street number,
+"23rd Street Dental"; two words need a word that is not); and the shorter name's identifying words
+all inside the longer's when the longer LEADS with them ("Laurenzo's Restaurant" and "Laurenzo's
+Prime Rib"). Plurals fold pairwise ("Sola Salons" and "Sola Salon Studios"), "Dr." is "doctor",
+and a nested or subset match needs a strong core (two identifying words, or one of five letters
+that is not an ordinal): "The Finn" is not "Dish Society at Finn Hall", "Bayou Place" is not
+"Bunnies On The Bayou". Measured through the real rule over the four areas: Davis 72% of Google's
+places linked, a suburban corridor 68%, Midtown 81%, downtown Houston 83%; the rest are mostly
+places the archive does not have.
+
+**Other languages (2026-09-22).** The generic list is the UNION of one table per app language
+(en fr de es it pt nl sv pl ru uk hu he, about 1,800 words after folding): the names on a map
+belong to the region, not to the phone, so no language is picked; "Boulangerie Paul" is "Paul",
+"Aral Tankstelle" is "Aral", "Аптека Ригла" is "Ригла" whatever the UI language, and a word that
+is a descriptor in one language and a name in another is accepted as rare. Legal forms (GmbH,
+SARL, S.r.l., S.L., Lda, B.V., AB, Sp. z o.o., ООО, Kft, בע"מ) and street abbreviations (Str.,
+Av., Bd, ул., просп.) join the English ones, and the letters NFKD leaves alone fold too (ß, æ, ø,
+œ, ł, đ, ё). Names in scripts written without spaces (Han, kana, Hangul, Thai) get no tokens and
+are compared as strings by `cjkMatch`: descriptor suffixes and prefixes (店, 支店, 薬局, 銀行,
+餐厅, 超市, 有限公司, 지점, 약국, สาขา...) are stripped from both ends, equal cores are a
+VARIANT ("星巴克咖啡" and "星巴克"), a core inside the other is an OVERLAP (the extra is a branch
+name: "スターバックス 渋谷店"), and a core shorter than two characters matches nothing. The bake's
+word file carries the same union. Three rules from a Berlin and Tokyo side by side (2026-09-22):
+Europe's brands are four letters (Lidl, Aldi, Rewe, Aral, Esso, Ikea), so a four-letter word
+carries a nested or subset match when it LEADS both names, the shorter name has words of its own
+and the longer adds exactly one identifying word ("Kolo Coffee" inside "Kolo coffee klcf shop"),
+and two names that both reduce to one four-letter word ("Lidl", "Lidl Deutschland") are one
+business under `sameBusiness` when their kinds agree; a bare four-letter name still claims nothing
+("Hair" against "Hair Studio", "The Finn" against "Dish Society at Finn Hall"). Country names and
+food descriptors are generic in German (Deutschland, Essen, Küche). A name glued into one word is
+read as its words when a run of the other name's words spells it ("greengymberlin health and
+fitness club" and "Green Gym Berlin"; eight letters or more). Measured through the rule: Berlin
+links 75% of Google's places to the de-berlin archive, Tokyo 38% under `hl=en` and 65% under
+`hl=ja`: Google names Tokyo's places in English for an English phone while three quarters of the
+archive's names are Japanese, and Overture carries no alternate-language names there, so no name
+rule bridges the two. The tap resolve bridges it instead: when nothing agrees by name and the
+tapped label is in a script Google answers differently (`NameScript.scriptLanguage`: kana or Han
+inside Japan is `ja`, Han elsewhere `zh-CN`, Traditional over Taiwan, Hong Kong and Macau, Hangul
+`ko`, Cyrillic `ru`, Hebrew `iw`, Thai `th`, Arabic `ar`, Greek `el`; Latin decides nothing) and
+that language is not the app's, `MapViewModel.crossScriptCandidates` runs the same search with
+`hl=<that language>` (`MapDataSource.search(lang)`), keeps the listings that agree, and fetches the
+nearest one's copy in the app's language by its own name so the sheet keeps the app language's
+category and hours; the copy replaces it when the feature ids match, else the foreign listing
+stands. Two requests at most, only on a cross-script miss; the `VelaTap` line carries `cross=N`. A single shared identifying word is NOT a match ("Arroyo Park" against
+"Arroyo Pool"), a name made only of generic words matches nothing by overlap ("Hair" inside "Hair
+Studio"), and a brand's other listing is a VARIANT that `same` keeps out. Pinned by
+`PlaceNamesMatchTest` with the fixture pairs. Two rules take the places' KINDS (the icon group)
+as well: `sameBusiness(a, kindA, b, kindB)` refuses an OVERLAP between two known, different kinds
+(a fuel station and the pizza place on its lot can share their identifying words), while EXACT and
+VARIANT still cross kinds ("Safeway Pharmacy" and "Safeway" are one business in two listings);
+and `sameFuelLot(kindA, kindB, distance, numberA, numberB)` calls two fuel stations within
+`FUEL_LOT_M` (30 m) one station whatever their names, because a forecourt is one per lot and the
+sources name it after different things (the brand in the archive, the operator on Google); two
+known house numbers that differ refuse it at any distance, which is the two-stations-across-the-
+road case, and 30 m is short of a road plus two setbacks. Ambient features carry `hn` (the
+listing's house number) for it. Not yet in the rule: a
+non-fuel department listing at the same point with a different name (the station's "Fast & Easy
+Mart" beside "Chevron"), and Google's own two profiles for one business.
 
 Sheet titles follow the app language's script: `NameScript.prefer(uiLang, google, label)` keeps
 the map's own label as the title when Google's name is not in the app language's script and the
@@ -1249,6 +1481,13 @@ host that cannot answer.
 - Typed coordinates drop a pin: `MapLinkParser.parseBareCoordinate` matches the whole string,
   requires a decimal point in both halves and range-checks, so an address with numbers still
   searches.
+- Network suggestions come from Google's own search-as-you-type request (`MapDataSource.suggest`,
+  the keyless `/s?tbm=map&suggest=p` call biased to the viewport), which honors the location
+  bias for a partial address; rows without a location are bare query rows that run as a search.
+  When it fails or Google is off, the older search-endpoint + OpenStreetMap race answers. Every
+  suggestion row carries a fill-in arrow that puts its primary text into the box, cursor at the end,
+  without searching. A typed house address that the search results cannot place is geocoded
+  through the same request and leads the results.
 - Local suggestions (recent queries, recent places, saved and list places, and opted-in
   contacts) are computed **synchronously** on each keystroke before the debounced network
   fetch, so they are instant and are the only thing that shows offline. Contacts are loaded into
@@ -1457,17 +1696,22 @@ features, and the building and address overlays where they exist. `MapPoiPrefs.p
 | TTS runtime, ASR models | vendored builds | `tts-runtime`, `asr-models` | catalog in `:core` |
 
 **A manifest merge derives the manifest from the release, never from the run's own fragments.**
-The bake matrix uploads one archive per region and the merge job publishes the manifest, so the
-merge is a read-modify-write on one shared asset and is serialized by a concurrency group. GitHub
-cancels a job that is PENDING in such a group when a newer one joins it, so in a wave of runs the
-middle merges are killed after their archives have already been uploaded: on 2026-09-18 that left
-99 of 414 basemap regions in the manifest, invisible except as regions the app could not find a
-map for. `scripts/repair-basemap-manifest.sh` (which `merge-basemap-manifest.sh` now calls) builds
-the list from the archives published on the release, reusing an existing row when the size is
-unchanged and reading the bbox out of the first 127 bytes otherwise, then lets the run's own entry
-files win for the regions it baked. The manifest is then a function of what is published: running
-it after the last upload is enough, running it twice changes nothing, and a merge that never ran
-costs nothing. Dispatch a catalog as a couple of sharded runs rather than one per group, so few
+The bake matrix uploads one archive per region and the merge job publishes the manifest, a
+read-modify-write on one shared asset. The basemap and places merges carry no concurrency group:
+GitHub cancels a job that is PENDING in such a group when a newer one joins it, so in a wave of
+runs the middle merges were killed after their archives had already been uploaded, which on
+2026-09-18 left 99 of 414 basemap regions in the manifest. Instead
+`scripts/repair-basemap-manifest.sh` (called by `merge-basemap-manifest.sh`) and
+`scripts/repair-places-manifest.sh` (called by `merge-places-manifest.sh`) build the list from the
+archives published on the release, reusing an existing row only when the size is unchanged AND the
+asset was not uploaded after the row's rev (size alone kept a stale rev when a rebake landed on the
+same byte count), then let the run's own entry files win for the regions it baked. The basemap
+script reads a new archive's bbox out of its first 127 bytes; the places script takes it from
+`tools/places-regions.json`. Parallel merges race only on the upload, which retries, and each script
+lists the release again after uploading and rebuilds once more when an archive landed meanwhile.
+The manifest is then a function of what is published: running it after the last upload is enough,
+running it twice changes nothing, and a merge that never ran costs nothing. The building, address
+and maxspeed merges still fold entries and are serialized by their own concurrency groups. Dispatch a catalog as a couple of sharded runs rather than one per group, so few
 merges can queue behind each other in the first place.
 
 **Infrastructure releases are not app releases.** Every non-`v0.*` tag is file hosting whose
@@ -1499,6 +1743,18 @@ Selection rules on the phone:
   were about to arrive, and crossing the box edge then unmounted it, so a pan along a download's
   border alternated gray and network. Only a probe that CANNOT answer leaves the old pick in
   charge, because that is the case where asking told us nothing. The pick runs off the main thread.
+  **The mount has hysteresis.** A swap reloads the whole style (`basemapArchive` is part of the
+  style key), so the pick must not flip on every camera idle along a border. Unmounting is eager
+  (no roads at the center tile means stream); mounting an archive that is not the one in use
+  requires roads at the eight z12 tiles around the center and at the four corners of the visible
+  viewport (`installedFor(center, mounted, view)`), so an archive returns only once the border has
+  left the screen. Swaps also keep a `BASEMAP_SWAP_COOLDOWN_MS` (2 s) floor. Offline the eager
+  unmount is replaced (`keepMounted`): the archive in use stays while its roads reach the center
+  tile, the ring or any viewport corner, because nothing streams in its place and letting go
+  blanked the whole screen, the downloaded half included, on a pan across a state line. Online
+  the mounted archive is no longer kept until the center leaves its data: it is in use exactly
+  while the ring and the corners are all inside it, so a border on screen means streaming and a
+  pan along the border reloads nothing.
 - **A global low-zoom archive is the floor under the pick** (`BasemapTileStore.WORLD_ID`, baked by
   `world-lowzoom.yml`, about 11 MB at z0-7, pulled once alongside the first offline download). It is
   kept OUT of the per-region candidate list: it covers every point on earth, and it carries no
@@ -1525,8 +1781,11 @@ Selection rules on the phone:
 
 ### 7.3 Freshness
 
-Every manifest row carries `rev` as a `YYYYMMDD` integer; installed revs live beside the files
-(`revs.json`) and `MapViewModel.refreshRegionUpdates` turns a newer rev into an Update button.
+A manifest row's `rev` is an integer that only grows. The obf, basemap and places bakes stamp the
+bake date as `YYYYMMDD`; place packs count up instead, one past the live manifest's rev for that
+region (`scripts/build-poi-region.sh`), which is the `fromRev` their row deltas key on. Installed
+revs live beside the files (`revs.json`) and `MapViewModel.refreshRegionUpdates` turns a newer rev
+into an Update button.
 Place packs additionally publish **row-level deltas**: `poipack_delta.py` emits one SQL EXCEPT
 per table into `del_`/`ins_` tables, published only when the delta is under half the full size.
 `PoiPackStore.applyDelta` runs when the installed rev equals the delta's `fromRev`, in one
@@ -1537,10 +1796,11 @@ integer, collisions fail the build), never insertion counters, or a rebuild renu
 of rows and the delta balloons to pack size. `TABLE_COLUMNS` in `PoiPackStore` mirrors
 `poipack_build.py` and `poipack_delta.py`; all three must stay in step.
 
-Scheduled rebakes: ALPR cameras weekly (Monday 08:17 UTC); place packs monthly (3rd, 07:15);
-road features monthly (4th, 07:45); places (6th and 7th, 05:00, sharded); basemap (9th and 10th,
-05:00, split by catalog half); routing, buildings, addresses and maxspeed quarterly (January,
-April, July, October, 2nd, 04:00). The obf bake stays manual because of its runner memory limits
+Scheduled rebakes: ALPR cameras weekly (Monday 08:17 UTC); place packs monthly (3rd and 5th, 07:15, half the catalog each);
+road features monthly (4th and 6th, 07:45, halves); places (6th and 7th, 05:00, sharded); basemap (9th and 10th,
+05:00, split by catalog half); buildings (three groups), addresses and maxspeed (two shards)
+quarterly (January, April, July, October, 2nd, 04:00, `quarterly-data-refresh.yml`). Routing is not
+scheduled: the obf bake stays manual because of its runner memory limits
 and the manifest flip. A world obf bake stages into `obf-manifest-staging.json`, which the app
 never reads; copying staging over the live name flips the whole catalog atomically.
 
@@ -1596,7 +1856,19 @@ applier is `app/offline/PmtilesPatch`.
   holds the claim down in CI: its fixture (`scripts/pmtiles-test-fixture.py`) is a small archive run
   through the real producer and the real applier, so it carries dead bytes the way a phone's does,
   and the test compacts it and checks the fingerprint, every tile id, length and run.
-- **Settings > Offline maps reports the archives too.** `offlineStorageBreakdown`'s "Offline places"
+- **Deleting gives the space back.** MapLibre keeps saved areas and the browsing cache in one
+  SQLite file; deleting a region removes its rows, not the bytes, so `OfflineMaps.packDatabase`
+  (`OfflineManager.packDatabase`, a VACUUM) runs after every saved-area delete and after Clear
+  map cache. A phone that had saved and deleted a few large areas otherwise reports gigabytes of
+  map data with nothing listed (issue #601). Settings > Offline maps > "Delete all offline data"
+  (`MapViewModel.deleteAllOfflineData`, behind a confirm naming the total) removes every saved
+  area, every region's routing, place pack, places and basemap archive, the building and address
+  overlays (which an area save pulls and no region row can delete), the road features, the offline
+  basemap's label glyph pack (`files/glyphs`, ~200 MB) and any legacy graph tree, sweeps the stores' folders for files no catalog id reaches any more, clears
+  the browsing cache and packs the database. Voices and speech models are not offline map data
+  and stay.
+- **Settings > Offline maps reports the archives too.** The map figure counts the glyph pack
+  and the road features beside the database, overlays and basemap archives, and `offlineStorageBreakdown`'s "Offline places"
   counts `files/poipacks` AND `files/places`; the archives were absent from the only storage screen
   in the app, so a region's few hundred MB of places were invisible.
 - **The archive catalog is memoized for an hour, not forever.** `PmtilesRegionStore.manifest` runs on
@@ -1606,8 +1878,10 @@ applier is `app/offline/PmtilesPatch`.
   Offline maps screen was opened, and the row still said there was nothing to update.
 - **Policy is the user's**: `ui/RegionUpdates` (never, the default until the path has been proven
   on a device / on Wi-Fi / on mobile data too),
-  metered judged by the system rather than by which radio it is. A FULL re-download is never
-  automatic on any setting. Every attempt is recorded in the diagnostics ring (kind `delta`) and
+  metered judged by the system rather than by which radio it is. On Wi-Fi or mobile the app applies
+  every published patch that fits an installed archive or pack on its own, a minute after start and
+  at most once in 20 hours, skipping a drive in progress. A FULL re-download is never automatic on
+  any setting, and a tapped one downloads over the installed copy so a failure keeps the region. Every attempt is recorded in the diagnostics ring (kind `delta`) and
   logcat `VelaDelta` with the bytes and the reason for any fallback, because the failure worth
   seeing is a region that quietly downloads itself whole every week.
 
@@ -1668,11 +1942,21 @@ Details:
   `PAIR_MERGE_M` (160 m) to the pair's midpoint, carrying the other ids as siblings; boards
   merge stoptimes across the representative and its siblings, and the `(route, headsign)`
   grouping shows both directions as separate rows. Direction-suffixed names differ as strings
-  and never merge.
+  and never merge. "Same name" is `Transitous.stopKey` (case, ordinals, "&" / "/" / "at",
+  street-type and compass abbreviations, and the order of the cross streets do not count), and
+  before that pass stops within `COLOCATED_M` (3 m) fold whatever their names: one corner
+  published by several feeds (the MTA's per-borough bus feeds, NY Waterway) or a station
+  complex's several parents. An ALL-CAPS merged name shows in title case
+  (`Transitous.displayName`). Around Bryant Park: 78 icons became 55.
 - Where the Transitous layer has coverage, the basemap's OSM bus icons hide by filter (rail and
   airport stay), so a stop cannot draw twice.
 - Every successful viewport fetch overwrites its area in a 24-area on-disk LRU
   (`TransitStopCache`), so visited areas keep canonical stops with no signal.
+- **Every board fetched is kept on disk (`TransitBoardCache`, newest 48, keyed by the stop's
+  coordinate to ~10 m, a 40 m near-match).** A stop tapped with no connection shows the board it
+  had last time, with a line saying when it was seen (`stopDeparturesCachedAt`), so the routes,
+  headsigns and colors are there and an old time is never read as a live one. A live board
+  replaces it and clears the marker; no cached board means the sheet shows no board, as before.
 - The transit category gate is multilingual and carries an exclusion list: gate words match and
   non-transit words (fuel, EV, emergency, broadcast) must not, because "station" appears in all
   of them. Both regexes are remotely overridable.
@@ -1722,6 +2006,11 @@ Rules:
 - Audio focus is refcounted through the utterance callbacks. A system TTS `speak()` returning
   `ERROR` enqueues no utterance and therefore no callback, so that path rolls back its acquire;
   a failed `onInit` clears the pending queue rather than accumulating prompts for a later init.
+- **A fresh focus grant leads the first sample by `FOCUS_LEAD_MS` (350 ms).** A player that
+  pauses on a transient duck (spoken-word apps, by Android's own guidance) takes a few hundred
+  milliseconds to stop, and without the lead the first word lands on the music. Focus already
+  held from the previous prompt (`FOCUS_HOLD_MS` 1500) speaks at once; a fresh grant means
+  nothing of Vela's is speaking, so no interrupt waits behind the delay.
 - Sentence pauses are made by splitting the utterance and splicing silence
   (`splitSentences`/`joinWithGaps`). The runtime's own silence scale is a no-op on this model.
 - **Every fragment gets terminal punctuation before synthesis.** A fragment ending in a letter
@@ -1932,10 +2221,21 @@ ports it rather than inventing a fourth:
   tables because unnamed roads are everywhere. Filled by the OSRM, Valhalla and obf builders; null
   for Google's abbreviated steps, which are scraped prose with nothing to rebuild from, and there
   speech keeps the full instruction rather than risk a mangled one.
+  `Maneuver.spokenInstruction()` is what every SPOKEN site reads: the five in `NavEngine`, plus the
+  nav OPENER and the faster-route line in `NavSession`, which are built from the first maneuver and
+  are otherwise the first and the loudest place the name would survive the switch. Each of those two
+  keeps the NAMED form for its banner and card, which is the whole contract: the switch decides what
+  is read aloud, never what is shown.
+  ANYTHING THAT REWRITES AN INSTRUCTION AFTER THE ROUTER BUILT IT MUST REWRITE BOTH FORMS, or the
+  switch silently undoes that rewrite. Two places do: `consolidateExits` drops the direction that is
+  not taken from a folded ramp (missing it, the voice announces both again, which is the bug that
+  fix exists for), and `enrichWithLights` prepends the pass-the-lights clause (missing it, turning
+  street names off also threw away traffic-light guidance, a separate feature with its own switch).
+  Both are pinned by `SpokenRoadNamesTest`.
 - **The drive is an Android 16 live update** (issue #595, API 36+, `promoteToLiveUpdate`). The nav
   notification asks to be promoted, which puts the drive in the status bar chip and on the lock
   screen instead of only in the shade. The bar is the ROUTE rather than a download: its scale is the
-  route's length in meters, the tracker is the current maneuver glyph sitting where the car is, the
+  route's length in meters, the tracker is the nav puck sitting where the car is (the maneuver glyph is the large icon, Google's own layout), the
   segments are the traffic spans Vela already has (so the jam ahead is visible without unlocking the
   phone), and each remaining stop is a point on it. The chip's critical text is the distance to the
   next turn, the one number worth a glance while moving. Everything is additive and guarded: below
@@ -2008,7 +2308,17 @@ refuses to cover the bars.
 `app/car/` is a navigation-category `CarAppService` (manifest service, `automotive_app_desc.xml`
 `<uses name="template"/>`, the `androidx.car.app.*` permissions, `minCarApiLevel=1`). A sideload
 appears in the car launcher only with the Android Auto developer setting "Unknown sources" on,
-so the host validator is open.
+so the host validator is open. What the phone-side gate actually checks, read off a car log on a
+GrapheneOS phone with sandboxed Play (2026-09-22): the Android Auto app asks the Play Store for
+the app's owners and denies a package Play never installed (`PlayGearheadService app.vela, app
+owners empty` then `CAR.VALIDATOR: Package DENIED`), whatever the install fields say, and the
+"Unknown sources" toggle does not cover it; on a stock Pixel an install routed through Google's
+own package installer passes. The car map re-applies the palette whenever the car's day/night
+changes, draws the phone's puck bitmap rotated by heading minus camera bearing, and keeps the
+speed badge and the attribution inside the host's stable area (the part no template UI ever
+covers), falling back to the visible area when the host reports no usable stable area. The
+guidance voice is band-limited by the protocol
+(the Android Auto guidance stream is 16 kHz mono).
 
 Screens: `MainCarScreen` (`PlaceListNavigationTemplate`) to `SearchCarScreen` (`SearchTemplate`)
 to `RoutePreviewCarScreen` (`RoutePreviewNavigationTemplate`) to `ActiveNavCarScreen`
@@ -2025,7 +2335,25 @@ to `RoutePreviewCarScreen` (`RoutePreviewNavigationTemplate`) to `ActiveNavCarSc
   direction and exit number from the route's own geometry rather than assuming.
 - The snapshotter resolves the same patched style file the phone map uses; a plain style URL
   leaves the car on Noto.
-- Android Auto has no pause control yet.
+- The car nav screen: a paused drive shows a `MessageInfo` ("Paused") in place of the turn card
+  and the strip carries Pause/Resume; a turn farther than `CONTINUE_FAR_M` (1,500 m) leads the card
+  with "Continue on <the road you are on>" (`Maneuver.roadAt`, the phone's pill rule) and shows the
+  turn as the "then" step; a search icon opens `AlongRouteCarScreen` (the quick categories as rows,
+  a pick searches around the car, a result becomes the next stop through `NavSession.addStop`); the
+  map strip's fourth action toggles an overview of the remaining route (`toggleOverview`, exempt
+  from the pan auto-recenter). `CarBridge` (`app/car`) carries the phone controller's spoken alerts
+  (cameras, speeding, closing soon) to a `CarToast` and the route's lights, stop signs and speed
+  cameras to the renderer, which draws them as dots from z13.5 with the plate cameras along the
+  route read straight off the bundled set.
+- The car snapshotter is themed with the phone's palette through the `StyleLayers` interface
+  (`applyMapTheme(SnapshotterHost(snapshotter), dark, amoled)`), applied from the first snapshot
+  callback because the style observer never fires for a style handed over as JSON; that first
+  frame is discarded for a themed one. The renderer draws no library
+  overlay (`QuietSnapshotter`) and its own single OpenStreetMap credit, frames the puck inside
+  the host's visible area at `PUCK_DOWN` (0.72) of its height while following in nav (meters
+  per pixel from 512 px tiles), glides the puck with `FollowEstimator`, and eases the speed-tiered
+  zoom (`ZOOM_EASE` 0.06 per 70 ms tick). A drive started from the car speaks with the Piper voice
+  when it is installed and chosen (the service attaches the synth).
 
 ### 10.7 Street View
 
@@ -2311,7 +2639,10 @@ tooling default that claims otherwise. Before pushing, `git log origin/main..HEA
   Compose, Hilt, a version catalog, R8 in the `release` build type.
 - **Channels.** A push to `main` or `canary` builds and tests only; a push can never mint a
   release. The nightly prerelease `v0.4.<run>` (versionName `0.4.<run>`, versionCode
-  `2000 + run`) is cut by a daily cron that skips when `main` has not moved, or on demand.
+  `2000 + run`) is cut by a daily cron that skips when `main` has not moved, or on demand. Its
+  title is `Vela <version> nightly` and its notes open with "Nightly build."; the promotion
+  retitles to `Vela <version>` and regenerates the notes, so the channel is readable on the
+  release page and in the in-app What's new dialog.
   `canary` is the working branch and also a real update channel: each push replaces the single
   APK on a fixed-tag rolling release whose tag is deliberately not `v0.*`. A weekly workflow
   promotes the newest nightly to stable: same tag, same signed APK, no rebuild.
@@ -2338,8 +2669,12 @@ tooling default that claims otherwise. Before pushing, `git log origin/main..HEA
   and FDROID.md and can be read from any signed APK with `apksigner verify --print-certs`; do
   not confuse it with the F-Droid index fingerprint. The calibration signing key is separate and
   equally never committed. A `MAPTILER_KEY` secret reaches `BuildConfig` only.
-- **In-app updater** (`SelfUpdater`): reads the channel's releases, derives the version code
-  from the tag, offers a card, downloads with a no-call-timeout client, checks the zip magic
+- **In-app updater** (`SelfUpdater`): lists the app-release tags through
+  `git/matching-refs/tags/v0.` and reads one release per tag (`releases/tags/<tag>`; stable reads
+  `releases/latest`, canary its rolling tag), never the releases list, whose data releases carry
+  ~450 assets each and made a check 4 to 9 MB; a check is 2 to 3 requests plus at most
+  `HISTORY_MAX_RELEASES` (8) for the cumulative notes, and logs one `VelaUpdate` line with its
+  request and byte counts. It derives the version code from the tag, offers a card, downloads with a no-call-timeout client, checks the zip magic
   bytes, and hands the file to the system installer through the FileProvider, which enforces
   same package and same signature. Notes are cumulative across the versions between installed
   and offered. The launch check is throttled to about daily and "not now" pins the dismissed

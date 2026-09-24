@@ -18,6 +18,8 @@ import app.vela.core.model.TravelMode
  * also means a future Overture/OSM source, or a self-hosted backend (the
  * Piped-for-Vela idea), is a drop-in.
  */
+data class SuggestResult(val places: List<Place>, val queries: List<String>)
+
 interface MapDataSource {
     /** [spanMeters]: the caller's visible viewport height — widens Google's result window to
      *  match how far out the map is zoomed (the pb template's baked span is ~25 km). */
@@ -25,11 +27,24 @@ interface MapDataSource {
     // are computed from - your real location when you are searching where you are, so the list
     // doesn't reshuffle around wherever the viewport happens to be centered. Null = rank from
     // `near` (the viewport), which stays the SEARCH AREA either way.
-    suspend fun search(query: String, near: LatLng? = null, spanMeters: Double? = null, rankFrom: LatLng? = null): SearchResult
+    /** [lang] (an `hl` code) asks the source for its answer in that language instead of the app's;
+     *  the tap resolve uses it for a label written in another script. Null = the app's. */
+    suspend fun search(query: String, near: LatLng? = null, spanMeters: Double? = null, rankFrom: LatLng? = null, lang: String? = null): SearchResult
 
     /** The NEXT [pages] result pages of the same query, starting at page [fromPage] (zero-based;
      *  [search] itself covers pages 0..2). Empty when the source cannot page. */
     suspend fun searchMore(query: String, near: LatLng? = null, spanMeters: Double? = null, rankFrom: LatLng? = null, fromPage: Int, pages: Int = 3): List<Place> = emptyList()
+
+    /** One page of results for [query] around [near], no pagination and no nearby pass: what a
+     *  tapped map label needs to find its own listing, which is always among the nearest few.
+     *  The full [search] is the fallback for a provider without a cheaper path. */
+    suspend fun searchOnce(query: String, near: LatLng, lang: String? = null): List<Place> =
+        search(query, near, lang = lang).places
+
+    /** Search-as-you-type: the provider's own autocomplete for a partial [query], biased to
+     *  [near] over a window [spanMeters] wide. Places carry a location; [SuggestResult.queries]
+     *  are bare query rows to run as a search. Empty when the provider has no such thing. */
+    suspend fun suggest(query: String, near: LatLng? = null, spanMeters: Double? = null, lang: String? = null): SuggestResult = SuggestResult(emptyList(), emptyList())
 
     /** Prominent places in the viewport, for the ambient map-POI overlay. [spanMeters] is the
      *  viewport's height — a SMALLER span (zoomed in) returns DENSER, more local results than the

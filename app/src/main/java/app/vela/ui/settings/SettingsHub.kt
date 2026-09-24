@@ -331,6 +331,7 @@ private val SEARCH_INDEX: List<Pair<Int, SettingsSection>> = listOf(
     R.string.settings_speed_cams to SettingsSection.NAVIGATION,
     R.string.settings_speed_cam_warn to SettingsSection.NAVIGATION,
     R.string.settings_flock_route_alert to SettingsSection.NAVIGATION,
+    R.string.settings_flock_detour to SettingsSection.NAVIGATION,
     R.string.settings_flock_nav_card to SettingsSection.NAVIGATION,
     R.string.settings_flock_nav_voice to SettingsSection.NAVIGATION,
     R.string.settings_buildings_3d to SettingsSection.MAP,
@@ -369,6 +370,7 @@ private val SEARCH_INDEX: List<Pair<Int, SettingsSection>> = listOf(
     R.string.settings_parking_history to SettingsSection.SAVED_PLACES,
     // Voice
     R.string.settings_spoken_directions to SettingsSection.VOICE,
+    R.string.settings_spoken_road_names to SettingsSection.VOICE,
     R.string.settings_voice_library to SettingsSection.VOICE,
     R.string.settings_voice_advanced to SettingsSection.VOICE,
     R.string.settings_voice_test to SettingsSection.VOICE,
@@ -380,12 +382,16 @@ private val SEARCH_INDEX: List<Pair<Int, SettingsSection>> = listOf(
     // Offline
     R.string.settings_offline to SettingsSection.OFFLINE,
     R.string.settings_offline_places_with_downloads to SettingsSection.OFFLINE,
+    R.string.settings_clear_map_cache to SettingsSection.OFFLINE,
+    R.string.settings_delete_offline_all to SettingsSection.OFFLINE,
     // Saved places
     R.string.settings_export to SettingsSection.SAVED_PLACES,
     R.string.settings_import to SettingsSection.SAVED_PLACES,
     R.string.mapscreen_section_lists to SettingsSection.SAVED_PLACES,
     // Privacy
     R.string.settings_privacy_button to SettingsSection.PRIVACY,
+    R.string.settings_google_free to SettingsSection.PRIVACY,
+    R.string.settings_google_free_links to SettingsSection.PRIVACY,
     R.string.settings_live_rechecks to SettingsSection.NAVIGATION,
     R.string.settings_clear_history to SettingsSection.PRIVACY,
     // Diagnostics
