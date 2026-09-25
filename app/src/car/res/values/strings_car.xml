@@ -175,4 +175,40 @@
         <item>Most played</item>
     </string-array>
     <string name="car_source_conflict">Another source started but does not support pause. Check the source application.</string>
+    <!-- Dock Clock -->
+    <string name="car_dock_clock_24h" translatable="false">HH\nmm</string>
+    <string name="car_dock_clock_12h" translatable="false">h\nmm</string>
+
+    <!-- Modular Backup & Restore (OsmAnd style) -->
+    <string name="car_backup_select_title">Select Items to Backup</string>
+    <string name="car_backup_restore_title">Select Items to Restore</string>
+    <string name="car_backup_select_all">Select All</string>
+    <string name="car_backup_deselect_all">Deselect All</string>
+    <string name="car_backup_export_btn">Create Backup</string>
+    <string name="car_backup_restore_btn">Restore Selected</string>
+    <string name="car_backup_no_items_selected">Please select at least one item.</string>
+    <string name="car_backup_cat_routes">Recorded Trips &amp; Routes (GPX)</string>
+    <string name="car_backup_cat_routes_desc">GPS driving tracks, recorded routes and replay files</string>
+    <string name="car_backup_cat_routing">Offline Routing Graphs (OBF)</string>
+    <string name="car_backup_cat_routing_desc">Offline turn-by-turn navigation routing data</string>
+    <string name="car_backup_cat_maps">Offline Vector Maps (Basemap)</string>
+    <string name="car_backup_cat_maps_desc">Downloaded PMTiles basemap and overlay layers</string>
+    <string name="car_backup_cat_places">Saved Places &amp; Favorites</string>
+    <string name="car_backup_cat_places_desc">Bookmarks, Home/Work shortcuts and place lists</string>
+    <string name="car_backup_cat_nav_settings">Navigation &amp; Avoidance Settings</string>
+    <string name="car_backup_cat_nav_settings_desc">Toll/highway avoidances, recent searches and parking history</string>
+    <string name="car_backup_cat_launcher">Car Launcher Layout &amp; Appearance</string>
+    <string name="car_backup_cat_launcher_desc">Dock position, panel dimensions, theme and startup modes</string>
+    <string name="car_backup_cat_dock">Dock App Shortcuts</string>
+    <string name="car_backup_cat_dock_desc">Shortcuts configured on the car dock bar</string>
+    <string name="car_backup_cat_widgets">Desktop Widgets</string>
+    <string name="car_backup_cat_widgets_desc">Clock, speed and media widgets on the workspace</string>
+    <string name="car_backup_cat_music">Music Playlists &amp; Focus</string>
+    <string name="car_backup_cat_music_desc">Custom playlists, favorite tracks and audio focus rules</string>
+    <string name="car_backup_cat_tools">System Tools &amp; Preferences</string>
+    <string name="car_backup_cat_tools_desc">Startup app, desktop text scaling and antenna settings</string>
+    <string name="car_backup_count_files">%1$d files (%2$s)</string>
+    <string name="car_backup_count_items">%1$d items</string>
+    <string name="car_backup_success">Backup completed successfully.</string>
+    <string name="car_backup_restore_success">Selected items restored successfully.</string>
 </resources>

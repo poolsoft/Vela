@@ -71,8 +71,11 @@ class CarAppDockHost(
         rootView.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ -> adaptToSize(r - l, b - t) }
 
         // OsmAnd Orijinal Kurali: Dikey dock (isVertical == true) iken mini muzik bari tamamen GONE
+        val dockClock = rootView.findViewById<android.widget.TextClock>(R.id.dock_clock)
         if (isVertical) {
             miniMusicContainer?.visibility = View.GONE
+            dockClock?.format24Hour = "HH\nmm"
+            dockClock?.format12Hour = "h\nmm"
         } else {
             miniMusicContainer?.visibility = View.VISIBLE
         }

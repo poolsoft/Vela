@@ -27,9 +27,42 @@ import java.util.Locale
 
 /** SAF folder transport: bounded-memory streaming; no network and no broad storage permission. */
 object PortableBackup {
+    enum class ModularCategory(
+        val id: String,
+        val titleRes: Int,
+        val descRes: Int,
+        val roots: Set<String>,
+        val isPersonalMeta: Boolean = false,
+        val isLauncherMeta: Boolean = false
+    ) {
+        MAPS("maps", R.string.car_backup_cat_maps, R.string.car_backup_cat_maps_desc, setOf("basemap", "glyphs", "sprites", "overlays")),
+        ROUTING("routing", R.string.car_backup_cat_routing, R.string.car_backup_cat_routing_desc, setOf("obf")),
+        ROUTES("routes", R.string.car_backup_cat_routes, R.string.car_backup_cat_routes_desc, setOf("trips")),
+        PLACES("places", R.string.car_backup_cat_places, R.string.car_backup_cat_places_desc, setOf("places", "poipacks"), isPersonalMeta = true),
+        LAUNCHER("launcher", R.string.car_backup_cat_launcher, R.string.car_backup_cat_launcher_desc, emptySet(), isLauncherMeta = true),
+        VOICE("voice", R.string.settings_voice, R.string.car_backup_cat_nav_settings_desc, setOf("piper", "asr"));
+
+        companion object {
+            fun fromId(id: String) = values().firstOrNull { it.id == id }
+            fun forEntryPath(path: String): ModularCategory? {
+                if (path == "launcher.json") return LAUNCHER
+                if (path == "personal.json") return PLACES
+                val root = path.substringBefore('/')
+                return values().firstOrNull { root in it.roots }
+            }
+        }
+    }
+
+    data class CategoryStat(
+        val category: ModularCategory,
+        val fileCount: Int,
+        val totalBytes: Long
+    )
+
     data class State(
         val busy: Boolean = false, val message: Int = 0, val detail: String = "",
         val done: Long = 0, val total: Long = 0, val review: Boolean = false, val ready: Boolean = false,
+        val availableRestoreCategories: List<CategoryStat> = emptyList()
     )
     private val mutable = MutableStateFlow(State())
     val state = mutable.asStateFlow()
@@ -70,35 +103,86 @@ object PortableBackup {
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastProgress > 150 || done == total) {
             lastProgress = now
-            mutable.value = State(true, R.string.backup_working, path, done, total)
+            mutable.value = mutable.value.copy(busy = true, message = R.string.backup_working, detail = path, done = done, total = total)
         }
     }
+
+    fun scanDeviceCategories(context: Context): List<CategoryStat> {
+        val app = context.applicationContext
+        return ModularCategory.values().map { cat ->
+            var count = 0
+            var bytes = 0L
+            for (root in cat.roots) {
+                val dir = File(app.filesDir, root)
+                if (dir.exists() && dir.isDirectory) {
+                    dir.walkTopDown().filter { it.isFile }.forEach { file ->
+                        val relative = "$root/" + file.relativeTo(dir).invariantSeparatorsPath
+                        if (BackupFiles.allowed(relative)) {
+                            count++
+                            bytes += file.length()
+                        }
+                    }
+                }
+            }
+            if (cat.isPersonalMeta) {
+                val text = runCatching { BackupPreferences.export(app) }.getOrNull()
+                if (text != null) {
+                    count++
+                    bytes += text.toByteArray(Charsets.UTF_8).size
+                }
+            }
+            if (cat.isLauncherMeta) {
+                val text = runCatching { LauncherBackupPort.export(app) }.getOrNull()
+                if (text != null) {
+                    count++
+                    bytes += text.toByteArray(Charsets.UTF_8).size
+                }
+            }
+            CategoryStat(cat, count, bytes)
+        }
+    }
+
     private data class Source(val path: String, val file: File?, val data: ByteArray?, val size: Long, val modified: Long)
-    private fun inventory(context: Context): List<Source> = BackupFiles.roots.sorted().flatMap { root ->
+    private fun inventory(context: Context, rootsToScan: Set<String> = BackupFiles.roots): List<Source> = rootsToScan.sorted().flatMap { root ->
         val dir = File(context.filesDir, root)
         if (!dir.exists()) emptyList() else {
-            require(dir.isDirectory && dir.canonicalFile == dir.absoluteFile)
+            val baseDir = context.filesDir.canonicalFile
+            require(dir.isDirectory && dir.canonicalFile.startsWith(baseDir))
             dir.walkTopDown().filter { it.isFile }.mapNotNull { file ->
                 val relative = "$root/" + file.relativeTo(dir).invariantSeparatorsPath
                 if (!BackupFiles.allowed(relative)) null else {
-                    require(file.canonicalFile == file.absoluteFile)
+                    require(file.canonicalFile.startsWith(dir.canonicalFile))
                     Source(relative, file, null, file.length(), file.lastModified())
                 }
             }.toList()
         }
     }.sortedBy { it.path }
-    fun export(context: Context, parentTree: Uri) = run(context) { app ->
+
+    fun export(
+        context: Context,
+        parentTree: Uri,
+        selectedCategories: Set<ModularCategory> = ModularCategory.values().toSet()
+    ) = run(context) { app ->
         val revision = DownloadService.workRevision()
-        val original = inventory(app)
-        val dirs = BackupFiles.roots.filter { File(app.filesDir, it).isDirectory }.sorted()
-        val personal = BackupPreferences.export(app).also { BackupPreferences.validate(it) }
-        val launcher = LauncherBackupPort.export(app).also { LauncherBackupPort.validate(it) }
-        val meta = mapOf("personal.json" to personal, "launcher.json" to launcher).map { (path, text) ->
-            val bytes = text.toByteArray(Charsets.UTF_8)
-            Source(path, null, bytes, bytes.size.toLong(), 0)
+        val targetRoots = selectedCategories.flatMap { it.roots }.toSet()
+        val original = inventory(app, targetRoots)
+        val dirs = targetRoots.filter { File(app.filesDir, it).isDirectory }.sorted()
+        
+        val meta = mutableListOf<Source>()
+        var personalText: String? = null
+        var launcherText: String? = null
+        if (ModularCategory.PLACES in selectedCategories) {
+            personalText = BackupPreferences.export(app).also { BackupPreferences.validate(it) }
+            val bytes = personalText.toByteArray(Charsets.UTF_8)
+            meta += Source("personal.json", null, bytes, bytes.size.toLong(), 0)
+        }
+        if (ModularCategory.LAUNCHER in selectedCategories) {
+            launcherText = LauncherBackupPort.export(app).also { LauncherBackupPort.validate(it) }
+            val bytes = launcherText.toByteArray(Charsets.UTF_8)
+            meta += Source("launcher.json", null, bytes, bytes.size.toLong(), 0)
         }
         val sources = original + meta
-        require(sources.size <= 100000)
+        require(sources.isNotEmpty() && sources.size <= 100000)
         val total = sources.sumOf { it.size }
         val name = "Vela-backup-" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(java.time.ZoneOffset.UTC).format(Instant.now())
         val folder = BackupFiles.create(app, BackupFiles.tree(parentTree), name, directory = true)
@@ -138,13 +222,14 @@ object PortableBackup {
                 entries += BackupFiles.Entry(source.path, source.size, hex(hash.digest()), parts)
             }
             currentCoroutineContext().ensureActive()
-            if (DownloadService.workRevision() != revision || inventory(app) != original ||
-                BackupPreferences.export(app) != personal || LauncherBackupPort.export(app) != launcher) throw Failure(R.string.backup_source_changed)
+            if (DownloadService.workRevision() != revision || inventory(app, targetRoots) != original) throw Failure(R.string.backup_source_changed)
+            if (personalText != null && BackupPreferences.export(app) != personalText) throw Failure(R.string.backup_source_changed)
+            if (launcherText != null && LauncherBackupPort.export(app) != launcherText) throw Failure(R.string.backup_source_changed)
+
             val manifest = BackupFiles.Manifest(dirs, entries, Instant.now().toString(), BuildConfig.VERSION_NAME)
             val json = manifest.json().also { BackupFiles.parse(it) }
             val uri = BackupFiles.create(app, folder, BackupFiles.MANIFEST)
             app.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(json.toByteArray(Charsets.UTF_8)) }
-            // Completion marker is last. Verify the provider actually persisted its contents.
             check(app.contentResolver.openInputStream(uri)!!.use { BackupFiles.readBounded(it) } == json)
             mutable.value = State(message = R.string.backup_exported, detail = name, done = total, total = total)
         } catch (e: Exception) {
@@ -152,6 +237,7 @@ object PortableBackup {
             throw e
         }
     }
+
     fun inspect(context: Context, tree: Uri) = run(context) { app ->
         reviewed = null
         val folder = BackupFiles.tree(tree)
@@ -161,25 +247,30 @@ object PortableBackup {
         require(manifest.entries.flatMap { it.parts }.all { it in docs })
         checkStorage(app, manifest.bytes)
         reviewed = folder to manifest
-        val counts = manifest.entries.groupingBy { it.path.substringBefore('/') }.eachCount()
-        mutable.value = State(message = R.string.backup_review, detail = buildString {
+
+        val categoryStats = manifest.entries.groupBy { ModularCategory.forEntryPath(it.path) }
+            .filterKeys { it != null }
+            .map { (cat, entries) ->
+                CategoryStat(cat!!, entries.size, entries.sumOf { it.size })
+            }.sortedBy { it.category.ordinal }
+
+        val detailStr = buildString {
             append(manifest.created).append("\nVela ").append(manifest.version)
             append("\n").append(app.getString(R.string.backup_summary, manifest.entries.size, manifest.bytes / (1024 * 1024)))
-            append("\n").append(counts.entries.joinToString { (root, count) ->
-                val label = when (root) {
-                    "basemap", "glyphs", "sprites", "overlays" -> app.getString(R.string.settings_map)
-                    "places", "poipacks" -> app.getString(R.string.settings_places)
-                    "obf" -> app.getString(R.string.settings_navigation)
-                    "trips" -> app.getString(R.string.settings_save_trips)
-                    "piper", "asr" -> app.getString(R.string.settings_voice)
-                    "launcher.json" -> app.getString(CarIntegration.settingsTitle)
-                    else -> app.getString(R.string.settings_saved_places)
-                }
-                "$label: $count"
-            })
-        }, total = manifest.bytes, review = true)
+        }
+        mutable.value = State(
+            message = R.string.backup_review,
+            detail = detailStr,
+            total = manifest.bytes,
+            review = true,
+            availableRestoreCategories = categoryStats
+        )
     }
-    fun restore(context: Context) {
+
+    fun restore(
+        context: Context,
+        selectedCategories: Set<ModularCategory> = ModularCategory.values().toSet()
+    ) {
         val (folder, manifest) = reviewed ?: return
         reviewed = null
         run(context) { app ->
@@ -187,12 +278,21 @@ object PortableBackup {
             try {
                 BackupRestore.discard(app)
                 val stage = File(work, "staged").apply { check(mkdirs()) }
-                checkStorage(app, manifest.bytes)
-                manifest.roots.forEach { check(File(stage, "files/$it").mkdirs()) }
+
+                val targetEntries = manifest.entries.filter { entry ->
+                    val cat = ModularCategory.forEntryPath(entry.path)
+                    cat != null && cat in selectedCategories
+                }
+                val totalBytes = targetEntries.sumOf { it.size }
+                checkStorage(app, totalBytes)
+
+                val targetRoots = selectedCategories.flatMap { it.roots }.filter { it in manifest.roots }
+                targetRoots.forEach { check(File(stage, "files/$it").mkdirs()) }
+
                 val docs = BackupFiles.children(app, folder)
                 val buffer = ByteArray(256 * 1024)
                 var done = 0L
-                for (entry in manifest.entries) {
+                for (entry in targetEntries) {
                     currentCoroutineContext().ensureActive()
                     val path = if (entry.path in BackupFiles.metadata) entry.path else "files/${entry.path}"
                     val out = BackupFiles.local(stage, path)
@@ -211,7 +311,7 @@ object PortableBackup {
                                     if (n <= 0) throw Failure(R.string.backup_invalid)
                                     hash.update(buffer, 0, n); output.write(buffer, 0, n)
                                     left -= n; done += n
-                                    progress(entry.path, done, manifest.bytes)
+                                    progress(entry.path, done, totalBytes)
                                 }
                                 if (input.read() != -1) throw Failure(R.string.backup_invalid)
                                 remaining -= chunk
@@ -221,11 +321,15 @@ object PortableBackup {
                     }
                     if (hex(hash.digest()) != entry.sha256) throw Failure(R.string.backup_invalid)
                 }
-                BackupPreferences.validate(File(stage, "personal.json").readText())
-                LauncherBackupPort.validate(File(stage, "launcher.json").readText())
+
+                val personalFile = File(stage, "personal.json")
+                if (personalFile.exists()) BackupPreferences.validate(personalFile.readText())
+                val launcherFile = File(stage, "launcher.json")
+                if (launcherFile.exists()) LauncherBackupPort.validate(launcherFile.readText())
+
                 currentCoroutineContext().ensureActive()
-                // Only verified, complete staging is eligible for activation on the next cold start.
-                BackupRestore.atomic(File(work, "ready.json"), manifest.json())
+                val partialManifest = BackupFiles.Manifest(targetRoots, targetEntries, manifest.created, manifest.version)
+                BackupRestore.atomic(File(work, "ready.json"), partialManifest.json())
                 File(app.filesDir, "portable-restore-result").delete()
                 mutable.value = State(message = R.string.backup_ready, ready = true, done = done, total = done)
             } catch (e: Exception) {

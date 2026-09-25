@@ -93,15 +93,17 @@ internal object BackupPreferences {
 
     /** Generate complete destination preference XML before any live changes, at cold start. */
     fun stage(context: Context, stage: File): List<String> {
-        val personal = validate(File(stage, "personal.json").readText())
-        val launcher = LauncherBackupPort.validate(File(stage, "launcher.json").readText())
+        val personalFile = File(stage, "personal.json")
+        val launcherFile = File(stage, "launcher.json")
+        val personal = if (personalFile.exists()) validate(personalFile.readText()) else null
+        val launcher = if (launcherFile.exists()) LauncherBackupPort.validate(launcherFile.readText()) else null
         val paths = mutableListOf<String>()
-        names.filter { it in personalSchema || it == SETTINGS || launcher.has(it) }.forEach { name ->
+        names.filter { (personal != null && (it in personalSchema || it == SETTINGS)) || (launcher != null && launcher.has(it)) }.forEach { name ->
             // Do not populate Android's process-wide SharedPreferences cache before swapping XML.
             val live = File(context.applicationInfo.dataDir, "shared_prefs/$name.xml")
             val bak = File(live.path + ".bak")
             val current = readXml(if (bak.exists()) bak else live)
-            val values = personal.optJSONObject(name) ?: launcher.getJSONObject(name)
+            val values = personal?.optJSONObject(name) ?: launcher?.optJSONObject(name) ?: return@forEach
             val oldWidgets = current["widget_config"] as? String
             val keys = personalSchema[name] ?: if (name == SETTINGS) current.keys.filter { settingType(it) != null }.toSet()
                 else LauncherBackupPort.schema.getValue(name).keys

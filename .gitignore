@@ -42,3 +42,6 @@ ghprobe/src/androidTest/assets/seam-graph.zip
 # Vendored native AAR (sherpa-onnx neural TTS runtime) — large binary, fetched out-of-band
 app/libs/*.aar
 core/libs/*.jar
+
+# Local tool scratch
+.freebuff/

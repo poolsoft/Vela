@@ -169,4 +169,40 @@
         <item>En çok dinlenenler</item>
     </string-array>
     <string name="car_source_conflict">Başka kaynak başladı ancak duraklatma desteklemiyor. Kaynak uygulamasını kontrol edin.</string>
+    <!-- Dock Saati -->
+    <string name="car_dock_clock_24h" translatable="false">HH\nmm</string>
+    <string name="car_dock_clock_12h" translatable="false">h\nmm</string>
+
+    <!-- Modüler Yedekleme ve Geri Yükleme (OsmAnd Tarzı) -->
+    <string name="car_backup_select_title">Yedeklenecek Öğeleri Seçin</string>
+    <string name="car_backup_restore_title">Geri Yüklenecek Öğeleri Seçin</string>
+    <string name="car_backup_select_all">Tümünü Seç</string>
+    <string name="car_backup_deselect_all">Seçimi Kaldır</string>
+    <string name="car_backup_export_btn">Yedek Al</string>
+    <string name="car_backup_restore_btn">Seçilenleri Geri Yükle</string>
+    <string name="car_backup_no_items_selected">Lütfen en az bir öğe seçin.</string>
+    <string name="car_backup_cat_routes">Kaydedilen Rotalar ve Geziler (GPX)</string>
+    <string name="car_backup_cat_routes_desc">GPS sürüş izleri, kayıtlı rotalar ve tekrar oynatma dosyaları</string>
+    <string name="car_backup_cat_routing">Çevrimdışı Rota Motoru (OBF)</string>
+    <string name="car_backup_cat_routing_desc">Çevrimdışı adım adım navigasyon rota hesaplama verileri</string>
+    <string name="car_backup_cat_maps">Çevrimdışı Vektör Haritalar (Basemap)</string>
+    <string name="car_backup_cat_maps_desc">İndirilen PMTiles altlık haritaları ve katmanlar</string>
+    <string name="car_backup_cat_places">Kayıtlı Konumlar ve Favoriler</string>
+    <string name="car_backup_cat_places_desc">Yer imleri, Ev/İş kısayolları ve özel konum listeleri</string>
+    <string name="car_backup_cat_nav_settings">Navigasyon ve Kaçınma Ayarları</string>
+    <string name="car_backup_cat_nav_settings_desc">Ücretli yol/otoyol kaçınmaları, son aramalar ve park yeri geçmişi</string>
+    <string name="car_backup_cat_launcher">Car Launcher Düzeni ve Görünümü</string>
+    <string name="car_backup_cat_launcher_desc">Dock konumu, panel boyutları, tema ve açılış modları</string>
+    <string name="car_backup_cat_dock">Dock Uygulama Kısayolları</string>
+    <string name="car_backup_cat_dock_desc">Araç dock çubuğuna eklenmiş hızlı başlatıcılar</string>
+    <string name="car_backup_cat_widgets">Masaüstü Widget Yapılandırması</string>
+    <string name="car_backup_cat_widgets_desc">Masaüstündeki saat, hız ve medya widget yerleşimleri</string>
+    <string name="car_backup_cat_music">Müzik Çalma Listeleri ve Odak</string>
+    <string name="car_backup_cat_music_desc">Oluşturulan çalma listeleri, favori parçalar ve ses takip kuralları</string>
+    <string name="car_backup_cat_tools">Sistem Araçları ve Başlatma</string>
+    <string name="car_backup_cat_tools_desc">Açılış uygulaması, masaüstü yazı boyutu ve anten ayarları</string>
+    <string name="car_backup_count_files">%1$d dosya (%2$s)</string>
+    <string name="car_backup_count_items">%1$d öğe</string>
+    <string name="car_backup_success">Yedekleme başarıyla tamamlandı.</string>
+    <string name="car_backup_restore_success">Seçilen öğeler başarıyla geri yüklendi.</string>
 </resources>

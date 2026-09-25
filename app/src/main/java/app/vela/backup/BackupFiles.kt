@@ -57,7 +57,7 @@ internal object BackupFiles {
             require(pieces.all { it.matches(Regex("part-[0-9]{7}\\.bin")) && parts.add(it) })
             Entry(path, size, hash, pieces)
         }
-        require("personal.json" in paths && "launcher.json" in paths)
+        require(paths.isNotEmpty())
         // Reject a file used as another file's directory, independent of archive order.
         require(paths.none { path -> path.split('/').dropLast(1).runningReduce { a, b -> "$a/$b" }.any { it in paths } })
         val result = Manifest(dirs, entries, o.getString("created"), o.getString("appVersion"))
