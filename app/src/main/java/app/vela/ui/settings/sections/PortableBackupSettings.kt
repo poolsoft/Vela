@@ -7,6 +7,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -16,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,14 +87,16 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
     // DIALOG 1: OsmAnd Tarzi Secimli Disa Aktarma (Export)
     // ==========================================
     if (showExportDialog) {
+        val allExportSelected = exportCategories.isNotEmpty() && selectedExportCategories.size == exportCategories.size
         Dialog(
             onDismissRequest = { showExportDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
                 modifier = Modifier
-                    .width(680.dp)
-                    .fillMaxHeight(0.94f)
+                    .widthIn(max = 640.dp)
+                    .fillMaxWidth(0.92f)
+                    .fillMaxHeight(0.92f)
                     .padding(8.dp),
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -100,7 +105,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -111,32 +116,34 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                             text = stringResource(R.string.car_backup_select_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(onClick = {
-                                selectedExportCategories = exportCategories.map { it.category }.toSet()
-                            }) {
-                                Text(stringResource(R.string.car_backup_select_all), fontSize = 12.sp)
-                            }
-                            Spacer(Modifier.width(4.dp))
-                            TextButton(onClick = {
-                                selectedExportCategories = emptySet()
-                            }) {
-                                Text(stringResource(R.string.car_backup_deselect_all), fontSize = 12.sp)
-                            }
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(
+                            onClick = {
+                                selectedExportCategories = if (allExportSelected) emptySet() else exportCategories.map { it.category }.toSet()
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = stringResource(if (allExportSelected) R.string.car_backup_deselect_all else R.string.car_backup_select_all),
+                                fontSize = 12.sp,
+                                maxLines = 1
+                            )
                         }
                     }
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                    Column(
+                    LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
-                            .verticalScroll(rememberScrollState())
                     ) {
-                        exportCategories.forEach { stat ->
+                        items(exportCategories, key = { it.category.name }) { stat ->
                             val isChecked = stat.category in selectedExportCategories
                             val sizeStr = if (stat.fileCount > 0) {
                                 "${stat.fileCount} dosya (${LauncherBackup.formatFileSize(stat.totalBytes)})"
@@ -172,21 +179,26 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                                             text = stringResource(stat.category.titleRes),
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         if (sizeStr.isNotBlank()) {
                                             Spacer(Modifier.width(8.dp))
                                             Text(
                                                 text = "($sizeStr)",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.primary
+                                                color = MaterialTheme.colorScheme.primary,
+                                                maxLines = 1
                                             )
                                         }
                                     }
                                     Text(
                                         text = stringResource(stat.category.descRes),
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -196,7 +208,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -226,14 +238,16 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
     // DIALOG 2: OsmAnd Tarzi Secimli Geri Yukleme (Restore)
     // ==========================================
     if (status.review) {
+        val allRestoreSelected = status.availableRestoreCategories.isNotEmpty() && selectedRestoreCategories.size == status.availableRestoreCategories.size
         Dialog(
             onDismissRequest = PortableBackup::dismissReview,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
                 modifier = Modifier
-                    .width(680.dp)
-                    .fillMaxHeight(0.94f)
+                    .widthIn(max = 640.dp)
+                    .fillMaxWidth(0.92f)
+                    .fillMaxHeight(0.92f)
                     .padding(8.dp),
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -242,7 +256,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -254,38 +268,41 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                                 text = stringResource(R.string.car_backup_restore_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = stringResource(R.string.backup_replace_warning),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error
+                                color = MaterialTheme.colorScheme.error,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(onClick = {
-                                selectedRestoreCategories = status.availableRestoreCategories.map { it.category }.toSet()
-                            }) {
-                                Text(stringResource(R.string.car_backup_select_all), fontSize = 12.sp)
-                            }
-                            Spacer(Modifier.width(4.dp))
-                            TextButton(onClick = {
-                                selectedRestoreCategories = emptySet()
-                            }) {
-                                Text(stringResource(R.string.car_backup_deselect_all), fontSize = 12.sp)
-                            }
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(
+                            onClick = {
+                                selectedRestoreCategories = if (allRestoreSelected) emptySet() else status.availableRestoreCategories.map { it.category }.toSet()
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = stringResource(if (allRestoreSelected) R.string.car_backup_deselect_all else R.string.car_backup_select_all),
+                                fontSize = 12.sp,
+                                maxLines = 1
+                            )
                         }
                     }
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                    Column(
+                    LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
-                            .verticalScroll(rememberScrollState())
                     ) {
-                        status.availableRestoreCategories.forEach { stat ->
+                        items(status.availableRestoreCategories, key = { it.category.name }) { stat ->
                             val isChecked = stat.category in selectedRestoreCategories
                             val sizeStr = "${stat.fileCount} dosya (${LauncherBackup.formatFileSize(stat.totalBytes)})"
 
@@ -319,19 +336,24 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                                             text = stringResource(stat.category.titleRes),
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         Spacer(Modifier.width(8.dp))
                                         Text(
                                             text = "($sizeStr)",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 1
                                         )
                                     }
                                     Text(
                                         text = stringResource(stat.category.descRes),
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -341,7 +363,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
