@@ -60,6 +60,8 @@ object OverpassPois {
         val query = "[out:json][timeout:25];" +
             "(nwr[amenity][name]($bbox);node[shop][name]($bbox);nwr[tourism][name]($bbox);" +
             "node[\"public_transport\"][name]($bbox);nwr[leisure][name]($bbox);" +
+            "nwr[\"place\"~\"^(city|town|suburb|quarter|neighbourhood|village|hamlet)$\"][name]($bbox);" +
+            "nwr[\"landuse\"=\"residential\"][name]($bbox);" +
             "nwr[boundary=national_park][name]($bbox););out center $limit;"
         OverpassEndpoints.run(http, query) { body ->
             json.decodeFromStream<OvResp>(body.byteStream()).elements.mapNotNull { toPlace(it) }
@@ -159,7 +161,7 @@ object OverpassPois {
         val lat = el.lat ?: el.center?.lat ?: return null
         val lng = el.lon ?: el.center?.lon ?: return null
         fun tag(k: String) = el.tags[k]
-        val category = tag("amenity") ?: tag("shop") ?: tag("tourism") ?: tag("leisure") ?: tag("public_transport") ?: tag("boundary")
+        val category = tag("amenity") ?: tag("shop") ?: tag("tourism") ?: tag("leisure") ?: tag("public_transport") ?: tag("place") ?: tag("landuse") ?: tag("boundary")
         // Keep the useful OSM detail tags too, so offline POIs aren't just a name on a
         // pin — address (addr:*), phone, website and opening_hours where mapped.
         val street = listOfNotNull(tag("addr:housenumber"), tag("addr:street")).joinToString(" ").ifBlank { null }

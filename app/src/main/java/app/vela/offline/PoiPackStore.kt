@@ -45,11 +45,24 @@ class PoiPackStore @Inject constructor(
     /** Register every installed pack with the core stores. Call at startup and after install/delete. */
     fun registerPacks() = OfflinePacks.reload(installedPaths())
 
-    /** Fetch the pack catalog. Same base shape as the routing manifest plus the update fields
-     *  (rev / row counts / optional delta), so rows reuse [RoutingRegion]. */
-    suspend fun manifest(manifestUrl: String): List<RoutingRegion> = withContext(Dispatchers.IO) {
-        runCatching {
-            val json = http.newCall(Request.Builder().url(manifestUrl).build()).execute()
+    /** Fetch the pack catalog. Supports multi-source manifests (Poolsoft fork, Upstream, Custom). */
+    suspend fun manifest(manifestUrl: String = app.vela.BuildConfig.POI_PACK_MANIFEST_URL): List<RoutingRegion> = withContext(Dispatchers.IO) {
+        val urls = OfflineServerConfig.getPoiManifestUrls(context)
+        val allRegions = ArrayList<RoutingRegion>()
+        for (url in urls) {
+            val list = fetchManifestFromUrl(url)
+            allRegions.addAll(list)
+        }
+        // Fallback: If custom/hybrid returned empty, try the passed manifestUrl if not already queried
+        if (allRegions.isEmpty() && manifestUrl !in urls) {
+            allRegions.addAll(fetchManifestFromUrl(manifestUrl))
+        }
+        allRegions.distinctBy { it.id }
+    }
+
+    private fun fetchManifestFromUrl(url: String): List<RoutingRegion> {
+        return runCatching {
+            val json = http.newCall(Request.Builder().url(url).build()).execute()
                 .use { r -> if (!r.isSuccessful) error("HTTP ${r.code}"); r.body!!.string() }
             val arr = JSONObject(json).getJSONArray("regions")
             (0 until arr.length()).map { i ->

@@ -45,3 +45,7 @@ core/libs/*.jar
 
 # Local tool scratch
 .freebuff/
+
+# Test artifacts / screenshots
+*.png
+window_dump*.xml

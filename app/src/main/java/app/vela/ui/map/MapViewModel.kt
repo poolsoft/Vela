@@ -2054,16 +2054,19 @@ class MapViewModel @Inject constructor(
                         if (i >= OFFLINE_ADDR_FILL || !p.address.isNullOrBlank()) p // fill only the first rows, the ones on screen
                         else p.copy(address = runCatching { addressStore.reverseGeocode(p.location) }.getOrNull() ?: p.address)
                     }
-                    // If it looks like a street address, geocode it too and lead with the address matches,
-                    // and with the BUSINESSES standing at that address ahead of the bare house point:
-                    // a typed address is usually a way of naming the shop on it.
-                    val addrs = if (app.vela.core.data.OfflineAddressStore.looksLikeAddress(q))
-                        runCatching { addressStore.geocode(q, near) }.getOrDefault(emptyList()) else emptyList()
-                    val atAddr = addrs.take(3).flatMap { a ->
-                        runCatching { offlinePoiStore.near(a.location, OFFLINE_AT_ADDR_M) }.getOrDefault(emptyList())
-                            .map { p -> if (p.address.isNullOrBlank()) p.copy(address = a.address ?: a.name) else p }
+                    val isAddress = app.vela.core.data.OfflineAddressStore.looksLikeAddress(q)
+                    val addrs = runCatching { addressStore.geocode(q, near) }.getOrDefault(emptyList())
+                    val atAddr = if (isAddress) {
+                        addrs.take(3).flatMap { a ->
+                            runCatching { offlinePoiStore.near(a.location, OFFLINE_AT_ADDR_M) }.getOrDefault(emptyList())
+                                .map { p -> if (p.address.isNullOrBlank()) p.copy(address = a.address ?: a.name) else p }
+                        }
+                    } else emptyList()
+                    val merged = when {
+                        isAddress && addrs.isNotEmpty() -> (atAddr + addrs + pois).distinctBy { it.id }
+                        pois.isNotEmpty() -> (pois + addrs).distinctBy { it.id }
+                        else -> addrs.distinctBy { it.id }
                     }
-                    val merged = (if (addrs.isNotEmpty()) atAddr + addrs + pois else pois + addrs).distinctBy { it.id }
                     val have = merged.isNotEmpty() ||
                         runCatching { offlinePoiStore.count() > 0 || addressStore.count() > 0 || addressStore.streetCount() > 0 }.getOrDefault(false)
                     merged to have
@@ -2221,9 +2224,9 @@ class MapViewModel @Inject constructor(
      *  surfaces instead of a blank screen. */
     private suspend fun offlineSearch(q: String, near: LatLng?): List<Place> = withContext(Dispatchers.IO) {
         val pois = runCatching { offlinePoiStore.search(q, near) }.getOrDefault(emptyList())
-        val addrs = if (app.vela.core.data.OfflineAddressStore.looksLikeAddress(q))
-            runCatching { addressStore.geocode(q, near) }.getOrDefault(emptyList()) else emptyList()
-        (if (addrs.isNotEmpty()) addrs + pois else pois + addrs).distinctBy { it.id }
+        val addrs = runCatching { addressStore.geocode(q, near) }.getOrDefault(emptyList())
+        val isAddr = app.vela.core.data.OfflineAddressStore.looksLikeAddress(q)
+        (if (isAddr && addrs.isNotEmpty()) addrs + pois else pois + addrs).distinctBy { it.id }
     }
 
     /** "Search along route": search [query] biased to the route's midpoint, then

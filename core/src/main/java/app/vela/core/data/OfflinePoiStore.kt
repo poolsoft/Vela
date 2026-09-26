@@ -101,10 +101,37 @@ class OfflinePoiStore @Inject constructor(
      */
     fun search(query: String, near: LatLng?, limit: Int = 30): List<Place> {
         val term = query.trim()
-        // name/category LIKE targets: the whole query, plus each word ≥3 chars (multi-word only).
-        val nameCat = LinkedHashSet<String>().apply { add(term) }
-        val words = term.split(Regex("\\s+")).filter { it.length >= 3 }
-        if (words.size > 1) nameCat.addAll(words)
+        // name/category LIKE targets: the whole query, plus each word ≥2 chars (multi-word only),
+        // with case variations and Turkish character folding for SQLite LIKE case-insensitivity.
+        val nameCat = LinkedHashSet<String>().apply {
+            add(term)
+            add(term.lowercase())
+            add(term.uppercase())
+            val trFold = term.replace('İ', 'i').replace('I', 'ı').replace('ı', 'i')
+                .replace('ş', 's').replace('Ş', 's')
+                .replace('ğ', 'g').replace('Ğ', 'g')
+                .replace('ü', 'u').replace('Ü', 'u')
+                .replace('ö', 'o').replace('Ö', 'o')
+                .replace('ç', 'c').replace('Ç', 'c')
+            add(trFold)
+            add(trFold.lowercase())
+            add(trFold.uppercase())
+        }
+        val words = term.split(Regex("\\s+")).filter { it.length >= 2 }
+        if (words.size > 1) {
+            words.forEach { w ->
+                nameCat.add(w)
+                nameCat.add(w.lowercase())
+                nameCat.add(w.uppercase())
+                val wFold = w.replace('İ', 'i').replace('I', 'ı').replace('ı', 'i')
+                    .replace('ş', 's').replace('Ş', 's')
+                    .replace('ğ', 'g').replace('Ğ', 'g')
+                    .replace('ü', 'u').replace('Ü', 'u')
+                    .replace('ö', 'o').replace('Ö', 'o')
+                    .replace('ç', 'c').replace('Ç', 'c')
+                nameCat.add(wFold)
+            }
+        }
         // category-tag targets: keywords for the whole query and for each word.
         val cats = LinkedHashSet<String>().apply { addAll(categoryKeywords(term)); words.forEach { addAll(categoryKeywords(it)) } }
 
@@ -228,6 +255,49 @@ class OfflinePoiStore @Inject constructor(
                 "theatre", "cinema", "arts center", "arts centre", "water park",
             ),
             "hardware" to listOf("hardware", "doityourself"),
+            // Turkish category words & chips
+            "restoran" to listOf("restaurant", "fast food", "cafe"),
+            "restoranlar" to listOf("restaurant", "fast food", "cafe"),
+            "yemek" to listOf("restaurant", "fast food"),
+            "lokanta" to listOf("restaurant"),
+            "kahve" to listOf("cafe", "coffee"),
+            "kafe" to listOf("cafe"),
+            "benzinlik" to listOf("fuel", "charging station"),
+            "benzin" to listOf("fuel"),
+            "akaryakit" to listOf("fuel"),
+            "akaryakıt" to listOf("fuel"),
+            "petrol" to listOf("fuel"),
+            "otopark" to listOf("parking"),
+            "park" to listOf("park"),
+            "market" to listOf("supermarket", "convenience", "grocery"),
+            "bakkal" to listOf("convenience", "supermarket"),
+            "manav" to listOf("greengrocer"),
+            "firin" to listOf("bakery"),
+            "fırın" to listOf("bakery"),
+            "pastane" to listOf("bakery", "pastry"),
+            "eczane" to listOf("pharmacy", "chemist"),
+            "hastane" to listOf("hospital", "clinic"),
+            "saglik ocagi" to listOf("clinic", "doctors"),
+            "sağlık ocağı" to listOf("clinic", "doctors"),
+            "doktor" to listOf("doctors", "clinic"),
+            "otel" to listOf("hotel", "motel", "guest house"),
+            "oteller" to listOf("hotel", "motel"),
+            "pansiyon" to listOf("guest house", "hostel"),
+            "cami" to listOf("place of worship"),
+            "mescit" to listOf("place of worship"),
+            "belediye" to listOf("townhall", "public building"),
+            "muhtarlik" to listOf("townhall", "public building"),
+            "muhtarlık" to listOf("townhall", "public building"),
+            "okul" to listOf("school"),
+            "universite" to listOf("university", "college"),
+            "üniversite" to listOf("university", "college"),
+            "banka" to listOf("bank", "atm"),
+            "durak" to listOf("bus stop", "platform", "station"),
+            "otogar" to listOf("bus station"),
+            "istasyon" to listOf("station", "train station"),
+            "toki" to listOf("residential", "neighbourhood", "suburb"),
+            "site" to listOf("residential"),
+            "sitesi" to listOf("residential"),
         )
 
         /** Exact key first, then the word minus a trailing "s", so typed plurals ("cafes", "gyms")

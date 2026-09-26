@@ -188,8 +188,15 @@ class OfflineAddressStore @Inject constructor(
      */
     fun geocode(query: String, near: LatLng?, limit: Int = 20): List<Place> {
         val m = HOUSE_STREET.find(query.trim())
-        val houseNo = m?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
-        val streetPart = (m?.groupValues?.get(2) ?: query).trim()
+        var houseNo = m?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+        var streetPart = (m?.groupValues?.get(2) ?: query).trim()
+        // If the remaining streetPart is just a street type word (e.g. "Sokak", "Cadde", "Street"),
+        // then the leading number was actually part of the street name itself (e.g. "34057. Sokak", "42nd Street")!
+        val cleanStreetPart = streetPart.lowercase().trimEnd('.', ' ')
+        if (houseNo != null && STREET_TYPE_WORDS.contains(cleanStreetPart)) {
+            houseNo = null
+            streetPart = query.trim()
+        }
         val words = normalizeStreet(streetPart).split(' ').filter { it.length >= 2 }
         if (words.isEmpty()) return emptyList()
 
@@ -369,7 +376,8 @@ class OfflineAddressStore @Inject constructor(
             val q = query.trim().lowercase()
             if (q.isEmpty()) return false
             if (q.first().isDigit()) return true
-            return STREET_TYPE_WORDS.any { Regex("(^|\\s)$it(\\s|$)").containsMatchIn(q) }
+            val qNorm = normalizeStreet(q)
+            return STREET_TYPE_WORDS.any { Regex("(^|\\s)$it(\\s|$)").containsMatchIn(q) || Regex("(^|\\s)$it(\\s|$)").containsMatchIn(qNorm) }
         }
 
         private val HOUSE_STREET = Regex("^\\s*(\\d+[a-zA-Z]?)\\s+(.+)$")
@@ -382,19 +390,31 @@ class OfflineAddressStore @Inject constructor(
             "trl" to "trail", "way" to "way", "loop" to "loop",
             "n" to "north", "s" to "south", "e" to "east", "w" to "west",
             "ne" to "northeast", "nw" to "northwest", "se" to "southeast", "sw" to "southwest",
+            // Turkish road & street abbreviations
+            "sk" to "sokak", "sok" to "sokak", "cd" to "cadde", "cad" to "cadde",
+            "blv" to "bulvar", "bulv" to "bulvar", "mah" to "mahalle", "mh" to "mahalle",
         )
 
-        private val STREET_TYPE_WORDS = setOf(
+        val STREET_TYPE_WORDS = setOf(
             "street", "st", "avenue", "ave", "av", "boulevard", "blvd", "drive", "dr", "road", "rd",
             "lane", "ln", "court", "ct", "place", "pl", "square", "sq", "terrace", "ter", "circle", "cir",
             "highway", "hwy", "parkway", "pkwy", "trail", "trl", "way", "loop", "route",
+            // Turkish road/street/place indicators
+            "sokak", "sok", "sk", "cadde", "cad", "cd", "bulvar", "bulv", "blv", "yolu", "yol",
+            "mahalle", "mahallesi", "mah", "mh", "sitesi", "site", "toki", "mevki", "mevkii", "koy", "koyu",
         )
 
         /** Lowercase, strip punctuation, expand each abbreviation to its full form → space-joined words.
          *  Applied identically to the stored street and the query so they line up regardless of how the
          *  user abbreviated it. */
         fun normalizeStreet(s: String): String =
-            s.lowercase()
+            s.replace('İ', 'i').replace('I', 'ı').replace('ı', 'i')
+                .replace('ş', 's').replace('Ş', 's')
+                .replace('ğ', 'g').replace('Ğ', 'g')
+                .replace('ü', 'u').replace('Ü', 'u')
+                .replace('ö', 'o').replace('Ö', 'o')
+                .replace('ç', 'c').replace('Ç', 'c')
+                .lowercase()
                 .replace(Regex("[.,#]"), " ")
                 .split(Regex("\\s+"))
                 .filter { it.isNotBlank() }

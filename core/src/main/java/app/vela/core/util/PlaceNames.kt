@@ -315,7 +315,7 @@ object PlaceNames {
      * "スターバックス" (VARIANT), "星巴克咖啡" is "星巴克", "セブン-イレブン渋谷駅前店" contains
      * "セブン-イレブン" (OVERLAP, the extra is a branch name).
      */
-    private val CJK = Regex("[\\p{IsHan}\\p{IsHiragana}\\p{IsKatakana}\\p{IsHangul}\\p{IsThai}]")
+    private val CJK = Regex("[\\u4E00-\\u9FFF\\u3040-\\u309F\\u30A0-\\u30FF\\uAC00-\\uD7AF\\u0E00-\\u0E7F]")
     private val CJK_SUFFIXES = listOf(
         // ja
         "駅前店", "本店", "支店", "分店", "店舗", "店", "薬局", "銀行", "支行", "病院", "医院", "診療所", "歯科", "学校", "公園", "駅", "駐車場",

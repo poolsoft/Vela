@@ -161,6 +161,83 @@ internal fun OfflineSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onClose
             }
         }
 
+        SubHead("Çevrimdışı Sunucu Kaynağı")
+        var serverMode by remember { mutableStateOf(app.vela.offline.OfflineServerConfig.getServerMode(context)) }
+        var customUrl by remember { mutableStateOf(app.vela.offline.OfflineServerConfig.getCustomPoiUrl(context)) }
+        var editingUrl by remember { mutableStateOf(false) }
+
+        SettingsGroup {
+            SelectableRow(
+                label = "Hibrit (Önerilen)",
+                selected = serverMode == app.vela.offline.OfflineServerConfig.MODE_HYBRID,
+                onClick = {
+                    serverMode = app.vela.offline.OfflineServerConfig.MODE_HYBRID
+                    app.vela.offline.OfflineServerConfig.setServerMode(context, serverMode)
+                    vm.refreshRoutingRegions()
+                },
+            )
+            Hint("Türkiye paketleri Poolsoft sunucusundan, diğer ülkeler resmi Vela sunucusundan çekilir.")
+            GroupDivider()
+            SelectableRow(
+                label = "Poolsoft Fork (Türkiye Odaklı)",
+                selected = serverMode == app.vela.offline.OfflineServerConfig.MODE_POOLSOFT,
+                onClick = {
+                    serverMode = app.vela.offline.OfflineServerConfig.MODE_POOLSOFT
+                    app.vela.offline.OfflineServerConfig.setServerMode(context, serverMode)
+                    vm.refreshRoutingRegions()
+                },
+            )
+            Hint("Sadece Türkiye için optimize edilmiş Poolsoft kaynaklarını kullanır.")
+            GroupDivider()
+            SelectableRow(
+                label = "Resmi Vela Sunucusu",
+                selected = serverMode == app.vela.offline.OfflineServerConfig.MODE_UPSTREAM,
+                onClick = {
+                    serverMode = app.vela.offline.OfflineServerConfig.MODE_UPSTREAM
+                    app.vela.offline.OfflineServerConfig.setServerMode(context, serverMode)
+                    vm.refreshRoutingRegions()
+                },
+            )
+            Hint("Orijinal Vela GitHub Releases sunucusu.")
+            GroupDivider()
+            SelectableRow(
+                label = "Özel Manifest URL",
+                selected = serverMode == app.vela.offline.OfflineServerConfig.MODE_CUSTOM,
+                onClick = {
+                    serverMode = app.vela.offline.OfflineServerConfig.MODE_CUSTOM
+                    app.vela.offline.OfflineServerConfig.setServerMode(context, serverMode)
+                    editingUrl = true
+                    vm.refreshRoutingRegions()
+                },
+            )
+            Hint(if (customUrl.isNotBlank()) customUrl else "Kendi sunucu adresinizi veya özel manifest URL'sini girin.")
+            if (serverMode == app.vela.offline.OfflineServerConfig.MODE_CUSTOM || editingUrl) {
+                GroupDivider()
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    OutlinedTextField(
+                        value = customUrl,
+                        onValueChange = { customUrl = it },
+                        label = { Text("Manifest URL (JSON)") },
+                        placeholder = { Text("https://.../poi-pack-manifest.json") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    FilledTonalButton(
+                        onClick = {
+                            app.vela.offline.OfflineServerConfig.setCustomPoiUrl(context, customUrl)
+                            editingUrl = false
+                            vm.refreshRoutingRegions()
+                        },
+                        modifier = Modifier.align(Alignment.End),
+                    ) {
+                        Text("Kaydet ve Yenile")
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+
         // What offline data actually costs on this phone, ABOVE the catalog since 2026-09-16 (issue
         // #518: see what you have and clear the cache before scrolling a world of downloads). (Issue #214: 8 GB arrived unannounced,
         // and 533 MB of "empty" app is mostly the browsing cache with no way to clear it).
