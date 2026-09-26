@@ -1,5 +1,7 @@
 package app.vela.offline
 
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -45,11 +47,24 @@ data class RoutingRegion(
  */
 @Singleton
 class RegionCatalog @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val http: OkHttpClient,
 ) {
-    suspend fun manifest(manifestUrl: String): List<RoutingRegion> = withContext(Dispatchers.IO) {
-        runCatching {
-            val json = http.newCall(Request.Builder().url(manifestUrl).build()).execute()
+    suspend fun manifest(manifestUrl: String = app.vela.BuildConfig.OBF_MANIFEST_URL): List<RoutingRegion> = withContext(Dispatchers.IO) {
+        val urls = OfflineServerConfig.getObfManifestUrls(context)
+        val allRegions = ArrayList<RoutingRegion>()
+        for (url in urls) {
+            allRegions.addAll(fetchManifestFromUrl(url))
+        }
+        if (allRegions.isEmpty() && manifestUrl !in urls) {
+            allRegions.addAll(fetchManifestFromUrl(manifestUrl))
+        }
+        allRegions.distinctBy { it.id }
+    }
+
+    private fun fetchManifestFromUrl(url: String): List<RoutingRegion> {
+        return runCatching {
+            val json = http.newCall(Request.Builder().url(url).build()).execute()
                 .use { r -> if (!r.isSuccessful) error("HTTP ${r.code}"); r.body!!.string() }
             val arr = JSONObject(json).getJSONArray("regions")
             (0 until arr.length()).map { i ->

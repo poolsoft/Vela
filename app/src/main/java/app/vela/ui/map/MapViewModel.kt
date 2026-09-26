@@ -7149,6 +7149,7 @@ class MapViewModel @Inject constructor(
         val installed = region.id in poiPackStore.installedIds()
         if (pack == null || (installed && !update)) {
             _state.update { it.copy(regionDownloadName = null) }
+            if (pack == null) showStatus(appContext.getString(R.string.mapvm_poipack_unavailable, region.name))
             return
         }
         _state.update { it.copy(poiPackDownloadingId = pack.id, poiPackDownloadPct = 0, regionDownloadName = region.name) }
@@ -7167,7 +7168,11 @@ class MapViewModel @Inject constructor(
                 poiPackInstalledRevs = poiPackStore.installedIds().associateWith { id -> poiPackStore.installedRev(id) },
             )
         }
-        if (ok) showStatus(appContext.getString(R.string.mapvm_poipack_ready, region.name))
+        if (ok) {
+            showStatus(appContext.getString(R.string.mapvm_poipack_ready, region.name))
+        } else if (!regionCancel.get()) {
+            showStatus(appContext.getString(R.string.offline_area_failed))
+        }
     }
 
     /** Settings "Get places" / "Update places" on an installed routing region — pulls or refreshes just

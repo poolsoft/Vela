@@ -61,7 +61,7 @@ android {
             "String",
             "OBF_MANIFEST_URL",
             "\"${(project.findProperty("obfManifestUrl") as String?)
-                ?: "https://github.com/PimpinPumpkin/Vela/releases/download/obf-regions/obf-manifest.json"}\"",
+                ?: "https://github.com/poolsoft/Vela/releases/download/obf-regions/obf-manifest.json"}\"",
         )
         // Open building-footprint overlay (Microsoft, ODbL) PMTiles catalog — same override pattern
         // (-PoverlayManifestUrl=http://127.0.0.1:8099/... for local testing via `adb reverse`).
@@ -69,7 +69,7 @@ android {
             "String",
             "OVERLAY_MANIFEST_URL",
             "\"${(project.findProperty("overlayManifestUrl") as String?)
-                ?: "https://github.com/PimpinPumpkin/Vela/releases/download/building-overlays/building-overlay-manifest.json"}\"",
+                ?: "https://github.com/poolsoft/Vela/releases/download/building-overlays/building-overlay-manifest.json"}\"",
         )
         // Posted speed-limit overlay (OSM maxspeed, ODbL) PMTiles catalog — the "Speed B" online source that
         // shows a limit WITHOUT the offline routing graph. Same override pattern (-PmaxspeedManifestUrl=…).
@@ -77,7 +77,7 @@ android {
             "String",
             "MAXSPEED_MANIFEST_URL",
             "\"${(project.findProperty("maxspeedManifestUrl") as String?)
-                ?: "https://github.com/PimpinPumpkin/Vela/releases/download/maxspeed-overlays/maxspeed-overlay-manifest.json"}\"",
+                ?: "https://github.com/poolsoft/Vela/releases/download/maxspeed-overlays/maxspeed-overlay-manifest.json"}\"",
         )
         // Open house-number (address-point) overlay (OpenAddresses) PMTiles catalog — same override pattern
         // (-PaddressManifestUrl=…). Rendered as a SymbolLayer of house numbers where OSM lacks addr:housenumber.
@@ -120,7 +120,7 @@ android {
             "String",
             "POI_PACK_MANIFEST_URL",
             "\"${(project.findProperty("poiPackManifestUrl") as String?)
-                ?: "https://github.com/PimpinPumpkin/Vela/releases/download/poi-packs/poi-pack-manifest.json"}\"",
+                ?: "https://github.com/poolsoft/Vela/releases/download/poi-packs/poi-pack-manifest.json"}\"",
         )
         // ALPR/Flock surveillance-camera dataset (DeFlock/OSM). A bundled floor ships in assets/, and the
         // app refreshes from this hosted manifest so camera data updates WITHOUT an app release (weekly CI

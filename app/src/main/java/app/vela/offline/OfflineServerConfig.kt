@@ -17,9 +17,17 @@ object OfflineServerConfig {
     const val MODE_UPSTREAM = 2  // Sadece Resmi Vela
     const val MODE_CUSTOM = 3    // Ozel URL
 
-    // Poolsoft fork varsayilan manifest URL'leri (GitHub Releases veya raw main)
+    // Poolsoft fork varsayilan manifest URL'leri (GitHub Releases)
     const val POOLSOFT_POI_MANIFEST_URL =
-        "https://raw.githubusercontent.com/poolsoft/Vela/main/releases/poi-packs/poi-pack-manifest.json"
+        "https://github.com/poolsoft/Vela/releases/download/poi-packs/poi-pack-manifest.json"
+    const val POOLSOFT_OBF_MANIFEST_URL =
+        "https://github.com/poolsoft/Vela/releases/download/obf-regions/obf-manifest.json"
+
+    // Upstream (Resmi Vela) manifest URL'leri
+    const val UPSTREAM_POI_MANIFEST_URL =
+        "https://github.com/PimpinPumpkin/Vela/releases/download/poi-packs/poi-pack-manifest.json"
+    const val UPSTREAM_OBF_MANIFEST_URL =
+        "https://github.com/PimpinPumpkin/Vela/releases/download/obf-regions/obf-manifest.json"
 
     fun getServerMode(context: Context): Int {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -49,13 +57,27 @@ object OfflineServerConfig {
     fun getPoiManifestUrls(context: Context): List<String> {
         return when (getServerMode(context)) {
             MODE_POOLSOFT -> listOf(POOLSOFT_POI_MANIFEST_URL)
-            MODE_UPSTREAM -> listOf(BuildConfig.POI_PACK_MANIFEST_URL)
+            MODE_UPSTREAM -> listOf(UPSTREAM_POI_MANIFEST_URL)
             MODE_CUSTOM -> {
                 val custom = getCustomPoiUrl(context)
-                if (custom.isNotBlank()) listOf(custom) else listOf(BuildConfig.POI_PACK_MANIFEST_URL)
+                if (custom.isNotBlank()) listOf(custom) else listOf(POOLSOFT_POI_MANIFEST_URL)
             }
             else -> { // MODE_HYBRID (Varsayilan): Poolsoft once, Upstream sonra (Turkiye paketi oncelikli)
-                listOf(POOLSOFT_POI_MANIFEST_URL, BuildConfig.POI_PACK_MANIFEST_URL)
+                listOf(POOLSOFT_POI_MANIFEST_URL, UPSTREAM_POI_MANIFEST_URL)
+            }
+        }
+    }
+
+    /**
+     * Aktif yapilandirmaya gore taranacak OBF manifest URL listesini dondurur.
+     */
+    fun getObfManifestUrls(context: Context): List<String> {
+        return when (getServerMode(context)) {
+            MODE_POOLSOFT -> listOf(POOLSOFT_OBF_MANIFEST_URL)
+            MODE_UPSTREAM -> listOf(UPSTREAM_OBF_MANIFEST_URL)
+            MODE_CUSTOM -> listOf(POOLSOFT_OBF_MANIFEST_URL)
+            else -> { // MODE_HYBRID: Poolsoft once, Upstream sonra (Turkiye paketi oncelikli)
+                listOf(POOLSOFT_OBF_MANIFEST_URL, UPSTREAM_OBF_MANIFEST_URL)
             }
         }
     }
