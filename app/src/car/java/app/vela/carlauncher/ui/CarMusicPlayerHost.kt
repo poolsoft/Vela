@@ -63,6 +63,7 @@ class CarMusicPlayerHost(
     private var isSeeking = false
 
     // Alt Bar Kontrolleri
+    private val playerProgressContainer: View? = rootView.findViewById(R.id.player_progress_container)
     private val btnPlay: ImageButton? = rootView.findViewById(R.id.btn_play)
     private val btnPrev: ImageButton? = rootView.findViewById(R.id.btn_prev)
     private val btnNext: ImageButton? = rootView.findViewById(R.id.btn_next)
@@ -78,6 +79,7 @@ class CarMusicPlayerHost(
         playerVisualizer?.setVisualizerContext(false)
         setupPanelsVisibility()
         setupListeners()
+        setupGestures()
         setupStateFlows()
         rootView.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ -> resizePlayer(r - l, b - t) }
     }
@@ -89,17 +91,22 @@ class CarMusicPlayerHost(
         lastPlayerSize = width to height
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
-        val narrow = width / density < 520
+        val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+        val dockHorizontal = isPortrait && (height > width)
         val dock = rootView.findViewById<android.widget.LinearLayout>(R.id.music_side_dock)
-        dock.orientation = if (narrow) android.widget.LinearLayout.HORIZONTAL else android.widget.LinearLayout.VERTICAL
-        dock.setPadding(dp(4), dp(4), dp(4), dp(4))
+        dock.orientation = if (dockHorizontal) android.widget.LinearLayout.HORIZONTAL else android.widget.LinearLayout.VERTICAL
+        if (dockHorizontal) {
+            dock.setPadding(dp(4), dp(4), dp(4), dp(4))
+        } else {
+            dock.setPadding(0, dp(8), 0, dp(16))
+        }
         val cs = androidx.constraintlayout.widget.ConstraintSet()
         cs.clone(rootView as androidx.constraintlayout.widget.ConstraintLayout)
         cs.clear(R.id.music_side_dock)
         cs.clear(R.id.music_content_column)
         cs.connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
         cs.connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
-        if (narrow) {
+        if (dockHorizontal) {
             cs.connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
             cs.constrainWidth(R.id.music_side_dock, 0)
             cs.constrainHeight(R.id.music_side_dock, dp(56))
@@ -107,7 +114,7 @@ class CarMusicPlayerHost(
             cs.connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.TOP, R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
         } else {
             cs.connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
-            cs.constrainWidth(R.id.music_side_dock, dp(64))
+            cs.constrainWidth(R.id.music_side_dock, dp(60))
             cs.constrainHeight(R.id.music_side_dock, 0)
             cs.connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.START, R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.END)
             cs.connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
@@ -123,16 +130,21 @@ class CarMusicPlayerHost(
             val child = dock.getChildAt(i)
             val lp = child.layoutParams as android.widget.LinearLayout.LayoutParams
             if (lp.weight > 0) {
-                lp.width = if (narrow) 0 else dp(1); lp.height = if (narrow) dp(1) else 0
+                lp.width = if (dockHorizontal) 0 else dp(1)
+                lp.height = if (dockHorizontal) dp(1) else 0
             } else {
-                lp.width = if (narrow) (width / 5 - dp(2)).coerceAtLeast(dp(28)) else dp(48); lp.height = dp(48)
-                lp.setMargins(0, 0, 0, 0)
+                val buttonSize = if (dockHorizontal) (width / 5 - dp(2)).coerceAtLeast(dp(28)) else dp(48)
+                lp.width = buttonSize
+                lp.height = dp(48)
+                lp.gravity = if (dockHorizontal) android.view.Gravity.CENTER_VERTICAL else android.view.Gravity.CENTER_HORIZONTAL
+                val vMargin = if (dockHorizontal) 0 else dp(4)
+                lp.setMargins(0, vMargin, 0, vMargin)
             }
             child.layoutParams = lp
         }
-        val contentWidth = width / density - if (narrow) 0 else 64
+        val contentWidth = width / density - if (dockHorizontal) 0 else 60
         val center = rootView.findViewById<androidx.constraintlayout.widget.ConstraintLayout>(R.id.now_playing_center_panel)
-        val artSize = (contentWidth * 0.25f).coerceIn(56f, 120f).toInt()
+        val artSize = (contentWidth * 0.28f).coerceIn(56f, 130f).toInt()
         androidx.constraintlayout.widget.ConstraintSet().apply {
             clone(center)
             constrainWidth(R.id.now_playing_center_art_card, dp(artSize))
@@ -140,7 +152,7 @@ class CarMusicPlayerHost(
             setDimensionRatio(R.id.now_playing_center_art_card, null)
             clear(R.id.now_playing_center_art_card, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
             connect(R.id.now_playing_center_art_card, androidx.constraintlayout.widget.ConstraintSet.TOP,
-                androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP, dp(8))
+                androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP, dp(6))
             applyTo(center)
         }
         val controls = rootView.findViewById<androidx.constraintlayout.widget.ConstraintLayout>(R.id.playback_controls_layout)
@@ -163,6 +175,7 @@ class CarMusicPlayerHost(
         isPlaylistVisible = visible
         trackListPanel?.visibility = if (visible) View.VISIBLE else View.GONE
         nowPlayingCenterPanel?.visibility = if (visible) View.GONE else View.VISIBLE
+        playerProgressContainer?.visibility = if (visible) View.GONE else View.VISIBLE
         btnDockPlaylist?.isSelected = visible
         btnDockPlaylist?.setColorFilter(if (visible) 0xFF00FFFF.toInt() else 0xFFFFFFFF.toInt())
         if (visible) {
@@ -174,6 +187,74 @@ class CarMusicPlayerHost(
         rootView.post {
             rootView.requestLayout()
             rootView.invalidate()
+        }
+    }
+
+    private fun setupGestures() {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+        val gestureDetector = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            private val SWIPE_THRESHOLD = 50
+            private val SWIPE_VELOCITY_THRESHOLD = 50
+
+            override fun onDown(e: android.view.MotionEvent): Boolean = true
+
+            override fun onDoubleTap(e: android.view.MotionEvent): Boolean {
+                onPlayPauseClick()
+                return true
+            }
+
+            override fun onFling(
+                e1: android.view.MotionEvent?,
+                e2: android.view.MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                if (e1 == null) return false
+                val diffX = e2.x - e1.x
+                val diffY = e2.y - e1.y
+                val absDiffX = Math.abs(diffX)
+                val absDiffY = Math.abs(diffY)
+
+                if (absDiffX > absDiffY) {
+                    if (absDiffX > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                        if (diffX > 0) {
+                            onPrevClick()
+                        } else {
+                            onNextClick()
+                        }
+                        return true
+                    }
+                } else {
+                    if (absDiffY > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
+                        if (diffY < 0) {
+                            // Yukari kaydirma: Ses artir
+                            audioManager?.adjustStreamVolume(
+                                android.media.AudioManager.STREAM_MUSIC,
+                                android.media.AudioManager.ADJUST_RAISE,
+                                android.media.AudioManager.FLAG_SHOW_UI
+                            )
+                        } else {
+                            // Asagi kaydirma: Ses azalt
+                            audioManager?.adjustStreamVolume(
+                                android.media.AudioManager.STREAM_MUSIC,
+                                android.media.AudioManager.ADJUST_LOWER,
+                                android.media.AudioManager.FLAG_SHOW_UI
+                            )
+                        }
+                        return true
+                    }
+                }
+                return false
+            }
+        })
+
+        nowPlayingCenterPanel?.setOnTouchListener { v, event ->
+            if (gestureDetector.onTouchEvent(event)) {
+                true
+            } else {
+                v.performClick()
+                false
+            }
         }
     }
 
@@ -232,11 +313,19 @@ class CarMusicPlayerHost(
         btnShuffle?.setOnClickListener {
             val yeniKarisik = !musicManager.internalPlayer.karisikCal.value
             musicManager.setKarisikCal(yeniKarisik)
+            val msg = if (yeniKarisik) "Karışık çalma açık" else "Karışık çalma kapalı"
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
         }
 
         btnRepeat?.setOnClickListener {
             val yeniMod = (musicManager.internalPlayer.tekrarModu.value + 1) % 3
             musicManager.setTekrarModu(yeniMod)
+            val msg = when (yeniMod) {
+                1 -> "Tek parça tekrarı"
+                2 -> "Tüm liste tekrarı"
+                else -> "Tekrar kapalı"
+            }
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
         }
 
         seekbar?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -360,7 +449,7 @@ class CarMusicPlayerHost(
             rootView.findViewById<ImageView>(R.id.now_playing_art_blur).setImageBitmap(medya.albumKapagi)
             nowPlayingCenterArt?.visibility = View.VISIBLE
         } else {
-            nowPlayingCenterArt?.setImageResource(R.drawable.bg_default_music_art)
+            nowPlayingCenterArt?.setImageResource(R.drawable.bg_playlist_default_art)
             rootView.findViewById<ImageView>(R.id.now_playing_art_blur).setImageResource(R.drawable.bg_default_music_art)
             nowPlayingCenterArt?.visibility = View.VISIBLE
         }
@@ -374,8 +463,8 @@ class CarMusicPlayerHost(
         btnPlay?.isEnabled = musicManager.canControl()
         btnPrev?.isEnabled = musicManager.canControl()
         btnNext?.isEnabled = musicManager.canControl()
-        btnShuffle?.isEnabled = musicManager.isInternalPlayback()
-        btnRepeat?.isEnabled = musicManager.isInternalPlayback()
+        btnShuffle?.isEnabled = true
+        btnRepeat?.isEnabled = true
         val duration = medya.toplamSureMs.coerceIn(0L, Int.MAX_VALUE.toLong())
         seekbar?.isEnabled = duration > 0 && musicManager.canSeek()
         if (!isSeeking) {

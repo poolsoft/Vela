@@ -114,6 +114,10 @@ class MusicPlaylistStore private constructor(context: Context) {
         state.value.firstOrNull { it.id == id }?.let { setTracks(id, it.trackKeys - key) }
     }
 
+    fun removeTrackFromAll(key: String) {
+        save(state.value.map { it.copy(trackKeys = it.trackKeys - key) })
+    }
+
     fun isFavorite(track: SesParcasi): Boolean = state.value.firstOrNull { it.id == FAVORITES }
         ?.trackKeys?.contains(track.libraryKey()) == true
 

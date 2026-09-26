@@ -188,20 +188,25 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     fun parcaAtaVeOynat(parca: SesParcasi, liste: List<SesParcasi> = emptyList()) {
-        if (liste.isNotEmpty()) {
+        val oynatmaListesi = if (liste.isNotEmpty()) {
+            liste
+        } else if (_calismaListesi.isNotEmpty()) {
+            _calismaListesi.toList()
+        } else {
+            getVarsayilanParcalar()
+        }
+
+        if (oynatmaListesi.isNotEmpty()) {
             _calismaListesi.clear()
-            _calismaListesi.addAll(liste)
+            _calismaListesi.addAll(oynatmaListesi)
             kuyruguYenidenKur(parca)
-        } else if (_calmaKuyrugu.none { it.libraryKey() == parca.libraryKey() }) {
+        } else {
             _calismaListesi.clear()
             _calismaListesi.add(parca)
             _calmaKuyrugu.clear()
             _calmaKuyrugu.add(parca)
             suAnkiIndex = 0
             _kuyruk.value = _calmaKuyrugu.toList()
-        } else {
-            val idx = _calmaKuyrugu.indexOfFirst { it.libraryKey() == parca.libraryKey() }
-            suAnkiIndex = if (idx >= 0) idx else 0
         }
 
         calParca(parca, otomatikOynat = true)
@@ -395,8 +400,19 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         }
     }
 
+    private fun getVarsayilanParcalar(): List<SesParcasi> {
+        return MusicRepository.getInstance(context).parcalar.value
+    }
+
     fun sonraki() {
-        if (_calmaKuyrugu.isEmpty()) return
+        if (_calmaKuyrugu.isEmpty()) {
+            val varsayilan = getVarsayilanParcalar()
+            if (varsayilan.isNotEmpty()) {
+                _calismaListesi.clear()
+                _calismaListesi.addAll(varsayilan)
+                kuyruguYenidenKur(_anlikParca.value)
+            } else return
+        }
 
         val yeniIndex = suAnkiIndex + 1
         if (yeniIndex < _calmaKuyrugu.size) {
@@ -405,6 +421,27 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         } else if (_tekrarModu.value == 2) { // Tum liste tekrari
             suAnkiIndex = 0
             calParca(_calmaKuyrugu[0], otomatikOynat = true)
+        } else if (_calmaKuyrugu.size <= 1) {
+            val varsayilan = getVarsayilanParcalar()
+            if (varsayilan.size > 1) {
+                _calismaListesi.clear()
+                _calismaListesi.addAll(varsayilan)
+                kuyruguYenidenKur(_anlikParca.value)
+                val sonrakiIdx = suAnkiIndex + 1
+                if (sonrakiIdx < _calmaKuyrugu.size) {
+                    suAnkiIndex = sonrakiIdx
+                    calParca(_calmaKuyrugu[suAnkiIndex], otomatikOynat = true)
+                } else if (_tekrarModu.value == 2) {
+                    suAnkiIndex = 0
+                    calParca(_calmaKuyrugu[0], otomatikOynat = true)
+                } else {
+                    duraklat()
+                    konumaGit(0L)
+                }
+            } else {
+                duraklat()
+                konumaGit(0L)
+            }
         } else {
             // Liste bitti
             duraklat()
@@ -413,7 +450,14 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     fun onceki() {
-        if (_calmaKuyrugu.isEmpty()) return
+        if (_calmaKuyrugu.isEmpty()) {
+            val varsayilan = getVarsayilanParcalar()
+            if (varsayilan.isNotEmpty()) {
+                _calismaListesi.clear()
+                _calismaListesi.addAll(varsayilan)
+                kuyruguYenidenKur(_anlikParca.value)
+            } else return
+        }
 
         // Sarki 3 saniyeden fazla calmissa basa sar, yoksa onceki parcaya gec
         if (_anlikKonumMs.value > 3000L) {
@@ -428,6 +472,18 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         } else if (_tekrarModu.value == 2) {
             suAnkiIndex = _calmaKuyrugu.size - 1
             calParca(_calmaKuyrugu[suAnkiIndex], otomatikOynat = true)
+        } else if (_calmaKuyrugu.size <= 1) {
+            val varsayilan = getVarsayilanParcalar()
+            if (varsayilan.size > 1) {
+                _calismaListesi.clear()
+                _calismaListesi.addAll(varsayilan)
+                kuyruguYenidenKur(_anlikParca.value)
+                val prevIdx = suAnkiIndex - 1
+                if (prevIdx >= 0) {
+                    suAnkiIndex = prevIdx
+                    calParca(_calmaKuyrugu[suAnkiIndex], otomatikOynat = true)
+                } else konumaGit(0L)
+            } else konumaGit(0L)
         } else {
             konumaGit(0L)
         }
@@ -448,28 +504,52 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     fun setKarisikCal(aktif: Boolean) {
-        if (_karisikCal.value != aktif) {
-            _karisikCal.value = aktif
-            prefs.edit().putBoolean(KEY_SHUFFLE, aktif).apply()
-            kuyruguYenidenKur(_anlikParca.value)
+        _karisikCal.value = aktif
+        prefs.edit().putBoolean(KEY_SHUFFLE, aktif).apply()
+        if (_calismaListesi.size <= 1) {
+            val varsayilan = getVarsayilanParcalar()
+            if (varsayilan.isNotEmpty()) {
+                _calismaListesi.clear()
+                _calismaListesi.addAll(varsayilan)
+            }
         }
+        kuyruguYenidenKur(_anlikParca.value)
     }
 
     fun setTekrarModu(mod: Int) {
         val yeniMod = mod % 3
         _tekrarModu.value = yeniMod
         prefs.edit().putInt(KEY_REPEAT, yeniMod).apply()
+        if (yeniMod == 2 && _calismaListesi.size <= 1) {
+            val varsayilan = getVarsayilanParcalar()
+            if (varsayilan.isNotEmpty()) {
+                _calismaListesi.clear()
+                _calismaListesi.addAll(varsayilan)
+                kuyruguYenidenKur(_anlikParca.value)
+            }
+        }
     }
 
     private fun kuyruguYenidenKur(suAnki: SesParcasi?) {
         _calmaKuyrugu.clear()
-        if (_calismaListesi.isEmpty()) { _kuyruk.value = emptyList(); suAnkiIndex = -1; return }
+        if (_calismaListesi.isEmpty()) {
+            val depo = getVarsayilanParcalar()
+            if (depo.isNotEmpty()) {
+                _calismaListesi.addAll(depo)
+            }
+        }
+
+        if (_calismaListesi.isEmpty()) {
+            _kuyruk.value = emptyList()
+            suAnkiIndex = -1
+            return
+        }
 
         if (_karisikCal.value) {
             val karisikListe = ArrayList(_calismaListesi)
             Collections.shuffle(karisikListe)
             if (suAnki != null) {
-                karisikListe.remove(suAnki)
+                karisikListe.removeAll { it.libraryKey() == suAnki.libraryKey() }
                 karisikListe.add(0, suAnki)
             }
             _calmaKuyrugu.addAll(karisikListe)

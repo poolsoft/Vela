@@ -140,7 +140,23 @@ class MusicRepository private constructor(private val context: Context) {
                         cursor.getLong(albumIdCol)
                     ).toString()
 
-                    if (duration > 5000L) { // 5 saniyeden kisa ses efektlerini haric tut
+                    val pathLower = path.lowercase()
+                    val folderLower = folderPath.lowercase()
+                    val isBlacklistedFolder = pathLower.contains("/whatsapp") ||
+                            pathLower.contains("/telegram") ||
+                            pathLower.contains("/notifications") ||
+                            pathLower.contains("/ringtones") ||
+                            pathLower.contains("/alarms") ||
+                            pathLower.contains("/voice recorder") ||
+                            pathLower.contains("/sound recorder") ||
+                            pathLower.contains("/call_rec") ||
+                            pathLower.contains("/callrecordings") ||
+                            pathLower.contains("/recordings") ||
+                            folderLower.contains("whatsapp") ||
+                            folderLower.contains("telegram") ||
+                            folderLower.contains("voice notes")
+
+                    if (duration > 15000L && !isBlacklistedFolder) { // Mesajlasma seslerini ve 15 saniyeden kisa efektleri haric tut
                         bulunanParcalar.add(
                             SesParcasi(
                                 id = id,

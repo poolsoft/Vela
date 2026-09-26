@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -82,6 +83,7 @@ fun CarLauncherHostView(
     val latestLaunch by rememberUpdatedState(onLaunchApp)
     val latestMap by rememberUpdatedState(haritaIcerigi)
 
+    val parentComposition = rememberCompositionContext()
     AndroidView(
         modifier = modifier.windowInsetsPadding(
             if (tamEkran) WindowInsets.displayCutout else WindowInsets.safeDrawing
@@ -94,6 +96,7 @@ fun CarLauncherHostView(
             panel.clipToOutline = true
             map.clipToOutline = true
             val mapCompose = ComposeView(ctx).apply {
+                setParentCompositionContext(parentComposition)
                 setContent {
                     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp))) { latestMap() }
                 }

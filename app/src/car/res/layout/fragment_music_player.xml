@@ -500,6 +500,11 @@
                     android:layout_weight="1"
                     android:max="100"
                     android:progress="0"
+                    android:minHeight="6dp"
+                    android:maxHeight="6dp"
+                    android:thumbOffset="9dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
                     android:progressDrawable="@drawable/seekbar_progress_compact"
                     android:thumb="@drawable/seekbar_thumb_compact"
                     android:splitTrack="false"/>

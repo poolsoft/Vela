@@ -48,6 +48,10 @@
     <string name="car_music_name_required">Enter a name</string>
     <string name="car_music_add_playlist">Add to playlist</string>
     <string name="car_music_add_queue">Add to play order</string>
+    <string name="car_music_added_to_queue">Added to queue</string>
+    <string name="car_music_delete_track">Delete track</string>
+    <string name="car_music_delete_track_confirm">Do you want to delete this track from device?</string>
+    <string name="car_music_track_deleted">Track deleted</string>
     <string name="car_music_add_list_next">Add list after current track</string>
     <string name="car_music_add_list_end">Add list to end of play order</string>
     <string name="car_music_play_next">Play next</string>

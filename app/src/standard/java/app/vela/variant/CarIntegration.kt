@@ -28,4 +28,43 @@ object CarIntegration {
     @Composable fun Settings(onBack: () -> Unit, onPermissions: () -> Unit, onBackup: () -> Unit) = Unit
     @Composable fun Permissions(onBack: () -> Unit) = Unit
     @Composable fun Appearance() = Unit
+
+    @Composable
+    fun RenderManeuverBanner(
+        landscape: Boolean,
+        text: String,
+        distanceMeters: Double,
+        type: app.vela.core.model.ManeuverType,
+        roundabout: app.vela.core.model.RoundaboutGeometry? = null,
+        nextText: String? = null,
+        nextType: app.vela.core.model.ManeuverType? = null,
+        nextRoundabout: app.vela.core.model.RoundaboutGeometry? = null,
+        nextDistanceMeters: Double? = null,
+        offRoute: Boolean = false,
+        modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
+    ): Boolean = false
+
+    @Composable
+    fun RenderNavControls(
+        landscape: Boolean,
+        remainingDistanceMeters: Double,
+        remainingSeconds: Double,
+        offRoute: Boolean,
+        paused: Boolean = false,
+        onStop: () -> Unit,
+        onPause: (() -> Unit)? = null,
+        onSteps: (() -> Unit)? = null,
+        modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
+    ): Boolean = false
+
+    fun isCarMode(): Boolean = false
+
+    @Composable
+    fun RenderSpeedWidget(
+        landscape: Boolean,
+        speedMps: Float?,
+        limitKmh: Double?,
+        imperial: Boolean,
+        modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
+    ): Boolean = false
 }

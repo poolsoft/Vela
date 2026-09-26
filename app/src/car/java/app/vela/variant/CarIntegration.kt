@@ -60,7 +60,10 @@ object CarIntegration {
     }
     @Composable fun MapContainer(onOpenSettings: () -> Unit, content: @Composable () -> Unit) {
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
-        CarLauncherLayout(passthrough = !enabled, onOpenSettings = onOpenSettings, haritaIcerigi = content)
+        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+        val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT ||
+            (configuration.screenWidthDp < configuration.screenHeightDp)
+        CarLauncherLayout(passthrough = !enabled || isPortrait, onOpenSettings = onOpenSettings, haritaIcerigi = content)
     }
     @Composable fun Settings(onBack: () -> Unit, onPermissions: () -> Unit, onBackup: () -> Unit) {
         CarLauncherSettingsView(
@@ -77,5 +80,90 @@ object CarIntegration {
             ToggleRow("Car Launcher Arayüzü", enabled, { CarLauncherSettings.setCarModeEtkin(it) })
         }
         Hint("Sol araç dock çubuğu, anlık dijital hız, hız sınırı tabelası ve müzik kontrol widget'ını etkinleştirir.")
+    }
+
+    @Composable
+    fun RenderManeuverBanner(
+        landscape: Boolean,
+        text: String,
+        distanceMeters: Double,
+        type: app.vela.core.model.ManeuverType,
+        roundabout: app.vela.core.model.RoundaboutGeometry? = null,
+        nextText: String? = null,
+        nextType: app.vela.core.model.ManeuverType? = null,
+        nextRoundabout: app.vela.core.model.RoundaboutGeometry? = null,
+        nextDistanceMeters: Double? = null,
+        offRoute: Boolean = false,
+        modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
+    ): Boolean {
+        val carMode by CarLauncherSettings.carModeEtkin.collectAsState()
+        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+        val isLandscape = landscape && configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        if (!carMode || !isLandscape) return false
+        app.vela.carlauncher.ui.CarCompactManeuverBanner(
+            text = text,
+            distanceMeters = distanceMeters,
+            type = type,
+            roundabout = roundabout,
+            nextText = nextText,
+            nextType = nextType,
+            nextRoundabout = nextRoundabout,
+            nextDistanceMeters = nextDistanceMeters,
+            offRoute = offRoute,
+            modifier = modifier
+        )
+        return true
+    }
+
+    @Composable
+    fun RenderNavControls(
+        landscape: Boolean,
+        remainingDistanceMeters: Double,
+        remainingSeconds: Double,
+        offRoute: Boolean,
+        paused: Boolean = false,
+        onStop: () -> Unit,
+        onPause: (() -> Unit)? = null,
+        onSteps: (() -> Unit)? = null,
+        modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
+    ): Boolean {
+        val carMode by CarLauncherSettings.carModeEtkin.collectAsState()
+        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+        val isLandscape = landscape && configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        if (!carMode || !isLandscape) return false
+        app.vela.carlauncher.ui.CarCompactEtaBar(
+            remainingDistanceMeters = remainingDistanceMeters,
+            remainingSeconds = remainingSeconds,
+            offRoute = offRoute,
+            paused = paused,
+            onStop = onStop,
+            onPause = onPause,
+            onSteps = onSteps,
+            modifier = modifier
+        )
+        return true
+    }
+
+    fun isCarMode(): Boolean = CarLauncherSettings.carModeEtkin.value
+
+    @Composable
+    fun RenderSpeedWidget(
+        landscape: Boolean,
+        speedMps: Float?,
+        limitKmh: Double?,
+        imperial: Boolean,
+        modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
+    ): Boolean {
+        val carMode by CarLauncherSettings.carModeEtkin.collectAsState()
+        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+        val isLandscape = landscape && configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        if (!carMode || !isLandscape) return false
+        app.vela.carlauncher.ui.CarSpeedWidget(
+            speedMps = speedMps,
+            limitKmh = limitKmh,
+            imperial = imperial,
+            modifier = modifier
+        )
+        return true
     }
 }

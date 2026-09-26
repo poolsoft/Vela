@@ -12,10 +12,12 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.net.Uri
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.TextView
+import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import app.vela.R
@@ -320,15 +322,77 @@ class MusicLibraryController(private val context: Context, private val root: Vie
     }
     private fun trackMenu(anchor: View, track: SesParcasi) {
         PopupMenu(context, anchor).apply {
+            if (tab != Tab.QUEUE) {
+                menu.add(R.string.car_music_add_queue).setOnMenuItemClickListener {
+                    manager.internalPlayer.kuyrugaEkle(track)
+                    Toast.makeText(context, R.string.car_music_added_to_queue, Toast.LENGTH_SHORT).show()
+                    true
+                }
+            } else {
+                menu.add(R.string.car_music_play_next).setOnMenuItemClickListener {
+                    manager.internalPlayer.kuyrugaEkle(listOf(track), siradaki = true)
+                    Toast.makeText(context, R.string.car_music_play_next, Toast.LENGTH_SHORT).show()
+                    true
+                }
+            }
+
             menu.add(R.string.car_music_add_playlist).setOnMenuItemClickListener {
                 val lists = store.playlists.value
                 val names = arrayOf(context.getString(R.string.car_music_new_playlist)) + lists.map(::name)
                 show(AlertDialog.Builder(context).setTitle(R.string.car_music_add_playlist).setItems(names) { _, index ->
                     if (index == 0) createPlaylist(track) else store.addTrack(lists[index - 1].id, track)
-                }.create()); true
+                }.create())
+                true
             }
-            if (tab == Tab.PLAYLISTS && playlist()?.let { !readOnly(it) } == true) menu.add(R.string.car_music_remove_track).setOnMenuItemClickListener {
-                playlistId?.let { store.removeTrack(it, track.libraryKey()) }; true
+
+            when {
+                tab == Tab.PLAYLISTS && playlist()?.let { !readOnly(it) } == true -> {
+                    menu.add(R.string.car_music_remove_track).setOnMenuItemClickListener {
+                        playlistId?.let { pid ->
+                            store.removeTrack(pid, track.libraryKey())
+                            Toast.makeText(context, R.string.car_music_remove_track, Toast.LENGTH_SHORT).show()
+                            render()
+                        }
+                        true
+                    }
+                }
+                tab == Tab.QUEUE -> {
+                    menu.add(R.string.car_music_remove_queue).setOnMenuItemClickListener {
+                        manager.internalPlayer.kuyruktanKaldir(track)
+                        Toast.makeText(context, R.string.car_music_remove_queue, Toast.LENGTH_SHORT).show()
+                        render()
+                        true
+                    }
+                }
+                else -> {
+                    menu.add(R.string.car_music_delete_track).setOnMenuItemClickListener {
+                        val dialog = AlertDialog.Builder(context)
+                            .setTitle(R.string.car_music_delete_track)
+                            .setMessage("${track.baslik}\n\n${context.getString(R.string.car_music_delete_track_confirm)}")
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .setPositiveButton(R.string.car_music_delete_track) { _, _ ->
+                                manager.internalPlayer.kuyruktanKaldir(track)
+                                val file = File(track.dosyaYolu)
+                                if (file.exists()) file.delete()
+                                runCatching {
+                                    if (track.contentUri.isNotBlank()) {
+                                        context.contentResolver.delete(Uri.parse(track.contentUri), null, null)
+                                    } else {
+                                        context.contentResolver.delete(
+                                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                                            "${MediaStore.Audio.Media._ID} = ?",
+                                            arrayOf(track.id.toString())
+                                        )
+                                    }
+                                }
+                                store.removeTrackFromAll(track.libraryKey())
+                                scope.launch { repository.muzikKutuphanesiniTara() }
+                                Toast.makeText(context, R.string.car_music_track_deleted, Toast.LENGTH_SHORT).show()
+                            }.create()
+                        show(dialog)
+                        true
+                    }
+                }
             }
             show()
         }

@@ -199,6 +199,7 @@ import app.vela.ui.nav.ArrivalSummary
 import app.vela.ui.nav.ManeuverBanner
 import app.vela.ui.nav.NavControls
 import app.vela.ui.nav.StepsSheet
+import app.vela.variant.CarIntegration
 import app.vela.ui.placeStatusColor
 import app.vela.ui.Traffic
 import app.vela.ui.place.DirectionsPanel
@@ -353,7 +354,9 @@ fun MapScreen(
     // bar + the chips beside it, Google's landscape layout) and the top-right corner stack
     // (layers button, compass) rises a row - on a phone's ~390dp landscape height the stacked
     // layout pushed the compass down into the parking/locate FABs (user 2026-07-15).
-    val landscapeChrome = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
+    val currentConfig = LocalConfiguration.current
+    val landscapeChrome = currentConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE ||
+        (currentConfig.screenWidthDp > currentConfig.screenHeightDp && currentConfig.orientation != android.content.res.Configuration.ORIENTATION_PORTRAIT)
     // Mirrored into the VM too: the route-through-here press is gated on the chooser being
     // minimized (stray building taps while the full picker covered the map added stops).
     LaunchedEffect(dirMinimized) { vm.onDirectionsCollapsed(dirMinimized) }
@@ -390,7 +393,7 @@ fun MapScreen(
         state.streetView != null || state.streetViewLoading -> 0
         placeSheetUp -> sidePanelWidthPx
         // Nav chrome is a left column in landscape, so the puck must sit clear of it.
-        state.navigating -> sidePanelWidthPx
+        state.navigating -> if (CarIntegration.isCarMode()) 0 else sidePanelWidthPx
         // The route chooser is a left panel in landscape too (issue #297), so the route it is
         // asking you to choose has to be framed clear of it.
         state.directionsOpen && !state.navigating && !dirMinimized -> sidePanelWidthPx
@@ -1552,7 +1555,10 @@ fun MapScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(end = NAV_FAB_EDGE_DP, bottom = navBarClearance),
+                    .padding(
+                        end = NAV_FAB_EDGE_DP,
+                        bottom = if (landscapeChrome && CarIntegration.isCarMode()) 16.dp + chromeLift else navBarClearance,
+                    ),
             ) {
                 if (state.navCameraDetached || state.previewStepIndex != null || navZoomOverride) {
                     FloatingActionButton(
@@ -1670,18 +1676,30 @@ fun MapScreen(
             !searchOpen && state.selected == null && !state.directionsOpen && !state.showSteps && !resultsShown
         val postedLimitKmh = state.speedLimitKmh ?: state.speedLimitOverlayKmh
         if (((state.navigating && !state.showSteps && !state.editingStops) && state.mySpeed != null) || movingFree) {
-            SpeedWidget(
+            val handledSpeed = CarIntegration.RenderSpeedWidget(
+                landscape = landscapeChrome,
                 speedMps = state.mySpeed,
                 limitKmh = postedLimitKmh,
                 imperial = Units.imperial.value,
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .navigationBarsPadding()
-                    // During nav the box clears the ETA bar; free-driving there is no bar, so it
-                    // sits low in the corner, level with the locate FAB (user 2026-07-14). The
-                    // scale bar yields the spot while the box is there (below).
-                    .padding(start = 16.dp, bottom = if (state.navigating) navBarClearance else 16.dp + chromeLift),
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 8.dp, end = 12.dp),
             )
+            if (!handledSpeed) {
+                SpeedWidget(
+                    speedMps = state.mySpeed,
+                    limitKmh = postedLimitKmh,
+                    imperial = Units.imperial.value,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .navigationBarsPadding()
+                        // During nav the box clears the ETA bar; free-driving there is no bar, so it
+                        // sits low in the corner, level with the locate FAB (user 2026-07-14). The
+                        // scale bar yields the spot while the box is there (below).
+                        .padding(start = 16.dp, bottom = if (state.navigating) navBarClearance else 16.dp + chromeLift),
+                )
+            }
         }
 
         if (!state.navigating && state.showSearchThisArea && state.selected == null && !searchOpen && !resultsShown) {
@@ -1867,61 +1885,84 @@ fun MapScreen(
             // slot (Google's in-nav list does the same); clearing it brings the bar back.
             // Landscape: the ETA/End bar joins the turn card in the LEFT column instead of
             // spanning the width (issue #297), so the map keeps the whole right side.
-            state.navigating && state.results.isEmpty() -> Column(
-                Modifier
-                    .align(if (landscapeChrome) Alignment.BottomStart else Alignment.BottomCenter)
-                    .landscapeColumn(landscapeChrome, sidePanelWidthDp)
-                    .navigationBarsPadding()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                NavControls(
+            state.navigating && state.results.isEmpty() -> {
+                val handledControls = CarIntegration.RenderNavControls(
+                    landscape = landscapeChrome,
                     remainingDistanceMeters = state.nav.remainingDistance,
                     remainingSeconds = state.nav.remainingDuration,
                     offRoute = state.nav.offRoute && !state.navPaused,
                     paused = state.navPaused,
                     onStop = vm::stopNav,
+                    onPause = if (navPauseInBar) vm::toggleNavPause else null,
                     onSteps = {
-                        // From the button / chevron: the well opens from closed.
                         stepsEnterFromPx = 0f
                         stepsCloseTick = 0
                         vm.openSteps()
                     },
-                    onStepsFromDrag = { liftPx ->
-                        stepsEnterFromPx = liftPx
-                        stepsCloseTick = 0
-                        vm.openSteps()
-                    },
-                    maxLift = stepsListMax,
-                    roadName = barRoadName(state),
-                    // The rows that show under the figures while the bar is pulled up: the same
-                    // StepRow the sheet draws, at the same padding, so nothing moves at the swap.
-                    // It starts at the current step (the sheet opens scrolled there), dividers included.
-                    preview = {
-                        val lat = state.roadNameLatin
-                        val lang = app.vela.ui.AppLocale.effective().language
-                        val stopLabels = vm.navRemainingStopLabels()
-                        app.vela.ui.nav.NavStepsPreview(
-                            maneuvers = state.activeRoute?.maneuvers ?: emptyList(),
-                            currentStep = state.nav.stepIndex,
-                            romanize = { s -> if (s.isEmpty() || lat.isEmpty()) s else app.vela.core.voice.SpokenScript.forDisplay(s, lang, lat) },
-                            destName = state.arrivedLabel,
-                            destAddress = state.navDestAddress,
-                            legStarts = remember(state.activeRoute, state.nav.stepIndex) {
-                                val r = state.activeRoute
-                                val stops = vm.navRemainingStops().map { it.location to it.label }
-                                if (r == null || stops.isEmpty()) emptyList() else app.vela.core.nav.RouteStops.legStarts(r, stops)
-                            },
-                            stopsRow = if (stopLabels.isEmpty()) null else ({ app.vela.ui.nav.NavStopsRow(stopLabels, onEdit = vm::openStopsEditor) }),
-                        )
-                    },
-                    trafficRatio = state.activeRoute?.trafficRatio,
-                    showListButton = navListButton,
-                    onPause = if (navPauseInBar) vm::toggleNavPause else null,
-                    // Measured AFTER the padding → the bar surface itself; navBarClearance adds the
-                    // padding + gap back. Everything stacked above the bar keys off this.
-                    modifier = Modifier.onGloballyPositioned { navBarHeightPx = it.size.height },
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .navigationBarsPadding()
+                        .padding(start = 12.dp, bottom = 12.dp)
+                        .onGloballyPositioned { navBarHeightPx = it.size.height },
                 )
+                if (!handledControls) {
+                    Column(
+                        Modifier
+                            .align(if (landscapeChrome) Alignment.BottomStart else Alignment.BottomCenter)
+                            .landscapeColumn(landscapeChrome, sidePanelWidthDp)
+                            .navigationBarsPadding()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        NavControls(
+                            remainingDistanceMeters = state.nav.remainingDistance,
+                            remainingSeconds = state.nav.remainingDuration,
+                            offRoute = state.nav.offRoute && !state.navPaused,
+                            paused = state.navPaused,
+                            onStop = vm::stopNav,
+                            onSteps = {
+                                // From the button / chevron: the well opens from closed.
+                                stepsEnterFromPx = 0f
+                                stepsCloseTick = 0
+                                vm.openSteps()
+                            },
+                            onStepsFromDrag = { liftPx ->
+                                stepsEnterFromPx = liftPx
+                                stepsCloseTick = 0
+                                vm.openSteps()
+                            },
+                            maxLift = stepsListMax,
+                            roadName = barRoadName(state),
+                            // The rows that show under the figures while the bar is pulled up: the same
+                            // StepRow the sheet draws, at the same padding, so nothing moves at the swap.
+                            // It starts at the current step (the sheet opens scrolled there), dividers included.
+                            preview = {
+                                val lat = state.roadNameLatin
+                                val lang = app.vela.ui.AppLocale.effective().language
+                                val stopLabels = vm.navRemainingStopLabels()
+                                app.vela.ui.nav.NavStepsPreview(
+                                    maneuvers = state.activeRoute?.maneuvers ?: emptyList(),
+                                    currentStep = state.nav.stepIndex,
+                                    romanize = { s -> if (s.isEmpty() || lat.isEmpty()) s else app.vela.core.voice.SpokenScript.forDisplay(s, lang, lat) },
+                                    destName = state.arrivedLabel,
+                                    destAddress = state.navDestAddress,
+                                    legStarts = remember(state.activeRoute, state.nav.stepIndex) {
+                                        val r = state.activeRoute
+                                        val stops = vm.navRemainingStops().map { it.location to it.label }
+                                        if (r == null || stops.isEmpty()) emptyList() else app.vela.core.nav.RouteStops.legStarts(r, stops)
+                                    },
+                                    stopsRow = if (stopLabels.isEmpty()) null else ({ app.vela.ui.nav.NavStopsRow(stopLabels, onEdit = vm::openStopsEditor) }),
+                                )
+                            },
+                            trafficRatio = state.activeRoute?.trafficRatio,
+                            showListButton = navListButton,
+                            onPause = if (navPauseInBar) vm::toggleNavPause else null,
+                            // Measured AFTER the padding → the bar surface itself; navBarClearance adds the
+                            // padding + gap back. Everything stacked above the bar keys off this.
+                            modifier = Modifier.onGloballyPositioned { navBarHeightPx = it.size.height },
+                        )
+                    }
+                }
             }
 
             // The dedicated stops editor covers the directions panel while open (drag to
@@ -3861,6 +3902,29 @@ private fun BoxScope.NavTurnBanner(
     fun navRomanize(s: String): String =
         if (s.isEmpty() || state.roadNameLatin.isEmpty()) s
         else app.vela.core.voice.SpokenScript.forDisplay(s, navUiLang, state.roadNameLatin)
+    val handledManeuver = CarIntegration.RenderManeuverBanner(
+        landscape = landscapeChrome,
+        text = navRomanize(if (previewing) (shown?.instruction.orEmpty()) else state.maneuverText),
+        distanceMeters = if (previewing) {
+            mans?.getOrNull(shownIdx - 1)?.distanceMeters ?: state.nav.distanceToNextManeuver
+        } else {
+            state.nav.distanceToNextManeuver
+        },
+        type = shown?.type ?: ManeuverType.STRAIGHT,
+        roundabout = shown?.roundabout,
+        nextText = next?.instruction?.let { navRomanize(it) },
+        nextType = next?.type,
+        nextRoundabout = next?.roundabout,
+        nextDistanceMeters = shown?.distanceMeters,
+        offRoute = state.nav.offRoute,
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .statusBarsPadding()
+            .padding(start = 12.dp, top = 8.dp, end = 125.dp)
+            .onGloballyPositioned { onBottomPx((it.positionInRoot().y + it.size.height).roundToInt()) },
+    )
+    if (handledManeuver) return
+
     ManeuverBanner(
         offRoute = state.nav.offRoute,
         text = navRomanize(if (previewing) (shown?.instruction.orEmpty()) else state.maneuverText),
