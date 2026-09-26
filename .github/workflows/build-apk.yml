@@ -97,13 +97,31 @@ jobs:
             "https://github.com/PimpinPumpkin/Vela/releases/download/tts-runtime/sherpa-onnx-1.13.3.aar"
           test "$(stat -c%s app/libs/sherpa-onnx-1.13.3.aar)" -gt 50000000
 
+      - name: Debug and Ensure NDK 27.0.12077973
+        run: |
+          echo "=== ANDROID_HOME: $ANDROID_HOME ==="
+          ls -la "$ANDROID_HOME/ndk" 2>/dev/null || echo "ndk alt klasoru henuz yok!"
+          if [ ! -d "$ANDROID_HOME/ndk/27.0.12077973" ]; then
+            echo "NDK 27.0.12077973 klasoru yok! sdkmanager ile kuruluyor..."
+            yes | sdkmanager "ndk;27.0.12077973"
+          fi
+          echo "=== NDK 27 Icerigi ==="
+          ls -la "$ANDROID_HOME/ndk/27.0.12077973" 2>/dev/null || echo "NDK 27 klasoru olusturulamadi!"
+          STRIP_PATH="$ANDROID_HOME/ndk/27.0.12077973/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+          if [ -f "$STRIP_PATH" ]; then
+            echo "llvm-strip bulundu: $STRIP_PATH"
+            "$STRIP_PATH" --version
+          else
+            echo "UYARI: llvm-strip bulunamadi: $STRIP_PATH"
+          fi
+
       - name: Build release APK
         env:
           VELA_KEYSTORE_PATH: ${{ runner.temp }}/vela-release.jks
           VELA_KEYSTORE_PASSWORD: ${{ secrets.VELA_KEYSTORE_PASSWORD }}
           VELA_KEY_ALIAS: ${{ secrets.VELA_KEY_ALIAS }}
         run: >
-          ./gradlew :app:assembleCarRelease --no-daemon
+          ./gradlew :app:assembleCarRelease --no-daemon --info
           -PappVersionName=${{ steps.ver.outputs.name }}
           -PappVersionCode=${{ steps.ver.outputs.code }}
           -PmaptilerKey=${{ secrets.MAPTILER_KEY }}
@@ -124,6 +142,14 @@ jobs:
           done
           echo "Hazirlanan APK dosyalari:"
           ls -lh release-apks/
+
+      - name: Inspect APK sizes and native libraries
+        run: |
+          for apk in release-apks/*.apk; do
+            echo "----------------------------------------------------"
+            echo "APK: $apk - Boyut: $(ls -lh "$apk" | awk '{print $5}')"
+            unzip -l "$apk" | grep -E "(libvalhalla-wrapper\.so|libmaplibre\.so)" || true
+          done
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
