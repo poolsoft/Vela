@@ -36,12 +36,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK & NDK
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platform-tools
-            ndk;26.1.10909125
+          packages: platform-tools
 
       - name: Strip machine-specific java.home for CI
         run: sed -i '/^org.gradle.java.home=/d' gradle.properties
