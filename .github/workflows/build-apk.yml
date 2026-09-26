@@ -14,7 +14,7 @@ on:
       force:
         description: 'Ayni kodda olsa bile yeniden derle'
         type: boolean
-        default: true
+        default: false
   push:
     branches: [ main, canary ]
     paths-ignore:
