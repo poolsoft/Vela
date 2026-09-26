@@ -3,6 +3,14 @@ name: Build APK
 on:
   workflow_dispatch:
     inputs:
+      channel:
+        description: 'Yayinlama Kanali'
+        type: choice
+        required: true
+        default: 'stable'
+        options:
+          - stable
+          - canary
       force:
         description: 'Ayni kodda olsa bile yeniden derle'
         type: boolean
@@ -82,10 +90,14 @@ jobs:
         id: ver
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            CH="${{ github.event.inputs.channel || 'stable' }}"
+          else
+            CH="canary"
+          fi
+          echo "channel=$CH" >> "$GITHUB_OUTPUT"
+          if [ "$CH" = "stable" ]; then
             echo "name=0.4.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           else
-            echo "channel=canary" >> "$GITHUB_OUTPUT"
             echo "name=0.4.${{ github.run_number }}-canary" >> "$GITHUB_OUTPUT"
           fi
           echo "code=$(( 2000 + ${{ github.run_number }} ))" >> "$GITHUB_OUTPUT"
