@@ -158,7 +158,7 @@ jobs:
           path: release-apks/*.apk
           if-no-files-found: error
 
-      - name: Publish Pre-release
+      - name: Publish Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -166,15 +166,15 @@ jobs:
           CODE="${{ steps.ver.outputs.code }}"
           SUBJ="$(bash scripts/changelog.sh --latest HEAD 2>/dev/null || git log -1 --no-merges --pretty=%s)"
           [ -z "$SUBJ" ] && SUBJ="$(git log -1 --no-merges --pretty=%s)"
-          NOTES="$(printf 'Vela %s Pre-release.\n\nversionName: %s\nversionCode: %s\n\nLatest change: %s\n\nSplit APKs: arm64-v8a, armeabi-v7a, x86_64, universal\n' "$VER" "$VER" "$CODE" "$SUBJ")"
+          NOTES="$(printf 'Vela %s.\n\nversionName: %s\nversionCode: %s\n\nLatest change: %s\n\nSplit APKs: arm64-v8a, armeabi-v7a, x86_64, universal\n' "$VER" "$VER" "$CODE" "$SUBJ")"
           
           # Eger onceden ayni tag varsa temizle
           gh release delete "v${VER}" --yes --cleanup-tag 2>/dev/null || true
           
-          # Pre-release olarak olustur
+          # Kararli Latest Release olarak olustur
           gh release create "v${VER}" \
-            --title "Vela $VER (Pre-release)" \
+            --title "Vela $VER" \
             --target "$GITHUB_SHA" \
-            --prerelease \
+            --latest \
             --notes "$NOTES" \
             release-apks/*.apk
