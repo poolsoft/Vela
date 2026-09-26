@@ -81,10 +81,12 @@ jobs:
       - name: Derive build version
         id: ver
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/canary" ]; then
-            echo "name=0.4.${{ github.run_number }}-canary" >> "$GITHUB_OUTPUT"
-          else
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
             echo "name=0.4.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=canary" >> "$GITHUB_OUTPUT"
+            echo "name=0.4.${{ github.run_number }}-canary" >> "$GITHUB_OUTPUT"
           fi
           echo "code=$(( 2000 + ${{ github.run_number }} ))" >> "$GITHUB_OUTPUT"
 
@@ -129,15 +131,21 @@ jobs:
       - name: Prepare APKs
         run: |
           VER="${{ steps.ver.outputs.name }}"
+          CH="${{ steps.ver.outputs.channel }}"
           mkdir -p release-apks
           for apk in app/build/outputs/apk/car/release/*.apk; do
             [ -f "$apk" ] || continue
             bname=$(basename "$apk" .apk)
             arch=$(echo "$bname" | sed -e 's/app-car-//' -e 's/-release//')
-            if [ "$arch" = "universal" ] || [ "$arch" = "app-car-release" ]; then
-              cp "$apk" "release-apks/vela-maps-v${VER}-universal.apk"
+            if [ "$CH" = "canary" ]; then
+              prefix="vela-maps-canary"
             else
-              cp "$apk" "release-apks/vela-maps-v${VER}-${arch}.apk"
+              prefix="vela-maps-v${VER}"
+            fi
+            if [ "$arch" = "universal" ] || [ "$arch" = "app-car-release" ]; then
+              cp "$apk" "release-apks/${prefix}-universal.apk"
+            else
+              cp "$apk" "release-apks/${prefix}-${arch}.apk"
             fi
           done
           echo "Hazirlanan APK dosyalari:"
@@ -158,7 +166,8 @@ jobs:
           path: release-apks/*.apk
           if-no-files-found: error
 
-      - name: Publish Release
+      - name: Publish Canary build (rolling release)
+        if: steps.ver.outputs.channel == 'canary'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -166,7 +175,27 @@ jobs:
           CODE="${{ steps.ver.outputs.code }}"
           SUBJ="$(bash scripts/changelog.sh --latest HEAD 2>/dev/null || git log -1 --no-merges --pretty=%s)"
           [ -z "$SUBJ" ] && SUBJ="$(git log -1 --no-merges --pretty=%s)"
-          NOTES="$(printf 'Vela %s.\n\nversionName: %s\nversionCode: %s\n\nLatest change: %s\n\nSplit APKs: arm64-v8a, armeabi-v7a, x86_64, universal\n' "$VER" "$VER" "$CODE" "$SUBJ")"
+          NOTES="$(printf 'Canary branch.\n\nversionName: %s\nversionCode: %s\n\nLatest change: %s\n\nSplit APKs: arm64-v8a, armeabi-v7a, x86_64, universal\n' "$VER" "$CODE" "$SUBJ")"
+          
+          # Eski canary release'i temizle ve en basa yeni olustur
+          gh release delete canary --yes --cleanup-tag 2>/dev/null || true
+          gh release create canary \
+            --title "Vela $VER" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --notes "$NOTES" \
+            release-apks/*.apk
+
+      - name: Publish Stable Release
+        if: steps.ver.outputs.channel == 'stable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="${{ steps.ver.outputs.name }}"
+          CODE="${{ steps.ver.outputs.code }}"
+          SUBJ="$(bash scripts/changelog.sh --latest HEAD 2>/dev/null || git log -1 --no-merges --pretty=%s)"
+          [ -z "$SUBJ" ] && SUBJ="$(git log -1 --no-merges --pretty=%s)"
+          NOTES="$(printf 'Kararli Vela surumu.\n\nversionName: %s\nversionCode: %s\n\nLatest change: %s\n\nSplit APKs: arm64-v8a, armeabi-v7a, x86_64, universal\n' "$VER" "$CODE" "$SUBJ")"
           
           # Eger onceden ayni tag varsa temizle
           gh release delete "v${VER}" --yes --cleanup-tag 2>/dev/null || true
