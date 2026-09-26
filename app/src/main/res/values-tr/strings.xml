@@ -120,7 +120,7 @@
     <string name="settings_voice_install_vela_hint">Önerilen navigasyon sesi.</string>
     <string name="settings_texture_render">Uyumluluk modu oluşturma</string>
     <string name="settings_texture_render_hint">Bazı cihazların grafik sürücüsü hatalarını önleyen uyumluluk modu. Yeniden başlatma gerektirir.</string>
-    <string name="settings_texture_render_auto_hint">Harita başlangıçta çöktüğü için otomatik açıldı. Yeniden başlatma gerektirir.</string>
+    <string name="settings_texture_render_auto_hint">Harita başlangıçta iki kez çöktüğü için %1$s üzerinde otomatik açıldı. Kapalıyken çalışıyorsa kapalı tutun: daha yavaştır ve sürüşte haritada takılma yapabilir. Uygulamanın yeniden başlatılması gerekir.</string>
     <string name="settings_show_reviews">Değerlendirmeleri göster</string>
     <string name="settings_show_reviews_hint">Kapalı = yer sayfalarında değerlendirme gösterilmez.</string>
     <string name="settings_load_photos">Fotoğrafları yükle</string>
@@ -174,7 +174,7 @@
     <string name="settings_download">İndir</string>
     <string name="settings_region_group_title">%1$s bölgesinin tamamı</string>
     <string name="settings_region_group_size">%1$d parça, yaklaşık %2$s</string>
-    <string name="settings_region_group_partial">%1$d / %2$d parça yüklendi</string>
+    <string name="settings_region_group_partial">%1$d / %2$d parça yüklendi, tümü yaklaşık %3$s</string>
     <string name="settings_region_group_installed">Tüm %1$d parça yüklendi</string>
     <string name="settings_region_group_downloading">Parça indiriliyor: %1$d / %2$d</string>
     <string name="settings_region_group_download">Tümünü indir</string>
