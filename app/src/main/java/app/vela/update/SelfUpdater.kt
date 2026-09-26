@@ -70,6 +70,20 @@ class SelfUpdater @Inject constructor(
      *  never strands its users behind the fleet. */
     suspend fun check(currentVersionCode: Int, channel: String = CHANNEL_STABLE): UpdateInfo? = withContext(Dispatchers.IO) {
         runCatching {
+            fun pickApkAsset(assets: JSONArray): JSONObject? {
+                val list = (0 until assets.length()).map { assets.getJSONObject(it) }
+                    .filter { it.getString("name").endsWith(".apk") }
+                if (list.isEmpty()) return null
+                val abis = android.os.Build.SUPPORTED_ABIS
+                for (abi in abis) {
+                    val match = list.firstOrNull { it.getString("name").contains(abi, ignoreCase = true) }
+                    if (match != null) return match
+                }
+                val universal = list.firstOrNull { it.getString("name").contains("universal", ignoreCase = true) }
+                if (universal != null) return universal
+                return list.first()
+            }
+
             fun releaseToInfo(o: JSONObject): UpdateInfo? {
                 val tag = o.getString("tag_name") // v0.<minor>.<run>
                 // Parse the RUN, not a hardcoded minor: the line moved 0.2 -> 0.3 once already and a
@@ -77,9 +91,7 @@ class SelfUpdater @Inject constructor(
                 val run = Regex("""^v0\.\d+\.(\d+)$""").find(tag)?.groupValues?.get(1)?.toIntOrNull() ?: return null
                 val code = 2000 + run
                 val assets = o.getJSONArray("assets")
-                val apk = (0 until assets.length())
-                    .map { assets.getJSONObject(it) }
-                    .firstOrNull { it.getString("name").endsWith(".apk") } ?: return null
+                val apk = pickApkAsset(assets) ?: return null
                 return UpdateInfo(tag.removePrefix("v"), code, apk.getString("browser_download_url"), apk.optLong("size"), o.optString("body"))
             }
             var requests = 0; var bytes = 0L
@@ -104,9 +116,7 @@ class SelfUpdater @Inject constructor(
                 val code = Regex("""versionCode:\s*(\d+)""").find(body)?.groupValues?.get(1)?.toIntOrNull() ?: return null
                 val name = Regex("""versionName:\s*(\S+)""").find(body)?.groupValues?.get(1) ?: "canary"
                 val assets = o.getJSONArray("assets")
-                val apk = (0 until assets.length())
-                    .map { assets.getJSONObject(it) }
-                    .firstOrNull { it.getString("name").endsWith(".apk") } ?: return null
+                val apk = pickApkAsset(assets) ?: return null
                 UpdateInfo(name, code, apk.getString("browser_download_url"), apk.optLong("size"), body)
             }.getOrNull()
             // THE RELEASES LIST IS NEVER FETCHED (2026-09-22). The repository's data releases

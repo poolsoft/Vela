@@ -174,7 +174,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vela-maps-apk
-          path: app/build/outputs/apk/car/release/app-car-release.apk
+          path: app/build/outputs/apk/car/release/*.apk
           if-no-files-found: error
 
       - name: Publish canary build (rolling release)
@@ -188,7 +188,17 @@ jobs:
         run: |
           VER="${{ steps.ver.outputs.name }}"
           CODE="${{ steps.ver.outputs.code }}"
-          cp app/build/outputs/apk/car/release/app-car-release.apk vela-maps-canary.apk
+          for apk in app/build/outputs/apk/car/release/*.apk; do
+            [ -f "$apk" ] || continue
+            bname=$(basename "$apk" .apk)
+            arch=$(echo "$bname" | sed -e 's/app-car-//' -e 's/-release//')
+            if [ "$arch" = "universal" ] || [ "$arch" = "app-car-release" ]; then
+              cp "$apk" vela-maps-canary.apk
+              cp "$apk" vela-maps-canary-universal.apk
+            else
+              cp "$apk" "vela-maps-canary-${arch}.apk"
+            fi
+          done
           # The newest change a USER can see (docs-only and comment-only commits are skipped,
           # scripts/changelog.sh), falling back to the plain subject when nothing qualifies.
           SUBJ="$(bash scripts/changelog.sh --latest HEAD)"
@@ -204,7 +214,7 @@ jobs:
           # updater's releases/tags/canary lookup are unchanged, with a few seconds of 404
           # during the swap that the updater reads as "nothing newer".
           gh release delete canary --yes --cleanup-tag 2>/dev/null || true
-          gh release create canary --prerelease --target "$GITHUB_SHA" --title "Vela $VER" --notes "$NOTES" vela-maps-canary.apk
+          gh release create canary --prerelease --target "$GITHUB_SHA" --title "Vela $VER" --notes "$NOTES" vela-maps-canary*.apk
 
       - name: Publish nightly (prerelease)
         # The nightly channel: ONE prerelease per day from the cron (or an on-demand
@@ -226,7 +236,17 @@ jobs:
             exit 0
           fi
           VER="0.4.${{ github.run_number }}"
-          cp app/build/outputs/apk/car/release/app-car-release.apk "vela-maps-v${VER}.apk"
+          for apk in app/build/outputs/apk/car/release/*.apk; do
+            [ -f "$apk" ] || continue
+            bname=$(basename "$apk" .apk)
+            arch=$(echo "$bname" | sed -e 's/app-car-//' -e 's/-release//')
+            if [ "$arch" = "universal" ] || [ "$arch" = "app-car-release" ]; then
+              cp "$apk" "vela-maps-v${VER}.apk"
+              cp "$apk" "vela-maps-v${VER}-universal.apk"
+            else
+              cp "$apk" "vela-maps-v${VER}-${arch}.apk"
+            fi
+          done
           # Build the changelog from the commit subjects since the previous release. Our commit
           # subjects are written as plain-language changelog lines, so this reads as real release
           # notes (what Obtainium shows people), not a raw hash dump.
@@ -249,7 +269,7 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --notes "$NOTES" \
-            "vela-maps-v${VER}.apk"
+            vela-maps-v${VER}*.apk
 
       - name: Prune old nightlies (stables are kept for good)
         # STABLES ARE NEVER DELETED. They are the changelog, they are what somebody bisecting a
