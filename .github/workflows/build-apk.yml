@@ -97,34 +97,16 @@ jobs:
             "https://github.com/PimpinPumpkin/Vela/releases/download/tts-runtime/sherpa-onnx-1.13.3.aar"
           test "$(stat -c%s app/libs/sherpa-onnx-1.13.3.aar)" -gt 50000000
 
-      - name: Locate NDK
-        id: ndk
-        run: |
-          NDK_DIR=$(find /usr/local/lib/android/sdk/ndk -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort -V | tail -n 1)
-          if [ -n "$NDK_DIR" ] && [ -d "$NDK_DIR" ]; then
-            echo "Bulunan NDK yolu: $NDK_DIR"
-            echo "path=$NDK_DIR" >> "$GITHUB_OUTPUT"
-          else
-            echo "NDK bulunamadi, varsayilan SDK kullanilacak."
-            echo "path=" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Build release APK
         env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.path }}
           VELA_KEYSTORE_PATH: ${{ runner.temp }}/vela-release.jks
           VELA_KEYSTORE_PASSWORD: ${{ secrets.VELA_KEYSTORE_PASSWORD }}
           VELA_KEY_ALIAS: ${{ secrets.VELA_KEY_ALIAS }}
-        run: |
-          EXTRA_ARGS=""
-          if [ -n "${{ steps.ndk.outputs.path }}" ]; then
-            EXTRA_ARGS="-Pandroid.ndkPath=${{ steps.ndk.outputs.path }}"
-          fi
-          ./gradlew :app:assembleCarRelease --no-daemon \
-            -PappVersionName=${{ steps.ver.outputs.name }} \
-            -PappVersionCode=${{ steps.ver.outputs.code }} \
-            -PmaptilerKey=${{ secrets.MAPTILER_KEY }} \
-            $EXTRA_ARGS
+        run: >
+          ./gradlew :app:assembleCarRelease --no-daemon
+          -PappVersionName=${{ steps.ver.outputs.name }}
+          -PappVersionCode=${{ steps.ver.outputs.code }}
+          -PmaptilerKey=${{ secrets.MAPTILER_KEY }}
 
       - name: Prepare APKs
         run: |
