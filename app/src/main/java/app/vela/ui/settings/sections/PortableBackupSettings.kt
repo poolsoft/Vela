@@ -25,7 +25,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vela.R
 import app.vela.backup.BackupRestore
 import app.vela.backup.PortableBackup
-import app.vela.carlauncher.tools.LauncherBackup
 import app.vela.ui.dpadHighlight
 import app.vela.ui.settings.PageIntro
 import app.vela.ui.settings.SettingsScaffold
@@ -146,7 +145,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                         items(exportCategories, key = { it.category.name }) { stat ->
                             val isChecked = stat.category in selectedExportCategories
                             val sizeStr = if (stat.fileCount > 0) {
-                                "${stat.fileCount} dosya (${LauncherBackup.formatFileSize(stat.totalBytes)})"
+                                "${stat.fileCount} dosya (${PortableBackup.formatFileSize(stat.totalBytes)})"
                             } else ""
 
                             Row(
@@ -304,7 +303,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                     ) {
                         items(status.availableRestoreCategories, key = { it.category.name }) { stat ->
                             val isChecked = stat.category in selectedRestoreCategories
-                            val sizeStr = "${stat.fileCount} dosya (${LauncherBackup.formatFileSize(stat.totalBytes)})"
+                            val sizeStr = "${stat.fileCount} dosya (${PortableBackup.formatFileSize(stat.totalBytes)})"
 
                             Row(
                                 modifier = Modifier

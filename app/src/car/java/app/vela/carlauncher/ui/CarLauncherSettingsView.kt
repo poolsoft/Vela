@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DisplaySettings
 import androidx.compose.material.icons.filled.Equalizer
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewSidebar
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.vela.carlauncher.hardware.CarHardwareManager
 import app.vela.carlauncher.settings.CarLauncherSettings
+import app.vela.ui.AppLocale
 
 private val ClPrimary = Color(0xFF0A84FF)
 private val ClCardBg = Color(0xFF141419)
@@ -138,7 +140,7 @@ fun CarLauncherSettingsView(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Ayarlar",
+                    text = stringResource(R.string.car_internal_settings),
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
@@ -154,7 +156,7 @@ fun CarLauncherSettingsView(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Kapat",
+                        contentDescription = stringResource(R.string.settings_close),
                         tint = Color.White,
                         modifier = Modifier.size(18.dp)
                     )
@@ -165,28 +167,28 @@ fun CarLauncherSettingsView(
 
             // Kategori Menuleri
             KategoriSecimButonu(
-                baslik = "Görünüm",
+                baslik = stringResource(R.string.car_settings_category_appearance),
                 ikon = Icons.Default.DisplaySettings,
                 secili = aktifKategori == "GORUNUM",
                 onClick = { aktifKategori = "GORUNUM" }
             )
 
             KategoriSecimButonu(
-                baslik = "Kenar Çubuğu (Dock)",
+                baslik = stringResource(R.string.car_settings_category_dock),
                 ikon = Icons.Default.ViewSidebar,
                 secili = aktifKategori == "DOCK",
                 onClick = { aktifKategori = "DOCK" }
             )
 
             KategoriSecimButonu(
-                baslik = "Müzik ve Ses",
+                baslik = stringResource(R.string.car_settings_category_music),
                 ikon = Icons.Default.MusicNote,
                 secili = aktifKategori == "MUZIK",
                 onClick = { aktifKategori = "MUZIK" }
             )
 
             KategoriSecimButonu(
-                baslik = "Sistem & Donanım",
+                baslik = stringResource(R.string.car_settings_category_system),
                 ikon = Icons.Default.Tune,
                 secili = aktifKategori == "SISTEM",
                 onClick = { aktifKategori = "SISTEM" }
@@ -208,16 +210,16 @@ fun CarLauncherSettingsView(
             when (aktifKategori) {
                 "GORUNUM" -> {
                     Text(
-                        text = "Görünüm ve Panel Ayarları",
+                        text = stringResource(R.string.car_settings_title_appearance),
                         color = Color.White,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
                     )
 
-                    AyarKategoriKarti(baslik = "Pencereler ve Düzen", ikon = Icons.Default.DisplaySettings) {
+                    AyarKategoriKarti(baslik = stringResource(R.string.car_settings_windows_layout), ikon = Icons.Default.DisplaySettings) {
                         AyarAnahtarSatiri(
-                            baslik = "Tam Ekran Modu (Immersive)",
-                            aciklama = "Gezinti ve durum çubuklarını gizler, tüm ekranı dokunmaya açar",
+                            baslik = stringResource(R.string.car_settings_immersive_mode),
+                            aciklama = stringResource(R.string.car_settings_immersive_desc),
                             secili = tamEkran,
                             onDegisim = { CarLauncherSettings.setTamEkranModu(it) }
                         )
@@ -226,8 +228,8 @@ fun CarLauncherSettingsView(
 
                         if (!tamEkran) {
                             AyarAnahtarSatiri(
-                                baslik = "Durum Çubuğu (Status Bar)",
-                                aciklama = "Üst sistem bildirim çubuğunu şeffaf olarak gösterir",
+                                baslik = stringResource(R.string.car_settings_status_bar),
+                                aciklama = stringResource(R.string.car_settings_status_bar_desc),
                                 secili = durumCubugu,
                                 onDegisim = { CarLauncherSettings.setDurumCubuguGoster(it) }
                             )
@@ -237,17 +239,17 @@ fun CarLauncherSettingsView(
 
                         // Panel Konumu (Sol / Sag)
                         Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-                            Text(text = "Widget Panel Konumu", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text(text = "Haritaya göre küçük panelin yerleşeceği taraf", color = Color.Gray, fontSize = 12.sp)
+                            Text(text = stringResource(R.string.car_settings_panel_pos), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text(text = stringResource(R.string.car_settings_panel_pos_desc), color = Color.Gray, fontSize = 12.sp)
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 SegmentButon(
-                                    metin = "Sol Taraf",
+                                    metin = stringResource(R.string.car_settings_panel_left),
                                     secili = panelKonumu == "left",
                                     onClick = { CarLauncherSettings.setPanelKonumu("left") }
                                 )
                                 SegmentButon(
-                                    metin = "Sağ Taraf",
+                                    metin = stringResource(R.string.car_settings_panel_right),
                                     secili = panelKonumu == "right",
                                     onClick = { CarLauncherSettings.setPanelKonumu("right") }
                                 )
@@ -259,10 +261,10 @@ fun CarLauncherSettingsView(
                         // Panel Genislik Slider'i (%15 - %65)
                         Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(text = "Panel Genişlik Oranı", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Text(text = stringResource(R.string.car_settings_panel_width_ratio), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                 Text(text = "%${(panelGenislikYuzdesi * 100).toInt()}", color = ClPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                             }
-                            Text(text = "Ekran genişliğine göre küçük panelin kapladığı oran", color = Color.Gray, fontSize = 12.sp)
+                            Text(text = stringResource(R.string.car_settings_panel_width_ratio_desc), color = Color.Gray, fontSize = 12.sp)
                             Slider(
                                 value = panelGenislikYuzdesi,
                                 onValueChange = { CarLauncherSettings.setWidgetPanelWidthPercent(it, persist = true) },
@@ -286,8 +288,8 @@ fun CarLauncherSettingsView(
                         }
 
                         AyarAnahtarSatiri(
-                            baslik = "Masaüstü Modu (Desktop)",
-                            aciklama = "Haritayı gizleyip tek büyük masaüstü paneli gösterir",
+                            baslik = stringResource(R.string.car_settings_desktop_mode),
+                            aciklama = stringResource(R.string.car_settings_desktop_mode_desc),
                             secili = desktopModu,
                             onDegisim = { CarLauncherSettings.setDesktopModu(it) }
                         )
@@ -295,8 +297,8 @@ fun CarLauncherSettingsView(
                         HorizontalDivider(color = ClDivider)
 
                         AyarAnahtarSatiri(
-                            baslik = "Masaüstünü Döngüye Dahil Et",
-                            aciklama = "Dock mod butonuna basıldığında Masaüstü Modunu 3. adım olarak döngüye sokar",
+                            baslik = stringResource(R.string.car_settings_desktop_loop),
+                            aciklama = stringResource(R.string.car_settings_desktop_loop_desc),
                             secili = desktopDongudeEtkin,
                             onDegisim = { CarLauncherSettings.setDesktopDongudeEtkin(it) }
                         )
@@ -304,22 +306,22 @@ fun CarLauncherSettingsView(
                         HorizontalDivider(color = ClDivider)
 
                         Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-                            Text(text = "İlk Açılış Sayfası", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text(text = "Uygulama başladığında varsayılan olarak açılacak ekran modu", color = Color.Gray, fontSize = 12.sp)
+                            Text(text = stringResource(R.string.car_settings_startup_page), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text(text = stringResource(R.string.car_settings_startup_page_desc), color = Color.Gray, fontSize = 12.sp)
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 SegmentButon(
-                                    metin = "Normal (Bölünmüş)",
+                                    metin = stringResource(R.string.car_settings_startup_normal),
                                     secili = baslangicEkrani == "normal",
                                     onClick = { CarLauncherSettings.setBaslangicEkrani("normal") }
                                 )
                                 SegmentButon(
-                                    metin = "Tam Harita",
+                                    metin = stringResource(R.string.car_settings_startup_map_only),
                                     secili = baslangicEkrani == "map_only",
                                     onClick = { CarLauncherSettings.setBaslangicEkrani("map_only") }
                                 )
                                 SegmentButon(
-                                    metin = "Masaüstü",
+                                    metin = stringResource(R.string.car_settings_startup_desktop),
                                     secili = baslangicEkrani == "desktop",
                                     onClick = { CarLauncherSettings.setBaslangicEkrani("desktop") }
                                 )
@@ -327,14 +329,14 @@ fun CarLauncherSettingsView(
                         }
                     }
 
-                    AyarKategoriKarti(baslik = "Yüzen Hız Butonu (Floating Assistant)", ikon = Icons.Default.Tune) {
+                    AyarKategoriKarti(baslik = stringResource(R.string.car_settings_floating_btn_title), ikon = Icons.Default.Tune) {
                         Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-                            Text(text = "Gösterim Durumu", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text(text = "Ekranda sürüklenebilir canlı hız ve asistan butonunun çalışma modu", color = Color.Gray, fontSize = 12.sp)
+                            Text(text = stringResource(R.string.car_settings_floating_btn_mode), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text(text = stringResource(R.string.car_settings_floating_btn_mode_desc), color = Color.Gray, fontSize = 12.sp)
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 SegmentButon(
-                                    metin = "Her Zaman",
+                                    metin = stringResource(R.string.car_settings_btn_always),
                                     secili = floatingButtonModu == "always",
                                     onClick = {
                                         CarLauncherSettings.setFloatingButtonModu("always")
@@ -343,7 +345,7 @@ fun CarLauncherSettingsView(
                                     modifier = Modifier.weight(1f)
                                 )
                                 SegmentButon(
-                                    metin = "Arka Planda",
+                                    metin = stringResource(R.string.car_settings_btn_background),
                                     secili = floatingButtonModu == "background_only",
                                     onClick = {
                                         CarLauncherSettings.setFloatingButtonModu("background_only")
@@ -352,7 +354,7 @@ fun CarLauncherSettingsView(
                                     modifier = Modifier.weight(1f)
                                 )
                                 SegmentButon(
-                                    metin = "Kapalı",
+                                    metin = stringResource(R.string.car_settings_btn_never),
                                     secili = floatingButtonModu == "never",
                                     onClick = {
                                         CarLauncherSettings.setFloatingButtonModu("never")
@@ -368,7 +370,7 @@ fun CarLauncherSettingsView(
 
                             Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(text = "Buton Boyutu", color = Color.White, fontSize = 14.sp)
+                                    Text(text = stringResource(R.string.car_settings_btn_size), color = Color.White, fontSize = 14.sp)
                                     Text(text = "${floatingButtonBoyutu} dp", color = ClPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 }
                                 Slider(
@@ -405,19 +407,19 @@ fun CarLauncherSettingsView(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = "Ekran Üzerinde Gösterme İzni", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                        Text(text = "Yüzen butonun çalışabilmesi için sistem pencere izni gerekir", color = Color.Gray, fontSize = 12.sp)
+                                        Text(text = stringResource(R.string.car_settings_overlay_permission), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                        Text(text = stringResource(R.string.car_settings_overlay_permission_desc), color = Color.Gray, fontSize = 12.sp)
                                     }
-                                    Text(text = "İzin Ver →", color = ClPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = stringResource(R.string.car_settings_grant_permission), color = ClPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                     }
 
-                    AyarKategoriKarti(baslik = "Gece Modu ve Karartma", ikon = Icons.Default.DisplaySettings) {
+                    AyarKategoriKarti(baslik = stringResource(R.string.car_settings_night_mode), ikon = Icons.Default.DisplaySettings) {
                         AyarAnahtarSatiri(
-                            baslik = "Gece Karartma Katmanı",
-                            aciklama = "Gece sürüşünde göz almayan yumuşak filtre katmanı",
+                            baslik = stringResource(R.string.car_settings_night_filter),
+                            aciklama = stringResource(R.string.car_settings_night_filter_desc),
                             secili = geceKarartma,
                             onDegisim = { CarLauncherSettings.setGeceKarartmaEtkin(it) }
                         )
@@ -426,7 +428,7 @@ fun CarLauncherSettingsView(
                             HorizontalDivider(color = ClDivider)
                             Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(text = "Karartma Yoğunluğu", color = Color.White, fontSize = 14.sp)
+                                    Text(text = stringResource(R.string.car_settings_dimming_level), color = Color.White, fontSize = 14.sp)
                                     Text(text = "%${(geceKarartmaSeviyesi * 100).toInt()}", color = ClPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 }
                                 Slider(
@@ -442,31 +444,31 @@ fun CarLauncherSettingsView(
 
                 "DOCK" -> {
                     Text(
-                        text = "Kenar Çubuğu (Dock) Ayarları",
+                        text = stringResource(R.string.car_settings_dock_title),
                         color = Color.White,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
                     )
 
-                    AyarKategoriKarti(baslik = "Dock Konumlandırma ve Boyut", ikon = Icons.Default.ViewSidebar) {
+                    AyarKategoriKarti(baslik = stringResource(R.string.car_settings_dock_pos_size), ikon = Icons.Default.ViewSidebar) {
                         // Dock Konumu (Sol / Alt / Sag)
                         Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-                            Text(text = "Dock Ekran Konumu", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text(text = "Hızlı uygulama çubuğunun ekrandaki yerleşimi", color = Color.Gray, fontSize = 12.sp)
+                            Text(text = stringResource(R.string.car_settings_dock_screen_pos), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text(text = stringResource(R.string.car_settings_dock_screen_pos_desc), color = Color.Gray, fontSize = 12.sp)
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 SegmentButon(
-                                    metin = "Sol Kenar",
+                                    metin = stringResource(R.string.car_settings_dock_left),
                                     secili = dockKonumu == "left",
                                     onClick = { CarLauncherSettings.setDockKonumu("left") }
                                 )
                                 SegmentButon(
-                                    metin = "Alt Çubuk",
+                                    metin = stringResource(R.string.car_settings_dock_bottom),
                                     secili = dockKonumu == "bottom",
                                     onClick = { CarLauncherSettings.setDockKonumu("bottom") }
                                 )
                                 SegmentButon(
-                                    metin = "Sağ Kenar",
+                                    metin = stringResource(R.string.car_settings_dock_right),
                                     secili = dockKonumu == "right",
                                     onClick = { CarLauncherSettings.setDockKonumu("right") }
                                 )
@@ -478,10 +480,10 @@ fun CarLauncherSettingsView(
                         // Dock Boyutu Olcegi Slider'i
                         Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(text = "Dock Boyutu ve İkon Ölçeği", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Text(text = stringResource(R.string.car_settings_dock_scale), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                 Text(text = "%$dockBoyutu", color = ClPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                             }
-                            Text(text = "Dock'un kalınlığını ve butonların büyüklüğünü ayarlar", color = Color.Gray, fontSize = 12.sp)
+                            Text(text = stringResource(R.string.car_settings_dock_scale_desc), color = Color.Gray, fontSize = 12.sp)
                             Slider(
                                 value = dockBoyutu.toFloat(),
                                 onValueChange = { CarLauncherSettings.setDockBoyutu(it.toInt()) },
@@ -495,13 +497,13 @@ fun CarLauncherSettingsView(
                 "MUZIK" -> {
                     app.vela.ui.settings.SmartFocusPreferences()
                     Text(
-                        text = "Müzik ve Ses Ayarları",
+                        text = stringResource(R.string.car_settings_music_title),
                         color = Color.White,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
                     )
 
-                    AyarKategoriKarti(baslik = "Oynatma ve Görselleştirici", ikon = Icons.Default.MusicNote) {
+                    AyarKategoriKarti(baslik = stringResource(R.string.car_settings_playback_visualizer), ikon = Icons.Default.MusicNote) {
                         Column(Modifier.fillMaxWidth().padding(14.dp).clickable {
                             scope.launch {
                                 val apps = CarAppManager.getInstance(context).yukluUygulamalariGetir().filter { !it.isInternal }
@@ -521,8 +523,8 @@ fun CarLauncherSettingsView(
                                     .getOrDefault(context.getString(R.string.car_app_launch_failed)), color = Color.Gray)
                         }
                         AyarAnahtarSatiri(
-                            baslik = "Otomatik Müzik Çalma",
-                            aciklama = "Uygulama açıldığında son çalınan parçayı otomatik devam ettirir",
+                            baslik = stringResource(R.string.car_settings_auto_play),
+                            aciklama = stringResource(R.string.car_settings_auto_play_desc),
                             secili = otomatikOynat,
                             onDegisim = { CarLauncherSettings.setOtomatikOynat(it) }
                         )
@@ -558,8 +560,8 @@ fun CarLauncherSettingsView(
                         HorizontalDivider(color = ClDivider)
 
                         AyarAnahtarSatiri(
-                            baslik = "Ambiyans Görselleştirici",
-                            aciklama = "Görselleştirici renklerini çalan albüm kapağının baskın rengine dinamik olarak uyarlar",
+                            baslik = stringResource(R.string.car_settings_ambient_visualizer),
+                            aciklama = stringResource(R.string.car_settings_ambient_visualizer_desc),
                             secili = ambiyansGorsellestirici,
                             onDegisim = { CarLauncherSettings.setAmbiyansGorsellestirici(it) }
                         )
@@ -577,11 +579,11 @@ fun CarLauncherSettingsView(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(text = "Harici Medya İzni (Spotify vb.)", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                Text(text = "Harici çalan şarkıları okumak için bildirim erişimi gerekir", color = Color.Gray, fontSize = 12.sp)
+                                Text(text = stringResource(R.string.car_settings_external_media), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Text(text = stringResource(R.string.car_settings_external_media_desc), color = Color.Gray, fontSize = 12.sp)
                             }
                             Text(
-                                text = if (bildirimIzniVar) "Etkin ✓" else "İzin Ver →",
+                                text = if (bildirimIzniVar) stringResource(R.string.car_settings_permission_active) else stringResource(R.string.car_settings_grant_permission),
                                 color = if (bildirimIzniVar) Color(0xFF30D158) else ClPrimary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
@@ -600,9 +602,9 @@ fun CarLauncherSettingsView(
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Icon(imageVector = Icons.Default.Equalizer, contentDescription = null, tint = ClPrimary, modifier = Modifier.size(20.dp))
-                                Text(text = "Donanım Ekolayzırını (DSP) Başlat", color = Color.White, fontSize = 14.sp)
+                                Text(text = stringResource(R.string.car_settings_dsp_launch), color = Color.White, fontSize = 14.sp)
                             }
-                            Text(text = "Aç →", color = ClPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(text = stringResource(R.string.car_settings_dsp_open), color = ClPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -615,14 +617,83 @@ fun CarLauncherSettingsView(
                         Text(stringResource(R.string.backup_title))
                     }
                     app.vela.carlauncher.tools.LauncherToolsSettings()
+
                     Text(
-                        text = "Donanım ve Sistem İşlemleri",
+                        text = stringResource(R.string.car_pref_category_language),
                         color = Color.White,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold
                     )
 
-                    AyarKategoriKarti(baslik = "Sistem Eylemleri", ikon = Icons.Default.Tune) {
+                    AyarKategoriKarti(
+                        baslik = stringResource(R.string.car_pref_language_title),
+                        ikon = Icons.Default.Language
+                    ) {
+                        val guncelDil = AppLocale.language.value
+                        val sistemDiliniTakipEt = guncelDil.isBlank()
+
+                        AyarAnahtarSatiri(
+                            baslik = stringResource(R.string.car_settings_language_follow_system),
+                            aciklama = stringResource(R.string.car_pref_language_desc),
+                            secili = sistemDiliniTakipEt,
+                            onDegisim = { takipEt ->
+                                if (takipEt) {
+                                    AppLocale.set(context, "")
+                                } else {
+                                    val varsayilan = AppLocale.deviceDefaultSupported()
+                                    AppLocale.set(context, varsayilan)
+                                }
+                            }
+                        )
+
+                        if (!sistemDiliniTakipEt) {
+                            HorizontalDivider(color = ClDivider)
+                            Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                                Text(
+                                    text = stringResource(R.string.car_pref_language_title),
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                val seciliDilAdi = AppLocale.endonym(guncelDil)
+                                Text(
+                                    text = seciliDilAdi,
+                                    color = ClPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0x220A84FF))
+                                        .clickable {
+                                            val diller = AppLocale.SUPPORTED
+                                            val etiketler = diller.map { AppLocale.endonym(it) }.toTypedArray()
+                                            val seciliIndex = diller.indexOf(guncelDil).coerceAtLeast(0)
+                                            android.app.AlertDialog.Builder(context)
+                                                .setTitle(R.string.car_pref_language_title)
+                                                .setSingleChoiceItems(etiketler, seciliIndex) { dialog, which ->
+                                                    AppLocale.set(context, diller[which])
+                                                    dialog.dismiss()
+                                                }
+                                                .setNegativeButton(android.R.string.cancel, null)
+                                                .show()
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = stringResource(R.string.car_settings_system_title),
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    AyarKategoriKarti(baslik = stringResource(R.string.car_settings_system_actions), ikon = Icons.Default.Tune) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -632,10 +703,10 @@ fun CarLauncherSettingsView(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text(text = "Hafızayı Temizle (RAM)", color = Color.White, fontSize = 14.sp)
-                                Text(text = "Arka planda kullanılmayan belleği boşaltır", color = Color.Gray, fontSize = 12.sp)
+                                Text(text = stringResource(R.string.car_settings_clean_ram), color = Color.White, fontSize = 14.sp)
+                                Text(text = stringResource(R.string.car_settings_clean_ram_desc), color = Color.Gray, fontSize = 12.sp)
                             }
-                            Text(text = "Temizle", color = ClPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(text = stringResource(R.string.car_settings_clean_ram_btn), color = ClPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
 
                         HorizontalDivider(color = ClDivider)
@@ -653,10 +724,10 @@ fun CarLauncherSettingsView(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text(text = "Araç Baş Ünitesi Modundan Çık", color = Color(0xFFFF453A), fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                Text(text = "Standart tam ekran harita görünümüne döner", color = Color.Gray, fontSize = 12.sp)
+                                Text(text = stringResource(R.string.car_settings_exit_car_mode), color = Color(0xFFFF453A), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Text(text = stringResource(R.string.car_settings_exit_car_mode_desc), color = Color.Gray, fontSize = 12.sp)
                             }
-                            Text(text = "Çıkış", color = Color(0xFFFF453A), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text(text = stringResource(R.string.car_settings_exit_car_mode_btn), color = Color(0xFFFF453A), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

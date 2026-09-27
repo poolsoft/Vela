@@ -25,10 +25,27 @@ if [[ "$PBF" == http* ]]; then
   curl -sSL --retry 5 -o "$WORK/region.osm.pbf" "$PBF"
   PBF="$WORK/region.osm.pbf"
 fi
+
+BOUNDS=""
+ROUTING_JSON="$(dirname "$0")/routing-regions.json"
+BBOX_JSON=""
+if [ -f "$ROUTING_JSON" ]; then
+  BBOX_JSON="$(jq -c --arg id "$ID" '.regions[] | select(.id == $id) | .bbox // empty' "$ROUTING_JSON" 2>/dev/null || true)"
+fi
+if [ -n "$BBOX_JSON" ]; then
+  S=$(echo "$BBOX_JSON" | jq '.[0]')
+  W=$(echo "$BBOX_JSON" | jq '.[1]')
+  N=$(echo "$BBOX_JSON" | jq '.[2]')
+  E=$(echo "$BBOX_JSON" | jq '.[3]')
+  echo "→ extracting subregion $ID for basemap: bbox W=$W, S=$S, E=$E, N=$N"
+  osmium extract -b "$W,$S,$E,$N" --set-bounds "$PBF" -o "$WORK/extracted.osm.pbf" --overwrite
+  PBF="$WORK/extracted.osm.pbf"
+  BOUNDS="$W,$S,$E,$N"
+fi
+
 # True bounds from Geofabrik's index: the id is the pbf_url path without the -latest suffix
 # ("north-america/us/new-mexico"); a local file or unknown id can only warn.
-BOUNDS=""
-if [[ "${2:-}" == http* || "${BASEMAP_GEOFABRIK_SLUG:-}" != "" ]]; then
+if [[ -z "$BOUNDS" && ( "${2:-}" == http* || "${BASEMAP_GEOFABRIK_SLUG:-}" != "" ) ]]; then
   SLUG="${BASEMAP_GEOFABRIK_SLUG:-}"
   if [[ -z "$SLUG" ]]; then
     SLUG="${2#*download.geofabrik.de/}"; SLUG="${SLUG#download.geofabrik.de/}"

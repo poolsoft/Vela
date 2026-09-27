@@ -29,6 +29,18 @@ unzip -q "$WORK/mapcreator.zip" -d "$WORK/mapcreator"
 
 curl -fSL --retry 3 -o "$WORK/region.osm.pbf" "$PBF_URL"
 
+# If this region has a bounding box defined in routing-regions.json, extract it
+BBOX_JSON="$(jq -c --arg id "$ID" '.regions[] | select(.id == $id) | .bbox // empty' "$ROOT/tools/routing-regions.json" 2>/dev/null || true)"
+if [ -n "$BBOX_JSON" ]; then
+  S=$(echo "$BBOX_JSON" | jq '.[0]')
+  W=$(echo "$BBOX_JSON" | jq '.[1]')
+  N=$(echo "$BBOX_JSON" | jq '.[2]')
+  E=$(echo "$BBOX_JSON" | jq '.[3]')
+  echo "→ extracting subregion $ID: bbox W=$W, S=$S, E=$E, N=$N"
+  osmium extract -b "$W,$S,$E,$N" --set-bounds "$WORK/region.osm.pbf" -o "$WORK/extracted.osm.pbf" --overwrite
+  mv "$WORK/extracted.osm.pbf" "$WORK/region.osm.pbf"
+fi
+
 # bbox [S,W,N,E] from the extract's declared HEADER box - same rule as every other region pipeline
 # (data.bbox is polluted by outlier nodes). osmium prints (minlon,minlat,maxlon,maxlat).
 read -r MINLON MINLAT MAXLON MAXLAT < <(osmium fileinfo -g header.boxes "$WORK/region.osm.pbf" | tr -d '()' | tr ',' ' ')

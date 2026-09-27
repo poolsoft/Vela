@@ -4242,6 +4242,46 @@
       ]
     },
     {
+      "id": "tr-guney",
+      "name": "Güney & Güneydoğu (Turkey)",
+      "bbox": [
+        35.7,
+        32.2,
+        39.8,
+        39.7
+      ]
+    },
+    {
+      "id": "tr-marmara",
+      "name": "Kuzeybatı & Marmara (Turkey)",
+      "bbox": [
+        39.0,
+        25.5,
+        42.2,
+        32.3
+      ]
+    },
+    {
+      "id": "tr-ege",
+      "name": "Ege & Batı Akdeniz (Turkey)",
+      "bbox": [
+        35.9,
+        25.9,
+        40.2,
+        34.8
+      ]
+    },
+    {
+      "id": "tr-karadeniz-dogu",
+      "name": "Karadeniz & Doğu Anadolu (Turkey)",
+      "bbox": [
+        36.6,
+        31.3,
+        42.2,
+        44.85
+      ]
+    },
+    {
       "id": "turkmenistan",
       "name": "Turkmenistan",
       "bbox": [

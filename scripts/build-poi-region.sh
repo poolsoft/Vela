@@ -20,6 +20,18 @@ WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 echo "→ downloading $URL"
 curl -fsSL "$URL" -o "$WORK/region.osm.pbf"
 
+# If this region has a bounding box defined in routing-regions.json, extract it
+BBOX_JSON="$(jq -c --arg id "$ID" '.regions[] | select(.id == $id) | .bbox // empty' "$ROOT/tools/routing-regions.json" 2>/dev/null || true)"
+if [ -n "$BBOX_JSON" ]; then
+  S=$(echo "$BBOX_JSON" | jq '.[0]')
+  W=$(echo "$BBOX_JSON" | jq '.[1]')
+  N=$(echo "$BBOX_JSON" | jq '.[2]')
+  E=$(echo "$BBOX_JSON" | jq '.[3]')
+  echo "→ extracting subregion $ID: bbox W=$W, S=$S, E=$E, N=$N"
+  osmium extract -b "$W,$S,$E,$N" --set-bounds "$WORK/region.osm.pbf" -o "$WORK/extracted.osm.pbf" --overwrite
+  mv "$WORK/extracted.osm.pbf" "$WORK/region.osm.pbf"
+fi
+
 # bbox first (from the header), so the source PBF can be deleted as soon as it's filtered — a big
 # country needs the disk back. [S,W,N,E] from the declared extract region, NOT data.bbox (same rule
 # as routing graphs — node extent is polluted by outlier nodes). osmium prints (minlon,minlat,...).

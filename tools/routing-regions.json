@@ -2679,7 +2679,56 @@
       "name": "Turkey",
       "group": "europe",
       "pbf_url": "https://download.geofabrik.de/europe/turkey-latest.osm.pbf",
-      "big": true
+      "big": true,
+      "skip_obf": true
+    },
+    {
+      "id": "tr-guney",
+      "name": "Güney & Güneydoğu (Turkey)",
+      "group": "turkey-sub",
+      "pbf_url": "https://download.geofabrik.de/europe/turkey-latest.osm.pbf",
+      "bbox": [
+        35.7,
+        32.2,
+        39.8,
+        39.7
+      ]
+    },
+    {
+      "id": "tr-marmara",
+      "name": "Kuzeybatı & Marmara (Turkey)",
+      "group": "turkey-sub",
+      "pbf_url": "https://download.geofabrik.de/europe/turkey-latest.osm.pbf",
+      "bbox": [
+        39.0,
+        25.5,
+        42.2,
+        32.3
+      ]
+    },
+    {
+      "id": "tr-ege",
+      "name": "Ege & Batı Akdeniz (Turkey)",
+      "group": "turkey-sub",
+      "pbf_url": "https://download.geofabrik.de/europe/turkey-latest.osm.pbf",
+      "bbox": [
+        35.9,
+        25.9,
+        40.2,
+        34.8
+      ]
+    },
+    {
+      "id": "tr-karadeniz-dogu",
+      "name": "Karadeniz & Doğu Anadolu (Turkey)",
+      "group": "turkey-sub",
+      "pbf_url": "https://download.geofabrik.de/europe/turkey-latest.osm.pbf",
+      "bbox": [
+        36.6,
+        31.3,
+        42.2,
+        44.85
+      ]
     },
     {
       "id": "turkmenistan",

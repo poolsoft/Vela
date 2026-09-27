@@ -22,12 +22,16 @@ object OfflineServerConfig {
         "https://github.com/poolsoft/Vela/releases/download/poi-packs/poi-pack-manifest.json"
     const val POOLSOFT_OBF_MANIFEST_URL =
         "https://github.com/poolsoft/Vela/releases/download/obf-regions/obf-manifest.json"
+    const val POOLSOFT_BASEMAP_MANIFEST_URL =
+        "https://github.com/poolsoft/Vela/releases/download/basemap-tiles/basemap-manifest.json"
 
     // Upstream (Resmi Vela) manifest URL'leri
     const val UPSTREAM_POI_MANIFEST_URL =
         "https://github.com/PimpinPumpkin/Vela/releases/download/poi-packs/poi-pack-manifest.json"
     const val UPSTREAM_OBF_MANIFEST_URL =
         "https://github.com/PimpinPumpkin/Vela/releases/download/obf-regions/obf-manifest.json"
+    const val UPSTREAM_BASEMAP_MANIFEST_URL =
+        "https://github.com/PimpinPumpkin/Vela/releases/download/basemap-tiles/basemap-manifest.json"
 
     fun getServerMode(context: Context): Int {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -78,6 +82,20 @@ object OfflineServerConfig {
             MODE_CUSTOM -> listOf(POOLSOFT_OBF_MANIFEST_URL)
             else -> { // MODE_HYBRID: Poolsoft once, Upstream sonra (Turkiye paketi oncelikli)
                 listOf(POOLSOFT_OBF_MANIFEST_URL, UPSTREAM_OBF_MANIFEST_URL)
+            }
+        }
+    }
+
+    /**
+     * Aktif yapilandirmaya gore taranacak Basemap (PMTiles) manifest URL listesini dondurur.
+     */
+    fun getBasemapManifestUrls(context: Context): List<String> {
+        return when (getServerMode(context)) {
+            MODE_POOLSOFT -> listOf(POOLSOFT_BASEMAP_MANIFEST_URL)
+            MODE_UPSTREAM -> listOf(UPSTREAM_BASEMAP_MANIFEST_URL)
+            MODE_CUSTOM -> listOf(POOLSOFT_BASEMAP_MANIFEST_URL)
+            else -> { // MODE_HYBRID: Poolsoft once, Upstream sonra (Turkiye paketi oncelikli)
+                listOf(POOLSOFT_BASEMAP_MANIFEST_URL, UPSTREAM_BASEMAP_MANIFEST_URL)
             }
         }
     }
