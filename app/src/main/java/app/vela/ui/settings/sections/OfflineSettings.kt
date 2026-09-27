@@ -488,7 +488,7 @@ private fun ParentRow(
     onToggle: () -> Unit,
 ) {
     val pieces = node.pieces
-    val missing = pieces.filter { it.id !in state.routingInstalledIds }
+    val missing = pieces.filter { it.id !in state.routingInstalledIds || it.id !in state.basemapInstalledIds }
     val batchActive = state.regionQueueTotal > 0 && pieces.any { it.id == state.routingDownloadingId }
     val totalMb = pieces.sumOf { p -> regionInstalledMb(p, state.poiPackRegions.firstOrNull { it.id == p.id }, state.regionExtrasMb[p.id] ?: 0) }
     Row(
@@ -545,10 +545,14 @@ private fun RegionRow(
     onConfirm: (app.vela.offline.RoutingRegion) -> Unit,
     subtitleSuffix: String? = null,
 ) {
-    val installed = region.id in state.routingInstalledIds
+    val routingInstalled = region.id in state.routingInstalledIds
+    val packInstalled = region.id in state.poiPackInstalledIds
+    val basemapInstalled = region.id in state.basemapInstalledIds
     val downloading = state.routingDownloadingId == region.id
     val packDownloading = state.poiPackDownloadingId == region.id
-    val packInstalled = region.id in state.poiPackInstalledIds
+    val isDownloading = downloading || packDownloading
+    val fullyInstalled = routingInstalled && packInstalled && basemapInstalled
+    val installed = routingInstalled && packInstalled
     // A fresher pack is published than the one installed → offer an in-place update
     // (a small row-level delta when the manifest carries one, else a full re-download).
     val packRegion = state.poiPackRegions.firstOrNull { it.id == region.id }
@@ -575,16 +579,18 @@ private fun RegionRow(
             }
             Text(
                 (if (subtitleSuffix != null) "$subtitleSuffix · " else "") + when {
-                    downloading -> stringResource(R.string.settings_routing_downloading, state.routingDownloadPct)
+                    downloading -> state.downloadStepText ?: stringResource(R.string.settings_routing_downloading, state.routingDownloadPct)
                     packDownloading -> stringResource(R.string.settings_routing_places_downloading, state.poiPackDownloadPct)
                     updateAvailable -> stringResource(R.string.settings_routing_update_available)
+                    fullyInstalled -> "Yüklendi · Harita ve yerler çevrimdışı hazır"
+                    routingInstalled && !basemapInstalled -> "Eksik: Sokak haritası yüklenmedi"
                     installed && packInstalled -> stringResource(R.string.settings_routing_installed_places)
-                    installed -> stringResource(R.string.settings_routing_installed)
+                    routingInstalled -> stringResource(R.string.settings_routing_installed)
                     here -> stringResource(R.string.settings_routing_size_installed_here, fmtMb(regionInstalledMb(region, packRegion, state.regionExtrasMb[region.id] ?: 0)))
                     else -> stringResource(R.string.settings_routing_size_installed, fmtMb(regionInstalledMb(region, packRegion, state.regionExtrasMb[region.id] ?: 0)))
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = if ((here && !installed && !downloading) || updateAvailable) MaterialTheme.colorScheme.primary
+                color = if ((here && !routingInstalled && !downloading) || updateAvailable || (routingInstalled && !basemapInstalled)) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -593,7 +599,7 @@ private fun RegionRow(
         // the highlight doesn't teleport to the top of the page (user report).
         val keeper = rememberDpadFocusKeeper()
         when {
-            downloading || packDownloading -> Row(verticalAlignment = Alignment.CenterVertically) {
+            isDownloading -> Row(verticalAlignment = Alignment.CenterVertically) {
                 DpadFocusHandoff(keeper)
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                 androidx.compose.material3.TextButton(
@@ -605,27 +611,36 @@ private fun RegionRow(
                 DpadFocusHandoff(keeper)
                 FilledTonalButton(
                     onClick = { vm.updateRegion(region) },
-                    enabled = state.routingDownloadingId == null && state.poiPackDownloadingId == null,
+                    enabled = !isDownloading,
                     modifier = Modifier.dpadFocusKept(keeper),
                 ) { Text(stringResource(R.string.settings_update_region)) }
                 IconButton(onClick = { vm.deleteRoutingGraph(region.id) }) {
                     Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.settings_routing_remove))
                 }
             }
-            // Installed before place packs existed (or its pack was skipped): offer just
-            // the pack, so offline search covers the region without a graph re-download.
-            installed && !packInstalled -> Row(verticalAlignment = Alignment.CenterVertically) {
+            routingInstalled && !basemapInstalled -> Row(verticalAlignment = Alignment.CenterVertically) {
+                DpadFocusHandoff(keeper)
+                FilledTonalButton(
+                    onClick = { vm.downloadRoutingGraph(region) },
+                    enabled = !isDownloading,
+                    modifier = Modifier.dpadFocusKept(keeper),
+                ) { Text("Haritayı Tamamla") }
+                IconButton(onClick = { vm.deleteRoutingGraph(region.id) }) {
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.settings_routing_remove))
+                }
+            }
+            routingInstalled && !packInstalled -> Row(verticalAlignment = Alignment.CenterVertically) {
                 DpadFocusHandoff(keeper)
                 FilledTonalButton(
                     onClick = { vm.downloadPoiPackFor(region) },
-                    enabled = state.routingDownloadingId == null && state.poiPackDownloadingId == null,
+                    enabled = !isDownloading,
                     modifier = Modifier.dpadFocusKept(keeper),
                 ) { Text(stringResource(R.string.settings_get_places)) }
                 IconButton(onClick = { vm.deleteRoutingGraph(region.id) }) {
                     Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.settings_routing_remove))
                 }
             }
-            installed -> {
+            routingInstalled -> {
                 DpadFocusHandoff(keeper)
                 IconButton(onClick = { vm.deleteRoutingGraph(region.id) }, modifier = Modifier.dpadFocusKept(keeper)) {
                     Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.settings_routing_remove))
@@ -640,7 +655,7 @@ private fun RegionRow(
                         if (regionInstalledMb(region, packRegion, state.regionExtrasMb[region.id] ?: 0) > CONFIRM_MB) onConfirm(region)
                         else vm.downloadRoutingGraph(region)
                     },
-                    enabled = state.routingDownloadingId == null,
+                    enabled = !isDownloading,
                     modifier = Modifier.dpadFocusKept(keeper),
                 ) { Text(stringResource(R.string.settings_download)) }
             }

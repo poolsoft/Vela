@@ -130,42 +130,75 @@ class OfflinePoiStore @Inject constructor(
         return out
     }
 
+    private fun norm(s: String): String =
+        s.lowercase()
+            .replace('ı', 'i').replace('İ', 'i').replace('I', 'i')
+            .replace('ş', 's').replace('Ş', 's')
+            .replace('ğ', 'g').replace('Ğ', 'g')
+            .replace('ü', 'u').replace('Ü', 'u')
+            .replace('ö', 'o').replace('Ö', 'o')
+            .replace('ç', 'c').replace('Ç', 'c')
+
+    private fun expandTurkishVariants(word: String): List<String> {
+        val res = LinkedHashSet<String>()
+        val w = word.trim()
+        if (w.isEmpty()) return emptyList()
+        res.add(w)
+        res.add(w.lowercase())
+        res.add(w.uppercase())
+
+        val ascii = norm(w)
+        res.add(ascii)
+        res.add(ascii.uppercase())
+        res.add(ascii.replaceFirstChar { it.uppercaseChar() })
+
+        val trDotless = w.lowercase().replace('i', 'ı')
+        res.add(trDotless)
+        res.add(trDotless.replaceFirstChar { 'I' })
+        res.add(trDotless.uppercase())
+
+        val trFull = ascii.replace('i', 'ı').replace('s', 'ş').replace('c', 'ç').replace('g', 'ğ').replace('u', 'ü').replace('o', 'ö')
+        res.add(trFull)
+        res.add(trFull.replaceFirstChar { if (it == 'ı') 'I' else it.uppercaseChar() })
+
+        return res.filter { it.isNotBlank() }.toList()
+    }
+
+    private fun matchRank(p: Place, query: String, stems: List<String>): Int {
+        val qNorm = norm(query)
+        val pNorm = norm(p.name)
+        val candidates = (listOf(qNorm) + stems.map { norm(it) }).filter { it.length >= 2 }.distinct()
+        val pWords = pNorm.split(Regex("\\s+")).filter { it.isNotEmpty() }
+
+        // 0: Tam eslesme (Exact match)
+        if (pNorm == qNorm || candidates.any { pNorm == it }) return 0
+
+        // 1: Isim arama terimiyle basliyor (Name starts with query)
+        if (pNorm.startsWith(qNorm) || candidates.any { pNorm.startsWith(it) }) return 1
+
+        // 2: Isimdeki herhangi bir kelime terimle basliyor (Word starts with query, e.g. Zeytin Ilicasi)
+        if (pWords.any { pw -> candidates.any { c -> pw.startsWith(c) } }) return 2
+
+        // 3: Isim icinde geciyor (Name contains query)
+        if (pNorm.contains(qNorm) || candidates.any { pNorm.contains(it) }) return 3
+
+        // 4: Kategori veya adreste geciyor
+        return 4
+    }
+
     fun search(query: String, near: LatLng?, limit: Int = 30): List<Place> {
         val term = query.trim()
-        // name/category LIKE targets: the whole query, plus each word ≥2 chars (multi-word only),
-        // with case variations and Turkish character folding for SQLite LIKE case-insensitivity.
-        val nameCat = LinkedHashSet<String>().apply {
-            add(term)
-            add(term.lowercase())
-            add(term.uppercase())
-            val trFold = term.replace('İ', 'i').replace('I', 'ı').replace('ı', 'i')
-                .replace('ş', 's').replace('Ş', 's')
-                .replace('ğ', 'g').replace('Ğ', 'g')
-                .replace('ü', 'u').replace('Ü', 'u')
-                .replace('ö', 'o').replace('Ö', 'o')
-                .replace('ç', 'c').replace('Ç', 'c')
-            add(trFold)
-            add(trFold.lowercase())
-            add(trFold.uppercase())
-        }
+        if (term.isEmpty()) return emptyList()
+
         val words = term.split(Regex("\\s+")).filter { it.length >= 2 }
         val stems = (listOf(term) + words).flatMap { turkishStemVariants(it) }.distinct()
         val allTerms = (listOf(term) + (if (words.size > 1) words else emptyList()) + stems).distinct()
 
+        val nameCat = LinkedHashSet<String>()
         for (w in allTerms) {
-            nameCat.add(w)
-            nameCat.add(w.lowercase())
-            nameCat.add(w.uppercase())
-            val wFold = w.replace('İ', 'i').replace('I', 'ı').replace('ı', 'i')
-                .replace('ş', 's').replace('Ş', 's')
-                .replace('ğ', 'g').replace('Ğ', 'g')
-                .replace('ü', 'u').replace('Ü', 'u')
-                .replace('ö', 'o').replace('Ö', 'o')
-                .replace('ç', 'c').replace('Ç', 'c')
-            nameCat.add(wFold)
-            nameCat.add(wFold.lowercase())
-            nameCat.add(wFold.uppercase())
+            nameCat.addAll(expandTurkishVariants(w))
         }
+
         // category-tag targets: keywords for the whole query and for each word.
         val cats = LinkedHashSet<String>().apply { addAll(categoryKeywords(term)); words.forEach { addAll(categoryKeywords(it)) } }
 
@@ -210,19 +243,14 @@ class OfflinePoiStore @Inject constructor(
         // same schema, same SQL. Dedupe by id (a POI can be in both once its area was also saved).
         query(helper.readableDatabase)
         OfflinePacks.dbs.forEach(::query)
-        // Rank by how many query words hit the name/category (so "mexican restaurant" leads with the
-        // Mexican restaurant, not a random one), then by distance.
-        val qWords = ((if (words.size > 1) words else listOf(term)) + stems).map { it.lowercase() }.distinct()
-        // TRANSIT STOPS GO LAST unless the query asks for transit. US stops are named by their
-        // corner ("Russell Blvd & Anderson Rd"), so any query carrying a street or a town
-        // word matched hundreds of them and a business search offline read as a list of
-        // intersections (user 2026-09-21, a parts store the pack did not have). They still show,
-        // after everything else.
+        // Rank: 1) Non-transit first, 2) Tam eslesme -> Kelime ile baslayan -> Iceren, 3) Word match count, 4) Distance
+        val qWords = ((if (words.size > 1) words else listOf(term)) + stems).map { norm(it) }.distinct()
         val transitQuery = TRANSIT_QUERY_WORDS.any { term.lowercase().contains(it) }
         return rows.distinctBy { it.id }.sortedWith(
             compareBy<Place> { p -> if (!transitQuery && (p.category ?: "").lowercase() in TRANSIT_STOP_CATS) 1 else 0 }
+                .thenBy { p -> matchRank(p, term, stems) }
                 .thenByDescending { p ->
-                    val hay = (p.name + " " + (p.category ?: "") + " " + (p.address ?: "")).lowercase()
+                    val hay = norm(p.name + " " + (p.category ?: "") + " " + (p.address ?: ""))
                     qWords.count { hay.contains(it) }
                 }.thenBy { it.distanceMeters ?: Double.MAX_VALUE },
         ).take(limit)
