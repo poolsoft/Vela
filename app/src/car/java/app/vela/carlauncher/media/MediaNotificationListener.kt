@@ -46,52 +46,55 @@ class MediaNotificationListener : NotificationListenerService() {
     }
 
     private val anaHandler = Handler(Looper.getMainLooper())
+    private var sonYenilemeZamaniMs = 0L
+    private val YENILEME_ESIK_MS = 2000L // En az 2 saniyede bir oturum yenile
 
     override fun onListenerConnected() {
-        Log.d(TAG, "NotificationListener baglandi. Medya oturumlari dinlenmeye hazir.")
+        app.vela.util.FileLogger.i(TAG, "NotificationListener baglandi. Medya oturumlari dinlenmeye hazir.")
         yenileAktifOturumlar()
     }
 
     override fun onListenerDisconnected() {
-        Log.w(TAG, "NotificationListener baglantisi kesildi.")
+        app.vela.util.FileLogger.w(TAG, "NotificationListener baglantisi kesildi.")
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        // OsmAnd mimarisi: Bildirimler cok sik gelebilir (RDS, navigasyon, teyp sistem bildirimleri).
+        // Bu yuzden sadece gercek medya bildirimlerinde ve debounced olarak islenmelidir.
         if (isMediaNotification(sbn)) {
-            Log.v(TAG, "Medya bildirimi geldi: ${sbn?.packageName}")
-            anaHandler.postDelayed({
-                yenileAktifOturumlar()
-            }, 500)
+            val simdi = System.currentTimeMillis()
+            if (simdi - sonYenilemeZamaniMs > YENILEME_ESIK_MS) {
+                sonYenilemeZamaniMs = simdi
+                anaHandler.removeCallbacksAndMessages(null)
+                anaHandler.postDelayed({
+                    yenileAktifOturumlar()
+                }, 1000)
+            }
         }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
-        if (isMediaNotification(sbn)) {
-            Log.v(TAG, "Medya bildirimi kaldirildi: ${sbn?.packageName}")
-            anaHandler.postDelayed({
-                yenileAktifOturumlar()
-            }, 300)
-        }
+        // Bildirim kaldirildiginda teybi mesgul etmemek icin gereksiz tarama yapma
     }
 
     private fun isMediaNotification(sbn: StatusBarNotification?): Boolean {
         if (sbn == null || sbn.notification == null) return false
         val category = sbn.notification.category
-        return Notification.CATEGORY_TRANSPORT == category || Notification.CATEGORY_SERVICE == category
+        return Notification.CATEGORY_TRANSPORT == category
     }
 
-    private fun yenileAktifOturumlar() {
+    fun yenileAktifOturumlar() {
         try {
             val manager = getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager ?: return
             val componentName = ComponentName(this, MediaNotificationListener::class.java)
             val controllers: List<MediaController> = manager.getActiveSessions(componentName)
 
-            Log.d(TAG, "Aktif oturumlar yenilendi. Oturum sayisi: ${controllers.size}")
+            app.vela.util.FileLogger.d(TAG, "Aktif oturumlar yenilendi. Oturum sayisi: ${controllers.size}")
             MusicManager.getInstance(applicationContext).onOturumlarYenilendi(controllers)
         } catch (se: SecurityException) {
-            Log.w(TAG, "Bildirim erisim izni henuz verilmedi: ${se.message}")
+            app.vela.util.FileLogger.w(TAG, "Bildirim erisim izni henuz verilmedi: ${se.message}")
         } catch (e: Exception) {
-            Log.w(TAG, "Aktif oturumlari yenileme hatasi: ${e.message}")
+            app.vela.util.FileLogger.e(TAG, "Aktif oturumlari yenileme hatasi: ${e.message}", e)
         }
     }
 }

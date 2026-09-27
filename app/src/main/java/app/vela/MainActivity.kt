@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        app.vela.util.FileLogger.i("MainActivity", "onResume - Uygulama on planda")
         // The 12/24-hour clock setting can change while Vela sits in the background (issue #357).
         app.vela.ui.Clock24.refresh(this)
         CarIntegration.onResume(this)
@@ -56,10 +57,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        app.vela.util.FileLogger.i("MainActivity", "onPause - Uygulama arka plana geciyor")
         CarIntegration.onPause(this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        app.vela.util.FileLogger.i("MainActivity", "onCreate baslatildi. Intent: ${intent?.action}")
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -174,12 +177,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        app.vela.util.FileLogger.i("MainActivity", "onStart")
         app.vela.ui.AppVisibility.foreground.value = true
     }
 
     override fun onStop() {
         super.onStop()
+        app.vela.util.FileLogger.i("MainActivity", "onStop")
         app.vela.ui.AppVisibility.foreground.value = false
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        app.vela.util.FileLogger.i("MainActivity", "onDestroy - Activity kapandi")
     }
 
     /** Vela registers for `geo:` URIs and Google-Maps web links so it can be the

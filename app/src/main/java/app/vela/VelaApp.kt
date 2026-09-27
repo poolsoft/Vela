@@ -59,6 +59,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
     }
 
     override fun onCreate() {
+        app.vela.util.FileLogger.init(this)
         super.onCreate()
         // Device memory class first: the Coil cap and the eager-warm decisions read it.
         app.vela.ui.MemoryPressure.init(this)

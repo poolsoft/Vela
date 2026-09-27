@@ -206,9 +206,10 @@ class CarFloatingButtonManager private constructor(private val context: Context)
 
             windowManager.addView(floatingView, p)
             isAdded = true
+            app.vela.util.FileLogger.d("CarFloatingButton", "Yuzen hiz butonu ekrana eklendi.")
             updateSpeed(lastSpeedKmh, lastMaxSpeedKmh)
         } catch (e: Exception) {
-            e.printStackTrace()
+            app.vela.util.FileLogger.e("CarFloatingButton", "Yuzen buton pencereye eklenemedi: ${e.message}", e)
         }
     }
 
@@ -219,8 +220,9 @@ class CarFloatingButtonManager private constructor(private val context: Context)
         if (isAdded && floatingView != null) {
             try {
                 windowManager.removeView(floatingView)
+                app.vela.util.FileLogger.d("CarFloatingButton", "Yuzen hiz butonu ekrandan kaldirildi.")
             } catch (e: Exception) {
-                e.printStackTrace()
+                app.vela.util.FileLogger.w("CarFloatingButton", "Yuzen buton kaldirma hatasi: ${e.message}")
             }
         }
         isAdded = false

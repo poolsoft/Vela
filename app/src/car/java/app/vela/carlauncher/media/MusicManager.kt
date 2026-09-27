@@ -122,6 +122,8 @@ class MusicManager private constructor(private val context: Context) : InternalM
 
     fun onOturumlarYenilendi(sessions: List<MediaController>) {
         controllers = sessions.filter { it.packageName != context.packageName }
+        app.vela.util.FileLogger.d(TAG, "Oturumlar guncellendi. Paketler: ${controllers.map { it.packageName }}")
+
         sessionCallbacks.keys.filter { it !in controllers }.forEach { controller ->
             sessionCallbacks.remove(controller)?.let { controller.unregisterCallback(it) }
             competingPlaying.remove(controller.packageName)
@@ -137,9 +139,21 @@ class MusicManager private constructor(private val context: Context) : InternalM
                                 controller.transportControls.pause()
                             else _sourceStatus.value = context.getString(app.vela.R.string.car_source_conflict)
                         }
-                    } else if (!manualSelection) {
-                        onOturumlarYenilendi(controllers)
+                    } else if (!manualSelection && playing) {
+                        // OsmAnd mimarisi: Asla onOturumlarYenilendi cagirma!
+                        // Sadece yeni calan oturumu aktif secip durumu senkronize et
+                        if (mediaSessionAdapter.getController() != controller) {
+                            app.vela.util.FileLogger.i(TAG, "Calan yeni oturum tespit edildi: ${controller.packageName}")
+                            mediaSessionAdapter.setController(controller)
+                        }
+                        senkronizeEtMedyaDurumu()
+                    } else {
+                        senkronizeEtMedyaDurumu()
                     }
+                }
+
+                override fun onMetadataChanged(metadata: android.media.MediaMetadata?) {
+                    senkronizeEtMedyaDurumu()
                 }
             }
             sessionCallbacks[controller] = callback

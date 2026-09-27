@@ -94,8 +94,7 @@ fun CarLauncherLayout(
     }
     LaunchedEffect(contentMode) { if (contentMode == "MUSIC") scanMusic() }
     LaunchedEffect(Unit) {
-        if (androidx.core.content.ContextCompat.checkSelfPermission(context, audioPermission) == android.content.pm.PackageManager.PERMISSION_GRANTED)
-            app.vela.carlauncher.media.MusicRepository.muzikleriTara(context)
+        app.vela.carlauncher.media.MusicRepository.muzikleriTara(context)
     }
     LaunchedEffect(libraryTracks, autoPlay) {
         if (!playbackRestored && libraryTracks.isNotEmpty())

@@ -55,6 +55,11 @@ object CrashCatcher {
             }
         }
         File(dir(context), "crash-${System.currentTimeMillis()}.txt").writeText(text)
+        runCatching {
+            val extLogsDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "logs").apply { mkdirs() }
+            File(extLogsDir, "crash-${System.currentTimeMillis()}.txt").writeText(text)
+            app.vela.util.FileLogger.e("CrashCatcher", "CRASH RAPORU KAYDEDILDI:\n$text", ex)
+        }
         prune(context)
     }
 
