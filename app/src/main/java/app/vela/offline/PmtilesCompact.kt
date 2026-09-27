@@ -104,7 +104,13 @@ object PmtilesCompact {
             tmp.delete()
             return Outcome.Refused(it.message ?: it.javaClass.simpleName)
         }
-        if (!ok || !tmp.renameTo(file)) {
+        val replaced = tmp.renameTo(file) || runCatching {
+            file.delete()
+            tmp.copyTo(file, overwrite = true)
+            tmp.delete()
+            true
+        }.getOrDefault(false)
+        if (!ok || !replaced) {
             tmp.delete()
             return Outcome.Refused("could not replace the archive")
         }

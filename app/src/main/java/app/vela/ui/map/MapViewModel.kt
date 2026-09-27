@@ -6229,6 +6229,7 @@ class MapViewModel @Inject constructor(
             _state.update {
                 it.copy(
                     routingInstalledIds = obfStore.installedIds(), poiPackInstalledIds = poiPackStore.installedIds(),
+                    basemapInstalledIds = emptySet(),
                     placesOverlays = emptyList(), basemapArchive = null, buildingOverlays = emptyList(), addressOverlays = emptyList(),
                 )
             }
@@ -7195,8 +7196,11 @@ class MapViewModel @Inject constructor(
             // Asama 3/3: Taban haritasi (Sokaklar ve binalar - PMTiles)
             if (!regionCancel.get()) {
                 _state.update { it.copy(downloadStepText = "3/3: Taban haritası (sokaklar) indiriliyor (%0)") }
-                downloadBasemapForRegionDirect(region) { pct ->
+                val basemapOk = downloadBasemapForRegionDirect(region) { pct ->
                     _state.update { it.copy(downloadStepText = "3/3: Taban haritası (sokaklar) indiriliyor (%$pct)") }
+                }
+                if (!basemapOk && !regionCancel.get()) {
+                    android.util.Log.e("VelaBasemap", "Basemap download failed for region ${region.id}")
                 }
             }
 
@@ -7216,6 +7220,43 @@ class MapViewModel @Inject constructor(
             }
             showStatus(appContext.getString(R.string.mapvm_offline_routing_ready, region.name))
             startNextQueuedRegion()
+        }
+    }
+
+    /** Sadece eksik taban (sokak) haritasini tamamlamak icin indirme baslatir. */
+    fun completeBasemapDownload(region: app.vela.offline.RoutingRegion) {
+        if (_state.value.routingDownloadingId != null) return
+        regionCancel.set(false)
+        _state.update {
+            it.copy(
+                routingDownloadingId = region.id,
+                routingDownloadPct = 0,
+                regionDownloadName = region.name,
+                downloadStepText = "Taban haritası (sokaklar) indiriliyor (%0)",
+            )
+        }
+        downloadLaunch("${region.name}: Taban haritası indiriliyor") {
+            val ok = downloadBasemapForRegionDirect(region) { pct ->
+                _state.update {
+                    it.copy(
+                        routingDownloadPct = pct,
+                        downloadStepText = "Taban haritası (sokaklar) indiriliyor (%$pct)",
+                    )
+                }
+            }
+            _state.update {
+                it.copy(
+                    routingDownloadingId = null,
+                    downloadStepText = null,
+                    regionDownloadName = null,
+                    basemapInstalledIds = basemapStore.installedIds(),
+                )
+            }
+            if (ok) {
+                showStatus("Harita tamamlandı: ${region.name}")
+            } else if (!regionCancel.get()) {
+                showStatus("Taban haritası indirilemedi: ${region.name}")
+            }
         }
     }
 

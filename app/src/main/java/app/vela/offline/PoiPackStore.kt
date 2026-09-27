@@ -135,7 +135,12 @@ class PoiPackStore @Inject constructor(
                 val magic = ByteArray(15); s.read(magic); String(magic) == "SQLite format 3"
             }) { "downloaded pack is not a SQLite db" }
             dest.delete()
-            check(tmp.renameTo(dest)) { "could not install pack (rename failed)" }
+            val installed = tmp.renameTo(dest) || runCatching {
+                tmp.copyTo(dest, overwrite = true)
+                tmp.delete()
+                true
+            }.getOrDefault(false)
+            check(installed && dest.exists() && dest.length() > 16) { "could not install pack (rename failed)" }
             writeRev(region.id, region.rev)
             registerPacks()
             onProgress(100)

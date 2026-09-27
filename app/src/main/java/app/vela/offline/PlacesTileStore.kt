@@ -353,8 +353,23 @@ abstract class PmtilesRegionStore(
                         }
                     }
                 }
-                check(tmp.length() > 127 && tmp.inputStream().use { s -> ByteArray(7).let { s.read(it); String(it) } } == "PMTiles") { "not a PMTiles archive" }
-                check(tmp.renameTo(file)) { "rename failed" }
+                // PMTiles v3 magic header verification (tam 7 bayt okunmasi garanti edilir)
+                val magic = ByteArray(7)
+                tmp.inputStream().use { input ->
+                    java.io.DataInputStream(input).readFully(magic)
+                }
+                val isPmtiles = magic.contentEquals("PMTiles".toByteArray(Charsets.US_ASCII))
+                check(tmp.length() > 127 && isPmtiles) { "not a PMTiles archive" }
+
+                // Hedef dosya kalintisi varsa temizle
+                file.delete()
+                val installed = tmp.renameTo(file) || runCatching {
+                    tmp.copyTo(file, overwrite = true)
+                    tmp.delete()
+                    true
+                }.getOrDefault(false)
+                check(installed && file.exists() && file.length() > 127) { "could not install pmtiles file (rename and copy failed)" }
+
                 synchronized(indexLock) {
                     writeIndex(readIndex() + (region.id to doubleArrayOf(region.s, region.w, region.n, region.e)))
                     writeRev(region.id, region.rev)
@@ -362,7 +377,11 @@ abstract class PmtilesRegionStore(
                 }
                 onProgress(100)
                 true
-            }.getOrElse { tmp.delete(); false }
+            }.getOrElse { err ->
+                android.util.Log.e("VelaBasemap", "Basemap download failed for ${region.id} (${region.url}): ${err.message}", err)
+                tmp.delete()
+                false
+            }
         }
     }
 

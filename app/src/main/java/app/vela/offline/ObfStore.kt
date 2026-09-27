@@ -90,7 +90,12 @@ class ObfStore @Inject constructor(
             // a truncated/error body must not register as a region.
             check(tmp.length() > 1024) { "downloaded obf is implausibly small" }
             dest.delete()
-            check(tmp.renameTo(dest)) { "could not install obf (rename failed)" }
+            val installed = tmp.renameTo(dest) || runCatching {
+                tmp.copyTo(dest, overwrite = true)
+                tmp.delete()
+                true
+            }.getOrDefault(false)
+            check(installed && dest.exists() && dest.length() > 1024) { "could not install obf (rename failed)" }
             synchronized(indexLock) { writeIndex(readIndex() + (region.id to doubleArrayOf(region.s, region.w, region.n, region.e))) }
             onProgress(100)
             true

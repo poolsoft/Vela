@@ -99,7 +99,12 @@ class OverlayTileStore @Inject constructor(
             check(tmp.length() > 127 && tmp.inputStream().use { s -> ByteArray(7).let { s.read(it); String(it) } } == "PMTiles")
                 { "downloaded overlay isn't a PMTiles archive" }
             file.delete()
-            check(tmp.renameTo(file)) { "could not install overlay (rename failed)" }
+            val installed = tmp.renameTo(file) || runCatching {
+                tmp.copyTo(file, overwrite = true)
+                tmp.delete()
+                true
+            }.getOrDefault(false)
+            check(installed && file.exists() && file.length() > 127) { "could not install overlay (rename failed)" }
             synchronized(indexLock) { writeIndex(readIndex() + (region.id to doubleArrayOf(region.s, region.w, region.n, region.e))) }
             onProgress(100)
             true

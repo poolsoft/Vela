@@ -621,7 +621,7 @@ private fun RegionRow(
             routingInstalled && !basemapInstalled -> Row(verticalAlignment = Alignment.CenterVertically) {
                 DpadFocusHandoff(keeper)
                 FilledTonalButton(
-                    onClick = { vm.downloadRoutingGraph(region) },
+                    onClick = { vm.completeBasemapDownload(region) },
                     enabled = !isDownloading,
                     modifier = Modifier.dpadFocusKept(keeper),
                 ) { Text("Haritayı Tamamla") }
