@@ -25,6 +25,7 @@ local.properties
 *.dex
 *.keystore
 *.jks
+!app/signing/*.jks
 release/
 
 # OS

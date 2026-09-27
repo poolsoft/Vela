@@ -174,11 +174,17 @@ android {
     signingConfigs {
         create("releaseFromEnv") {
             val path = System.getenv("VELA_KEYSTORE_PATH")
+            val defaultKeystore = file("signing/vela.jks")
             if (!path.isNullOrBlank() && File(path).exists()) {
                 storeFile = File(path)
-                storePassword = System.getenv("VELA_KEYSTORE_PASSWORD")
+                storePassword = System.getenv("VELA_KEYSTORE_PASSWORD") ?: "178214ab"
                 keyAlias = System.getenv("VELA_KEY_ALIAS") ?: "vela"
-                keyPassword = System.getenv("VELA_KEYSTORE_PASSWORD")
+                keyPassword = System.getenv("VELA_KEYSTORE_PASSWORD") ?: "178214ab"
+            } else if (defaultKeystore.exists()) {
+                storeFile = defaultKeystore
+                storePassword = "178214ab"
+                keyAlias = "vela"
+                keyPassword = "178214ab"
             }
         }
     }

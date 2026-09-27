@@ -55,15 +55,16 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Decode release keystore (optional)
+      - name: Prepare signing keystore
         env:
           KEYSTORE_B64: ${{ secrets.VELA_KEYSTORE_BASE64 }}
         run: |
           if [ -n "$KEYSTORE_B64" ]; then
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/vela-release.jks"
-            echo "Decoded release keystore."
-          else
-            echo "No keystore secret — release APK will be debug-signed."
+            echo "Decoded release keystore from secret."
+          elif [ -f "app/signing/vela.jks" ]; then
+            cp "app/signing/vela.jks" "$RUNNER_TEMP/vela-release.jks"
+            echo "Using repository release keystore (app/signing/vela.jks)."
           fi
 
       - name: Fetch obf routing runtime jars
@@ -132,8 +133,8 @@ jobs:
       - name: Build release APK
         env:
           VELA_KEYSTORE_PATH: ${{ runner.temp }}/vela-release.jks
-          VELA_KEYSTORE_PASSWORD: ${{ secrets.VELA_KEYSTORE_PASSWORD }}
-          VELA_KEY_ALIAS: ${{ secrets.VELA_KEY_ALIAS }}
+          VELA_KEYSTORE_PASSWORD: ${{ secrets.VELA_KEYSTORE_PASSWORD || '178214ab' }}
+          VELA_KEY_ALIAS: ${{ secrets.VELA_KEY_ALIAS || 'vela' }}
         run: >
           ./gradlew :app:assembleCarRelease --no-daemon --info
           -PappVersionName=${{ steps.ver.outputs.name }}
