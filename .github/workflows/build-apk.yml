@@ -17,14 +17,14 @@ on:
         default: false
   push:
     branches: [ main, canary ]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - 'fdroid/metadata/**'
-      - '.github/ISSUE_TEMPLATE/**'
-      - 'site/**'
+    paths:
+      - 'app/**'
+      - 'core/**'
+      - 'gradle/**'
+      - 'build.gradle*'
+      - 'settings.gradle*'
+      - 'gradle.properties'
+      - '.github/workflows/build-apk.yml'
 
 permissions:
   contents: write
