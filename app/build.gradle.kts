@@ -103,7 +103,7 @@ android {
             "String",
             "BASEMAP_MANIFEST_URL",
             "\"${(project.findProperty("basemapManifestUrl") as String?)
-                ?: "https://github.com/PimpinPumpkin/Vela/releases/download/basemap-tiles/basemap-manifest.json"}\"",
+                ?: "https://github.com/poolsoft/Vela/releases/download/basemap-tiles/basemap-manifest.json"}\"",
         )
         // The GLOBAL low-zoom basemap (`world-lowzoom.yml`): the whole planet's coastlines, water,
         // boundaries and place labels at z0-7, about 11 MB, pulled alongside the first offline

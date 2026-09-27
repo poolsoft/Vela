@@ -377,7 +377,7 @@ internal fun OfflineSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onClose
             val shownNodes = if (q.isBlank()) nodes else nodes.mapNotNull { n ->
                 when {
                     n.title.contains(q, ignoreCase = true) -> n
-                    n.pieces.size > 1 -> n.pieces.filter { it.name.contains(q, ignoreCase = true) }.takeIf { it.isNotEmpty() }?.let { n.copy(listed = it) }
+                    n.pieces.size > 1 -> n.pieces.filter { it.name.contains(q, ignoreCase = true) || regionProvincesHint(it.id)?.contains(q, ignoreCase = true) == true }.takeIf { it.isNotEmpty() }?.let { n.copy(listed = it) }
                     else -> null
                 }
             }
@@ -563,6 +563,16 @@ private fun RegionRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(if (indent) pieceName(region) else region.name, style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+            val provincesHint = regionProvincesHint(region.id)
+            if (provincesHint != null) {
+                Text(
+                    text = provincesHint,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp)),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+            }
             Text(
                 (if (subtitleSuffix != null) "$subtitleSuffix · " else "") + when {
                     downloading -> stringResource(R.string.settings_routing_downloading, state.routingDownloadPct)
@@ -674,3 +684,13 @@ internal fun fmtMb(mb: Int): String =
     if (mb >= 1024) String.format(java.util.Locale.getDefault(), "%.1f GB", mb / 1024f) else "$mb MB"
 
 private const val CONFIRM_MB = 1024
+
+/** Turkiye alt bolgelerinin kapsadigi illerin listesi */
+internal fun regionProvincesHint(id: String): String? = when (id) {
+    "tr-guney" -> "Adana, G.Antep, K.Maraş, Mersin, Hatay, Ş.Urfa, Malatya, Adıyaman, Kayseri, Niğde, Nevşehir, Aksaray, Kilis, Karaman, Osmaniye"
+    "tr-marmara" -> "İstanbul, Bursa, Kocaeli, Sakarya, Balıkesir, Çanakkale, Edirne, Tekirdağ, Kırklareli, Yalova, Bilecik, Bolu, Düzce"
+    "tr-ege" -> "İzmir, Antalya, Muğla, Aydın, Denizli, Manisa, Kütahya, Uşak, Afyonkarahisar, Isparta, Burdur"
+    "tr-karadeniz-dogu" -> "Samsun, Trabzon, Erzurum, Diyarbakır, Van, Batman, Sivas, Ordu, Giresun, Rize, Mardin, Ağrı, Tokat, Çorum, Elazığ, Sinop..."
+    else -> null
+}
+

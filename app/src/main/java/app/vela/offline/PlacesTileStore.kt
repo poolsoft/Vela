@@ -250,6 +250,26 @@ abstract class PmtilesRegionStore(
 
     fun installedIds(): Set<String> = installed().keys
 
+    private val folderName: String = folder
+
+    private fun fetchManifestFromUrl(url: String): List<Region> {
+        return runCatching {
+            val json = http.newCall(Request.Builder().url(url).build()).execute()
+                .use { r -> if (!r.isSuccessful) error("HTTP ${r.code}"); r.body!!.string() }
+            val arr = JSONObject(json).getJSONArray("regions")
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                val b = o.getJSONArray("bbox") // [S, W, N, E]
+                val d = o.optJSONObject("delta")
+                Region(
+                    o.getString("id"), o.optString("name", o.getString("id")), o.getString("url"), o.optDouble("sizeMb", 0.0),
+                    b.getDouble(0), b.getDouble(1), b.getDouble(2), b.getDouble(3), o.optInt("rev"),
+                    d?.let { Delta(it.optInt("fromRev"), it.getString("url"), it.optDouble("sizeMb", 0.0)) },
+                )
+            }
+        }.getOrDefault(emptyList())
+    }
+
     suspend fun manifest(manifestUrl: String): List<Region> {
         // The memo EXPIRES. A bake publishes a new revision while the app is running, and a process
         // that lives for days would otherwise never see it: no Update offered, no delta taken.
@@ -258,21 +278,19 @@ abstract class PmtilesRegionStore(
         // idle, and without the memo each pan retried the fetch.
         if (SystemClock.elapsedRealtime() - lastMissMs < MISS_MEMO_MS) return emptyList()
         val fetched = withContext(Dispatchers.IO) {
-            runCatching {
-                val json = http.newCall(Request.Builder().url(manifestUrl).build()).execute()
-                    .use { r -> if (!r.isSuccessful) error("HTTP ${r.code}"); r.body!!.string() }
-                val arr = JSONObject(json).getJSONArray("regions")
-                (0 until arr.length()).map { i ->
-                    val o = arr.getJSONObject(i)
-                    val b = o.getJSONArray("bbox") // [S, W, N, E]
-                    val d = o.optJSONObject("delta")
-                    Region(
-                        o.getString("id"), o.optString("name", o.getString("id")), o.getString("url"), o.optDouble("sizeMb", 0.0),
-                        b.getDouble(0), b.getDouble(1), b.getDouble(2), b.getDouble(3), o.optInt("rev"),
-                        d?.let { Delta(it.optInt("fromRev"), it.getString("url"), it.optDouble("sizeMb", 0.0)) },
-                    )
-                }
-            }.getOrDefault(emptyList())
+            val urls = if (folderName == "basemap") {
+                OfflineServerConfig.getBasemapManifestUrls(context)
+            } else {
+                listOf(manifestUrl)
+            }
+            val allRegions = ArrayList<Region>()
+            for (url in urls) {
+                allRegions.addAll(fetchManifestFromUrl(url))
+            }
+            if (allRegions.isEmpty() && manifestUrl !in urls) {
+                allRegions.addAll(fetchManifestFromUrl(manifestUrl))
+            }
+            allRegions.distinctBy { it.id }
         }
         if (fetched.isNotEmpty()) {
             cached = fetched
