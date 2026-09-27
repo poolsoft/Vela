@@ -99,6 +99,37 @@ class OfflinePoiStore @Inject constructor(
      *    word, so "mexican restaurant" finds "Ixtapa Mexican Restaurant" and the restaurant category,
      *    instead of returning nothing because no name contains the exact phrase.
      */
+    /** Turkce iyelik, yer tamlamasi ve bulunma eklerini ayristirarak kok kelime varyantlarini dondurur. */
+    private fun turkishStemVariants(input: String): Set<String> {
+        val out = LinkedHashSet<String>()
+        val base = input.trim()
+        if (base.length < 3) return out
+
+        val apostropheIdx = base.indexOfAny(charArrayOf('\'', '’', '`'))
+        if (apostropheIdx >= 2) {
+            out.add(base.substring(0, apostropheIdx))
+        }
+
+        val lower = base.lowercase()
+        val suffixes = listOf(
+            "lari", "leri", "ları", "leri",
+            "lar", "ler",
+            "casi", "cesi", "cası", "cesi",
+            "basi", "besi", "bası", "besi",
+            "si", "sı", "su", "sü",
+            "da", "de", "ta", "te",
+            "ya", "ye",
+            "dan", "den", "tan", "ten",
+            "i", "ı", "u", "ü",
+        )
+        for (suf in suffixes) {
+            if (lower.endsWith(suf) && base.length - suf.length >= 3) {
+                out.add(base.substring(0, base.length - suf.length))
+            }
+        }
+        return out
+    }
+
     fun search(query: String, near: LatLng?, limit: Int = 30): List<Place> {
         val term = query.trim()
         // name/category LIKE targets: the whole query, plus each word ≥2 chars (multi-word only),
@@ -118,19 +149,22 @@ class OfflinePoiStore @Inject constructor(
             add(trFold.uppercase())
         }
         val words = term.split(Regex("\\s+")).filter { it.length >= 2 }
-        if (words.size > 1) {
-            words.forEach { w ->
-                nameCat.add(w)
-                nameCat.add(w.lowercase())
-                nameCat.add(w.uppercase())
-                val wFold = w.replace('İ', 'i').replace('I', 'ı').replace('ı', 'i')
-                    .replace('ş', 's').replace('Ş', 's')
-                    .replace('ğ', 'g').replace('Ğ', 'g')
-                    .replace('ü', 'u').replace('Ü', 'u')
-                    .replace('ö', 'o').replace('Ö', 'o')
-                    .replace('ç', 'c').replace('Ç', 'c')
-                nameCat.add(wFold)
-            }
+        val stems = (listOf(term) + words).flatMap { turkishStemVariants(it) }.distinct()
+        val allTerms = (listOf(term) + (if (words.size > 1) words else emptyList()) + stems).distinct()
+
+        for (w in allTerms) {
+            nameCat.add(w)
+            nameCat.add(w.lowercase())
+            nameCat.add(w.uppercase())
+            val wFold = w.replace('İ', 'i').replace('I', 'ı').replace('ı', 'i')
+                .replace('ş', 's').replace('Ş', 's')
+                .replace('ğ', 'g').replace('Ğ', 'g')
+                .replace('ü', 'u').replace('Ü', 'u')
+                .replace('ö', 'o').replace('Ö', 'o')
+                .replace('ç', 'c').replace('Ç', 'c')
+            nameCat.add(wFold)
+            nameCat.add(wFold.lowercase())
+            nameCat.add(wFold.uppercase())
         }
         // category-tag targets: keywords for the whole query and for each word.
         val cats = LinkedHashSet<String>().apply { addAll(categoryKeywords(term)); words.forEach { addAll(categoryKeywords(it)) } }
@@ -178,7 +212,7 @@ class OfflinePoiStore @Inject constructor(
         OfflinePacks.dbs.forEach(::query)
         // Rank by how many query words hit the name/category (so "mexican restaurant" leads with the
         // Mexican restaurant, not a random one), then by distance.
-        val qWords = (if (words.size > 1) words else listOf(term)).map { it.lowercase() }
+        val qWords = ((if (words.size > 1) words else listOf(term)) + stems).map { it.lowercase() }.distinct()
         // TRANSIT STOPS GO LAST unless the query asks for transit. US stops are named by their
         // corner ("Russell Blvd & Anderson Rd"), so any query carrying a street or a town
         // word matched hundreds of them and a business search offline read as a list of
@@ -298,6 +332,32 @@ class OfflinePoiStore @Inject constructor(
             "toki" to listOf("residential", "neighbourhood", "suburb"),
             "site" to listOf("residential"),
             "sitesi" to listOf("residential"),
+            "ilica" to listOf("hot spring", "spring", "spa", "resort", "village"),
+            "ılıca" to listOf("hot spring", "spring", "spa", "resort", "village"),
+            "kaplica" to listOf("hot spring", "spring", "spa", "resort"),
+            "kaplıca" to listOf("hot spring", "spring", "spa", "resort"),
+            "termal" to listOf("hot spring", "spring", "spa", "resort"),
+            "kale" to listOf("castle", "ruins"),
+            "kalesi" to listOf("castle", "ruins"),
+            "selale" to listOf("waterfall", "attraction"),
+            "şelale" to listOf("waterfall", "attraction"),
+            "gol" to listOf("water"),
+            "göl" to listOf("water"),
+            "yayla" to listOf("locality", "village"),
+            "koy" to listOf("village"),
+            "köy" to listOf("village"),
+            "belde" to listOf("town", "village"),
+            "mahalle" to listOf("suburb", "neighbourhood"),
+            "mahallesi" to listOf("suburb", "neighbourhood"),
+            "plaj" to listOf("beach"),
+            "plaji" to listOf("beach"),
+            "plajı" to listOf("beach"),
+            "magara" to listOf("cave_entrance"),
+            "mağara" to listOf("cave_entrance"),
+            "tepe" to listOf("peak"),
+            "dag" to listOf("peak"),
+            "dağ" to listOf("peak"),
+            "antik kent" to listOf("archaeological_site", "ruins"),
         )
 
         /** Exact key first, then the word minus a trailing "s", so typed plurals ("cafes", "gyms")

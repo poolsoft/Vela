@@ -93,7 +93,7 @@ def haversine_m(lat1, lon1, lat2, lon2):
 
 def category(tags):
     """Mirror of OverpassPois.toPlace: first matching key, '_'->' ', first letter upper."""
-    for k in ("amenity", "shop", "tourism", "leisure", "public_transport", "boundary"):
+    for k in ("amenity", "shop", "tourism", "leisure", "public_transport", "boundary", "place", "natural", "historic"):
         v = tags.get(k)
         if v:
             disp = v.replace("_", " ")
@@ -223,7 +223,7 @@ def main():
             if name and cat and fid not in seen_poi:
                 # boundary rows only count when they're a national park (mirrors the Overpass query)
                 if tags.get("boundary") and tags.get("boundary") != "national_park" and not any(
-                    tags.get(k) for k in ("amenity", "shop", "tourism", "leisure", "public_transport")
+                    tags.get(k) for k in ("amenity", "shop", "tourism", "leisure", "public_transport", "place", "natural", "historic")
                 ):
                     continue
                 seen_poi.add(fid)

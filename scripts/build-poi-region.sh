@@ -38,9 +38,12 @@ fi
 read -r MINLON MINLAT MAXLON MAXLAT < <(osmium fileinfo -g header.boxes "$WORK/region.osm.pbf" | tr -d '()' | tr ',' ' ')
 BBOX="[$MINLAT,$MINLON,$MAXLAT,$MAXLON]"
 
-echo "→ filtering POIs / addresses / named roads"
+echo "→ filtering POIs / addresses / places / named roads"
 osmium tags-filter "$WORK/region.osm.pbf" \
   nwr/amenity nwr/shop nwr/tourism nwr/leisure nwr/public_transport nwr/boundary=national_park \
+  nwr/place=city,town,village,suburb,hamlet,locality,isolated_dwelling \
+  nwr/natural=peak,volcano,spring,hot_spring,cave_entrance,beach,water,cape \
+  nwr/historic=castle,monument,ruins,archaeological_site,memorial \
   nwr/addr:housenumber \
   w/highway=motorway,trunk,primary,secondary,tertiary,unclassified,residential,living_street,service,road,motorway_link,trunk_link,primary_link,secondary_link,tertiary_link \
   -o "$WORK/filtered.osm.pbf" --overwrite
