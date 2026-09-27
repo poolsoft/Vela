@@ -161,6 +161,30 @@ def main():
         CREATE TABLE streetname(sid INTEGER PRIMARY KEY, street TEXT, street_norm TEXT);
         CREATE TABLE addr(hn TEXT, sid INTEGER, city TEXT, lat REAL, lng REAL);
         CREATE TABLE streetpt(sid INTEGER, lat REAL, lng REAL);
+
+        -- FTS5 full-text search table with unicode61 tokenizer (external content)
+        CREATE VIRTUAL TABLE IF NOT EXISTS poi_fts USING fts5(
+            name,
+            category,
+            address,
+            content='poi',
+            content_rowid='rowid',
+            tokenize='unicode61 remove_diacritics 2'
+        );
+        CREATE TRIGGER IF NOT EXISTS poi_ai AFTER INSERT ON poi BEGIN
+            INSERT INTO poi_fts(rowid, name, category, address) 
+            VALUES (new.rowid, new.name, new.category, new.address);
+        END;
+        CREATE TRIGGER IF NOT EXISTS poi_ad AFTER DELETE ON poi BEGIN
+            INSERT INTO poi_fts(poi_fts, rowid, name, category, address) 
+            VALUES('delete', old.rowid, old.name, old.category, old.address);
+        END;
+        CREATE TRIGGER IF NOT EXISTS poi_au AFTER UPDATE ON poi BEGIN
+            INSERT INTO poi_fts(poi_fts, rowid, name, category, address) 
+            VALUES('delete', old.rowid, old.name, old.category, old.address);
+            INSERT INTO poi_fts(rowid, name, category, address) 
+            VALUES (new.rowid, new.name, new.category, new.address);
+        END;
         """
     )
     names = StreetNames()
@@ -247,6 +271,8 @@ def main():
         CREATE INDEX idx_addr_lat ON addr(lat);
         CREATE INDEX idx_streetpt_sid ON streetpt(sid);
         CREATE INDEX idx_streetpt_lat ON streetpt(lat);
+        INSERT INTO poi_fts(poi_fts) VALUES('rebuild');
+        INSERT INTO poi_fts(poi_fts) VALUES('optimize');
         ANALYZE;
         """
     )

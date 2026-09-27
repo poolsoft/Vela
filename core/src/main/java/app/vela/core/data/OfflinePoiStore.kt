@@ -20,16 +20,76 @@ import javax.inject.Singleton
 class OfflinePoiStore @Inject constructor(
     @ApplicationContext context: Context,
 ) {
-    private val helper = object : SQLiteOpenHelper(context, "vela_offline_pois.db", null, 2) {
+    private val helper = object : SQLiteOpenHelper(context, "vela_offline_pois.db", null, 3) {
         override fun onCreate(db: SQLiteDatabase) {
             db.execSQL(
                 "CREATE TABLE poi(id TEXT PRIMARY KEY, name TEXT, lat REAL, lng REAL, category TEXT, " +
                     "address TEXT, phone TEXT, website TEXT, hours TEXT)",
             )
             db.execSQL("CREATE INDEX idx_poi_name ON poi(name COLLATE NOCASE)")
+            olusturFtsTablosu(db)
         }
         override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
-            db.execSQL("DROP TABLE IF EXISTS poi"); onCreate(db)
+            db.execSQL("DROP TABLE IF EXISTS poi_fts")
+            db.execSQL("DROP TABLE IF EXISTS poi")
+            onCreate(db)
+        }
+    }
+
+    private val ftsTabloCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+    private fun olusturFtsTablosu(db: SQLiteDatabase) {
+        runCatching {
+            db.execSQL(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS poi_fts USING fts5(
+                    name,
+                    category,
+                    address,
+                    content='poi',
+                    content_rowid='rowid',
+                    tokenize='unicode61 remove_diacritics 2'
+                )
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TRIGGER IF NOT EXISTS poi_ai AFTER INSERT ON poi BEGIN
+                    INSERT INTO poi_fts(rowid, name, category, address) 
+                    VALUES (new.rowid, new.name, new.category, new.address);
+                END
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TRIGGER IF NOT EXISTS poi_ad AFTER DELETE ON poi BEGIN
+                    INSERT INTO poi_fts(poi_fts, rowid, name, category, address) 
+                    VALUES('delete', old.rowid, old.name, old.category, old.address);
+                END
+                """.trimIndent(),
+            )
+            db.execSQL(
+                """
+                CREATE TRIGGER IF NOT EXISTS poi_au AFTER UPDATE ON poi BEGIN
+                    INSERT INTO poi_fts(poi_fts, rowid, name, category, address) 
+                    VALUES('delete', old.rowid, old.name, old.category, old.address);
+                    INSERT INTO poi_fts(rowid, name, category, address) 
+                    VALUES (new.rowid, new.name, new.category, new.address);
+                END
+                """.trimIndent(),
+            )
+        }
+    }
+
+    private fun hasFtsTablosu(db: SQLiteDatabase): Boolean {
+        val yol = db.path ?: return false
+        return ftsTabloCache.getOrPut(yol) {
+            runCatching {
+                db.rawQuery(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='poi_fts' LIMIT 1",
+                    null,
+                ).use { it.moveToFirst() }
+            }.getOrDefault(false)
         }
     }
 
@@ -164,6 +224,17 @@ class OfflinePoiStore @Inject constructor(
         return res.filter { it.isNotBlank() }.toList()
     }
 
+    private data class AramaAdayi(
+        val place: Place,
+        val bm25Skor: Double,
+        val rank: Int,
+        val kelimeUyumSayisi: Int,
+    )
+
+    private fun ftsTemizle(kelime: String): String {
+        return kelime.filter { it.isLetterOrDigit() }
+    }
+
     private fun matchRank(p: Place, query: String, stems: List<String>): Int {
         val qNorm = norm(query)
         val pNorm = norm(p.name)
@@ -186,74 +257,212 @@ class OfflinePoiStore @Inject constructor(
         return 4
     }
 
+    private fun ftsSorgula(
+        db: SQLiteDatabase,
+        ftsQuery: String,
+        limit: Int,
+        near: LatLng?,
+        term: String,
+        stems: List<String>,
+        qWords: List<String>,
+        cikti: MutableMap<String, AramaAdayi>,
+    ) {
+        if (ftsQuery.isBlank()) return
+        val sql = """
+            SELECT p.id, p.name, p.lat, p.lng, p.category, p.address, p.phone, p.website, p.hours,
+                   bm25(poi_fts, 10.0, 2.5, 1.0) AS text_rank
+            FROM poi_fts f
+            JOIN poi p ON f.rowid = p.rowid
+            WHERE poi_fts MATCH ?
+            ORDER BY text_rank ASC
+            LIMIT ?
+        """.trimIndent()
+
+        runCatching {
+            db.rawQuery(sql, arrayOf(ftsQuery, limit.toString())).use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getString(0) ?: continue
+                    if (cikti.containsKey(id)) continue
+                    val loc = LatLng(c.getDouble(2), c.getDouble(3))
+                    val place = Place(
+                        id = id,
+                        name = c.getString(1) ?: "",
+                        location = loc,
+                        category = c.getString(4),
+                        address = c.getString(5),
+                        phone = c.getString(6),
+                        website = c.getString(7),
+                        hours = app.vela.core.util.OsmHours.lines(c.getString(8)),
+                        distanceMeters = near?.distanceTo(loc),
+                    )
+                    val bm25 = c.getDouble(9)
+                    val rank = matchRank(place, term, stems)
+                    val metin = norm(place.name + " " + (place.category ?: "") + " " + (place.address ?: ""))
+                    val kelimeUyumu = qWords.count { metin.contains(it) }
+                    cikti[id] = AramaAdayi(place, bm25, rank, kelimeUyumu)
+                }
+            }
+        }
+    }
+
+    private fun likeFallbackSorgula(
+        db: SQLiteDatabase,
+        term: String,
+        words: List<String>,
+        stems: List<String>,
+        near: LatLng?,
+        qWords: List<String>,
+        cikti: MutableMap<String, AramaAdayi>,
+    ) {
+        val allTerms = (listOf(term) + (if (words.size > 1) words else emptyList()) + stems).distinct()
+        val nameCat = LinkedHashSet<String>()
+        for (w in allTerms) {
+            nameCat.addAll(expandTurkishVariants(w))
+        }
+        val cats = LinkedHashSet<String>().apply {
+            addAll(categoryKeywords(term))
+            words.forEach { addAll(categoryKeywords(it)) }
+        }
+
+        val clauses = ArrayList<String>()
+        val args = ArrayList<String>()
+        for (t in nameCat) {
+            clauses.add("name LIKE ?")
+            args.add("%$t%")
+            clauses.add("category LIKE ?")
+            args.add("%$t%")
+        }
+        for (c in cats) {
+            clauses.add("category LIKE ?")
+            args.add("%$c%")
+        }
+        clauses.add("address LIKE ?")
+        args.add("%$term%")
+        args.add("%$term%")
+
+        val sql = "SELECT id,name,lat,lng,category,address,phone,website,hours FROM poi " +
+            "WHERE ${clauses.joinToString(" OR ")} ORDER BY (name LIKE ?) DESC LIMIT 200"
+
+        runCatching {
+            db.rawQuery(sql, args.toTypedArray()).use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getString(0) ?: continue
+                    if (cikti.containsKey(id)) continue
+                    val loc = LatLng(c.getDouble(2), c.getDouble(3))
+                    val place = Place(
+                        id = id,
+                        name = c.getString(1) ?: "",
+                        location = loc,
+                        category = c.getString(4),
+                        address = c.getString(5),
+                        phone = c.getString(6),
+                        website = c.getString(7),
+                        hours = app.vela.core.util.OsmHours.lines(c.getString(8)),
+                        distanceMeters = near?.distanceTo(loc),
+                    )
+                    val rank = matchRank(place, term, stems)
+                    val metin = norm(place.name + " " + (place.category ?: "") + " " + (place.address ?: ""))
+                    val kelimeUyumu = qWords.count { metin.contains(it) }
+                    // LIKE sorgusunda bm25 olmadigi icin rank tabanli varsayilan skor uretilir
+                    val varsayilanBm25 = rank.toDouble() * 2.0
+                    cikti[id] = AramaAdayi(place, varsayilanBm25, rank, kelimeUyumu)
+                }
+            }
+        }
+    }
+
     fun search(query: String, near: LatLng?, limit: Int = 30): List<Place> {
         val term = query.trim()
         if (term.isEmpty()) return emptyList()
 
         val words = term.split(Regex("\\s+")).filter { it.length >= 2 }
         val stems = (listOf(term) + words).flatMap { turkishStemVariants(it) }.distinct()
-        val allTerms = (listOf(term) + (if (words.size > 1) words else emptyList()) + stems).distinct()
+        val qWords = ((if (words.size > 1) words else listOf(term)) + stems).map { norm(it) }.distinct()
+        val temizKelimeler = words.map { ftsTemizle(norm(it)) }.filter { it.length >= 2 }
+        val temizTekTerim = ftsTemizle(norm(term))
 
-        val nameCat = LinkedHashSet<String>()
-        for (w in allTerms) {
-            nameCat.addAll(expandTurkishVariants(w))
-        }
+        val adayHavuzu = LinkedHashMap<String, AramaAdayi>()
+        val tumDbListesi = listOf(helper.readableDatabase) + OfflinePacks.dbs
 
-        // category-tag targets: keywords for the whole query and for each word.
-        val cats = LinkedHashSet<String>().apply { addAll(categoryKeywords(term)); words.forEach { addAll(categoryKeywords(it)) } }
+        for (db in tumDbListesi) {
+            if (hasFtsTablosu(db)) {
+                // 1. Katman: Kesin AND eslesmesi (Strict AND - Isim alaninda)
+                val katman1Query = if (temizKelimeler.isNotEmpty()) {
+                    temizKelimeler.joinToString(" AND ") { "name: $it*" }
+                } else if (temizTekTerim.isNotEmpty()) {
+                    "name: $temizTekTerim*"
+                } else {
+                    ""
+                }
+                ftsSorgula(db, katman1Query, 100, near, term, stems, qWords, adayHavuzu)
 
-        val clauses = ArrayList<String>()
-        val args = ArrayList<String>()
-        for (t in nameCat) { clauses.add("name LIKE ?"); args.add("%$t%"); clauses.add("category LIKE ?"); args.add("%$t%") }
-        for (c in cats) { clauses.add("category LIKE ?"); args.add("%$c%") }
-        // Whole-query address match, so typing a downloaded POI's street address finds it offline (the
-        // general typed-address geocoder is OfflineAddressStore).
-        clauses.add("address LIKE ?"); args.add("%$term%")
-        // Whole-query NAME matches must survive the LIMIT, not just win the post-sort: a state pack has
-        // thousands of category hits ("cafe"), and taking the first 400 in table order dropped an exact
-        // name match that lived past them (found while verifying delta updates). The ORDER BY puts
-        // phrase-in-name rows first, THEN the cap applies. Its LIKE arg is the last one bound.
-        args.add("%$term%")
-        val sql = "SELECT id,name,lat,lng,category,address,phone,website,hours FROM poi " +
-            "WHERE ${clauses.joinToString(" OR ")} ORDER BY (name LIKE ?) DESC LIMIT 400"
-        val rows = ArrayList<Place>()
-        fun query(db: android.database.sqlite.SQLiteDatabase) {
-            runCatching {
-                db.rawQuery(sql, args.toTypedArray()).use { c ->
-                    while (c.moveToNext()) {
-                        val loc = LatLng(c.getDouble(2), c.getDouble(3))
-                        rows.add(
-                            Place(
-                                id = c.getString(0),
-                                name = c.getString(1),
-                                location = loc,
-                                category = c.getString(4),
-                                address = c.getString(5),
-                                phone = c.getString(6),
-                                website = c.getString(7),
-                                hours = app.vela.core.util.OsmHours.lines(c.getString(8)), // packs keep OSM's raw tag
-                                distanceMeters = near?.distanceTo(loc),
-                            ),
-                        )
+                // 2. Katman: Eger sonuc azsa Kategori ve Adres hibrit arama
+                if (adayHavuzu.size < 15 && temizKelimeler.isNotEmpty()) {
+                    val katman2Query = temizKelimeler.joinToString(" AND ") {
+                        "(name: $it* OR category: $it* OR address: $it*)"
+                    }
+                    ftsSorgula(db, katman2Query, 100, near, term, stems, qWords, adayHavuzu)
+                }
+
+                // 3. Katman: Eger hala cok azsa toleransli OR arama
+                if (adayHavuzu.size < 5) {
+                    val tumAdayKokler = (temizKelimeler + stems.map { ftsTemizle(norm(it)) })
+                        .filter { it.length >= 2 }
+                        .distinct()
+                    if (tumAdayKokler.isNotEmpty()) {
+                        val katman3Query = tumAdayKokler.joinToString(" OR ") { "name: $it*" }
+                        ftsSorgula(db, katman3Query, 100, near, term, stems, qWords, adayHavuzu)
                     }
                 }
+            } else {
+                // FTS5 tablosu bulunmayan eski .poipack dosyalari icin geriye donuk uyumlu LIKE fallback
+                likeFallbackSorgula(db, term, words, stems, near, qWords, adayHavuzu)
             }
         }
-        // The viewport-download index, then every installed region pack (a state's whole POI set) —
-        // same schema, same SQL. Dedupe by id (a POI can be in both once its area was also saved).
-        query(helper.readableDatabase)
-        OfflinePacks.dbs.forEach(::query)
-        // Rank: 1) Non-transit first, 2) Tam eslesme -> Kelime ile baslayan -> Iceren, 3) Word match count, 4) Distance
-        val qWords = ((if (words.size > 1) words else listOf(term)) + stems).map { norm(it) }.distinct()
-        val transitQuery = TRANSIT_QUERY_WORDS.any { term.lowercase().contains(it) }
-        return rows.distinctBy { it.id }.sortedWith(
-            compareBy<Place> { p -> if (!transitQuery && (p.category ?: "").lowercase() in TRANSIT_STOP_CATS) 1 else 0 }
-                .thenBy { p -> matchRank(p, term, stems) }
-                .thenByDescending { p ->
-                    val hay = norm(p.name + " " + (p.category ?: "") + " " + (p.address ?: ""))
-                    qWords.count { hay.contains(it) }
-                }.thenBy { it.distanceMeters ?: Double.MAX_VALUE },
-        ).take(limit)
+
+        // Konum ve Metin Hibrit Skorlamasi (Re-Ranking)
+        val transitSorgusu = TRANSIT_QUERY_WORDS.any { term.lowercase().contains(it) }
+
+        return adayHavuzu.values.sortedWith { a1, a2 ->
+            // 1. Transit durak filtresi (Kullanici durak aramiyorsa duraklar alta duser)
+            val t1 = if (!transitSorgusu && (a1.place.category ?: "").lowercase() in TRANSIT_STOP_CATS) 1 else 0
+            val t2 = if (!transitSorgusu && (a2.place.category ?: "").lowercase() in TRANSIT_STOP_CATS) 1 else 0
+            if (t1 != t2) return@sortedWith t1.compareTo(t2)
+
+            // 2. Birebir tam eslesme (Exact match daima en ustte)
+            val tam1 = if (a1.rank == 0) 0 else 1
+            val tam2 = if (a2.rank == 0) 0 else 1
+            if (tam1 != tam2) return@sortedWith tam1.compareTo(tam2)
+
+            // 3. Hibrit Skor: Metin Alakasi (%75) - Yakinlik Etkisi (%25)
+            // bm25 negatif oldugu icin eksi ile carpilinca pozitiflesir (0'a yakin olan daha alakali -> daha yuksek skor)
+            val metinSkoru1 = -a1.bm25Skor
+            val distKm1 = a1.place.distanceMeters?.let { it / 1000.0 }
+            val ceza1 = if (distKm1 != null) Math.log10(distKm1 + 1.0) else 2.0
+            val hibrit1 = (metinSkoru1 * 0.75) - (ceza1 * 0.25)
+
+            val metinSkoru2 = -a2.bm25Skor
+            val distKm2 = a2.place.distanceMeters?.let { it / 1000.0 }
+            val ceza2 = if (distKm2 != null) Math.log10(distKm2 + 1.0) else 2.0
+            val hibrit2 = (metinSkoru2 * 0.75) - (ceza2 * 0.25)
+
+            if (hibrit1 != hibrit2) {
+                return@sortedWith hibrit2.compareTo(hibrit1) // Yuksek skor once
+            }
+
+            // 4. Terimle baslama (rank 1 once)
+            if (a1.rank != a2.rank) return@sortedWith a1.rank.compareTo(a2.rank)
+
+            // 5. Kelime uyusma sayisi (fazla olan once)
+            if (a1.kelimeUyumSayisi != a2.kelimeUyumSayisi) {
+                return@sortedWith a2.kelimeUyumSayisi.compareTo(a1.kelimeUyumSayisi)
+            }
+
+            // 6. Mesafe (yakin olan once)
+            val d1 = a1.place.distanceMeters ?: Double.MAX_VALUE
+            val d2 = a2.place.distanceMeters ?: Double.MAX_VALUE
+            d1.compareTo(d2)
+        }.map { it.place }.take(limit)
     }
 
     companion object {
