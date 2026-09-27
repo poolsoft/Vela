@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Default English POI category synonyms for search matching -->
+    <string name="poi_cat_restaurant">restaurant,restaurants,food,fast food,diner,eatery</string>
+    <string name="poi_cat_gas">gas,gas station,fuel,petrol,petrol station,charging,ev charging</string>
+    <string name="poi_cat_groceries">groceries,grocery,supermarket,market,convenience,store</string>
+    <string name="poi_cat_pharmacy">pharmacy,chemist,drug store,drugstore</string>
+    <string name="poi_cat_hospital">hospital,hospitals,clinic,doctor,doctors,urgent care</string>
+    <string name="poi_cat_hotel">hotel,hotels,motel,guest house,hostel,lodging</string>
+    <string name="poi_cat_parking">parking,parking lot,garage</string>
+    <string name="poi_cat_bank">bank,banks,atm,atms</string>
+    <string name="poi_cat_cafe">coffee,cafe</string>
+    <string name="poi_cat_bakery">bakery,pastry</string>
+    <string name="poi_cat_school">school,university,college</string>
+    <string name="poi_cat_park">park,parks</string>
+    <string name="poi_cat_gym">gym,fitness center,fitness centre,sports center</string>
+    <string name="poi_cat_car_wash">car wash</string>
+    <string name="poi_cat_post_office">post office,post offices</string>
+    <string name="poi_cat_campground">campground,campgrounds,camping,camp site,caravan site</string>
+    <string name="poi_cat_things_to_do">things to do,attraction,museum,viewpoint,theme park,zoo,aquarium</string>
+    <string name="poi_cat_transit">bus,stop,station,transit,train,tram,platform,metro,subway,ferry</string>
+    <string name="poi_cat_worship">place of worship,church,mosque,synagogue,temple</string>
+</resources>

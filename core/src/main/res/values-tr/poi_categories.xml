@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Türkçe POI kategori eşanlamlıları ve arama anahtar kelimeleri -->
+    <string name="poi_cat_restaurant">restoran,restoranlar,yemek,lokanta,kafe</string>
+    <string name="poi_cat_gas">benzinlik,benzin,akaryakıt,petrol,şarj istasyonu</string>
+    <string name="poi_cat_groceries">market,süpermarket,bakkal,manav</string>
+    <string name="poi_cat_pharmacy">eczane</string>
+    <string name="poi_cat_hospital">hastane,hastaneler,sağlık ocağı,klinik,doktor</string>
+    <string name="poi_cat_hotel">otel,oteller,pansiyon,konaklama,motel</string>
+    <string name="poi_cat_parking">otopark,park</string>
+    <string name="poi_cat_bank">banka,bankalar,atm</string>
+    <string name="poi_cat_cafe">kahve,kafe</string>
+    <string name="poi_cat_bakery">fırın,pastane</string>
+    <string name="poi_cat_school">okul,üniversite,kolej</string>
+    <string name="poi_cat_park">park,parklar</string>
+    <string name="poi_cat_gym">spor salonu,fitnes,gym</string>
+    <string name="poi_cat_car_wash">oto yıkama,araba yıkama</string>
+    <string name="poi_cat_post_office">postane,ptt</string>
+    <string name="poi_cat_campground">kamp,kamp alanı,karavan alanı</string>
+    <string name="poi_cat_things_to_do">gezilecek yerler,müze,tarihi yer,örentyeri</string>
+    <string name="poi_cat_transit">durak,otobüs durağı,istasyon,otogar,metro,tramvay,tren,vapur</string>
+    <string name="poi_cat_worship">cami,mescit,kilise,ibadethane</string>
+</resources>

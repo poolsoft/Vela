@@ -159,75 +159,22 @@ class OfflinePoiStore @Inject constructor(
      *    word, so "mexican restaurant" finds "Ixtapa Mexican Restaurant" and the restaurant category,
      *    instead of returning nothing because no name contains the exact phrase.
      */
-    /** Turkce iyelik, yer tamlamasi ve bulunma eklerini ayristirarak kok kelime varyantlarini dondurur. */
-    private fun turkishStemVariants(input: String): Set<String> {
-        val out = LinkedHashSet<String>()
-        val base = input.trim()
-        if (base.length < 3) return out
 
-        val apostropheIdx = base.indexOfAny(charArrayOf('\'', '’', '`'))
-        if (apostropheIdx >= 2) {
-            out.add(base.substring(0, apostropheIdx))
-        }
-
-        val lower = base.lowercase()
-        val suffixes = listOf(
-            "lari", "leri", "ları", "leri",
-            "lar", "ler",
-            "casi", "cesi", "cası", "cesi",
-            "basi", "besi", "bası", "besi",
-            "si", "sı", "su", "sü",
-            "da", "de", "ta", "te",
-            "ya", "ye",
-            "dan", "den", "tan", "ten",
-            "i", "ı", "u", "ü",
-        )
-        for (suf in suffixes) {
-            if (lower.endsWith(suf) && base.length - suf.length >= 3) {
-                out.add(base.substring(0, base.length - suf.length))
-            }
-        }
-        return out
-    }
-
-    private fun norm(s: String): String =
-        s.lowercase()
-            .replace('ı', 'i').replace('İ', 'i').replace('I', 'i')
-            .replace('ş', 's').replace('Ş', 's')
-            .replace('ğ', 'g').replace('Ğ', 'g')
-            .replace('ü', 'u').replace('Ü', 'u')
-            .replace('ö', 'o').replace('Ö', 'o')
-            .replace('ç', 'c').replace('Ç', 'c')
-
-    private fun expandTurkishVariants(word: String): List<String> {
-        val res = LinkedHashSet<String>()
-        val w = word.trim()
-        if (w.isEmpty()) return emptyList()
-        res.add(w)
-        res.add(w.lowercase())
-        res.add(w.uppercase())
-
-        val ascii = norm(w)
-        res.add(ascii)
-        res.add(ascii.uppercase())
-        res.add(ascii.replaceFirstChar { it.uppercaseChar() })
-
-        val trDotless = w.lowercase().replace('i', 'ı')
-        res.add(trDotless)
-        res.add(trDotless.replaceFirstChar { 'I' })
-        res.add(trDotless.uppercase())
-
-        val trFull = ascii.replace('i', 'ı').replace('s', 'ş').replace('c', 'ç').replace('g', 'ğ').replace('u', 'ü').replace('o', 'ö')
-        res.add(trFull)
-        res.add(trFull.replaceFirstChar { if (it == 'ı') 'I' else it.uppercaseChar() })
-
-        return res.filter { it.isNotBlank() }.toList()
+    /**
+     * Dilden bagimsiz aksan ve karakter temizleme fonksiyonu.
+     * Dunyadaki tum alfabelerin (Turkce, Almanca, Fransizca vb.) aksanlarini standartlastirir.
+     */
+    private fun norm(s: String): String {
+        val nfd = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD)
+        return nfd.replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+            .replace('ı', 'i')
+            .replace('İ', 'i')
     }
 
     private data class AramaAdayi(
         val place: Place,
-        val bm25Skor: Double,
-        val rank: Int,
+        val metinPuani: Double, // FTS5 bm25 veya SQL CASE-WHEN normalize puani
+        val rank: Int,          // matchRank (0: tam, 1: baslayan, 2: kelime baslayan, 3: iceren, 4: diger)
         val kelimeUyumSayisi: Int,
     )
 
@@ -235,35 +182,87 @@ class OfflinePoiStore @Inject constructor(
         return kelime.filter { it.isLetterOrDigit() }
     }
 
-    private fun matchRank(p: Place, query: String, stems: List<String>): Int {
+    private fun matchRank(p: Place, query: String): Int {
         val qNorm = norm(query)
         val pNorm = norm(p.name)
-        val candidates = (listOf(qNorm) + stems.map { norm(it) }).filter { it.length >= 2 }.distinct()
         val pWords = pNorm.split(Regex("\\s+")).filter { it.isNotEmpty() }
 
         // 0: Tam eslesme (Exact match)
-        if (pNorm == qNorm || candidates.any { pNorm == it }) return 0
+        if (pNorm == qNorm) return 0
 
         // 1: Isim arama terimiyle basliyor (Name starts with query)
-        if (pNorm.startsWith(qNorm) || candidates.any { pNorm.startsWith(it) }) return 1
+        if (pNorm.startsWith(qNorm)) return 1
 
-        // 2: Isimdeki herhangi bir kelime terimle basliyor (Word starts with query, e.g. Zeytin Ilicasi)
-        if (pWords.any { pw -> candidates.any { c -> pw.startsWith(c) } }) return 2
+        // 2: Isimdeki herhangi bir kelime terimle basliyor (Word starts with query)
+        if (pWords.any { it.startsWith(qNorm) }) return 2
 
         // 3: Isim icinde geciyor (Name contains query)
-        if (pNorm.contains(qNorm) || candidates.any { pNorm.contains(it) }) return 3
+        if (pNorm.contains(qNorm)) return 3
 
         // 4: Kategori veya adreste geciyor
         return 4
     }
 
+    /**
+     * Cihazin dil dosyasindan (poi_categories.xml) dinamik olarak yuklenen kategori eslesmeleri.
+     * Kod icinde hardcoded kelime bulundurmaz, Android yerellestirme (i18n) standartlarini kullanir.
+     */
+    private val dinamikKategoriHaritasi: Map<String, List<String>> by lazy {
+        val harita = HashMap<String, List<String>>()
+        harita.putAll(CATEGORY_KEYWORDS)
+
+        val kaynakEslestirmeleri = listOf(
+            app.vela.core.R.string.poi_cat_restaurant to listOf("restaurant", "fast food", "cafe"),
+            app.vela.core.R.string.poi_cat_gas to listOf("fuel", "charging station"),
+            app.vela.core.R.string.poi_cat_groceries to listOf("supermarket", "convenience", "grocery"),
+            app.vela.core.R.string.poi_cat_pharmacy to listOf("pharmacy", "chemist"),
+            app.vela.core.R.string.poi_cat_hospital to listOf("hospital", "clinic", "doctors"),
+            app.vela.core.R.string.poi_cat_hotel to listOf("hotel", "motel", "guest house"),
+            app.vela.core.R.string.poi_cat_parking to listOf("parking"),
+            app.vela.core.R.string.poi_cat_bank to listOf("bank", "atm"),
+            app.vela.core.R.string.poi_cat_cafe to listOf("cafe", "coffee"),
+            app.vela.core.R.string.poi_cat_bakery to listOf("bakery", "pastry"),
+            app.vela.core.R.string.poi_cat_school to listOf("school", "university", "college"),
+            app.vela.core.R.string.poi_cat_park to listOf("park"),
+            app.vela.core.R.string.poi_cat_gym to listOf("fitness center", "sports center"),
+            app.vela.core.R.string.poi_cat_car_wash to listOf("car wash"),
+            app.vela.core.R.string.poi_cat_post_office to listOf("post office"),
+            app.vela.core.R.string.poi_cat_campground to listOf("camp site", "caravan site"),
+            app.vela.core.R.string.poi_cat_things_to_do to listOf("attraction", "museum", "viewpoint"),
+            app.vela.core.R.string.poi_cat_transit to listOf("bus stop", "station", "platform"),
+            app.vela.core.R.string.poi_cat_worship to listOf("place of worship"),
+        )
+
+        for ((resId, osmKategorileri) in kaynakEslestirmeleri) {
+            runCatching {
+                val kelimelerMetni = context.getString(resId)
+                for (kelime in kelimelerMetni.split(",")) {
+                    val k = kelime.trim().lowercase()
+                    if (k.isNotEmpty()) {
+                        harita[k] = osmKategorileri
+                    }
+                }
+            }
+        }
+        harita
+    }
+
+    private fun kategoriBul(kelime: String): List<String> {
+        val anahtar = kelime.trim().lowercase()
+        return dinamikKategoriHaritasi[anahtar]
+            ?: anahtar.takeIf { it.length > 3 && it.endsWith("s") }?.let { dinamikKategoriHaritasi[it.dropLast(1)] }
+            ?: categoryKeywords(anahtar)
+    }
+
+    /**
+     * FTS5 motoru sorgusu: Ağırlıklı BM25 puanlaması ile FTS tablosunda arama yapar.
+     */
     private fun ftsSorgula(
         db: SQLiteDatabase,
         ftsQuery: String,
         limit: Int,
         near: LatLng?,
         term: String,
-        stems: List<String>,
         qWords: List<String>,
         cikti: MutableMap<String, AramaAdayi>,
     ) {
@@ -296,55 +295,129 @@ class OfflinePoiStore @Inject constructor(
                         distanceMeters = near?.distanceTo(loc),
                     )
                     val bm25 = c.getDouble(9)
-                    val rank = matchRank(place, term, stems)
+                    val rank = matchRank(place, term)
                     val metin = norm(place.name + " " + (place.category ?: "") + " " + (place.address ?: ""))
                     val kelimeUyumu = qWords.count { metin.contains(it) }
-                    cikti[id] = AramaAdayi(place, bm25, rank, kelimeUyumu)
+                    // BM25 negatif deger uretir (0'a yakin olan daha iyidir). Eksi ile pozitiflestirilir.
+                    val normalizePuan = (-bm25).coerceAtLeast(0.0)
+                    cikti[id] = AramaAdayi(place, normalizePuan, rank, kelimeUyumu)
                 }
             }
         }
     }
 
-    private fun likeFallbackSorgula(
+    /**
+     * Vela sunucularindan indirilen mevcut .poipack dosyalari icin Akilli SQL motoru:
+     * 1. Adim: Prefix B-Tree aramasi (name LIKE 'kelime%' COLLATE NOCASE)
+     * 2. Adim: Kademeli Katı AND sorgusu (name LIKE '%w1%' AND name LIKE '%w2%')
+     * 3. Adim: SQL ici agirlikli CASE-WHEN puanlamasi (200, 100, 60, 25, 20, 5 puan)
+     */
+    private fun akilliSqlSorgula(
         db: SQLiteDatabase,
         term: String,
         words: List<String>,
-        stems: List<String>,
         near: LatLng?,
         qWords: List<String>,
         cikti: MutableMap<String, AramaAdayi>,
     ) {
-        val allTerms = (listOf(term) + (if (words.size > 1) words else emptyList()) + stems).distinct()
-        val nameCat = LinkedHashSet<String>()
-        for (w in allTerms) {
-            nameCat.addAll(expandTurkishVariants(w))
-        }
-        val cats = LinkedHashSet<String>().apply {
-            addAll(categoryKeywords(term))
-            words.forEach { addAll(categoryKeywords(it)) }
+        val cats = kategoriBul(term) + words.flatMap { kategoriBul(it) }
+        val catTerm = cats.firstOrNull() ?: ""
+
+        // Adim 1: Tek kelimelik aramalarda B-Tree indeksli prefix sorgu
+        if (words.size <= 1) {
+            val prefixSql = "SELECT id,name,lat,lng,category,address,phone,website,hours FROM poi " +
+                "WHERE name LIKE ? || '%' COLLATE NOCASE LIMIT 50"
+            runCatching {
+                db.rawQuery(prefixSql, arrayOf(term)).use { c ->
+                    while (c.moveToNext()) {
+                        val id = c.getString(0) ?: continue
+                        if (cikti.containsKey(id)) continue
+                        val loc = LatLng(c.getDouble(2), c.getDouble(3))
+                        val place = Place(
+                            id = id,
+                            name = c.getString(1) ?: "",
+                            location = loc,
+                            category = c.getString(4),
+                            address = c.getString(5),
+                            phone = c.getString(6),
+                            website = c.getString(7),
+                            hours = app.vela.core.util.OsmHours.lines(c.getString(8)),
+                            distanceMeters = near?.distanceTo(loc),
+                        )
+                        val rank = matchRank(place, term)
+                        val metin = norm(place.name + " " + (place.category ?: "") + " " + (place.address ?: ""))
+                        val kelimeUyumu = qWords.count { metin.contains(it) }
+                        cikti[id] = AramaAdayi(place, 10.0, rank, kelimeUyumu)
+                    }
+                }
+            }
+            if (cikti.size >= 15) return
         }
 
-        val clauses = ArrayList<String>()
-        val args = ArrayList<String>()
-        for (t in nameCat) {
-            clauses.add("name LIKE ?")
-            args.add("%$t%")
-            clauses.add("category LIKE ?")
-            args.add("%$t%")
+        // Adim 2: Cok kelimeli aramalarda Katı AND sorgusu (Havuz zehirlenmesini onler)
+        if (words.size > 1) {
+            val andClauses = words.map { "name LIKE ?" }
+            val andArgs = words.map { "%$it%" }
+            val andSql = "SELECT id,name,lat,lng,category,address,phone,website,hours FROM poi " +
+                "WHERE ${andClauses.joinToString(" AND ")} LIMIT 100"
+            runCatching {
+                db.rawQuery(andSql, andArgs.toTypedArray()).use { c ->
+                    while (c.moveToNext()) {
+                        val id = c.getString(0) ?: continue
+                        if (cikti.containsKey(id)) continue
+                        val loc = LatLng(c.getDouble(2), c.getDouble(3))
+                        val place = Place(
+                            id = id,
+                            name = c.getString(1) ?: "",
+                            location = loc,
+                            category = c.getString(4),
+                            address = c.getString(5),
+                            phone = c.getString(6),
+                            website = c.getString(7),
+                            hours = app.vela.core.util.OsmHours.lines(c.getString(8)),
+                            distanceMeters = near?.distanceTo(loc),
+                        )
+                        val rank = matchRank(place, term)
+                        val metin = norm(place.name + " " + (place.category ?: "") + " " + (place.address ?: ""))
+                        val kelimeUyumu = qWords.count { metin.contains(it) }
+                        cikti[id] = AramaAdayi(place, 12.0, rank, kelimeUyumu)
+                    }
+                }
+            }
+            if (cikti.size >= 5) return
         }
-        for (c in cats) {
-            clauses.add("category LIKE ?")
-            args.add("%$c%")
-        }
-        clauses.add("address LIKE ?")
-        args.add("%$term%")
-        args.add("%$term%")
 
-        val sql = "SELECT id,name,lat,lng,category,address,phone,website,hours FROM poi " +
-            "WHERE ${clauses.joinToString(" OR ")} ORDER BY (name LIKE ?) DESC LIMIT 200"
+        // Adim 3: Dinamik CASE-WHEN agirlikli SQL sorgusu
+        val w1 = words.getOrNull(0) ?: term
+        val w2 = words.getOrNull(1) ?: term
+
+        val caseSql = """
+            SELECT id, name, lat, lng, category, address, phone, website, hours,
+                (
+                    (CASE WHEN LOWER(name) = LOWER(?) THEN 200 ELSE 0 END) +
+                    (CASE WHEN name LIKE ? || '%' COLLATE NOCASE THEN 100 ELSE 0 END) +
+                    (CASE WHEN name LIKE '%' || ? || '%' THEN 60 ELSE 0 END) +
+                    (CASE WHEN name LIKE '%' || ? || '%' THEN 25 ELSE 0 END) +
+                    (CASE WHEN name LIKE '%' || ? || '%' THEN 25 ELSE 0 END) +
+                    (CASE WHEN category LIKE '%' || ? || '%' THEN 20 ELSE 0 END) +
+                    (CASE WHEN address LIKE '%' || ? || '%' THEN 5 ELSE 0 END)
+                ) AS match_score
+            FROM poi
+            WHERE name LIKE '%' || ? || '%'
+               OR (name LIKE '%' || ? || '%' AND name LIKE '%' || ? || '%')
+               OR (LENGTH(?) > 0 AND category LIKE '%' || ? || '%')
+               OR address LIKE '%' || ? || '%'
+            ORDER BY match_score DESC
+            LIMIT 150
+        """.trimIndent()
+
+        val caseArgs = arrayOf(
+            term, term, term, w1, w2, catTerm, term,
+            term, w1, w2, catTerm, catTerm, term,
+        )
 
         runCatching {
-            db.rawQuery(sql, args.toTypedArray()).use { c ->
+            db.rawQuery(caseSql, caseArgs).use { c ->
                 while (c.moveToNext()) {
                     val id = c.getString(0) ?: continue
                     if (cikti.containsKey(id)) continue
@@ -360,12 +433,13 @@ class OfflinePoiStore @Inject constructor(
                         hours = app.vela.core.util.OsmHours.lines(c.getString(8)),
                         distanceMeters = near?.distanceTo(loc),
                     )
-                    val rank = matchRank(place, term, stems)
+                    val sqlScore = c.getDouble(9)
+                    val rank = matchRank(place, term)
                     val metin = norm(place.name + " " + (place.category ?: "") + " " + (place.address ?: ""))
                     val kelimeUyumu = qWords.count { metin.contains(it) }
-                    // LIKE sorgusunda bm25 olmadigi icin rank tabanli varsayilan skor uretilir
-                    val varsayilanBm25 = rank.toDouble() * 2.0
-                    cikti[id] = AramaAdayi(place, varsayilanBm25, rank, kelimeUyumu)
+                    // SQL match_score 0-200 arasi oldugundan 0-10 arasi normalize edilir
+                    val normalizePuan = sqlScore / 20.0
+                    cikti[id] = AramaAdayi(place, normalizePuan, rank, kelimeUyumu)
                 }
             }
         }
@@ -376,8 +450,7 @@ class OfflinePoiStore @Inject constructor(
         if (term.isEmpty()) return emptyList()
 
         val words = term.split(Regex("\\s+")).filter { it.length >= 2 }
-        val stems = (listOf(term) + words).flatMap { turkishStemVariants(it) }.distinct()
-        val qWords = ((if (words.size > 1) words else listOf(term)) + stems).map { norm(it) }.distinct()
+        val qWords = (if (words.size > 1) words else listOf(term)).map { norm(it) }.distinct()
         val temizKelimeler = words.map { ftsTemizle(norm(it)) }.filter { it.length >= 2 }
         val temizTekTerim = ftsTemizle(norm(term))
 
@@ -386,6 +459,7 @@ class OfflinePoiStore @Inject constructor(
 
         for (db in tumDbListesi) {
             if (hasFtsTablosu(db)) {
+                // FTS5 Destekli Motor (Yeni paketler ve cihazda kaydedilen bolgeler)
                 // 1. Katman: Kesin AND eslesmesi (Strict AND - Isim alaninda)
                 val katman1Query = if (temizKelimeler.isNotEmpty()) {
                     temizKelimeler.joinToString(" AND ") { "name: $it*" }
@@ -394,33 +468,30 @@ class OfflinePoiStore @Inject constructor(
                 } else {
                     ""
                 }
-                ftsSorgula(db, katman1Query, 100, near, term, stems, qWords, adayHavuzu)
+                ftsSorgula(db, katman1Query, 100, near, term, qWords, adayHavuzu)
 
                 // 2. Katman: Eger sonuc azsa Kategori ve Adres hibrit arama
                 if (adayHavuzu.size < 15 && temizKelimeler.isNotEmpty()) {
                     val katman2Query = temizKelimeler.joinToString(" AND ") {
                         "(name: $it* OR category: $it* OR address: $it*)"
                     }
-                    ftsSorgula(db, katman2Query, 100, near, term, stems, qWords, adayHavuzu)
+                    ftsSorgula(db, katman2Query, 100, near, term, qWords, adayHavuzu)
                 }
 
                 // 3. Katman: Eger hala cok azsa toleransli OR arama
                 if (adayHavuzu.size < 5) {
-                    val tumAdayKokler = (temizKelimeler + stems.map { ftsTemizle(norm(it)) })
-                        .filter { it.length >= 2 }
-                        .distinct()
-                    if (tumAdayKokler.isNotEmpty()) {
-                        val katman3Query = tumAdayKokler.joinToString(" OR ") { "name: $it*" }
-                        ftsSorgula(db, katman3Query, 100, near, term, stems, qWords, adayHavuzu)
+                    if (temizKelimeler.isNotEmpty()) {
+                        val katman3Query = temizKelimeler.joinToString(" OR ") { "name: $it*" }
+                        ftsSorgula(db, katman3Query, 100, near, term, qWords, adayHavuzu)
                     }
                 }
             } else {
-                // FTS5 tablosu bulunmayan eski .poipack dosyalari icin geriye donuk uyumlu LIKE fallback
-                likeFallbackSorgula(db, term, words, stems, near, qWords, adayHavuzu)
+                // FTS5 Bulunmayan Klasik DB Motoru (Vela sunucusundan indirilen mevcut .poipack dosyalari)
+                akilliSqlSorgula(db, term, words, near, qWords, adayHavuzu)
             }
         }
 
-        // Konum ve Metin Hibrit Skorlamasi (Re-Ranking)
+        // Ortak Konum ve Metin Hibrit Skorlamasi (Re-Ranking)
         val transitSorgusu = TRANSIT_QUERY_WORDS.any { term.lowercase().contains(it) }
 
         return adayHavuzu.values.sortedWith { a1, a2 ->
@@ -435,13 +506,12 @@ class OfflinePoiStore @Inject constructor(
             if (tam1 != tam2) return@sortedWith tam1.compareTo(tam2)
 
             // 3. Hibrit Skor: Metin Alakasi (%75) - Yakinlik Etkisi (%25)
-            // bm25 negatif oldugu icin eksi ile carpilinca pozitiflesir (0'a yakin olan daha alakali -> daha yuksek skor)
-            val metinSkoru1 = -a1.bm25Skor
+            val metinSkoru1 = a1.metinPuani
             val distKm1 = a1.place.distanceMeters?.let { it / 1000.0 }
             val ceza1 = if (distKm1 != null) Math.log10(distKm1 + 1.0) else 2.0
             val hibrit1 = (metinSkoru1 * 0.75) - (ceza1 * 0.25)
 
-            val metinSkoru2 = -a2.bm25Skor
+            val metinSkoru2 = a2.metinPuani
             val distKm2 = a2.place.distanceMeters?.let { it / 1000.0 }
             val ceza2 = if (distKm2 != null) Math.log10(distKm2 + 1.0) else 2.0
             val hibrit2 = (metinSkoru2 * 0.75) - (ceza2 * 0.25)
@@ -526,75 +596,6 @@ class OfflinePoiStore @Inject constructor(
                 "theatre", "cinema", "arts center", "arts centre", "water park",
             ),
             "hardware" to listOf("hardware", "doityourself"),
-            // Turkish category words & chips
-            "restoran" to listOf("restaurant", "fast food", "cafe"),
-            "restoranlar" to listOf("restaurant", "fast food", "cafe"),
-            "yemek" to listOf("restaurant", "fast food"),
-            "lokanta" to listOf("restaurant"),
-            "kahve" to listOf("cafe", "coffee"),
-            "kafe" to listOf("cafe"),
-            "benzinlik" to listOf("fuel", "charging station"),
-            "benzin" to listOf("fuel"),
-            "akaryakit" to listOf("fuel"),
-            "akaryakıt" to listOf("fuel"),
-            "petrol" to listOf("fuel"),
-            "otopark" to listOf("parking"),
-            "park" to listOf("park"),
-            "market" to listOf("supermarket", "convenience", "grocery"),
-            "bakkal" to listOf("convenience", "supermarket"),
-            "manav" to listOf("greengrocer"),
-            "firin" to listOf("bakery"),
-            "fırın" to listOf("bakery"),
-            "pastane" to listOf("bakery", "pastry"),
-            "eczane" to listOf("pharmacy", "chemist"),
-            "hastane" to listOf("hospital", "clinic"),
-            "saglik ocagi" to listOf("clinic", "doctors"),
-            "sağlık ocağı" to listOf("clinic", "doctors"),
-            "doktor" to listOf("doctors", "clinic"),
-            "otel" to listOf("hotel", "motel", "guest house"),
-            "oteller" to listOf("hotel", "motel"),
-            "pansiyon" to listOf("guest house", "hostel"),
-            "cami" to listOf("place of worship"),
-            "mescit" to listOf("place of worship"),
-            "belediye" to listOf("townhall", "public building"),
-            "muhtarlik" to listOf("townhall", "public building"),
-            "muhtarlık" to listOf("townhall", "public building"),
-            "okul" to listOf("school"),
-            "universite" to listOf("university", "college"),
-            "üniversite" to listOf("university", "college"),
-            "banka" to listOf("bank", "atm"),
-            "durak" to listOf("bus stop", "platform", "station"),
-            "otogar" to listOf("bus station"),
-            "istasyon" to listOf("station", "train station"),
-            "toki" to listOf("residential", "neighbourhood", "suburb"),
-            "site" to listOf("residential"),
-            "sitesi" to listOf("residential"),
-            "ilica" to listOf("hot spring", "spring", "spa", "resort", "village"),
-            "ılıca" to listOf("hot spring", "spring", "spa", "resort", "village"),
-            "kaplica" to listOf("hot spring", "spring", "spa", "resort"),
-            "kaplıca" to listOf("hot spring", "spring", "spa", "resort"),
-            "termal" to listOf("hot spring", "spring", "spa", "resort"),
-            "kale" to listOf("castle", "ruins"),
-            "kalesi" to listOf("castle", "ruins"),
-            "selale" to listOf("waterfall", "attraction"),
-            "şelale" to listOf("waterfall", "attraction"),
-            "gol" to listOf("water"),
-            "göl" to listOf("water"),
-            "yayla" to listOf("locality", "village"),
-            "koy" to listOf("village"),
-            "köy" to listOf("village"),
-            "belde" to listOf("town", "village"),
-            "mahalle" to listOf("suburb", "neighbourhood"),
-            "mahallesi" to listOf("suburb", "neighbourhood"),
-            "plaj" to listOf("beach"),
-            "plaji" to listOf("beach"),
-            "plajı" to listOf("beach"),
-            "magara" to listOf("cave_entrance"),
-            "mağara" to listOf("cave_entrance"),
-            "tepe" to listOf("peak"),
-            "dag" to listOf("peak"),
-            "dağ" to listOf("peak"),
-            "antik kent" to listOf("archaeological_site", "ruins"),
         )
 
         /** Exact key first, then the word minus a trailing "s", so typed plurals ("cafes", "gyms")
