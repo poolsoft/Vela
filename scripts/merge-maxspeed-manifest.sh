@@ -9,7 +9,7 @@
 set -euo pipefail
 
 DIR="${1:?dir of *.json entry files}"
-REPO="${VELA_REPO:-PimpinPumpkin/Vela}"
+REPO="${VELA_REPO:-poolsoft/Vela}"
 TAG="maxspeed-overlays"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 

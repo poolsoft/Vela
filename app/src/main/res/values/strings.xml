@@ -762,7 +762,7 @@
     <string name="car_along_none">Nothing found nearby</string>
     <string name="car_stop_added">Added %1$s as the next stop</string>
     <string name="car_continue_on">Continue on %1$s</string>
-    <string name="car_no_route">No route available — check your location</string>
+    <string name="car_no_route">No route available - check your location</string>
     <string name="map_parking_saved">Parking spot saved</string>
     <string name="map_parking_no_fix">Waiting for a location fix</string>
     <string name="map_parking_cleared">Parking spot cleared</string>

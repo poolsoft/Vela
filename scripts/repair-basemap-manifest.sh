@@ -17,7 +17,7 @@
 # rev defaults to today (YYYYMMDD) and stamps rows derived from the release. entries-dir is the
 # bake's own entry files: they carry the region's real bake rev and win over the derived row.
 set -euo pipefail
-REPO="${VELA_REPO:-PimpinPumpkin/Vela}"
+REPO="${VELA_REPO:-poolsoft/Vela}"
 TAG="basemap-tiles"
 REV="${1:-$(date -u +%Y%m%d)}"
 ENTRIES="${2:-}"

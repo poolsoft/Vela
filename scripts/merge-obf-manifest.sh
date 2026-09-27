@@ -9,7 +9,7 @@
 set -euo pipefail
 
 DIR="${1:?dir of *.json entry files}"
-REPO="${VELA_REPO:-PimpinPumpkin/Vela}"
+REPO="${VELA_REPO:-poolsoft/Vela}"
 TAG="obf-regions"
 # OBF_MANIFEST_NAME=obf-manifest-staging.json stages the world bake WITHOUT flipping the fleet:
 # the app cuts over to the obf catalog the moment the LIVE obf-manifest.json has entries, so the

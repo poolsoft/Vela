@@ -12,7 +12,7 @@
 set -euo pipefail
 
 ID="${1:?engine id (sensevoice|moonshine)}"
-REPO="${VELA_REPO:-PimpinPumpkin/Vela}"
+REPO="${VELA_REPO:-poolsoft/Vela}"
 TAG="asr-models"
 K2="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT

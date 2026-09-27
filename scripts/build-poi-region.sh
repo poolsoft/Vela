@@ -12,7 +12,7 @@
 set -euo pipefail
 
 ID="${1:?region id}"; NAME="${2:?display name}"; URL="${3:?geofabrik pbf url}"
-REPO="${VELA_REPO:-PimpinPumpkin/Vela}"
+REPO="${VELA_REPO:-poolsoft/Vela}"
 TAG="poi-packs"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
@@ -32,9 +32,9 @@ if [ -n "$BBOX_JSON" ]; then
   mv "$WORK/extracted.osm.pbf" "$WORK/region.osm.pbf"
 fi
 
-# bbox first (from the header), so the source PBF can be deleted as soon as it's filtered — a big
+# bbox first (from the header), so the source PBF can be deleted as soon as it's filtered - a big
 # country needs the disk back. [S,W,N,E] from the declared extract region, NOT data.bbox (same rule
-# as routing graphs — node extent is polluted by outlier nodes). osmium prints (minlon,minlat,...).
+# as routing graphs - node extent is polluted by outlier nodes). osmium prints (minlon,minlat,...).
 read -r MINLON MINLAT MAXLON MAXLAT < <(osmium fileinfo -g header.boxes "$WORK/region.osm.pbf" | tr -d '()' | tr ',' ' ')
 BBOX="[$MINLAT,$MINLON,$MAXLAT,$MAXLON]"
 
@@ -46,7 +46,7 @@ osmium tags-filter "$WORK/region.osm.pbf" \
   -o "$WORK/filtered.osm.pbf" --overwrite
 rm -f "$WORK/region.osm.pbf" # reclaim disk before the build (country PBFs are GB-scale)
 
-# The export STREAMS into the pack builder — never written to disk. The geojsonseq is ~12x the
+# The export STREAMS into the pack builder - never written to disk. The geojsonseq is ~12x the
 # filtered PBF (a large state: 161 MB -> 1.9 GB), so a country-sized export on disk would blow a
 # 14 GB CI runner; piped, the peak disk is just filtered.pbf + the SQLite db.
 echo "→ exporting features → building SQLite pack (streamed)"
@@ -92,7 +92,7 @@ if [ "$OLD_REV" -gt 0 ] && gh release download "$TAG" --repo "$REPO" -p "$ID.zip
           --argjson from "$OLD_REV" --argjson size "$DSIZE_MB" '{fromRev:$from,url:$url,sizeMb:$size}')"
         echo "→ delta published: ${DSIZE_MB} MB (full is ${SIZE} MB)"
       else
-        echo "→ delta too big ($(( DSIZE_B / 1048576 )) MB vs full ${SIZE} MB) — clients will full-download"
+        echo "→ delta too big ($(( DSIZE_B / 1048576 )) MB vs full ${SIZE} MB) - clients will full-download"
       fi
     fi
   fi
@@ -121,5 +121,5 @@ else
     '.regions = ([.regions[] | select(.id != ($entry.id))] + [$entry])' \
     "$WORK/manifest.json" > "$WORK/poi-pack-manifest.json"
   gh release upload "$TAG" "$WORK/poi-pack-manifest.json" --clobber --repo "$REPO"
-  echo "✓ published $ID — state downloads will now pull its place pack"
+  echo "✓ published $ID - state downloads will now pull its place pack"
 fi

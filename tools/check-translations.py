@@ -31,7 +31,7 @@ def parse(path):
         if 'translatable="false"' in attrs:
             continue
         out[name] = set(re.findall(r"%\d+\$[sd]", body))
-    # <plurals name="x"> ... </plurals> — union the placeholders across all <item>s
+    # <plurals name="x"> ... </plurals> - union the placeholders across all <item>s
     for m in re.finditer(r'<plurals name="([^"]+)"([^>]*)>(.*?)</plurals>', text, re.S):
         name, attrs, body = m.group(1), m.group(2), m.group(3)
         if 'translatable="false"' in attrs:

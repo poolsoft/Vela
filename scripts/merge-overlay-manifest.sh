@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Merge many region entries into building-overlay-manifest.json in ONE upload — the race-safe half of the
+# Merge many region entries into building-overlay-manifest.json in ONE upload - the race-safe half of the
 # CI matrix (build-overlay-region.sh MANIFEST_MODE=emit drops one entry file per region; this folds them
 # all in). Replace-by-id, so re-running a region updates it; regions not in this batch are preserved.
 # Sibling of merge-routing-manifest.sh.
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 DIR="${1:?dir of *.json entry files}"
-REPO="${VELA_REPO:-PimpinPumpkin/Vela}"
+REPO="${VELA_REPO:-poolsoft/Vela}"
 TAG="building-overlays"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 

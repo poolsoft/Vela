@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Merge many region entries into address-overlay-manifest.json in ONE upload — the race-safe half of the CI
+# Merge many region entries into address-overlay-manifest.json in ONE upload - the race-safe half of the CI
 # matrix (build-address-region.sh MANIFEST_MODE=emit drops one entry file per region; this folds them all in).
 # Replace-by-id, so re-running a region updates it; regions not in this batch are preserved. Sibling of
-# merge-overlay-manifest.sh (buildings) — this is for the house-number ADDRESS overlay.
+# merge-overlay-manifest.sh (buildings) - this is for the house-number ADDRESS overlay.
 #
 #   scripts/merge-address-manifest.sh <dir-of-entry-json-files>
 #
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 DIR="${1:?dir of *.json entry files}"
-REPO="${VELA_REPO:-PimpinPumpkin/Vela}"
+REPO="${VELA_REPO:-poolsoft/Vela}"
 TAG="address-overlays"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 

@@ -165,6 +165,7 @@ jobs:
       - name: Rebuild basemap-manifest.json from the release
         env:
           GH_TOKEN: ${{ github.token }}
+          VELA_REPO: ${{ github.repository }}
         run: |
           # No early exit on an empty entries dir: the merge derives the manifest from the archives
           # on the release, so a run with nothing of its own to add still heals whatever an earlier
