@@ -36,7 +36,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         .build()
 
     /** Apply the persisted in-app language to the Application context too (no-op when following the
-     *  system), so `getString` from the ViewModel/nav-notification also localizes — resolved at launch
+     *  system), so `getString` from the ViewModel/nav-notification also localizes - resolved at launch
      *  from the saved pref (an in-session change re-reads it on next launch). */
     /**
      * Hand OS memory pressure to every holder that owns a large or native allocation (ported from

@@ -10,9 +10,9 @@ import java.io.PrintWriter
 import java.io.StringWriter
 
 /**
- * Catches an otherwise-fatal uncaught exception and **persists** a crash report —
+ * Catches an otherwise-fatal uncaught exception and **persists** a crash report -
  * stack trace, app/device versions, and whatever diagnostic breadcrumbs were in
- * memory — to a file under `filesDir/diag/crash/`, then chains to the system's
+ * memory - to a file under `filesDir/diag/crash/`, then chains to the system's
  * default handler so the normal crash flow is unchanged.
  *
  * Why this exists: when nav crashed on a phone that wasn't tethered, there was no
@@ -20,7 +20,7 @@ import java.io.StringWriter
  * crash report on the next launch** (Settings → Diagnostics) and hand it to a dev.
  *
  * The stack trace + device info are benign (no personal data), so a report is
- * written even if the opt-in diagnostics log is off — the breadcrumb section is
+ * written even if the opt-in diagnostics log is off - the breadcrumb section is
  * simply empty in that case (breadcrumbs are only recorded when the user opted in).
  * The report never leaves the phone unless the user exports + shares it.
  */
@@ -45,7 +45,7 @@ object CrashCatcher {
             append("when: ").append(System.currentTimeMillis()).append('\n')
             append("version: ").append(BuildConfig.VERSION_NAME).append(" (").append(BuildConfig.VERSION_CODE).append(")\n")
             append("android: API ").append(Build.VERSION.SDK_INT)
-                .append(" — ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append("\n\n")
+                .append(" - ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append("\n\n")
             append("=== stack trace ===\n").append(sw.toString()).append('\n')
             append("=== breadcrumbs (").append(crumbs.size).append(") ===\n")
             crumbs.forEach { e ->
