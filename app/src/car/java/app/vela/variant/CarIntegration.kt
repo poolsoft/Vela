@@ -97,9 +97,7 @@ object CarIntegration {
         modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
     ): Boolean {
         val carMode by CarLauncherSettings.carModeEtkin.collectAsState()
-        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-        val isLandscape = landscape && configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-        if (!carMode || !isLandscape) return false
+        if (!carMode || !landscape) return false
         app.vela.carlauncher.ui.CarCompactManeuverBanner(
             text = text,
             distanceMeters = distanceMeters,
@@ -129,9 +127,7 @@ object CarIntegration {
         modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
     ): Boolean {
         val carMode by CarLauncherSettings.carModeEtkin.collectAsState()
-        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-        val isLandscape = landscape && configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-        if (!carMode || !isLandscape) return false
+        if (!carMode || !landscape) return false
         app.vela.carlauncher.ui.CarCompactEtaBar(
             remainingDistanceMeters = remainingDistanceMeters,
             remainingSeconds = remainingSeconds,
@@ -157,9 +153,7 @@ object CarIntegration {
         modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
     ): Boolean {
         val carMode by CarLauncherSettings.carModeEtkin.collectAsState()
-        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-        val isLandscape = landscape && configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-        if (!carMode || !isLandscape) return false
+        if (!carMode || !landscape) return false
         app.vela.carlauncher.ui.CarSpeedWidget(
             speedMps = speedMps,
             limitKmh = limitKmh,

@@ -1257,15 +1257,25 @@ fun MapScreen(
         // are ON is the one entered by the last maneuver you passed, which is what the banner's
         // shield already uses; prefer its ref ("US-23 S") and fall back to the street name.
         // Hidden while previewing a step (previewing must not change where you "are"), in PiP,
-        // and until the ticker has reported a puck position.
         val roadLabelMode = app.vela.ui.RoadLabel.mode.value
-        if (state.navigating && !pipUi && state.previewStepIndex == null && roadLabelMode != app.vela.ui.RoadLabel.OFF && roadLabelMode != app.vela.ui.RoadLabel.IN_BAR) {
+        val showFloatingPill = if (CarIntegration.isCarMode()) {
+            roadLabelMode == app.vela.ui.RoadLabel.PUCK
+        } else {
+            roadLabelMode != app.vela.ui.RoadLabel.OFF && roadLabelMode != app.vela.ui.RoadLabel.IN_BAR
+        }
+        if (state.navigating && !pipUi && state.previewStepIndex == null && showFloatingPill) {
             val liveIdx = state.nav.stepIndex
             // The road you are ON right now: the leg's road, or the last silent rename already
             // passed on it (traveled = leg length minus what is left to the next turn).
-            val onRoad = state.activeRoute?.maneuvers?.getOrNull(liveIdx - 1)?.let { m ->
-                val (name, ref) = m.roadAt(m.distanceMeters - state.nav.distanceToNextManeuver)
-                ref?.takeIf { r -> r.isNotBlank() } ?: name?.takeIf { r -> r.isNotBlank() }
+            val onRoad = state.activeRoute?.maneuvers?.let { mans ->
+                mans.getOrNull(liveIdx - 1) ?: mans.getOrNull(liveIdx)
+            }?.let { m ->
+                val traveled = (m.distanceMeters - state.nav.distanceToNextManeuver).coerceAtLeast(0.0)
+                val (name, ref) = m.roadAt(traveled)
+                ref?.takeIf { r -> r.isNotBlank() }
+                    ?: name?.takeIf { r -> r.isNotBlank() }
+                    ?: m.road?.takeIf { r -> r.isNotBlank() }
+                    ?: m.ref?.takeIf { r -> r.isNotBlank() }
             }
             // Composition reads only "do we have a position"; the value itself is read in layout.
             val havePuck = puckScreen.value != null
@@ -5759,11 +5769,24 @@ private fun routeBubblesFor(
  *  when that placement is not chosen or there is nothing to show. Same source as the floating
  *  pill: the leg's road, or the last silent rename already passed on it, ref first. */
 private fun barRoadName(state: MapUiState): String? {
-    if (app.vela.ui.RoadLabel.mode.value != app.vela.ui.RoadLabel.IN_BAR) return null
+    val mode = app.vela.ui.RoadLabel.mode.value
+    val allowed = if (CarIntegration.isCarMode()) {
+        mode == app.vela.ui.RoadLabel.IN_BAR || mode == app.vela.ui.RoadLabel.BAR
+    } else {
+        mode == app.vela.ui.RoadLabel.IN_BAR
+    }
+    if (!allowed) return null
     if (!state.navigating || state.previewStepIndex != null) return null
-    val m = state.activeRoute?.maneuvers?.getOrNull(state.nav.stepIndex - 1) ?: return null
-    val (name, ref) = m.roadAt(m.distanceMeters - state.nav.distanceToNextManeuver)
-    val road = ref?.takeIf { it.isNotBlank() } ?: name?.takeIf { it.isNotBlank() } ?: return null
+    val maneuvers = state.activeRoute?.maneuvers ?: return null
+    val liveIdx = state.nav.stepIndex
+    val m = maneuvers.getOrNull(liveIdx - 1) ?: maneuvers.getOrNull(liveIdx) ?: return null
+    val traveled = (m.distanceMeters - state.nav.distanceToNextManeuver).coerceAtLeast(0.0)
+    val (name, ref) = m.roadAt(traveled)
+    val road = ref?.takeIf { it.isNotBlank() }
+        ?: name?.takeIf { it.isNotBlank() }
+        ?: m.road?.takeIf { it.isNotBlank() }
+        ?: m.ref?.takeIf { it.isNotBlank() }
+        ?: return null
     if (state.roadNameLatin.isEmpty()) return road
     return app.vela.core.voice.SpokenScript.forDisplay(road, app.vela.ui.AppLocale.effective().language, state.roadNameLatin)
 }

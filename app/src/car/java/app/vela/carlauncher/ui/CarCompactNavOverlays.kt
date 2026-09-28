@@ -290,12 +290,12 @@ fun CarCompactEtaBar(
                     Spacer(Modifier.width(4.dp))
                     Text(
                         roadName!!,
-                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 260.dp)
+                        modifier = Modifier.widthIn(max = 320.dp)
                     )
                 }
             }
