@@ -121,6 +121,10 @@ class MusicManager private constructor(private val context: Context) : InternalM
     }
 
     fun onOturumlarYenilendi(sessions: List<MediaController>) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            anaHandler.post { onOturumlarYenilendi(sessions) }
+            return
+        }
         controllers = sessions.filter { it.packageName != context.packageName }
         app.vela.util.FileLogger.d(TAG, "Oturumlar guncellendi. Paketler: ${controllers.map { it.packageName }}")
 

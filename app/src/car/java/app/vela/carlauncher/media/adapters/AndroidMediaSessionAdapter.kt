@@ -34,11 +34,18 @@ class AndroidMediaSessionAdapter(
         }
     }
 
+    private var onbellekBaslik: String? = null
+    private var onbellekSanatci: String? = null
+    private var onbellekKapak: Bitmap? = null
+
     fun setController(c: MediaController?) {
         if (controller == c) return
 
         controller?.unregisterCallback(callback)
         controller = c
+        onbellekBaslik = null
+        onbellekSanatci = null
+        onbellekKapak = null
         controller?.registerCallback(callback, anaHandler)
         onDurumDegisti()
     }
@@ -89,10 +96,49 @@ class AndroidMediaSessionAdapter(
             ?: ""
     }
 
+    private fun guvenliOlcekleBitmap(kaynak: Bitmap?, maxBoyut: Int = 512): Bitmap? {
+        if (kaynak == null) return null
+        return try {
+            val genislik = kaynak.width
+            val yukseklik = kaynak.height
+            if (genislik <= maxBoyut && yukseklik <= maxBoyut) {
+                kaynak
+            } else {
+                val oran = genislik.toFloat() / yukseklik.toFloat()
+                val yeniGenislik: Int
+                val yeniYukseklik: Int
+                if (oran > 1f) {
+                    yeniGenislik = maxBoyut
+                    yeniYukseklik = (maxBoyut / oran).toInt().coerceAtLeast(1)
+                } else {
+                    yeniYukseklik = maxBoyut
+                    yeniGenislik = (maxBoyut * oran).toInt().coerceAtLeast(1)
+                }
+                Bitmap.createScaledBitmap(kaynak, yeniGenislik, yeniYukseklik, true)
+            }
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
     override fun albumKapagi(): Bitmap? {
         val meta = controller?.metadata ?: return null
-        return meta.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-            ?: meta.getBitmap(MediaMetadata.METADATA_KEY_ART)
+        val b = baslik()
+        val s = sanatci()
+        if (b.isNotBlank() && b == onbellekBaslik && s == onbellekSanatci && onbellekKapak != null) {
+            return onbellekKapak
+        }
+        val raw = try {
+            meta.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                ?: meta.getBitmap(MediaMetadata.METADATA_KEY_ART)
+        } catch (e: Throwable) {
+            null
+        }
+        val olcekli = guvenliOlcekleBitmap(raw, 512)
+        onbellekBaslik = b
+        onbellekSanatci = s
+        onbellekKapak = olcekli
+        return olcekli
     }
 
     override fun toplamSureMs(): Long {
@@ -114,5 +160,8 @@ class AndroidMediaSessionAdapter(
     override fun serbestBirak() {
         controller?.unregisterCallback(callback)
         controller = null
+        onbellekBaslik = null
+        onbellekSanatci = null
+        onbellekKapak = null
     }
 }

@@ -39,22 +39,24 @@ class MusicRepository private constructor(private val context: Context) {
             }
         }
 
-        fun muzikleriTara(context: Context) {
+        fun muzikleriTara(context: Context, zorla: Boolean = false) {
             kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-                getInstance(context).muzikKutuphanesiniTara()
+                getInstance(context).muzikKutuphanesiniTara(zorla)
             }
         }
     }
 
     private val scanScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
     private var mediaScanJob: kotlinx.coroutines.Job? = null
+    private var sonTaramaZamaniMs = 0L
+    private val MIN_TARAMA_ARALIGI_MS = 60_000L // 1 dakika icinde tekrar tam disk taramasi yapma
     private val storageReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: android.content.Intent?) {
             FileLogger.i(TAG, "Depolama degisikligi algilandi: ${intent?.action}")
             mediaScanJob?.cancel()
             mediaScanJob = scanScope.launch {
                 kotlinx.coroutines.delay(1000)
-                muzikKutuphanesiniTara()
+                muzikKutuphanesiniTara(zorla = true)
             }
         }
     }
@@ -87,7 +89,12 @@ class MusicRepository private constructor(private val context: Context) {
     private val _taraniyorMu = MutableStateFlow(false)
     val taraniyorMu: StateFlow<Boolean> = _taraniyorMu.asStateFlow()
 
-    suspend fun muzikKutuphanesiniTara() = withContext(Dispatchers.IO) {
+    suspend fun muzikKutuphanesiniTara(zorla: Boolean = false) = withContext(Dispatchers.IO) {
+        val simdi = System.currentTimeMillis()
+        if (!zorla && _parcalar.value.isNotEmpty() && (simdi - sonTaramaZamaniMs < MIN_TARAMA_ARALIGI_MS)) {
+            FileLogger.d(TAG, "Muzik taramasi atlandi (yakin zamanda tarandi)")
+            return@withContext
+        }
         if (!scanMutex.tryLock()) return@withContext
         _lastError.value = null
         _taraniyorMu.value = true
@@ -222,6 +229,7 @@ class MusicRepository private constructor(private val context: Context) {
             if (e is SecurityException) { _parcalar.value = emptyList(); _klasorler.value = emptyList() }
             FileLogger.e(TAG, "Muzik tarama genel hatasi: ${e.message}", e)
         } finally {
+            sonTaramaZamaniMs = System.currentTimeMillis()
             _taraniyorMu.value = false
             scanMutex.unlock()
         }

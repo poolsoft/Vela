@@ -102,7 +102,7 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
 
         sessionToken = mediaSession?.sessionToken
         musicManager.addListener(this)
-        guncelleBildirim()
+        guncelleBildirim(hemen = true)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -117,7 +117,7 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
                 stopForeground(true)
             }
         }
-        guncelleBildirim()
+        guncelleBildirim(hemen = true)
         return START_STICKY
     }
 
@@ -158,7 +158,53 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
         }
     }
 
-    private fun guncelleBildirim() {
+    private val bildirimHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var bildirimGuncellemeBekliyor = false
+    private val bildirimGuncellemeRunnable = Runnable {
+        bildirimGuncellemeBekliyor = false
+        gerceklesitirBildirimGuncelleme()
+    }
+
+    private fun guncelleBildirim(hemen: Boolean = false) {
+        if (bildirimKapatildi) return
+        if (hemen) {
+            bildirimHandler.removeCallbacks(bildirimGuncellemeRunnable)
+            bildirimGuncellemeBekliyor = false
+            gerceklesitirBildirimGuncelleme()
+        } else {
+            if (!bildirimGuncellemeBekliyor) {
+                bildirimGuncellemeBekliyor = true
+                bildirimHandler.postDelayed(bildirimGuncellemeRunnable, 150L)
+            }
+        }
+    }
+
+    private fun guvenliOlcekleBitmap(kaynak: Bitmap?, maxBoyut: Int = 512): Bitmap? {
+        if (kaynak == null) return null
+        return try {
+            val genislik = kaynak.width
+            val yukseklik = kaynak.height
+            if (genislik <= maxBoyut && yukseklik <= maxBoyut) {
+                kaynak
+            } else {
+                val oran = genislik.toFloat() / yukseklik.toFloat()
+                val yeniGenislik: Int
+                val yeniYukseklik: Int
+                if (oran > 1f) {
+                    yeniGenislik = maxBoyut
+                    yeniYukseklik = (maxBoyut / oran).toInt().coerceAtLeast(1)
+                } else {
+                    yeniYukseklik = maxBoyut
+                    yeniGenislik = (maxBoyut * oran).toInt().coerceAtLeast(1)
+                }
+                Bitmap.createScaledBitmap(kaynak, yeniGenislik, yeniYukseklik, true)
+            }
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
+    private fun gerceklesitirBildirimGuncelleme() {
         if (bildirimKapatildi) return
 
         val medya = musicManager.medyaDurumu.value
@@ -168,13 +214,15 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
         val state = if (caliyor) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
         mediaSession?.setPlaybackState(buildPlaybackState(state))
 
+        val guvenliKapak = guvenliOlcekleBitmap(medya.albumKapagi, 512)
+
         val metaBuilder = MediaMetadata.Builder()
             .putString(MediaMetadata.METADATA_KEY_TITLE, medya.baslik)
             .putString(MediaMetadata.METADATA_KEY_ARTIST, medya.sanatci)
             .putLong(MediaMetadata.METADATA_KEY_DURATION, medya.toplamSureMs)
 
-        if (medya.albumKapagi != null) {
-            metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, medya.albumKapagi)
+        if (guvenliKapak != null) {
+            metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, guvenliKapak)
         }
         mediaSession?.setMetadata(metaBuilder.build())
 
@@ -225,7 +273,7 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
             .setContentTitle(if (medya.baslik.isNotBlank()) medya.baslik else "Vela Müzik")
             .setContentText(if (medya.sanatci.isNotBlank()) medya.sanatci else "Hazır")
             .setSmallIcon(R.drawable.ic_internal_music)
-            .setLargeIcon(medya.albumKapagi)
+            .setLargeIcon(guvenliKapak)
             .setContentIntent(openAppIntent)
             .setDeleteIntent(closeIntent)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
@@ -257,18 +305,23 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
                     .setShowActionsInCompactView(0, 1, 2)
             )
 
-        startForeground(NOTIFICATION_ID, builder.build())
+        try {
+            startForeground(NOTIFICATION_ID, builder.build())
+        } catch (e: Exception) {
+            app.vela.util.FileLogger.e("CarMediaService", "startForeground bildirimi gonderilemedi: ${e.message}", e)
+        }
     }
 
     override fun onParcaDegisti(medya: MedyaParcasi) {
-        guncelleBildirim()
+        guncelleBildirim(hemen = false)
     }
 
     override fun onCalmaDurumuDegisti(caliyor: Boolean) {
-        guncelleBildirim()
+        guncelleBildirim(hemen = false)
     }
 
     override fun onDestroy() {
+        bildirimHandler.removeCallbacks(bildirimGuncellemeRunnable)
         musicManager.removeListener(this)
         mediaSession?.isActive = false
         mediaSession?.release()
