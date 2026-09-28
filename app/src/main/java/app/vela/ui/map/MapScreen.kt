@@ -1258,26 +1258,18 @@ fun MapScreen(
         // shield already uses; prefer its ref ("US-23 S") and fall back to the street name.
         // Hidden while previewing a step (previewing must not change where you "are"), in PiP,
         val roadLabelMode = app.vela.ui.RoadLabel.mode.value
-        val showFloatingPill = if (CarIntegration.isCarMode()) {
-            false
+        val isLandscapeCar = landscapeChrome && CarIntegration.isCarMode()
+        val showFloatingPill = if (isLandscapeCar) {
+            false // Yatay arac modunda etiket haritada okun altinda degil, kompakt eta bar icinde gosterilir
         } else {
             roadLabelMode != app.vela.ui.RoadLabel.OFF && roadLabelMode != app.vela.ui.RoadLabel.IN_BAR
         }
         if (state.navigating && !pipUi && state.previewStepIndex == null && showFloatingPill) {
-            val liveIdx = state.nav.stepIndex
-            // The road you are ON right now: the leg's road, or the last silent rename already
-            // passed on it (traveled = leg length minus what is left to the next turn).
-            val onRoad = state.activeRoute?.maneuvers?.getOrNull(liveIdx - 1)?.let { m ->
-                val (name, ref) = m.roadAt(m.distanceMeters - state.nav.distanceToNextManeuver)
-                ref?.takeIf { r -> r.isNotBlank() } ?: name?.takeIf { r -> r.isNotBlank() }
-            }
+            val onRoad = resolveCurrentRoad(state)
             // Composition reads only "do we have a position"; the value itself is read in layout.
             val havePuck = puckScreen.value != null
             if (onRoad != null && (havePuck || roadLabelMode == app.vela.ui.RoadLabel.BAR)) {
-                val uiLang = app.vela.ui.AppLocale.effective().language
-                val shownRoad =
-                    if (state.roadNameLatin.isEmpty()) onRoad
-                    else app.vela.core.voice.SpokenScript.forDisplay(onRoad, uiLang, state.roadNameLatin)
+                val shownRoad = onRoad
                 // Two placements: Google's fixed spot centered above the bottom bar (default: it
                 // can always be centered, whatever the name's length) or pinned under the arrow
                 // (issue #288's mockup; long names clamp to the screen edge there).
@@ -1908,7 +1900,7 @@ fun MapScreen(
                         stepsCloseTick = 0
                         vm.openSteps()
                     },
-                    roadName = barRoadName(state),
+                    roadName = if (roadLabelMode != app.vela.ui.RoadLabel.OFF) resolveCurrentRoad(state) else null,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .navigationBarsPadding()
@@ -5762,19 +5754,16 @@ private fun routeBubblesFor(
 /** The road you are on, for the "Inside the bottom bar" road-name placement (issue #553), or null
  *  when that placement is not chosen or there is nothing to show. Same source as the floating
  *  pill: the leg's road, or the last silent rename already passed on it, ref first. */
-private fun barRoadName(state: MapUiState): String? {
-    val mode = app.vela.ui.RoadLabel.mode.value
-    val allowed = if (CarIntegration.isCarMode()) {
-        mode != app.vela.ui.RoadLabel.OFF
-    } else {
-        mode == app.vela.ui.RoadLabel.IN_BAR
-    }
-    if (!allowed) return null
+/** Gecerli rotada aracin uzerinde bulundugu veya yaklasmakta oldugu yol adini cozer. */
+private fun resolveCurrentRoad(state: MapUiState): String? {
     if (!state.navigating || state.previewStepIndex != null) return null
     val maneuvers = state.activeRoute?.maneuvers ?: return null
+    if (maneuvers.isEmpty()) return null
     val liveIdx = state.nav.stepIndex
-    // 1. Onceki manevralardan geriye dogru son girilen gecerli yol adini ara
+
     var road: String? = null
+
+    // 1. Onceki manevralardan geriye dogru son girilen gecerli yol adini ara
     for (i in (liveIdx - 1) downTo 0) {
         val prev = maneuvers.getOrNull(i) ?: continue
         val traveled = (prev.distanceMeters - if (i == liveIdx - 1) state.nav.distanceToNextManeuver else 0.0).coerceAtLeast(0.0)
@@ -5788,7 +5777,8 @@ private fun barRoadName(state: MapUiState): String? {
             break
         }
     }
-    // 2. Onceki adimlarda yoksa (orn. kalkis baslangicinda), gecerli adimdaki yol adina bak
+
+    // 2. Gecerli adimdaki yol adina bak
     if (road == null) {
         val cur = maneuvers.getOrNull(liveIdx)
         if (cur != null) {
@@ -5799,18 +5789,32 @@ private fun barRoadName(state: MapUiState): String? {
                 ?: cur.ref?.takeIf { it.isNotBlank() }
         }
     }
-    // 3. Eger hala yoksa ve rota basindaysak (liveIdx == 0), baslangic sonrasi adimlardaki yol adina bak
-    if (road == null && liveIdx == 0) {
-        for (i in 1 until minOf(maneuvers.size, 4)) {
+
+    // 3. Eger henuz rota baslangicindaysa veya isimsiz yoldaysa, sonraki ilk adimlardaki yol adina bak
+    if (road == null) {
+        for (i in (liveIdx + 1) until minOf(maneuvers.size, liveIdx + 4)) {
             val nextM = maneuvers.getOrNull(i) ?: continue
-            val r = nextM.road?.takeIf { it.isNotBlank() } ?: nextM.ref?.takeIf { it.isNotBlank() }
+            val (name, ref) = nextM.roadAt(0.0)
+            val r = ref?.takeIf { it.isNotBlank() }
+                ?: name?.takeIf { it.isNotBlank() }
+                ?: nextM.road?.takeIf { it.isNotBlank() }
+                ?: nextM.ref?.takeIf { it.isNotBlank() }
             if (r != null) {
                 road = r
                 break
             }
         }
     }
+
     if (road == null) return null
     if (state.roadNameLatin.isEmpty()) return road
     return app.vela.core.voice.SpokenScript.forDisplay(road, app.vela.ui.AppLocale.effective().language, state.roadNameLatin)
+}
+
+/** The road you are on, for the "Inside the bottom bar" road-name placement (issue #553), or null
+ *  when that placement is not chosen or there is nothing to show. */
+private fun barRoadName(state: MapUiState): String? {
+    val mode = app.vela.ui.RoadLabel.mode.value
+    if (mode != app.vela.ui.RoadLabel.IN_BAR) return null
+    return resolveCurrentRoad(state)
 }
