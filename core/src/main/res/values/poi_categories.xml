@@ -13,7 +13,7 @@
     <string name="poi_cat_bakery">bakery,pastry</string>
     <string name="poi_cat_school">school,university,college</string>
     <string name="poi_cat_park">park,parks</string>
-    <string name="poi_cat_gym">gym,fitness center,fitness centre,sports center</string>
+    <string name="poi_cat_gym">gym,fitness center,sports center</string>
     <string name="poi_cat_car_wash">car wash</string>
     <string name="poi_cat_post_office">post office,post offices</string>
     <string name="poi_cat_campground">campground,campgrounds,camping,camp site,caravan site</string>

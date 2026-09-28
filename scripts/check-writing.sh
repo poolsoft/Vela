@@ -21,7 +21,7 @@ if [ -n "$MSGS" ]; then
   if grep -inE "co-authored-by:.*(claude|anthropic)|generated with \[?claude|🤖" <<<"$MSGS"; then
     echo "FAIL: a commit message carries AI attribution" >&2; FAIL=1
   fi
-  if grep -n "-" <<<"$MSGS"; then
+  if grep -n "—" <<<"$MSGS"; then
     echo "FAIL: a commit message contains an em dash" >&2; FAIL=1
   fi
   if grep -inE "$BRITISH" <<<"$MSGS"; then
@@ -39,9 +39,9 @@ if grep -inE "$BRITISH" <<<"$ADDED" | grep -viE "values-en-rGB|centre\"|centre'|
   grep -inE "$BRITISH" <<<"$ADDED" | grep -viE "values-en-rGB|centre\"|centre'|fitness_centre|arts_centre|neighbourhood|cancelled\(\)|isCancelled" | head -5 >&2
   FAIL=1
 fi
-if grep -n "-" <<<"$ADDED" >/dev/null 2>&1; then
+if grep -n "—" <<<"$ADDED" >/dev/null 2>&1; then
   echo "FAIL: this change adds an em dash:" >&2
-  grep -n "-" <<<"$ADDED" | head -5 >&2
+  grep -n "—" <<<"$ADDED" | head -5 >&2
   FAIL=1
 fi
 [ "$FAIL" -eq 0 ] && echo "writing checks passed"
