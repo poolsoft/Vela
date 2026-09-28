@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,6 +25,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import app.vela.R
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -249,8 +252,10 @@ fun CarCompactEtaBar(
     onStop: () -> Unit,
     onPause: (() -> Unit)? = null,
     onSteps: (() -> Unit)? = null,
+    roadName: String? = null,
     modifier: Modifier = Modifier
 ) {
+    val hasRoadName = !roadName.isNullOrBlank()
     Surface(
         onClick = {
             android.util.Log.d("CarCompactEtaBar", "Surface clicked! onSteps: $onSteps")
@@ -258,15 +263,45 @@ fun CarCompactEtaBar(
         },
         enabled = onSteps != null,
         color = Color(0xE614161D),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(if (hasRoadName) 20.dp else 22.dp),
         border = BorderStroke(1.dp, Color(0x33448AFF)),
         shadowElevation = 4.dp,
         modifier = modifier
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(
+                horizontal = 6.dp,
+                vertical = if (hasRoadName) 3.dp else 4.dp
+            ),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (hasRoadName) {
+                Row(
+                    modifier = Modifier.padding(top = 2.dp, bottom = 1.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowUp,
+                        contentDescription = null,
+                        tint = Color(0x99FFFFFF),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        roadName!!,
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 260.dp)
+                    )
+                }
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
             // Rotayi Bitir Butonu (Kirmizi Kapsul)
             Surface(
                 onClick = onStop,
@@ -277,7 +312,7 @@ fun CarCompactEtaBar(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Rotayı Bitir",
+                        contentDescription = stringResource(R.string.nav_end),
                         tint = Color.White,
                         modifier = Modifier.size(18.dp)
                     )
@@ -339,7 +374,7 @@ fun CarCompactEtaBar(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             if (paused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                            contentDescription = "Duraklat / Sürdür",
+                            contentDescription = stringResource(if (paused) R.string.nav_resume else R.string.nav_pause),
                             tint = Color.White,
                             modifier = Modifier.size(18.dp)
                         )
@@ -359,7 +394,7 @@ fun CarCompactEtaBar(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Default.KeyboardArrowUp,
-                            contentDescription = "Yol Tarifi ve Adımlar",
+                            contentDescription = stringResource(R.string.nav_steps),
                             tint = Color.White,
                             modifier = Modifier.size(20.dp)
                         )
@@ -368,4 +403,5 @@ fun CarCompactEtaBar(
             }
         }
     }
+}
 }

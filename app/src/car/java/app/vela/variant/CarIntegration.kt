@@ -125,6 +125,7 @@ object CarIntegration {
         onStop: () -> Unit,
         onPause: (() -> Unit)? = null,
         onSteps: (() -> Unit)? = null,
+        roadName: String? = null,
         modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
     ): Boolean {
         val carMode by CarLauncherSettings.carModeEtkin.collectAsState()
@@ -139,6 +140,7 @@ object CarIntegration {
             onStop = onStop,
             onPause = onPause,
             onSteps = onSteps,
+            roadName = roadName,
             modifier = modifier
         )
         return true

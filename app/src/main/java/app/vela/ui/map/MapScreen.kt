@@ -1285,7 +1285,12 @@ fun MapScreen(
                     shadowElevation = 3.dp,
                     modifier = if (abovePill) Modifier
                         .align(if (landscapeChrome) Alignment.BottomStart else Alignment.BottomCenter)
-                        .then(if (landscapeChrome) Modifier.padding(start = (sidePanelWidthDp - 260.dp) / 2 + 16.dp) else Modifier)
+                        .then(
+                            if (landscapeChrome) {
+                                if (CarIntegration.isCarMode()) Modifier.padding(start = 16.dp)
+                                else Modifier.padding(start = (sidePanelWidthDp - 260.dp) / 2 + 16.dp)
+                            } else Modifier
+                        )
                         .navigationBarsPadding()
                         .padding(bottom = with(LocalDensity.current) { navBarHeightPx.toDp() } + 16.dp + 10.dp)
                         // Never reaches the speed-limit sign (left) or the FAB column (right):
@@ -1899,6 +1904,7 @@ fun MapScreen(
                         stepsCloseTick = 0
                         vm.openSteps()
                     },
+                    roadName = barRoadName(state),
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .navigationBarsPadding()

@@ -54,6 +54,7 @@ object CarIntegration {
         onStop: () -> Unit,
         onPause: (() -> Unit)? = null,
         onSteps: (() -> Unit)? = null,
+        roadName: String? = null,
         modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
     ): Boolean = false
 
