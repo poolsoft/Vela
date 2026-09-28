@@ -24,6 +24,8 @@ object OfflineServerConfig {
         "https://github.com/poolsoft/Vela/releases/download/obf-regions/obf-manifest.json"
     const val POOLSOFT_BASEMAP_MANIFEST_URL =
         "https://github.com/poolsoft/Vela/releases/download/basemap-tiles/basemap-manifest.json"
+    const val POOLSOFT_WORLD_BASEMAP_URL =
+        "https://github.com/poolsoft/Vela/releases/download/basemap-tiles/basemap-world.pmtiles"
 
     // Upstream (Resmi Vela) manifest URL'leri
     const val UPSTREAM_POI_MANIFEST_URL =
@@ -32,6 +34,15 @@ object OfflineServerConfig {
         "https://github.com/PimpinPumpkin/Vela/releases/download/obf-regions/obf-manifest.json"
     const val UPSTREAM_BASEMAP_MANIFEST_URL =
         "https://github.com/PimpinPumpkin/Vela/releases/download/basemap-tiles/basemap-manifest.json"
+    const val UPSTREAM_WORLD_BASEMAP_URL =
+        "https://github.com/PimpinPumpkin/Vela/releases/download/basemap-tiles/basemap-world.pmtiles"
+
+    fun getWorldBasemapUrl(context: Context): String {
+        return when (getServerMode(context)) {
+            MODE_UPSTREAM -> UPSTREAM_WORLD_BASEMAP_URL
+            else -> POOLSOFT_WORLD_BASEMAP_URL
+        }
+    }
 
     fun getServerMode(context: Context): Int {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

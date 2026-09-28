@@ -6425,7 +6425,8 @@ class MapViewModel @Inject constructor(
      *  network draws a coarse world instead of an empty screen. Best effort and silent - it is an
      *  improvement on nothing, so failing to get it changes nothing. */
     private suspend fun ensureWorldBasemap() {
-        runCatching { basemapStore.ensureWorld(app.vela.BuildConfig.WORLD_BASEMAP_URL) }
+        val url = app.vela.offline.OfflineServerConfig.getWorldBasemapUrl(appContext)
+        runCatching { basemapStore.ensureWorld(url) }
     }
 
     /** The smallest basemap archive covering ([lat],[lng]), pulled with a viewport download. */

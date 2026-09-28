@@ -113,7 +113,7 @@ android {
             "String",
             "WORLD_BASEMAP_URL",
             "\"${(project.findProperty("worldBasemapUrl") as String?)
-                ?: "https://github.com/PimpinPumpkin/Vela/releases/download/basemap-tiles/basemap-world.pmtiles"}\"",
+                ?: "https://github.com/poolsoft/Vela/releases/download/basemap-tiles/basemap-world.pmtiles"}\"",
         )
         // Offline PLACE packs (whole-region POI/address SQLite, pulled with a routing-region download so a
         // state is searchable offline) — same override pattern (-PpoiPackManifestUrl=… via `adb reverse`).
