@@ -1259,7 +1259,7 @@ fun MapScreen(
         // Hidden while previewing a step (previewing must not change where you "are"), in PiP,
         val roadLabelMode = app.vela.ui.RoadLabel.mode.value
         val showFloatingPill = if (CarIntegration.isCarMode()) {
-            roadLabelMode == app.vela.ui.RoadLabel.PUCK
+            false
         } else {
             roadLabelMode != app.vela.ui.RoadLabel.OFF && roadLabelMode != app.vela.ui.RoadLabel.IN_BAR
         }
@@ -1267,31 +1267,17 @@ fun MapScreen(
             val liveIdx = state.nav.stepIndex
             // The road you are ON right now: the leg's road, or the last silent rename already
             // passed on it (traveled = leg length minus what is left to the next turn).
-            val onRoad = state.activeRoute?.maneuvers?.let { mans ->
-                mans.getOrNull(liveIdx - 1) ?: mans.getOrNull(liveIdx)
-            }?.let { m ->
-                val traveled = (m.distanceMeters - state.nav.distanceToNextManeuver).coerceAtLeast(0.0)
-                val (name, ref) = m.roadAt(traveled)
-                ref?.takeIf { r -> r.isNotBlank() }
-                    ?: name?.takeIf { r -> r.isNotBlank() }
-                    ?: m.road?.takeIf { r -> r.isNotBlank() }
-                    ?: m.ref?.takeIf { r -> r.isNotBlank() }
+            val onRoad = state.activeRoute?.maneuvers?.getOrNull(liveIdx - 1)?.let { m ->
+                val (name, ref) = m.roadAt(m.distanceMeters - state.nav.distanceToNextManeuver)
+                ref?.takeIf { r -> r.isNotBlank() } ?: name?.takeIf { r -> r.isNotBlank() }
             }
             // Composition reads only "do we have a position"; the value itself is read in layout.
             val havePuck = puckScreen.value != null
-            val defaultFloatingRoad = when (roadLabelMode) {
-                app.vela.ui.RoadLabel.BAR -> stringResource(R.string.settings_road_label) + " (" + stringResource(R.string.settings_road_label_bar) + ")"
-                app.vela.ui.RoadLabel.PUCK -> stringResource(R.string.settings_road_label) + " (" + stringResource(R.string.settings_road_label_puck) + ")"
-                else -> stringResource(R.string.settings_road_label)
-            }
-            val shownRoad = if (!onRoad.isNullOrBlank()) {
+            if (onRoad != null && (havePuck || roadLabelMode == app.vela.ui.RoadLabel.BAR)) {
                 val uiLang = app.vela.ui.AppLocale.effective().language
-                if (state.roadNameLatin.isEmpty()) onRoad
-                else app.vela.core.voice.SpokenScript.forDisplay(onRoad, uiLang, state.roadNameLatin)
-            } else {
-                defaultFloatingRoad
-            }
-            if (havePuck || roadLabelMode == app.vela.ui.RoadLabel.BAR) {
+                val shownRoad =
+                    if (state.roadNameLatin.isEmpty()) onRoad
+                    else app.vela.core.voice.SpokenScript.forDisplay(onRoad, uiLang, state.roadNameLatin)
                 // Two placements: Google's fixed spot centered above the bottom bar (default: it
                 // can always be centered, whatever the name's length) or pinned under the arrow
                 // (issue #288's mockup; long names clamp to the screen edge there).
@@ -5787,14 +5773,44 @@ private fun barRoadName(state: MapUiState): String? {
     if (!state.navigating || state.previewStepIndex != null) return null
     val maneuvers = state.activeRoute?.maneuvers ?: return null
     val liveIdx = state.nav.stepIndex
-    val m = maneuvers.getOrNull(liveIdx - 1) ?: maneuvers.getOrNull(liveIdx) ?: return null
-    val traveled = (m.distanceMeters - state.nav.distanceToNextManeuver).coerceAtLeast(0.0)
-    val (name, ref) = m.roadAt(traveled)
-    val road = ref?.takeIf { it.isNotBlank() }
-        ?: name?.takeIf { it.isNotBlank() }
-        ?: m.road?.takeIf { it.isNotBlank() }
-        ?: m.ref?.takeIf { it.isNotBlank() }
-        ?: return null
+    // 1. Onceki manevralardan geriye dogru son girilen gecerli yol adini ara
+    var road: String? = null
+    for (i in (liveIdx - 1) downTo 0) {
+        val prev = maneuvers.getOrNull(i) ?: continue
+        val traveled = (prev.distanceMeters - if (i == liveIdx - 1) state.nav.distanceToNextManeuver else 0.0).coerceAtLeast(0.0)
+        val (name, ref) = prev.roadAt(traveled)
+        val r = ref?.takeIf { it.isNotBlank() }
+            ?: name?.takeIf { it.isNotBlank() }
+            ?: prev.road?.takeIf { it.isNotBlank() }
+            ?: prev.ref?.takeIf { it.isNotBlank() }
+        if (r != null) {
+            road = r
+            break
+        }
+    }
+    // 2. Onceki adimlarda yoksa (orn. kalkis baslangicinda), gecerli adimdaki yol adina bak
+    if (road == null) {
+        val cur = maneuvers.getOrNull(liveIdx)
+        if (cur != null) {
+            val (name, ref) = cur.roadAt(0.0)
+            road = ref?.takeIf { it.isNotBlank() }
+                ?: name?.takeIf { it.isNotBlank() }
+                ?: cur.road?.takeIf { it.isNotBlank() }
+                ?: cur.ref?.takeIf { it.isNotBlank() }
+        }
+    }
+    // 3. Eger hala yoksa ve rota basindaysak (liveIdx == 0), baslangic sonrasi adimlardaki yol adina bak
+    if (road == null && liveIdx == 0) {
+        for (i in 1 until minOf(maneuvers.size, 4)) {
+            val nextM = maneuvers.getOrNull(i) ?: continue
+            val r = nextM.road?.takeIf { it.isNotBlank() } ?: nextM.ref?.takeIf { it.isNotBlank() }
+            if (r != null) {
+                road = r
+                break
+            }
+        }
+    }
+    if (road == null) return null
     if (state.roadNameLatin.isEmpty()) return road
     return app.vela.core.voice.SpokenScript.forDisplay(road, app.vela.ui.AppLocale.effective().language, state.roadNameLatin)
 }

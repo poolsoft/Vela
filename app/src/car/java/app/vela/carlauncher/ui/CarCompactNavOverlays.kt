@@ -107,13 +107,13 @@ fun CarCompactManeuverBanner(
 
                 Spacer(Modifier.width(10.dp))
 
-                // Cadde / Manevra Yonergesi
+                // Cadde / Manevra Yonergesi (cok satira izin verilir, metin kesilmez)
                 Text(
                     text,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 17.sp, lineHeight = 21.sp),
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFE2E4E9),
-                    maxLines = 1,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
@@ -151,10 +151,10 @@ fun CarCompactManeuverBanner(
                         Spacer(Modifier.width(6.dp))
                         Text(
                             nextText,
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 17.sp),
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFFB0B3C0),
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
@@ -256,15 +256,8 @@ fun CarCompactEtaBar(
     modifier: Modifier = Modifier
 ) {
     val roadLabelMode = app.vela.ui.RoadLabel.mode.value
-    val showRoadLabel = roadLabelMode != app.vela.ui.RoadLabel.OFF
-
-    val defaultText = when (roadLabelMode) {
-        app.vela.ui.RoadLabel.IN_BAR -> stringResource(R.string.settings_road_label) + " (" + stringResource(R.string.settings_road_label_inbar) + ")"
-        app.vela.ui.RoadLabel.BAR -> stringResource(R.string.settings_road_label) + " (" + stringResource(R.string.settings_road_label_bar) + ")"
-        app.vela.ui.RoadLabel.PUCK -> stringResource(R.string.settings_road_label) + " (" + stringResource(R.string.settings_road_label_puck) + ")"
-        else -> stringResource(R.string.settings_road_label)
-    }
-    val displayRoadName = if (!roadName.isNullOrBlank()) roadName else defaultText
+    val isRoadLabelOff = roadLabelMode == app.vela.ui.RoadLabel.OFF
+    val hasRoadName = !isRoadLabelOff && !roadName.isNullOrBlank()
 
     Surface(
         onClick = {
@@ -273,7 +266,7 @@ fun CarCompactEtaBar(
         },
         enabled = onSteps != null,
         color = Color(0xE614161D),
-        shape = RoundedCornerShape(if (showRoadLabel) 20.dp else 22.dp),
+        shape = RoundedCornerShape(if (hasRoadName) 20.dp else 22.dp),
         border = BorderStroke(1.dp, Color(0x33448AFF)),
         shadowElevation = 4.dp,
         modifier = modifier
@@ -281,13 +274,13 @@ fun CarCompactEtaBar(
         Column(
             modifier = Modifier.padding(
                 horizontal = 6.dp,
-                vertical = if (showRoadLabel) 3.dp else 4.dp
+                vertical = if (hasRoadName) 3.dp else 4.dp
             ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (showRoadLabel) {
+            if (hasRoadName) {
                 Row(
-                    modifier = Modifier.padding(top = 2.dp, bottom = 1.dp),
+                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
@@ -295,17 +288,17 @@ fun CarCompactEtaBar(
                         Icons.Default.KeyboardArrowUp,
                         contentDescription = null,
                         tint = Color(0xFF00FFC4),
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(16.dp)
                     )
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(6.dp))
                     Text(
-                        displayRoadName,
-                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
-                        fontWeight = FontWeight.SemiBold,
+                        roadName!!,
+                        style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
+                        fontWeight = FontWeight.Bold,
                         color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 320.dp)
+                        modifier = Modifier.widthIn(max = 340.dp)
                     )
                 }
             }
@@ -338,8 +331,8 @@ fun CarCompactEtaBar(
             ) {
                 Text(
                     formatDuration(remainingSeconds),
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
+                    fontWeight = FontWeight.ExtraBold,
                     color = if (offRoute) Color(0xFFFFB300) else Color(0xFF00FF9D)
                 )
 
@@ -347,13 +340,13 @@ fun CarCompactEtaBar(
                     " • ",
                     color = Color(0x66FFFFFF),
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
+                    fontSize = 14.sp
                 )
 
                 Text(
                     formatDistance(remainingDistanceMeters),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+                    fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
 
@@ -361,12 +354,13 @@ fun CarCompactEtaBar(
                     " • ",
                     color = Color(0x66FFFFFF),
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
+                    fontSize = 14.sp
                 )
 
                 Text(
                     formatArrivalClock(remainingSeconds),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+                    fontWeight = FontWeight.SemiBold,
                     color = Color(0xFFB0B3C0)
                 )
             }
