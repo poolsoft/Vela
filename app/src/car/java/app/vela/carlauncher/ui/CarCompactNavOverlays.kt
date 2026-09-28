@@ -255,7 +255,17 @@ fun CarCompactEtaBar(
     roadName: String? = null,
     modifier: Modifier = Modifier
 ) {
-    val hasRoadName = !roadName.isNullOrBlank()
+    val roadLabelMode = app.vela.ui.RoadLabel.mode.value
+    val showRoadLabel = roadLabelMode != app.vela.ui.RoadLabel.OFF
+
+    val defaultText = when (roadLabelMode) {
+        app.vela.ui.RoadLabel.IN_BAR -> stringResource(R.string.settings_road_label) + " (" + stringResource(R.string.settings_road_label_inbar) + ")"
+        app.vela.ui.RoadLabel.BAR -> stringResource(R.string.settings_road_label) + " (" + stringResource(R.string.settings_road_label_bar) + ")"
+        app.vela.ui.RoadLabel.PUCK -> stringResource(R.string.settings_road_label) + " (" + stringResource(R.string.settings_road_label_puck) + ")"
+        else -> stringResource(R.string.settings_road_label)
+    }
+    val displayRoadName = if (!roadName.isNullOrBlank()) roadName else defaultText
+
     Surface(
         onClick = {
             android.util.Log.d("CarCompactEtaBar", "Surface clicked! onSteps: $onSteps")
@@ -263,7 +273,7 @@ fun CarCompactEtaBar(
         },
         enabled = onSteps != null,
         color = Color(0xE614161D),
-        shape = RoundedCornerShape(if (hasRoadName) 20.dp else 22.dp),
+        shape = RoundedCornerShape(if (showRoadLabel) 20.dp else 22.dp),
         border = BorderStroke(1.dp, Color(0x33448AFF)),
         shadowElevation = 4.dp,
         modifier = modifier
@@ -271,11 +281,11 @@ fun CarCompactEtaBar(
         Column(
             modifier = Modifier.padding(
                 horizontal = 6.dp,
-                vertical = if (hasRoadName) 3.dp else 4.dp
+                vertical = if (showRoadLabel) 3.dp else 4.dp
             ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (hasRoadName) {
+            if (showRoadLabel) {
                 Row(
                     modifier = Modifier.padding(top = 2.dp, bottom = 1.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -284,12 +294,12 @@ fun CarCompactEtaBar(
                     Icon(
                         Icons.Default.KeyboardArrowUp,
                         contentDescription = null,
-                        tint = Color(0x99FFFFFF),
+                        tint = Color(0xFF00FFC4),
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        roadName!!,
+                        displayRoadName,
                         style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,

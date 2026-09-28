@@ -1279,11 +1279,19 @@ fun MapScreen(
             }
             // Composition reads only "do we have a position"; the value itself is read in layout.
             val havePuck = puckScreen.value != null
-            if (onRoad != null && (havePuck || roadLabelMode == app.vela.ui.RoadLabel.BAR)) {
+            val defaultFloatingRoad = when (roadLabelMode) {
+                app.vela.ui.RoadLabel.BAR -> stringResource(R.string.settings_road_label) + " (" + stringResource(R.string.settings_road_label_bar) + ")"
+                app.vela.ui.RoadLabel.PUCK -> stringResource(R.string.settings_road_label) + " (" + stringResource(R.string.settings_road_label_puck) + ")"
+                else -> stringResource(R.string.settings_road_label)
+            }
+            val shownRoad = if (!onRoad.isNullOrBlank()) {
                 val uiLang = app.vela.ui.AppLocale.effective().language
-                val shownRoad =
-                    if (state.roadNameLatin.isEmpty()) onRoad
-                    else app.vela.core.voice.SpokenScript.forDisplay(onRoad, uiLang, state.roadNameLatin)
+                if (state.roadNameLatin.isEmpty()) onRoad
+                else app.vela.core.voice.SpokenScript.forDisplay(onRoad, uiLang, state.roadNameLatin)
+            } else {
+                defaultFloatingRoad
+            }
+            if (havePuck || roadLabelMode == app.vela.ui.RoadLabel.BAR) {
                 // Two placements: Google's fixed spot centered above the bottom bar (default: it
                 // can always be centered, whatever the name's length) or pinned under the arrow
                 // (issue #288's mockup; long names clamp to the screen edge there).
@@ -5771,7 +5779,7 @@ private fun routeBubblesFor(
 private fun barRoadName(state: MapUiState): String? {
     val mode = app.vela.ui.RoadLabel.mode.value
     val allowed = if (CarIntegration.isCarMode()) {
-        mode == app.vela.ui.RoadLabel.IN_BAR || mode == app.vela.ui.RoadLabel.BAR
+        mode != app.vela.ui.RoadLabel.OFF
     } else {
         mode == app.vela.ui.RoadLabel.IN_BAR
     }
