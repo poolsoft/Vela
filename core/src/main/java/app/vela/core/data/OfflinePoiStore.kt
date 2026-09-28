@@ -160,18 +160,9 @@ class OfflinePoiStore @Inject constructor(
      *    instead of returning nothing because no name contains the exact phrase.
      */
 
-    /**
-     * Dilden bagimsiz aksan ve karakter temizleme fonksiyonu.
-     * Dunyadaki tum alfabelerin (Turkce, Almanca, Fransizca vb.) aksanlarini standartlastirir.
-     */
-    private fun norm(s: String): String {
-        val nfd = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD)
-        return nfd.replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
-            .replace('ı', 'i')
-            .replace('İ', 'i')
-    }
 
-    private data class AramaAdayi(
+
+    internal data class AramaAdayi(
         val place: Place,
         val metinPuani: Double, // FTS5 bm25 veya SQL CASE-WHEN normalize puani
         val rank: Int,          // matchRank (0: tam, 1: baslayan, 2: kelime baslayan, 3: iceren, 4: diger)
@@ -491,51 +482,153 @@ class OfflinePoiStore @Inject constructor(
             }
         }
 
-        // Ortak Konum ve Metin Hibrit Skorlamasi (Re-Ranking)
-        val transitSorgusu = TRANSIT_QUERY_WORDS.any { term.lowercase().contains(it) }
-
-        return adayHavuzu.values.sortedWith { a1, a2 ->
-            // 1. Transit durak filtresi (Kullanici durak aramiyorsa duraklar alta duser)
-            val t1 = if (!transitSorgusu && (a1.place.category ?: "").lowercase() in TRANSIT_STOP_CATS) 1 else 0
-            val t2 = if (!transitSorgusu && (a2.place.category ?: "").lowercase() in TRANSIT_STOP_CATS) 1 else 0
-            if (t1 != t2) return@sortedWith t1.compareTo(t2)
-
-            // 2. Birebir tam eslesme (Exact match daima en ustte)
-            val tam1 = if (a1.rank == 0) 0 else 1
-            val tam2 = if (a2.rank == 0) 0 else 1
-            if (tam1 != tam2) return@sortedWith tam1.compareTo(tam2)
-
-            // 3. Hibrit Skor: Metin Alakasi (%75) - Yakinlik Etkisi (%25)
-            val metinSkoru1 = a1.metinPuani
-            val distKm1 = a1.place.distanceMeters?.let { it / 1000.0 }
-            val ceza1 = if (distKm1 != null) Math.log10(distKm1 + 1.0) else 2.0
-            val hibrit1 = (metinSkoru1 * 0.75) - (ceza1 * 0.25)
-
-            val metinSkoru2 = a2.metinPuani
-            val distKm2 = a2.place.distanceMeters?.let { it / 1000.0 }
-            val ceza2 = if (distKm2 != null) Math.log10(distKm2 + 1.0) else 2.0
-            val hibrit2 = (metinSkoru2 * 0.75) - (ceza2 * 0.25)
-
-            if (hibrit1 != hibrit2) {
-                return@sortedWith hibrit2.compareTo(hibrit1) // Yuksek skor once
-            }
-
-            // 4. Terimle baslama (rank 1 once)
-            if (a1.rank != a2.rank) return@sortedWith a1.rank.compareTo(a2.rank)
-
-            // 5. Kelime uyusma sayisi (fazla olan once)
-            if (a1.kelimeUyumSayisi != a2.kelimeUyumSayisi) {
-                return@sortedWith a2.kelimeUyumSayisi.compareTo(a1.kelimeUyumSayisi)
-            }
-
-            // 6. Mesafe (yakin olan once)
-            val d1 = a1.place.distanceMeters ?: Double.MAX_VALUE
-            val d2 = a2.place.distanceMeters ?: Double.MAX_VALUE
-            d1.compareTo(d2)
-        }.map { it.place }.take(limit)
+        return disambiguateAndRank(term, adayHavuzu.values.toList(), near, limit)
     }
 
     companion object {
+        /**
+         * Dilden bagimsiz aksan ve karakter temizleme fonksiyonu.
+         * Dunyadaki tum alfabelerin (Turkce, Almanca, Fransizca vb.) aksanlarini standartlastirir.
+         */
+        internal fun norm(s: String): String {
+            val nfd = java.text.Normalizer.normalize(s.lowercase(), java.text.Normalizer.Form.NFD)
+            return nfd.replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+                .replace('ı', 'i')
+                .replace('İ', 'i')
+        }
+
+        /**
+         * Navigasyon aramasinda isim cakismalarini (collision) onleme ve
+         * 4 seviyeli ayirt etme (disambiguation) algoritmasi.
+         */
+        internal fun disambiguateAndRank(
+            rawQuery: String,
+            candidates: List<AramaAdayi>,
+            near: LatLng?,
+            limit: Int = 30,
+        ): List<Place> {
+            if (candidates.isEmpty()) return emptyList()
+
+            val trLocale = java.util.Locale("tr", "TR")
+            val cleanQuery = rawQuery.trim()
+            val lowerQueryTr = cleanQuery.lowercase(trLocale)
+            val qNorm = norm(cleanQuery)
+
+            val wordsTr = lowerQueryTr.split(Regex("\\s+")).filter { it.length >= 2 }
+            val wordsNorm = wordsTr.map { norm(it) }
+
+            val transitSorgusu = TRANSIT_QUERY_WORDS.any { lowerQueryTr.contains(it) }
+
+            data class PuanliAday(
+                val place: Place,
+                val nihaiPuan: Double,
+            )
+
+            return candidates.map { adayi ->
+                val place = adayi.place
+                val pName = place.name.trim()
+                val pNameLowerTr = pName.lowercase(trLocale)
+                val pNameNorm = norm(pName)
+                val pWordsLowerTr = pNameLowerTr.split(Regex("\\s+")).filter { it.isNotEmpty() }
+                val pWordsNorm = pNameNorm.split(Regex("\\s+")).filter { it.isNotEmpty() }
+
+                var totalScore = 0.0
+
+                // 1. Seviye: Orijinal Karakter ve Buyuk/Kucuk Harf Sadakati (Orthography)
+                when {
+                    // Birebir harf harfine tam eslesme (Exact string match: "Ilica" == "Ilica")
+                    pName == cleanQuery -> totalScore += 100.0
+
+                    // Turkce kurallarina uygun kucuk/buyuk harf esitligi ("ilica" == "Ilica")
+                    pNameLowerTr == lowerQueryTr -> totalScore += 80.0
+
+                    // Isim dogrudan sorguyla basliyor (Turkce karakter sadakatiyle)
+                    pNameLowerTr.startsWith(lowerQueryTr) -> totalScore += 60.0
+
+                    // Isimdeki bir kelime sorguyla basliyor (Turkce karakter sadakatiyle)
+                    pWordsLowerTr.any { it.startsWith(lowerQueryTr) } -> totalScore += 50.0
+
+                    // Isim icinde sorgu harfiyen geciyor
+                    pNameLowerTr.contains(lowerQueryTr) -> totalScore += 35.0
+
+                    // Fold edilmis / karakter benzesimi uzerinden gelenler (i <-> i sapmasi)
+                    pNameNorm == qNorm -> totalScore += 25.0
+                    pNameNorm.startsWith(qNorm) -> totalScore += 20.0
+                    pWordsNorm.any { it.startsWith(qNorm) } -> totalScore += 15.0
+                    pNameNorm.contains(qNorm) -> totalScore += 10.0
+
+                    // Sadece adres veya kategoride eslesmis
+                    else -> totalScore += 5.0
+                }
+
+                // 2. Seviye: Yer Hiyerarsisi ve Onem Derecesi (Place Importance / Saliency)
+                totalScore += getImportanceScore(place.category)
+
+                // 3. Seviye: Baglam ve Ikinci Terim Ayiklamasi (Context Disambiguation)
+                if (wordsTr.size > 1) {
+                    val addrLowerTr = (place.address ?: "").lowercase(trLocale)
+                    val addrNorm = norm(place.address ?: "")
+                    val catLowerTr = (place.category ?: "").lowercase(trLocale)
+                    val catNorm = norm(place.category ?: "")
+
+                    for (i in wordsTr.indices) {
+                        val wTr = wordsTr[i]
+                        val wNorm = wordsNorm[i]
+
+                        // Isimde yer almayan terimler bir baglam belirtecidir (il, ilce, mahalle, kategori)
+                        val isimdeVar = pNameLowerTr.contains(wTr) || pNameNorm.contains(wNorm)
+                        if (!isimdeVar) {
+                            val adresteVar = addrLowerTr.contains(wTr) || addrNorm.contains(wNorm)
+                            val kategorideVar = catLowerTr.contains(wTr) || catNorm.contains(wNorm)
+                            if (adresteVar) {
+                                totalScore += 50.0 // Ilce/Il baglami adreste dogrulandi
+                            } else if (kategorideVar) {
+                                totalScore += 25.0 // Kategori baglami dogrulandi
+                            }
+                        }
+                    }
+                }
+
+                // FTS5 BM25 veya SQL CASE-WHEN motorundan gelen metin puani katilimi (0-10 arasi)
+                totalScore += (adayi.metinPuani * 2.0)
+
+                // 4. Seviye: Dinamik Logaritmik Mesafe Etkisi (Distance Weighting)
+                val distMeters = place.distanceMeters ?: near?.distanceTo(place.location)
+                if (distMeters != null) {
+                    val distKm = distMeters / 1000.0
+                    val distancePenalty = 4.0 * kotlin.math.ln(1.0 + distKm)
+                    totalScore -= distancePenalty
+                } else {
+                    // Konum bilinmiyorsa varsayilan notr mesafe cezasi (yaklasik 20 km)
+                    totalScore -= (4.0 * kotlin.math.ln(1.0 + 20.0))
+                }
+
+                // Transit filtreleme (Kullanici durak aramiyorsa duraklara ceza)
+                val isTransit = (place.category ?: "").lowercase(java.util.Locale.ROOT) in TRANSIT_STOP_CATS
+                if (!transitSorgusu && isTransit) {
+                    totalScore -= 40.0
+                }
+
+                PuanliAday(place, totalScore)
+            }
+            .sortedByDescending { it.nihaiPuan }
+            .map { it.place }
+            .take(limit)
+        }
+
+        private fun getImportanceScore(category: String?): Double {
+            val cat = (category ?: "").lowercase(java.util.Locale.ROOT)
+            return when {
+                cat.contains("city") || cat.contains("administrative") -> 100.0
+                cat.contains("town") -> 80.0
+                cat.contains("suburb") || cat.contains("village") -> 60.0
+                cat.contains("neighbourhood") || cat.contains("neighborhood") -> 40.0
+                cat.contains("thermal") || cat.contains("spring") || cat.contains("spa") -> 30.0
+                cat.contains("fuel") || cat.contains("hospital") || cat.contains("pharmacy") -> 25.0
+                cat.contains("supermarket") || cat.contains("shop") || cat.contains("cafe") || cat.contains("restaurant") -> 10.0
+                else -> 5.0
+            }
+        }
         // Map a search word (or the map's category chip) to the OSM tag values we store as `category`
         // (amenity/shop/leisure/…, space-separated + capitalized, e.g. "Fuel", "Fast food"). Matched
         // case-insensitively via LIKE. Keep the values in the OSM form, not the display word.
