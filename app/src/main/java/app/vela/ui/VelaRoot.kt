@@ -163,6 +163,8 @@ fun VelaRoot(vm: MapViewModel = hiltViewModel()) {
         CarIntegration.MapContainer(
             onOpenSettings = { settingsOpenCar = true; showSettings = true },
             onVoiceClick = { vm.triggerVoiceSearch() },
+            isVoiceListening = mapState.isVoiceListening,
+            voiceAudioLevel = mapState.voiceAudioLevel,
         ) {
             MapScreen(
                 vm = vm,

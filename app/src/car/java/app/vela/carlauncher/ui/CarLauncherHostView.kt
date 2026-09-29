@@ -52,6 +52,8 @@ fun CarLauncherHostView(
     onScanMusic: () -> Unit,
     onVisualizerPermission: () -> Unit,
     onAsistanTiklandi: () -> Unit = {},
+    isVoiceListening: Boolean = false,
+    voiceAudioLevel: Float = 0f,
     modifier: Modifier = Modifier,
     haritaIcerigi: @Composable () -> Unit
 ) {
@@ -144,6 +146,7 @@ fun CarLauncherHostView(
             binding.dockHost?.updateShortcuts(shortcuts)
             binding.dockHost?.updateMedia(medya)
             binding.dockHost?.updateModeButton(desktop, fullScreenMap)
+            binding.dockHost?.setVoiceListening(isVoiceListening, voiceAudioLevel)
 
             if (binding.contentMode != contentMode) {
                 binding.releasePanel()

@@ -36,6 +36,8 @@ fun CarLauncherLayout(
     modifier: Modifier = Modifier,
     passthrough: Boolean = false,
     onAsistanTiklandi: () -> Unit = {},
+    isVoiceListening: Boolean = false,
+    voiceAudioLevel: Float = 0f,
     haritaIcerigi: @Composable () -> Unit
 ) {
     if (passthrough) {
@@ -133,6 +135,8 @@ fun CarLauncherLayout(
             medya = media,
             contentMode = contentMode,
             fullScreenMap = fullMap,
+            isVoiceListening = isVoiceListening,
+            voiceAudioLevel = voiceAudioLevel,
             onPanelChange = ::showPanel,
             onToggleMode = {
                 when {

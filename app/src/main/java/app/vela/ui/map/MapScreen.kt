@@ -746,13 +746,18 @@ fun MapScreen(
     var voiceError by remember { mutableStateOf<app.vela.voice.VoiceResult.Reason?>(null) }
     fun startLocalVoice() {
         voiceStop = false; voiceAbort = false; voiceStarted = false; voiceLevel = 0f; voiceListening = true
+        vm.updateVoiceListeningState(true, 0f)
         voiceScope.launch {
             val result = vm.voiceListen(
-                onLevel = { voiceLevel = it },
+                onLevel = {
+                    voiceLevel = it
+                    vm.updateVoiceListeningState(true, it)
+                },
                 onListening = { voiceStarted = true },
                 canceled = { voiceStop },
             )
             voiceListening = false
+            vm.updateVoiceListeningState(false, 0f)
             if (voiceAbort) return@launch // the user backed out; never talk back at them
             when (result) {
                 is app.vela.voice.VoiceResult.Text -> {
@@ -925,7 +930,7 @@ fun MapScreen(
         app.vela.ui.MapPoiPrefs.showTransit.value,
         app.vela.ui.MapPoiPrefs.showCivic.value,
     ) { vm.onPoiPrefsChanged() }
-    if (voiceListening) {
+    if (voiceListening && !state.wakeWordSilentMode) {
         app.vela.ui.VoiceCaptureDialog(
             level = voiceLevel,
             listening = voiceStarted,

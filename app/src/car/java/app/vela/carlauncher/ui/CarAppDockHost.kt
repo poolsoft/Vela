@@ -110,10 +110,62 @@ class CarAppDockHost(
             if (isVertical || width / density >= 480) View.VISIBLE else View.GONE
     }
 
+    private var isListeningVoice = false
+    private var voicePulseAnimator: android.animation.ValueAnimator? = null
+    private val originalBackground = btnAssistant?.background
+    private val originalImageTint = btnAssistant?.imageTintList
+
     fun updateShortcuts(shortcuts: List<AppShortcut>) = shortcutAdapter.submitItems(shortcuts)
 
     fun release() {
+        voicePulseAnimator?.cancel()
+        voicePulseAnimator = null
         dockRecycler?.adapter = null
+    }
+
+    fun setVoiceListening(listening: Boolean, level: Float = 0f) {
+        val btn = btnAssistant ?: return
+        if (listening) {
+            val baseScale = 1.0f + (level.coerceIn(0f, 1f) * 0.18f)
+            btn.scaleX = baseScale
+            btn.scaleY = baseScale
+            btn.imageTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#00E5FF"))
+
+            if (!isListeningVoice) {
+                isListeningVoice = true
+                val glowDrawable = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(android.graphics.Color.parseColor("#2600E5FF"))
+                    setStroke(
+                        (3 * context.resources.displayMetrics.density).toInt(),
+                        android.graphics.Color.parseColor("#00E5FF")
+                    )
+                }
+                btn.background = glowDrawable
+
+                voicePulseAnimator?.cancel()
+                voicePulseAnimator = android.animation.ValueAnimator.ofFloat(0.45f, 1.0f).apply {
+                    duration = 550
+                    repeatMode = android.animation.ValueAnimator.REVERSE
+                    repeatCount = android.animation.ValueAnimator.INFINITE
+                    addUpdateListener { anim ->
+                        btn.alpha = anim.animatedValue as Float
+                    }
+                    start()
+                }
+            }
+        } else {
+            if (isListeningVoice) {
+                isListeningVoice = false
+                voicePulseAnimator?.cancel()
+                voicePulseAnimator = null
+                btn.alpha = 1.0f
+                btn.scaleX = 1.0f
+                btn.scaleY = 1.0f
+                btn.background = originalBackground
+                btn.imageTintList = originalImageTint
+            }
+        }
     }
 
     fun updateMedia(medya: MedyaParcasi) {

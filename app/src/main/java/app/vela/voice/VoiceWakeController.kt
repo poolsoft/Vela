@@ -83,6 +83,12 @@ class VoiceWakeController @Inject constructor(
         }
     }
 
+    fun isSilentMode(): Boolean = prefs.getBoolean(KEY_WAKE_SILENT_MODE, true)
+
+    fun setSilentMode(silent: Boolean) {
+        prefs.edit().putBoolean(KEY_WAKE_SILENT_MODE, silent).apply()
+    }
+
     fun getWakePhrase(): String = prefs.getString(KEY_WAKE_PHRASE, DEFAULT_WAKE_PHRASE) ?: DEFAULT_WAKE_PHRASE
 
     fun setWakePhrase(phrase: String) {
@@ -308,6 +314,7 @@ class VoiceWakeController @Inject constructor(
     companion object {
         private const val PREFS_NAME = "vela_settings"
         const val KEY_WAKE_ENABLED = "wake_word_enabled"
+        const val KEY_WAKE_SILENT_MODE = "wake_word_silent_mode"
         const val KEY_WAKE_PHRASE = "wake_word_phrase"
         const val DEFAULT_WAKE_PHRASE = "Hey Vela"
 

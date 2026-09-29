@@ -320,6 +320,9 @@ data class MapUiState(
     val asrInstalledIds: Set<String> = emptySet(), // which voice-search engines are on disk (Whisper/SenseVoice/Moonshine)
     val asrActiveId: String = app.vela.voice.AsrEngine.DEFAULT.id, // the engine the mic will use
     val wakeWordEnabled: Boolean = false, // hands-free voice wake enabled
+    val wakeWordSilentMode: Boolean = true, // do not show fullscreen dialog on wake; use dock mic pulse border instead
+    val isVoiceListening: Boolean = false, // actively listening for voice command
+    val voiceAudioLevel: Float = 0f, // current mic input amplitude (0f..1f)
     val wakeWordPhrase: String = "Hey Vela", // customizable wake phrase (e.g. "Hey Vela", "Vela", "Asistan")
     val voiceSpeaker: Int = 0, // chosen speaker # for the multi-speaker Vela voice (playground stepper)
     val voiceSpeed: Float = 1.0f, // spoken-directions speed multiplier (1.0 = normal, >1 = faster)
@@ -628,6 +631,7 @@ class MapViewModel @Inject constructor(
                 recentPlaces = recentPlaceStore.recent(),
                 home = shortcutStore.get(ShortcutKind.HOME), work = shortcutStore.get(ShortcutKind.WORK),
                 wakeWordEnabled = voiceWakeController.isEnabled(),
+                wakeWordSilentMode = voiceWakeController.isSilentMode(),
                 wakeWordPhrase = voiceWakeController.getWakePhrase(),
             )
         }
@@ -5625,6 +5629,17 @@ class MapViewModel @Inject constructor(
     fun setWakeWordEnabled(enabled: Boolean) {
         voiceWakeController.setEnabled(enabled)
         _state.update { it.copy(wakeWordEnabled = enabled) }
+    }
+
+    /** Enable or disable silent mode (shows pulsing border on car dock mic instead of fullscreen dialog). */
+    fun setWakeWordSilentMode(silent: Boolean) {
+        voiceWakeController.setSilentMode(silent)
+        _state.update { it.copy(wakeWordSilentMode = silent) }
+    }
+
+    /** Update active voice listening state and mic audio level. */
+    fun updateVoiceListeningState(listening: Boolean, level: Float = 0f) {
+        _state.update { it.copy(isVoiceListening = listening, voiceAudioLevel = level) }
     }
 
     /** Customize the wake word phrase (persisted and dynamically updated). */

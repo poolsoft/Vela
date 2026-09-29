@@ -366,6 +366,12 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
                     hint = stringResource(R.string.settings_voice_wake_hint),
                 )
                 if (state.wakeWordEnabled) {
+                    ToggleRow(
+                        label = stringResource(R.string.settings_voice_wake_silent_toggle),
+                        checked = state.wakeWordSilentMode,
+                        onCheckedChange = { vm.setWakeWordSilentMode(it) },
+                        hint = stringResource(R.string.settings_voice_wake_silent_hint),
+                    )
                     androidx.compose.foundation.layout.Column(Modifier.padding(horizontal = 16.dp)) {
                         Spacer(Modifier.height(8.dp))
                         Text(

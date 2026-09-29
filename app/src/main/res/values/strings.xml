@@ -877,6 +877,8 @@
     <string name="settings_voice_wake_phrase_placeholder">e.g. hey vela</string>
     <string name="settings_voice_wake_test_chime">Test wake chime</string>
     <string name="settings_voice_wake_conflict_note">Echo cancellation (AEC) and automatic mute protect against TTS mic conflicts.</string>
+    <string name="settings_voice_wake_silent_toggle">Silent listening mode (No dialog)</string>
+    <string name="settings_voice_wake_silent_hint">Keep the map visible without opening the fullscreen dialog; the dock microphone pulses with a glowing border while listening.</string>
     <string name="settings_voice_asr_model_title">Speech recognition model</string>
     <string name="settings_voice_asr_installed">Offline recognition model ready (Whisper %1$d MB)</string>
     <string name="settings_voice_asr_not_installed">Required for offline hands-free recognition without internet.</string>

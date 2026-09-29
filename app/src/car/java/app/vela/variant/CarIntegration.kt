@@ -61,6 +61,8 @@ object CarIntegration {
     @Composable fun MapContainer(
         onOpenSettings: () -> Unit,
         onVoiceClick: () -> Unit = {},
+        isVoiceListening: Boolean = false,
+        voiceAudioLevel: Float = 0f,
         content: @Composable () -> Unit
     ) {
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
@@ -71,6 +73,8 @@ object CarIntegration {
             passthrough = !enabled || isPortrait,
             onOpenSettings = onOpenSettings,
             onAsistanTiklandi = onVoiceClick,
+            isVoiceListening = isVoiceListening,
+            voiceAudioLevel = voiceAudioLevel,
             haritaIcerigi = content
         )
     }

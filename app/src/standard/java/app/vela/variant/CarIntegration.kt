@@ -24,7 +24,13 @@ object CarIntegration {
     fun onHomeIntent(intent: Intent?) = Unit
     fun onKeyDown(activity: ComponentActivity, keyCode: Int) = false
     fun onMapState(context: Context, state: MapUiState) = Unit
-    @Composable fun MapContainer(onOpenSettings: () -> Unit, onVoiceClick: () -> Unit = {}, content: @Composable () -> Unit) = content()
+    @Composable fun MapContainer(
+        onOpenSettings: () -> Unit,
+        onVoiceClick: () -> Unit = {},
+        isVoiceListening: Boolean = false,
+        voiceAudioLevel: Float = 0f,
+        content: @Composable () -> Unit
+    ) = content()
     @Composable fun Settings(onBack: () -> Unit, onPermissions: () -> Unit, onBackup: () -> Unit) = Unit
     @Composable fun Permissions(onBack: () -> Unit) = Unit
     @Composable fun Appearance() = Unit
