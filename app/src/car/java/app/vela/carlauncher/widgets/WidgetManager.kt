@@ -20,8 +20,8 @@ import org.json.JSONObject
 class WidgetManager private constructor(private val context: Context) {
 
     companion object {
-        const val COL_COUNT = 8
-        const val ROW_COUNT = 4
+        const val COL_COUNT = 12
+        const val ROW_COUNT = 6
 
         private const val PREFS_NAME = "vela_car_launcher_widgets"
         private const val KEY_WIDGET_CONFIG = "widget_config"
@@ -403,8 +403,8 @@ class WidgetManager private constructor(private val context: Context) {
     private fun loadDefaultWidgets() {
         val defaults = mutableListOf<BaseWidget>()
 
-        // Sayfa 0 (Launcher 2/3 Hucre Yerlesimi: 8x4 Grid)
-        // Dashboard (Saat + Hiz): Sol ust 4x2
+        // Sayfa 0 (Launcher 2/3 Hucre Yerlesimi: 12x6 Grid)
+        // Dashboard (Saat + Hiz): Sol ust 6x3
         defaults.add(
             GenericWidget(
                 id = "w_comb_0",
@@ -414,11 +414,11 @@ class WidgetManager private constructor(private val context: Context) {
                 pageIndex = 0,
                 cellX = 0,
                 cellY = 0,
-                spanX = 4,
-                spanY = 2
+                spanX = 6,
+                spanY = 3
             )
         )
-        // Muzik Calar: Orta ust 2x2
+        // Muzik Calar: Sag ust 6x3
         defaults.add(
             GenericWidget(
                 id = "w_music_0",
@@ -426,41 +426,13 @@ class WidgetManager private constructor(private val context: Context) {
                 title = "Medya Çalar",
                 size = BaseWidget.WidgetSize.LARGE,
                 pageIndex = 0,
-                cellX = 4,
-                cellY = 0,
-                spanX = 2,
-                spanY = 2
-            )
-        )
-        // Hava Durumu: Sag ust 2x1
-        defaults.add(
-            GenericWidget(
-                id = "w_weath_0",
-                typeId = WidgetRegistry.TYPE_WEATHER,
-                title = "Hava Durumu",
-                size = BaseWidget.WidgetSize.MEDIUM,
-                pageIndex = 0,
                 cellX = 6,
                 cellY = 0,
-                spanX = 2,
-                spanY = 1
+                spanX = 6,
+                spanY = 3
             )
         )
-        // Pusula: Sag alt 2x1
-        defaults.add(
-            GenericWidget(
-                id = "w_comp_0",
-                typeId = WidgetRegistry.TYPE_COMPASS,
-                title = "Pusula & Yön",
-                size = BaseWidget.WidgetSize.MEDIUM,
-                pageIndex = 0,
-                cellX = 6,
-                cellY = 1,
-                spanX = 2,
-                spanY = 1
-            )
-        )
-        // Hiz Gostergesi: Sol alt 2x2
+        // Hiz Gostergesi: Sol alt 3x3
         defaults.add(
             GenericWidget(
                 id = "w_speed_0",
@@ -469,12 +441,12 @@ class WidgetManager private constructor(private val context: Context) {
                 size = BaseWidget.WidgetSize.MEDIUM,
                 pageIndex = 0,
                 cellX = 0,
-                cellY = 2,
-                spanX = 2,
-                spanY = 2
+                cellY = 3,
+                spanX = 3,
+                spanY = 3
             )
         )
-        // Dijital Saat: Orta sol alt 2x2
+        // Dijital Saat: Orta sol alt 3x3
         defaults.add(
             GenericWidget(
                 id = "w_clock_0",
@@ -482,24 +454,38 @@ class WidgetManager private constructor(private val context: Context) {
                 title = "Dijital Saat",
                 size = BaseWidget.WidgetSize.MEDIUM,
                 pageIndex = 0,
-                cellX = 2,
-                cellY = 2,
-                spanX = 2,
-                spanY = 2
+                cellX = 3,
+                cellY = 3,
+                spanX = 3,
+                spanY = 3
             )
         )
-        // OBD2 / Arac: Sag alt 4x2
+        // Hava Durumu: Orta sag alt 3x3
         defaults.add(
             GenericWidget(
-                id = "w_obd_0",
-                typeId = WidgetRegistry.TYPE_OBD,
-                title = "OBD2 / Araç Verileri",
-                size = BaseWidget.WidgetSize.LARGE,
+                id = "w_weath_0",
+                typeId = WidgetRegistry.TYPE_WEATHER,
+                title = "Hava Durumu",
+                size = BaseWidget.WidgetSize.MEDIUM,
                 pageIndex = 0,
-                cellX = 4,
-                cellY = 2,
-                spanX = 4,
-                spanY = 2
+                cellX = 6,
+                cellY = 3,
+                spanX = 3,
+                spanY = 3
+            )
+        )
+        // Pusula: Sag alt 3x3
+        defaults.add(
+            GenericWidget(
+                id = "w_comp_0",
+                typeId = WidgetRegistry.TYPE_COMPASS,
+                title = "Pusula & Yön",
+                size = BaseWidget.WidgetSize.MEDIUM,
+                pageIndex = 0,
+                cellX = 9,
+                cellY = 3,
+                spanX = 3,
+                spanY = 3
             )
         )
 
@@ -513,8 +499,8 @@ class WidgetManager private constructor(private val context: Context) {
                 pageIndex = 1,
                 cellX = 0,
                 cellY = 0,
-                spanX = 4,
-                spanY = 2
+                spanX = 6,
+                spanY = 3
             )
         )
 
