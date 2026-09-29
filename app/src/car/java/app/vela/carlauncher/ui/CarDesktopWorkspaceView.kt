@@ -1,61 +1,49 @@
 package app.vela.carlauncher.ui
 
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.runtime.mutableStateMapOf
+import android.appwidget.AppWidgetManager
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.ViewModule
-import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,13 +51,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.vela.carlauncher.apps.AppDockManager
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.graphics.drawable.toBitmap
 import app.vela.carlauncher.model.HizTelemetrisi
 import app.vela.carlauncher.model.MedyaParcasi
 import app.vela.carlauncher.widgets.BaseWidget
@@ -81,19 +78,22 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val ClCardBg = Color(0xFF141624)
+private val ClCardBg = Color(0xF0141624)
 private val ClBorder = Color(0x33FFFFFF)
 private val ClPrimary = Color(0xFF0A84FF)
+private val ClDanger = Color(0xFFFF453A)
+private val ClSuccess = Color(0xFF30D158)
 
 /**
- * OsmAnd fragment_widget_panel.xml Uyumlu Dinamik Cok Sayfali Masaustu Calisma Alani (Workspace).
- * - WidgetManager uzerinden dinamik widget ekleme, silme ve boyutlandirma destegi.
- * - Bos alanda "+ Widget Ekle" butonu veya uzun basim ile WidgetPickerDialog.
- * - Widget uzerine uzun basim ile boyut degistirme / silme dialogu.
- * - Cok sayfali yatay kaydirma ve sayfa gostergesi.
+ * Launcher 2/3 Mimarili Hucre Tabanli Gelismis Masaustu Alani (Workspace).
+ * - 8 Sütun x 4 Satır hücre koordinat sistemi (cellX, cellY, spanX, spanY).
+ * - Uzun basma ile "Duzenleme Modu" (Edit Mode), iOS/Launcher3 tarzi titreme animasyonu.
+ * - 4 kenarda boyutlandirma tutamaçlari (Resize handles) ve silme/ayar butonlari.
+ * - Surukle-birak sirasinda hedef hucre maskesi ve kilavuz cizgileri.
+ * - Sistem widget'lari (AppWidgetHostView) ve dinamik kisayollar.
+ * - Ekran goruntusundeki Widget Kutuphanesi entegrasyonu.
  * Kod icerisinde Turkce karakter kullanilmamistir (identifier ve degiskenlerde).
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CarDesktopWorkspaceView(
     telemetri: HizTelemetrisi,
@@ -109,18 +109,13 @@ fun CarDesktopWorkspaceView(
     val context = LocalContext.current
     val widgetManager = remember { WidgetManager.getInstance(context) }
     val widgets by widgetManager.widgetsFlow.collectAsState()
-    val dockManager = remember { AppDockManager.getInstance(context) }
-    val kisayollar by dockManager.kisayollar.collectAsState()
     val scope = rememberCoroutineScope()
 
-    val widgetBounds = remember { mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
-    var draggingId by remember { mutableStateOf<String?>(null) }
-    var dragOffset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
     val pageCount = widgetManager.getPageCount()
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { pageCount })
 
-    var seciliDuzenlemeWidget by remember { mutableStateOf<BaseWidget?>(null) }
-    var widgetEklemeDialogAcik by remember { mutableStateOf(false) }
+    var isEditMode by remember { mutableStateOf(false) }
+    var showWidgetPicker by remember { mutableStateOf(false) }
 
     var saatMetni by remember { mutableStateOf("12:00") }
     var tarihMetni by remember { mutableStateOf("") }
@@ -144,21 +139,26 @@ fun CarDesktopWorkspaceView(
                     colors = listOf(Color(0xFF090A0F), Color(0xFF10121C), Color(0xFF131524))
                 )
             )
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = { isEditMode = true },
+                    onTap = { if (isEditMode) isEditMode = false }
+                )
+            }
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-
             // ═══════════════════════════════════════════════════════════════
-            // UST BAR: SAYFA GOSTERGESI, "+ WIDGET EKLE"
+            // UST BAR: SAYFA GOSTERGESI, DUZENLEME DURUMU & WIDGET EKLE BUTONU
             // ═══════════════════════════════════════════════════════════════
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+                    .padding(bottom = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Sayfa Noktalari
+                // Sol: Sayfa Noktalari
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -182,21 +182,85 @@ fun CarDesktopWorkspaceView(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
+
+                    if (isEditMode) {
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0x33FF9500))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = "Düzenleme Modu (Bitirmek için boş alana dokunun)",
+                                color = Color(0xFFFF9500),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
 
-                // Sag Butonlar: + Widget Ekle ve (varsa) Kapat
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Sag: + Widget Ekle ve Mod Kontrol Butonlari
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isEditMode) {
+                        // Tamam Butonu
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(ClSuccess.copy(alpha = 0.25f))
+                                .border(1.dp, ClSuccess, RoundedCornerShape(8.dp))
+                                .clickable { isEditMode = false }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = ClSuccess,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Tamam",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+
+                    // + Widget Ekle Butonu
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .background(Color(0x220A84FF))
                             .border(1.dp, ClPrimary, RoundedCornerShape(8.dp))
-                            .clickable { widgetEklemeDialogAcik = true }
+                            .clickable { showWidgetPicker = true }
                             .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = ClPrimary, modifier = Modifier.size(16.dp))
-                            Text(text = "Widget Ekle", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                tint = ClPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Widget Ekle",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
 
@@ -209,407 +273,556 @@ fun CarDesktopWorkspaceView(
                                 .clickable { onKapat() },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Kapat", tint = Color.White, modifier = Modifier.size(18.dp))
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Kapat",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
                 }
             }
 
             // ═══════════════════════════════════════════════════════════════
-            // SAYFALAR & DINAMIK WIDGET GRID YERLESIMI
+            // SAYFALAR & LAUNCHER 2/3 HUCRESEL CELL LAYOUT (8x4 GRID)
             // ═══════════════════════════════════════════════════════════════
             HorizontalPager(
                 state = pagerState,
+                userScrollEnabled = !isEditMode,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
             ) { pageIndex ->
                 val pageWidgets = widgets.filter { it.pageIndex == pageIndex && it.isVisible }
 
-                if (pageWidgets.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clickable { widgetEklemeDialogAcik = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(48.dp))
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = "Bu sayfada henüz widget yok", color = Color.Gray, fontSize = 14.sp)
-                            Text(text = "Widget eklemek için dokunun", color = ClPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                WorkspaceCellPageLayout(
+                    pageIndex = pageIndex,
+                    widgets = pageWidgets,
+                    isEditMode = isEditMode,
+                    saatMetni = saatMetni,
+                    tarihMetni = tarihMetni,
+                    telemetri = telemetri,
+                    medya = medya,
+                    onOynatDuraklat = onOynatDuraklat,
+                    onSonraki = onSonraki,
+                    onOnceki = onOnceki,
+                    onLaunchApp = onLaunchApp,
+                    onEnterEditMode = { isEditMode = true },
+                    onDeleteWidget = { widgetId -> widgetManager.removeWidget(widgetId) },
+                    onMoveWidget = { id, cellX, cellY ->
+                        val w = pageWidgets.find { it.id == id }
+                        if (w != null) {
+                            widgetManager.updateWidgetPlacement(id, pageIndex, cellX, cellY, w.spanX, w.spanY)
+                        }
+                    },
+                    onResizeWidget = { id, spanX, spanY ->
+                        val w = pageWidgets.find { it.id == id }
+                        if (w != null) {
+                            widgetManager.updateWidgetPlacement(id, pageIndex, w.cellX, w.cellY, spanX, spanY)
                         }
                     }
-                } else {
-                    FlowRow(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        maxItemsInEachRow = 3
-                    ) {
-                        pageWidgets.forEach { widget ->
-                            // Widget genislik olceklemesi (Boyuta gore)
-                            val widgetWidthModifier = when (widget.size) {
-                                BaseWidget.WidgetSize.LARGE -> Modifier.fillMaxWidth()
-                                BaseWidget.WidgetSize.MEDIUM -> Modifier.fillMaxWidth(0.64f)
-                                BaseWidget.WidgetSize.SMALL -> Modifier.fillMaxWidth(0.32f)
-                            }
-
-                            Box(
-                                modifier = widgetWidthModifier
-                                    .onGloballyPositioned { if (draggingId != widget.id) widgetBounds[widget.id] = it.boundsInRoot() }
-                                    .graphicsLayer {
-                                        translationX = if (draggingId == widget.id) dragOffset.x else 0f
-                                        translationY = if (draggingId == widget.id) dragOffset.y else 0f
-                                    }
-                                    .pointerInput(widget.id) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = { draggingId = widget.id; dragOffset = androidx.compose.ui.geometry.Offset.Zero },
-                                            onDragCancel = { draggingId = null; dragOffset = androidx.compose.ui.geometry.Offset.Zero },
-                                            onDragEnd = {
-                                                val center = widgetBounds[widget.id]?.center?.plus(dragOffset)
-                                                if (center != null) pageWidgets.firstOrNull { other ->
-                                                    other.id != widget.id && widgetBounds[other.id]?.contains(center) == true
-                                                }?.let { widgetManager.swapWidgets(widget.id, it.id) }
-                                                draggingId = null
-                                                dragOffset = androidx.compose.ui.geometry.Offset.Zero
-                                            },
-                                            onDrag = { change, amount -> change.consume(); dragOffset += amount }
-                                        )
-                                    }
-                                    .height(if (widget.size == BaseWidget.WidgetSize.LARGE) 175.dp else 125.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(ClCardBg)
-                                    .border(1.dp, ClBorder, RoundedCornerShape(16.dp))
-                                    .clickable {
-                                        seciliDuzenlemeWidget = widget
-                                    }
-                                    .padding(10.dp)
-                            ) {
-                                when (widget.typeId) {
-                                    WidgetRegistry.TYPE_COMBINED -> {
-                                        CombinedWidgetView(saatMetni, tarihMetni, telemetri, medya, onOynatDuraklat)
-                                    }
-                                    WidgetRegistry.TYPE_SPEED -> {
-                                        SpeedWidgetView(telemetri)
-                                    }
-                                    WidgetRegistry.TYPE_CLOCK -> {
-                                        ClockWidgetView(saatMetni, tarihMetni)
-                                    }
-                                    WidgetRegistry.TYPE_MUSIC -> {
-                                        MusicWidgetView(medya, onOynatDuraklat, onOnceki, onSonraki, onMuzikPaneliAc)
-                                    }
-                                    WidgetRegistry.TYPE_WEATHER -> {
-                                        WeatherWidgetView()
-                                    }
-                                    WidgetRegistry.TYPE_COMPASS -> {
-                                        CompassWidgetView(telemetri)
-                                    }
-                                    WidgetRegistry.TYPE_OBD -> {
-                                        ObdWidgetView(telemetri)
-                                    }
-                                    WidgetRegistry.TYPE_SHORTCUTS -> {
-                                        ShortcutsWidgetView(kisayollar, onLaunchApp)
-                                    }
-                                    else -> {
-                                        val systemId = widget.typeId.removePrefix("system:").toIntOrNull()
-                                        if (widget.typeId.startsWith("system:") && systemId != null)
-                                            app.vela.carlauncher.widgets.SystemWidgetView(systemId, Modifier.fillMaxSize())
-                                        else Text(text = widget.title, color = Color.White, fontSize = 14.sp)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                )
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // WIDGET KONTROL / DUZENLEME DIALOGU (Boyut & Sil)
-        // ═══════════════════════════════════════════════════════════════
-        seciliDuzenlemeWidget?.let { widget ->
-            AlertDialog(
-                onDismissRequest = { seciliDuzenlemeWidget = null },
-                title = { Text(text = "${widget.title} Ayarları", color = Color.White) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(text = "Widget Boyutu:", color = Color.Gray, fontSize = 13.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = {
-                                    widgetManager.resizeWidget(widget.id, BaseWidget.WidgetSize.SMALL)
-                                    seciliDuzenlemeWidget = null
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = if (widget.size == BaseWidget.WidgetSize.SMALL) ClPrimary else Color(0x33FFFFFF))
-                            ) {
-                                Text("Küçük")
-                            }
-                            Button(
-                                onClick = {
-                                    widgetManager.resizeWidget(widget.id, BaseWidget.WidgetSize.MEDIUM)
-                                    seciliDuzenlemeWidget = null
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = if (widget.size == BaseWidget.WidgetSize.MEDIUM) ClPrimary else Color(0x33FFFFFF))
-                            ) {
-                                Text("Orta")
-                            }
-                            Button(
-                                onClick = {
-                                    widgetManager.resizeWidget(widget.id, BaseWidget.WidgetSize.LARGE)
-                                    seciliDuzenlemeWidget = null
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = if (widget.size == BaseWidget.WidgetSize.LARGE) ClPrimary else Color(0x33FFFFFF))
-                            ) {
-                                Text("Büyük")
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(text = "Sayfa Taşı:", color = Color.Gray, fontSize = 13.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            for (p in 0 until pageCount) {
-                                Button(
-                                    onClick = {
-                                        widgetManager.moveWidgetToPage(widget.id, p)
-                                        seciliDuzenlemeWidget = null
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (widget.pageIndex == p) ClPrimary else Color(0x33FFFFFF))
-                                ) {
-                                    Text("Sayfa ${p + 1}")
-                                }
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            widgetManager.removeWidget(widget.id)
-                            seciliDuzenlemeWidget = null
-                        }
-                    ) {
-                        Text("Widget'ı Sil", color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { seciliDuzenlemeWidget = null }) {
-                        Text("Kapat", color = Color.White)
-                    }
-                },
-                containerColor = Color(0xFF181924)
-            )
-        }
-
-        // ═══════════════════════════════════════════════════════════════
-        // WIDGET EKLEME KATALOG DIALOGU (WidgetPickerDialog)
-        // ═══════════════════════════════════════════════════════════════
-        if (widgetEklemeDialogAcik) {
-            val available = WidgetRegistry.getAvailableWidgets()
-            AlertDialog(
-                onDismissRequest = { widgetEklemeDialogAcik = false },
-                title = { Text(text = "Masaüstüne Widget Ekle", color = Color.White, fontWeight = FontWeight.Bold) },
-                text = {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        item { app.vela.carlauncher.widgets.SystemWidgetAddButton(pagerState.currentPage) { widgetEklemeDialogAcik = false } }
-                        items(available) { entry ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0x22FFFFFF))
-                                    .clickable {
-                                        widgetManager.addWidget(entry.typeId, pagerState.currentPage, entry.defaultSize)
-                                        widgetEklemeDialogAcik = false
-                                    }
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(text = entry.displayName, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                                    Text(text = entry.description, color = Color.Gray, fontSize = 12.sp)
-                                }
-                                Text(text = "+ Ekle", color = ClPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                },
-                confirmButton = {},
-                dismissButton = {
-                    TextButton(onClick = { widgetEklemeDialogAcik = false }) {
-                        Text("İptal", color = Color.White)
-                    }
-                },
-                containerColor = Color(0xFF141520)
+        // Widget Secici Kutuphanesi Dialogu (Gorseldeki gibi)
+        if (showWidgetPicker) {
+            WidgetPickerDialogView(
+                activePageIndex = pagerState.currentPage,
+                onDismiss = { showWidgetPicker = false },
+                onWidgetAdded = {
+                    showWidgetPicker = false
+                }
             )
         }
     }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// WIDGET ARAYUZ PARCALARI
-// ═══════════════════════════════════════════════════════════════
-
+/**
+ * 8 Sütun x 4 Satır Launcher 2/3 Hücresel Grid Çizim Alanı
+ */
 @Composable
-private fun CombinedWidgetView(
-    saat: String,
-    tarih: String,
+fun WorkspaceCellPageLayout(
+    pageIndex: Int,
+    widgets: List<BaseWidget>,
+    isEditMode: Boolean,
+    saatMetni: String,
+    tarihMetni: String,
     telemetri: HizTelemetrisi,
     medya: MedyaParcasi,
-    onOynat: () -> Unit
+    onOynatDuraklat: () -> Unit,
+    onSonraki: () -> Unit,
+    onOnceki: () -> Unit,
+    onLaunchApp: (String) -> Unit,
+    onEnterEditMode: () -> Unit,
+    onDeleteWidget: (String) -> Unit,
+    onMoveWidget: (String, Int, Int) -> Unit,
+    onResizeWidget: (String, Int, Int) -> Unit
 ) {
-    Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Column {
-            Text(text = saat, color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
-            Text(text = tarih, color = Color.Gray, fontSize = 12.sp)
-        }
-        Column(horizontalAlignment = Alignment.End) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(text = "${telemetri.anlikHizKmh}", color = ClPrimary, fontSize = 38.sp, fontWeight = FontWeight.Bold)
-                Text(text = " km/s", color = Color.Gray, fontSize = 14.sp)
-            }
-            Text(text = if (medya.caliyorMu) "Çalıyor: ${medya.baslik}" else "Vela Dashboard", color = Color(0xFF30D158), fontSize = 11.sp)
-        }
-    }
-}
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val colCount = WidgetManager.COL_COUNT
+    val rowCount = WidgetManager.ROW_COUNT
+    val spacingDp = 8.dp
 
-@Composable
-private fun SpeedWidgetView(telemetri: HizTelemetrisi) {
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(text = "${telemetri.anlikHizKmh}", color = ClPrimary, fontSize = 42.sp, fontWeight = FontWeight.Bold)
-            Text(text = " km/s", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
-        }
-        if (telemetri.hizSiniriKmh > 0) {
-            Text(text = "Limit: ${telemetri.hizSiniriKmh} km/s", color = Color(0xFFFF9500), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        }
-    }
-}
+    var draggingWidgetId by remember { mutableStateOf<String?>(null) }
+    var dragCellX by remember { mutableIntStateOf(-1) }
+    var dragCellY by remember { mutableIntStateOf(-1) }
+    var isDragValid by remember { mutableStateOf(false) }
 
-@Composable
-private fun ClockWidgetView(saat: String, tarih: String) {
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = saat, color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Bold)
-        Text(text = tarih, color = Color.Gray, fontSize = 11.sp)
-    }
-}
-
-@Composable
-private fun MusicWidgetView(
-    medya: MedyaParcasi,
-    onPlay: () -> Unit,
-    onPrev: () -> Unit,
-    onNext: () -> Unit,
-    onOpen: () -> Unit
-) {
-    Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Column(modifier = Modifier.weight(1f).clickable { onOpen() }) {
-            Text(text = if (medya.baslik.isNotBlank()) medya.baslik else "Parça Seçin", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text(text = if (medya.sanatci.isNotBlank()) medya.sanatci else "Vela Müzik", color = Color.Gray, fontSize = 12.sp, maxLines = 1)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            IconButton(onClick = onPrev) { Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = Color.White) }
-            IconButton(onClick = onPlay) { Icon(if (medya.caliyorMu) Icons.Default.Close else Icons.Default.PlayArrow, contentDescription = null, tint = ClPrimary) }
-            IconButton(onClick = onNext) { Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White) }
-        }
-    }
-}
-
-@Composable
-private fun WeatherWidgetView() {
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(Icons.Default.WbSunny, contentDescription = null, tint = Color(0xFFFFCC00), modifier = Modifier.size(32.dp))
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = "24°C", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Text(text = "Açık", color = Color.Gray, fontSize = 11.sp)
-    }
-}
-
-@Composable
-private fun CompassWidgetView(telemetri: HizTelemetrisi) {
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(Icons.Default.Explore, contentDescription = null, tint = ClPrimary, modifier = Modifier.size(32.dp))
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(text = "${telemetri.pusulaYonu.toInt()}°", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Text(text = "Pusula", color = Color.Gray, fontSize = 11.sp)
-    }
-}
-
-@Composable
-private fun ObdWidgetView(telemetri: HizTelemetrisi) {
-    Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = "Hız", color = Color.Gray, fontSize = 10.sp)
-            Text(text = "${telemetri.anlikHizKmh}", color = ClPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = "Ort. Hız", color = Color.Gray, fontSize = 10.sp)
-            Text(text = "${telemetri.ortalamaHizKmh} km/s", color = Color(0xFF30D158), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = "İrtifa", color = Color.Gray, fontSize = 10.sp)
-            Text(text = "${telemetri.irtifaMetre.toInt()}m", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-private fun ShortcutsWidgetView(kisayollar: List<app.vela.carlauncher.model.AppShortcut>, onLaunchApp: (String) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0x08FFFFFF))
     ) {
-        kisayollar.take(5).forEach { item ->
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onLaunchApp(item.paketAdi) }
-                    .padding(4.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0x22FFFFFF)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (item.ikon != null) {
-                        androidx.compose.ui.viewinterop.AndroidView(
-                            factory = { ctx ->
-                                android.widget.ImageView(ctx).apply {
-                                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-                                }
-                            },
-                            update = { imageView ->
-                                imageView.setImageDrawable(item.ikon)
-                            },
-                            modifier = Modifier.size(36.dp)
-                        )
-                    } else {
-                        Text(
-                            text = item.ad.take(1).uppercase(),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
+        val totalWidthPx = constraints.maxWidth.toFloat()
+        val totalHeightPx = constraints.maxHeight.toFloat()
+        val spacingPx = with(density) { spacingDp.toPx() }
+
+        val cellWidthPx = (totalWidthPx - (colCount - 1) * spacingPx) / colCount
+        val cellHeightPx = (totalHeightPx - (rowCount - 1) * spacingPx) / rowCount
+
+        // 1. Duzenleme Modu Izgara Kilavuz Cizgileri (Grid Lines)
+        if (isEditMode) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val gridColor = Color(0x1FFFFFFF)
+                for (r in 0 until rowCount) {
+                    for (c in 0 until colCount) {
+                        val left = c * (cellWidthPx + spacingPx)
+                        val top = r * (cellHeightPx + spacingPx)
+                        drawRoundRect(
+                            color = gridColor,
+                            topLeft = Offset(left, top),
+                            size = Size(cellWidthPx, cellHeightPx),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx(), 8.dp.toPx()),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = item.ad,
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+
+                // Sürükleme Hedef Alan Maskesi (Yeşil / Kırmızı)
+                if (draggingWidgetId != null && dragCellX >= 0 && dragCellY >= 0) {
+                    val draggingWidget = widgets.find { it.id == draggingWidgetId }
+                    if (draggingWidget != null) {
+                        val targetLeft = dragCellX * (cellWidthPx + spacingPx)
+                        val targetTop = dragCellY * (cellHeightPx + spacingPx)
+                        val targetWidth = draggingWidget.spanX * cellWidthPx + (draggingWidget.spanX - 1) * spacingPx
+                        val targetHeight = draggingWidget.spanY * cellHeightPx + (draggingWidget.spanY - 1) * spacingPx
+
+                        drawRoundRect(
+                            color = if (isDragValid) Color(0x4430D158) else Color(0x44FF453A),
+                            topLeft = Offset(targetLeft, targetTop),
+                            size = Size(targetWidth, targetHeight),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx(), 12.dp.toPx())
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Widget Elemanlari
+        widgets.forEach { widget ->
+            val isCurrentDragging = draggingWidgetId == widget.id
+
+            val safeCellX = widget.cellX.coerceIn(0, colCount - 1)
+            val safeCellY = widget.cellY.coerceIn(0, rowCount - 1)
+            val safeSpanX = widget.spanX.coerceIn(1, colCount - safeCellX)
+            val safeSpanY = widget.spanY.coerceIn(1, rowCount - safeCellY)
+
+            val leftPx = safeCellX * (cellWidthPx + spacingPx)
+            val topPx = safeCellY * (cellHeightPx + spacingPx)
+            val widthPx = safeSpanX * cellWidthPx + (safeSpanX - 1) * spacingPx
+            val heightPx = safeSpanY * cellHeightPx + (safeSpanY - 1) * spacingPx
+
+            val leftDp = with(density) { leftPx.toDp() }
+            val topDp = with(density) { topPx.toDp() }
+            val widthDp = with(density) { widthPx.toDp() }
+            val heightDp = with(density) { heightPx.toDp() }
+
+            // Titreme (Jiggle/Shake) Animasyonu (Launcher3 ve iOS tarzi)
+            val infiniteTransition = rememberInfiniteTransition()
+            val rotation by infiniteTransition.animateFloat(
+                initialValue = -1.2f,
+                targetValue = 1.2f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(130, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
                 )
+            )
+
+            Box(
+                modifier = Modifier
+                    .offset(x = leftDp, y = topDp)
+                    .size(width = widthDp, height = heightDp)
+                    .graphicsLayer {
+                        if (isEditMode && !isCurrentDragging) {
+                            rotationZ = rotation
+                        }
+                    }
+                    .pointerInput(widget.id, isEditMode) {
+                        detectDragGestures(
+                            onDragStart = {
+                                if (isEditMode) {
+                                    draggingWidgetId = widget.id
+                                    dragCellX = widget.cellX
+                                    dragCellY = widget.cellY
+                                    isDragValid = true
+                                }
+                            },
+                            onDragCancel = {
+                                draggingWidgetId = null
+                                dragCellX = -1
+                                dragCellY = -1
+                            },
+                            onDragEnd = {
+                                if (draggingWidgetId == widget.id && isDragValid && dragCellX >= 0 && dragCellY >= 0) {
+                                    onMoveWidget(widget.id, dragCellX, dragCellY)
+                                }
+                                draggingWidgetId = null
+                                dragCellX = -1
+                                dragCellY = -1
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                val currentX = leftPx + change.position.x
+                                val currentY = topPx + change.position.y
+                                val calculatedCol = ((currentX / (cellWidthPx + spacingPx)).toInt()).coerceIn(0, colCount - widget.spanX)
+                                val calculatedRow = ((currentY / (cellHeightPx + spacingPx)).toInt()).coerceIn(0, rowCount - widget.spanY)
+
+                                dragCellX = calculatedCol
+                                dragCellY = calculatedRow
+
+                                // Cakisma kontrolu
+                                val widgetManager = WidgetManager.getInstance(context)
+                                isDragValid = widgetManager.isRegionVacant(
+                                    pageIndex = pageIndex,
+                                    cellX = calculatedCol,
+                                    cellY = calculatedRow,
+                                    spanX = widget.spanX,
+                                    spanY = widget.spanY,
+                                    ignoreWidgetId = widget.id
+                                )
+                            }
+                        )
+                    }
+                    .pointerInput(widget.id) {
+                        detectTapGestures(
+                            onLongPress = { onEnterEditMode() },
+                            onTap = {
+                                if (isEditMode) {
+                                    // Edit modundayken dokunma
+                                } else if (widget.typeId == "shortcut" && widget.packageName != null) {
+                                    onLaunchApp(widget.packageName!!)
+                                }
+                            }
+                        )
+                    }
+            ) {
+                // Widget Kart Cercevesi
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(ClCardBg)
+                        .border(
+                            width = if (isEditMode) 1.5.dp else 1.dp,
+                            color = if (isEditMode) Color.White else ClBorder,
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        .padding(8.dp)
+                ) {
+                    // Icerik Renderi
+                    RenderWidgetContent(
+                        widget = widget,
+                        saatMetni = saatMetni,
+                        tarihMetni = tarihMetni,
+                        telemetri = telemetri,
+                        medya = medya,
+                        onOynatDuraklat = onOynatDuraklat,
+                        onSonraki = onSonraki,
+                        onOnceki = onOnceki,
+                        onLaunchApp = onLaunchApp
+                    )
+                }
+
+                // ═══════════════════════════════════════════════════════════
+                // DUZENLEME MODU AKSİYONLARI: SIL BUTONU VE BOYUT TUTAMACLARI
+                // ═══════════════════════════════════════════════════════════
+                if (isEditMode) {
+                    // Sag Ust Sil Butonu (Delete Badge ✕)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 4.dp, y = (-4).dp)
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(ClDanger)
+                            .clickable { onDeleteWidget(widget.id) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Sil",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+
+                    // Sag Kenar Boyut Tutamaci (Genislik SpanX Artir / Azalt)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .offset(x = 6.dp)
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .border(1.dp, Color.Black, CircleShape)
+                            .clickable {
+                                val nextSpanX = if (safeSpanX >= 4) 1 else safeSpanX + 1
+                                onResizeWidget(widget.id, nextSpanX, safeSpanY)
+                            }
+                    )
+
+                    // Alt Kenar Boyut Tutamaci (Yukseklik SpanY Artir / Azalt)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .offset(y = 6.dp)
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .border(1.dp, Color.Black, CircleShape)
+                            .clickable {
+                                val nextSpanY = if (safeSpanY >= 4) 1 else safeSpanY + 1
+                                onResizeWidget(widget.id, safeSpanX, nextSpanY)
+                            }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Widget Icerik Rendersi
+ */
+@Composable
+fun RenderWidgetContent(
+    widget: BaseWidget,
+    saatMetni: String,
+    tarihMetni: String,
+    telemetri: HizTelemetrisi,
+    medya: MedyaParcasi,
+    onOynatDuraklat: () -> Unit,
+    onSonraki: () -> Unit,
+    onOnceki: () -> Unit,
+    onLaunchApp: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val widgetManager = remember { WidgetManager.getInstance(context) }
+
+    when {
+        // 1. SISTEM WIDGETI (AppWidgetHostView)
+        widget.typeId == "system" && widget.appWidgetId != -1 -> {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx ->
+                    val appWidgetManager = AppWidgetManager.getInstance(ctx)
+                    val providerInfo = appWidgetManager.getAppWidgetInfo(widget.appWidgetId)
+                    if (providerInfo != null) {
+                        widgetManager.appWidgetHost.createView(ctx, widget.appWidgetId, providerInfo)
+                    } else {
+                        android.widget.TextView(ctx).apply {
+                            text = widget.title
+                            setTextColor(android.graphics.Color.WHITE)
+                        }
+                    }
+                }
+            )
+        }
+
+        // 2. UYGULAMA KISAYOLU
+        widget.typeId == "shortcut" && widget.packageName != null -> {
+            val pm = context.packageManager
+            val appIcon = remember(widget.packageName) {
+                try { pm.getApplicationIcon(widget.packageName!!) } catch (e: Exception) { null }
+            }
+            val bmp = remember(appIcon) {
+                try { appIcon?.toBitmap(80, 80)?.asImageBitmap() } catch (e: Exception) { null }
+            }
+
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (bmp != null) {
+                    Image(bitmap = bmp, contentDescription = null, modifier = Modifier.size(36.dp))
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x33FFFFFF))
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = widget.title,
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // 3. DASHBOARD (BIRLESIK WIDGET)
+        widget.typeId == WidgetRegistry.TYPE_COMBINED -> {
+            Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = saatMetni, color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                    Text(text = tarihMetni, color = Color.LightGray, fontSize = 11.sp)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(text = "${telemetri.anlikHizKmh}", color = ClPrimary, fontSize = 36.sp, fontWeight = FontWeight.Black)
+                    Text(text = "KM/S", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // 4. HIZ & LIMIT
+        widget.typeId == WidgetRegistry.TYPE_SPEED -> {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(text = "${telemetri.anlikHizKmh}", color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.Black)
+                Text(text = "KM / S", color = ClPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        // 5. DIJITAL SAAT
+        widget.typeId == WidgetRegistry.TYPE_CLOCK -> {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(text = saatMetni, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                Text(text = tarihMetni, color = Color.LightGray, fontSize = 10.sp, maxLines = 1)
+            }
+        }
+
+        // 6. MEDYA CALAR
+        widget.typeId == WidgetRegistry.TYPE_MUSIC -> {
+            Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF232536)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(modifier = Modifier.size(18.dp)) {
+                            drawCircle(color = Color(0xFFFF375F), radius = size.minDimension / 2.5f)
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = medya.baslik.ifBlank { "Müzik Çalınmıyor" }, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Text(text = medya.sanatci.ifBlank { "Vela Medya" }, color = Color.Gray, fontSize = 10.sp, maxLines = 1)
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "◀◀",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { onOnceki() }
+                    )
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = ClPrimary,
+                        modifier = Modifier.size(30.dp).clickable { onOynatDuraklat() }
+                    )
+                    Text(
+                        text = "▶▶",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { onSonraki() }
+                    )
+                }
+            }
+        }
+
+        // 7. HAVA DURUMU
+        widget.typeId == WidgetRegistry.TYPE_WEATHER -> {
+            Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                Canvas(modifier = Modifier.size(28.dp)) {
+                    drawCircle(color = Color(0xFFFFCC00), radius = size.minDimension / 2.5f)
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(text = "22°C", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Açık", color = Color.LightGray, fontSize = 11.sp)
+                }
+            }
+        }
+
+        // 8. PUSULA & YON
+        widget.typeId == WidgetRegistry.TYPE_COMPASS -> {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Canvas(modifier = Modifier.size(26.dp)) {
+                    drawCircle(color = Color(0xFF32ADE6), radius = size.minDimension / 2f, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(text = "KUZEY (${telemetri.pusulaYonu.toInt()}°)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        // 9. OBD2 / TELEMETRI
+        widget.typeId == WidgetRegistry.TYPE_OBD -> {
+            Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "RPM", color = Color.Gray, fontSize = 10.sp)
+                    Text(text = "2400", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "HARARET", color = Color.Gray, fontSize = 10.sp)
+                    Text(text = "90°C", color = ClSuccess, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "VOLTAJ", color = Color.Gray, fontSize = 10.sp)
+                    Text(text = "14.2V", color = ClPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // VARSAYILAN KART
+        else -> {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(text = widget.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
             }
         }
     }

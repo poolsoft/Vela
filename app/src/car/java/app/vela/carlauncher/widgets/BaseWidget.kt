@@ -14,6 +14,10 @@ abstract class BaseWidget(
     var pageIndex: Int = 0,
     var cellX: Int = -1,
     var cellY: Int = -1,
+    var spanX: Int = 1,
+    var spanY: Int = 1,
+    var appWidgetId: Int = -1,
+    var packageName: String? = null,
     var isVisible: Boolean = true
 ) {
 

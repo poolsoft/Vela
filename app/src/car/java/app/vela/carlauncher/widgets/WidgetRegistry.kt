@@ -118,11 +118,34 @@ object WidgetRegistry {
 
     fun getAvailableWidgets(): List<WidgetEntry> = availableWidgets.toList()
 
-    fun createWidget(typeId: String, pageIndex: Int = 0, size: BaseWidget.WidgetSize? = null): BaseWidget? {
-        val entry = availableWidgets.find { it.typeId == typeId } ?: return null
+    fun createWidget(
+        typeId: String,
+        pageIndex: Int = 0,
+        size: BaseWidget.WidgetSize? = null,
+        cellX: Int = -1,
+        cellY: Int = -1,
+        spanX: Int = 1,
+        spanY: Int = 1,
+        appWidgetId: Int = -1,
+        packageName: String? = null
+    ): BaseWidget? {
+        val entry = availableWidgets.find { it.typeId == typeId }
         val uniqueId = "${typeId}_${System.currentTimeMillis()}"
-        val chosenSize = size ?: entry.defaultSize
-        return entry.creator(uniqueId, pageIndex, chosenSize)
+        val chosenSize = size ?: entry?.defaultSize ?: BaseWidget.WidgetSize.MEDIUM
+        val title = entry?.displayName ?: "Widget"
+        return GenericWidget(
+            id = uniqueId,
+            typeId = typeId,
+            title = title,
+            size = chosenSize,
+            pageIndex = pageIndex,
+            cellX = cellX,
+            cellY = cellY,
+            spanX = spanX,
+            spanY = spanY,
+            appWidgetId = appWidgetId,
+            packageName = packageName
+        )
     }
 }
 
@@ -133,6 +156,24 @@ class GenericWidget(
     id: String,
     typeId: String,
     title: String,
-    size: WidgetSize,
-    pageIndex: Int = 0
-) : BaseWidget(id, typeId, title, size, pageIndex)
+    size: WidgetSize = WidgetSize.MEDIUM,
+    pageIndex: Int = 0,
+    cellX: Int = -1,
+    cellY: Int = -1,
+    spanX: Int = 1,
+    spanY: Int = 1,
+    appWidgetId: Int = -1,
+    packageName: String? = null
+) : BaseWidget(
+    id = id,
+    typeId = typeId,
+    title = title,
+    size = size,
+    pageIndex = pageIndex,
+    cellX = cellX,
+    cellY = cellY,
+    spanX = spanX,
+    spanY = spanY,
+    appWidgetId = appWidgetId,
+    packageName = packageName
+)
