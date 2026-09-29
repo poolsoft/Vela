@@ -185,7 +185,7 @@ private fun basemapSrc(style: StyleLayers): String? = when {
     style.getSource(LOCAL_BASEMAP_SRC) != null -> LOCAL_BASEMAP_SRC
     else -> null
 }
-private fun basemapSrc(style: Style): String? = basemapSrc(StyleHost(style))
+private fun basemapSrc(style: Style): String? = runCatching { basemapSrc(StyleHost(style)) }.getOrNull()
 
 private val localBasemapLayerIds = HashSet<String>() // the JSON layers re-pointed at it, re-attached after load
 private const val AMBIENT_LAYER = "vela-ambient"
@@ -948,11 +948,13 @@ fun VelaMapView(
             puckOverlayHidLayer[0] = false
             puckOverlayOwnsArrow = false
             lastMeLayerKey = null // applyData re-derives the symbol puck's visibility on its next pass
-            styleRef?.let { st ->
-                // The source was not fed while the overlay drew (see the ticker), so put the symbol
-                // where the arrow last was before showing it.
-                navPuck.drawn?.let { setMeSource(st, it, navPuck.displayBearing) }
-                st.getLayer(ME_ARROW_LAYER)?.setProperties(PropertyFactory.visibility(Property.VISIBLE))
+            styleRef?.takeIf { it.isFullyLoaded }?.let { st ->
+                runCatching {
+                    // The source was not fed while the overlay drew (see the ticker), so put the symbol
+                    // where the arrow last was before showing it.
+                    navPuck.drawn?.let { setMeSource(st, it, navPuck.displayBearing) }
+                    st.getLayer(ME_ARROW_LAYER)?.setProperties(PropertyFactory.visibility(Property.VISIBLE))
+                }
             }
         }
     }
@@ -999,7 +1001,7 @@ fun VelaMapView(
     val upcomingRoadsHolder = rememberUpdatedState(navUpcomingRoads)
     val navRoadLatinHolder = rememberUpdatedState(onNavRoadLatin)
     LaunchedEffect(navMode, routePolyline, styleRef) {
-        val style = styleRef ?: return@LaunchedEffect
+        val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         if (!navMode || routePolyline.size < 2) return@LaunchedEffect
         var lastApplied: List<String>? = null
         // QUANTIZED (2026-07-16, the "camera dropping frames since the bubbles" report): the
@@ -1029,6 +1031,7 @@ fun VelaMapView(
         var dictStaleTicks = 0
         var emptyPassTicks = 0 // consecutive quantum passes that placed no label (tiles still loading)
         while (true) {
+            if (!style.isFullyLoaded) break
             val quantum = (navPuck.progressM / 400.0).toLong()
             // Drop the callouts the puck is past, every tick (cheap: a filter swap, gated on a 25 m step).
             runCatching { applyNavLabelProgress(style, navPuck.progressM) }
@@ -1036,7 +1039,7 @@ fun VelaMapView(
             val quantumChanged = quantum != lastQuantum || upcomingNow != lastUpcoming
             if (quantumChanged) { dictStaleTicks = 0; emptyPassTicks = 0 } // new area: re-warm the dict as its tiles land
             if (quantumChanged || dictStaleTicks < 3) {
-                val src = basemapSrc(style)?.let { style.getSource(it) } as? VectorSource
+                val src = basemapSrc(style)?.let { runCatching { if (style.isFullyLoaded) style.getSource(it) else null }.getOrNull() } as? VectorSource
                 val feats = if (src != null) runCatching {
                     src.querySourceFeatures(arrayOf("transportation_name"), classFilter)
                 }.getOrNull().orEmpty() else emptyList()
@@ -1171,7 +1174,7 @@ fun VelaMapView(
     // for a clean nav map, and restore on exit. Keyed on styleRef so it re-applies after a style
     // (re)load (dark/light flip), which recreates the layers at default visibility.
     LaunchedEffect(navMode, navDriveMode, styleRef, topographyOn) {
-        val style = styleRef ?: return@LaunchedEffect
+        val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         val vis = if (navMode) Property.NONE else Property.VISIBLE
         runCatching {
             listOf("poi_r1", "poi_r7", "poi_r20", "poi_transit").forEach { id ->
@@ -1283,19 +1286,19 @@ fun VelaMapView(
     // a second raster layer serves them; where Esri tops out, Google's imagery tiles fill the deep
     // zooms instead. Both slot directly above the base imagery, below the ghost roads + labels.
     LaunchedEffect(satelliteOn, satDeep, styleRef) {
-        val style = styleRef ?: return@LaunchedEffect
+        val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         // -1 is the Google imagery fallback where Esri tops out; without Google, no deep layer.
         runCatching { ensureSatelliteDeep(style, satelliteOn, if (satDeep == -1 && app.vela.ui.GoogleFree.on.value) 0 else satDeep) }
     }
 
     // Transit itinerary preview (issue #233): draw/clear the expanded chooser row's legs.
     LaunchedEffect(transitPreview, styleRef) {
-        val style = styleRef ?: return@LaunchedEffect
+        val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         runCatching { ensureTransitPreview(style, transitPreview) }
     }
 
     LaunchedEffect(buildingOverlays, styleRef, darkTheme) {
-        val style = styleRef ?: return@LaunchedEffect
+        val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         // runCatching the enumerations too: the style can die between the null-check and this walk
         // (theme flip mid-effect), and a dead style throws on ANY access, not just mutation.
         runCatching { style.layers.filter { it.id.startsWith("vela-ovl-") }.forEach { style.removeLayer(it) } }
@@ -1369,9 +1372,10 @@ fun VelaMapView(
     // Route time bubbles (chooser experiment). Their own effect rather than applyData: they change
     // only when the route set or the selection does, never per recomposition.
     LaunchedEffect(routeBubbles, styleRef, darkTheme) {
-        val style = styleRef ?: return@LaunchedEffect
+        val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         // Experiment off (or no chooser open) on a fresh style: add nothing, so the default map is unchanged.
-        if (routeBubbles.isEmpty() && style.getSource(ROUTE_BUBBLE_SRC) == null) return@LaunchedEffect
+        val hasSrc = runCatching { if (style.isFullyLoaded) style.getSource(ROUTE_BUBBLE_SRC) != null else false }.getOrDefault(false)
+        if (routeBubbles.isEmpty() && !hasSrc) return@LaunchedEffect
         runCatching {
             val d = context.resources.displayMetrics.density
             val sel = android.graphics.Color.parseColor("#1A73E8")
@@ -1432,32 +1436,38 @@ fun VelaMapView(
     // The exit callout's one feature (or none). Cheap enough to push on every change of the
     // maneuver; the layer itself is built with the rest of the nav labels.
     LaunchedEffect(navExitCallout, styleRef, navMode) {
-        val style = styleRef ?: return@LaunchedEffect
-        val src = style.getSourceAs<GeoJsonSource>(NAV_EXIT_SRC) ?: return@LaunchedEffect
+        val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
+        val src = runCatching { if (style.isFullyLoaded) style.getSourceAs<GeoJsonSource>(NAV_EXIT_SRC) else null }.getOrNull() ?: return@LaunchedEffect
         val c = navExitCallout.takeIf { navMode }
-        src.setGeoJson(
-            if (c == null) FeatureCollection.fromFeatures(emptyList())
-            else FeatureCollection.fromFeatures(
-                listOf(
-                    Feature.fromGeometry(Point.fromLngLat(c.first.lng, c.first.lat)).apply {
-                        addStringProperty("name", c.second)
-                    },
+        runCatching {
+            src.setGeoJson(
+                if (c == null) FeatureCollection.fromFeatures(emptyList())
+                else FeatureCollection.fromFeatures(
+                    listOf(
+                        Feature.fromGeometry(Point.fromLngLat(c.first.lng, c.first.lat)).apply {
+                            addStringProperty("name", c.second)
+                        },
+                    ),
                 ),
-            ),
-        )
+            )
+        }
     }
     LaunchedEffect(placesOneSet, styleRef) {
         osmOneSet = placesOneSet
         lastOsmPoiVis = null // applyData re-decides the basemap point layers' visibility
-        styleRef?.let { st -> if (placesOneSet) OSM_POI_LAYERS.forEach { id -> st.getLayer(id)?.setProperties(PropertyFactory.visibility(Property.NONE)) } }
+        styleRef?.takeIf { it.isFullyLoaded }?.let { st ->
+            runCatching {
+                if (placesOneSet) OSM_POI_LAYERS.forEach { id -> st.getLayer(id)?.setProperties(PropertyFactory.visibility(Property.NONE)) }
+            }
+        }
     }
     LaunchedEffect(placesPending, styleRef, osmBusinesses) {
-        val style = styleRef ?: return@LaunchedEffect
+        val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         val hide = (placesOverlays.isNotEmpty() || placesPending) && !osmBusinesses
         if (hide != osmHideBusiness) {
             osmHideBusiness = hide
             fillLast[0] = Double.NaN // the fill-in pass now has businesses to dedupe: run it on the next idle
-            applyPoiTierFilters(style, lastPoiFuelOnly ?: false)
+            runCatching { applyPoiTierFilters(style, lastPoiFuelOnly ?: false) }
         }
     }
     ambientClosedNow = ambientClosed
@@ -1466,7 +1476,7 @@ fun VelaMapView(
     // here, so a size baked in at creation is the only one they ever get, and a settings change has
     // to rebuild them to take effect (user 2026-09-18, on a head unit).
     LaunchedEffect(placesOverlays, styleRef, darkTheme, hiddenOpenPlaceIds, poiIconScale, poiLabelScale) {
-        val style = styleRef ?: return@LaunchedEffect
+        val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         // A pin whose Google listing came back permanently closed (Overture lags Google by months)
         // is filtered out of both tiers the moment the tap resolved, and stays out across restarts.
         openHiddenIds = hiddenOpenPlaceIds
@@ -1750,7 +1760,7 @@ fun VelaMapView(
     }
 
     LaunchedEffect(maxspeedOverlays, styleRef, speedOverlayOn) {
-        val style = styleRef ?: return@LaunchedEffect
+        val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         runCatching { style.layers.filter { it.id.startsWith("vela-ms-") }.forEach { style.removeLayer(it) } }
         runCatching { style.sources.filter { it.id.startsWith("vela-ms-src-") }.forEach { style.removeSource(it) } }
         if (!speedOverlayOn || isEmulator()) return@LaunchedEffect // no query layer on the browse map or emulator
@@ -1829,7 +1839,7 @@ fun VelaMapView(
     // whole feature set re-uploads whenever the list (or its order) changes, so a reorder in
     // the stops editor re-numbers the map immediately. Icons register on demand per number.
     LaunchedEffect(stopPins, destinationPin, candidatePin, styleRef) {
-        val style = styleRef ?: return@LaunchedEffect
+        val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         runCatching {
             if (stopPins.isEmpty() && destinationPin == null && candidatePin == null) {
                 style.getLayer(STOPNUM_LAYER)?.let { style.removeLayer(it) }
@@ -1876,7 +1886,7 @@ fun VelaMapView(
     }
 
     LaunchedEffect(addressOverlays, styleRef, darkTheme, satelliteOn) {
-        val style = styleRef ?: return@LaunchedEffect
+        val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         runCatching { style.layers.filter { it.id.startsWith("vela-addr-") }.forEach { style.removeLayer(it) } }
         runCatching { style.sources.filter { it.id.startsWith("vela-addr-src-") }.forEach { style.removeSource(it) } }
         // The overlay statewide data covers what OSM has too — hide the basemap number layer while the overlay
@@ -1965,7 +1975,7 @@ fun VelaMapView(
     val buildings3d = app.vela.ui.Buildings3d.on.value && !satelliteOn && !navMode
     LaunchedEffect(buildings3d, styleRef) {
         runCatching {
-            styleRef?.getLayer("building-3d")?.setProperties(
+            styleRef?.takeIf { it.isFullyLoaded }?.getLayer("building-3d")?.setProperties(
                 PropertyFactory.visibility(if (buildings3d) Property.VISIBLE else Property.NONE),
             )
         }
@@ -1977,7 +1987,7 @@ fun VelaMapView(
     // render the fixed-px bitmaps physically huge - a 0.7x here is the fix that doesn't touch
     // phones (their default stays 1.0).
     LaunchedEffect(styleRef, poiIconScale, poiLabelScale) {
-        val st = styleRef ?: return@LaunchedEffect
+        val st = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         val sc = poiIconScale
         val lc = poiLabelScale
         runCatching {
@@ -2066,7 +2076,7 @@ fun VelaMapView(
             val now = withFrameNanos { it }
             val dt = (if (lastNanos == 0L) 0.0 else ((now - lastNanos) / 1e9)).toFloat().coerceIn(0f, 0.1f)
             lastNanos = now
-            val style = styleRef ?: continue
+            val style = styleRef?.takeIf { it.isFullyLoaded } ?: continue
             val loc = myLocationHolder.value ?: continue
             // Ease the beam toward the freshest heading (compass when stopped, GPS course when
             // moving). Hold the last angle when neither is available so the cone doesn't snap to 0.
@@ -2391,7 +2401,7 @@ fun VelaMapView(
             val dtRaw = if (lastNanos == 0L) 0.0 else ((now - lastNanos) / 1e9)
             val dt = dtRaw.toFloat().coerceIn(0f, 0.1f)
             lastNanos = now
-            val style = styleRef ?: continue
+            val style = styleRef?.takeIf { it.isFullyLoaded } ?: continue
             // TRACE-time frame deltas: during a replay the world runs speedup× faster than the
             // wall clock, so every physics/easing step must integrate speedup× as much time or
             // the puck falls behind each fix and surges to catch up (the replay stutter). Live
@@ -3806,23 +3816,25 @@ fun VelaMapView(
                 ensureTopography(style, topographyOn)
             }
         } else {
-            styleRef?.let {
-                applyData(map, it, context, darkTheme, ambientCoversView, routePolyline, routeColor, routeDashed, routeTrafficSpans, alternates, altColor, markers, ambientPois, trafficControls, flockCameras, speedCameras, transitStops, mePaint, meBearing, myAccuracyM, locationStale, previewTarget, routeProgress, navMode, navDriveMode, parkingSpot, savedPins, poisEnabled, svPose)
-                // AUDIT FIX 3e (2026-07-15): the ensure* helpers are idempotent but each call
-                // probes the style over JNI (getLayer/getSource) - per recomposition, that's
-                // four probe sets during every camera flight for nothing. They only need to run
-                // when their toggle actually flips; the style-reload branch above still calls
-                // them unconditionally on a fresh style.
-                val ensureKey = (if (satelliteOn) 1 else 0) or (if (trafficOn) 2 else 0) or
-                    (if (transitOn) 4 else 0) or (if (topographyOn) 8 else 0) or
-                    (if (navMode) 16 else 0) or (if (darkTheme) 32 else 0)
-                if (ensureKey != lastEnsureKey[0]) {
-                    lastEnsureKey[0] = ensureKey
-                    ensureNavRoadLabels(it, navMode, darkTheme, context.resources.displayMetrics.density, navLabelExclude)
-                    ensureSatellite(it, satelliteOn)
-                    ensureTraffic(it, trafficOn)
-                    ensureTransit(it, transitOn)
-                    ensureTopography(it, topographyOn)
+            styleRef?.takeIf { it.isFullyLoaded }?.let {
+                runCatching {
+                    applyData(map, it, context, darkTheme, ambientCoversView, routePolyline, routeColor, routeDashed, routeTrafficSpans, alternates, altColor, markers, ambientPois, trafficControls, flockCameras, speedCameras, transitStops, mePaint, meBearing, myAccuracyM, locationStale, previewTarget, routeProgress, navMode, navDriveMode, parkingSpot, savedPins, poisEnabled, svPose)
+                    // AUDIT FIX 3e (2026-07-15): the ensure* helpers are idempotent but each call
+                    // probes the style over JNI (getLayer/getSource) - per recomposition, that's
+                    // four probe sets during every camera flight for nothing. They only need to run
+                    // when their toggle actually flips; the style-reload branch above still calls
+                    // them unconditionally on a fresh style.
+                    val ensureKey = (if (satelliteOn) 1 else 0) or (if (trafficOn) 2 else 0) or
+                        (if (transitOn) 4 else 0) or (if (topographyOn) 8 else 0) or
+                        (if (navMode) 16 else 0) or (if (darkTheme) 32 else 0)
+                    if (ensureKey != lastEnsureKey[0]) {
+                        lastEnsureKey[0] = ensureKey
+                        ensureNavRoadLabels(it, navMode, darkTheme, context.resources.displayMetrics.density, navLabelExclude)
+                        ensureSatellite(it, satelliteOn)
+                        ensureTraffic(it, trafficOn)
+                        ensureTransit(it, transitOn)
+                        ensureTopography(it, topographyOn)
+                    }
                 }
             }
         }
@@ -4175,6 +4187,8 @@ fun VelaMapView(
 }
 
 private fun ensureLayers(style: Style) {
+    if (!style.isFullyLoaded) return
+    runCatching {
     // Kill the style light: MapLibre lights fill-extrusion faces toward white (default
     // intensity 0.5), so at z16+ the building-3d tops rendered ~40% brighter than the
     // palette (#1c3b69 became #2e5590) while Google keeps buildings the SAME color at
@@ -4972,6 +4986,7 @@ private fun ensureLayers(style: Style) {
             ),
         )
     }
+    }
 }
 
 /**
@@ -4983,26 +4998,29 @@ private fun ensureLayers(style: Style) {
  * MapLibre GL JS harness before shipping (same render engine as MapLibre Native).
  */
 private fun ensureHillshade(style: Style) {
-    if (style.getSource(DEM_SRC) == null) {
-        val tiles = TileSet("2.2.0", TERRARIUM_TILES)
-        tiles.encoding = "terrarium" // else MapLibre decodes the elevation as mapbox-RGB → garbage
-        style.addSource(RasterDemSource(DEM_SRC, tiles, 256))
-    }
-    if (style.getLayer(HILLSHADE_LAYER) == null) {
-        val hs = HillshadeLayer(HILLSHADE_LAYER, DEM_SRC).withProperties(
-            PropertyFactory.hillshadeExaggeration(0.32f),
-            PropertyFactory.hillshadeShadowColor("#6b7280"),
-            PropertyFactory.hillshadeHighlightColor("#ffffff"),
-            PropertyFactory.hillshadeAccentColor("#9aa0a6"),
-            // OFF by default (Google doesn't shade terrain unless you ask) - the Topography toggle
-            // flips it via ensureTopography. Added hidden so a fresh style starts flat.
-            PropertyFactory.visibility(Property.NONE),
-        )
-        hs.setMaxZoom(16f)
-        // Below the first road layer → above water/landuse (so terrain shades the
-        // land) but under roads + labels (which stay readable).
-        val firstRoad = style.layers.firstOrNull { it.id.startsWith("road") }?.id
-        if (firstRoad != null) style.addLayerBelow(hs, firstRoad) else style.addLayer(hs)
+    if (!style.isFullyLoaded) return
+    runCatching {
+        if (style.getSource(DEM_SRC) == null) {
+            val tiles = TileSet("2.2.0", TERRARIUM_TILES)
+            tiles.encoding = "terrarium" // else MapLibre decodes the elevation as mapbox-RGB → garbage
+            style.addSource(RasterDemSource(DEM_SRC, tiles, 256))
+        }
+        if (style.getLayer(HILLSHADE_LAYER) == null) {
+            val hs = HillshadeLayer(HILLSHADE_LAYER, DEM_SRC).withProperties(
+                PropertyFactory.hillshadeExaggeration(0.32f),
+                PropertyFactory.hillshadeShadowColor("#6b7280"),
+                PropertyFactory.hillshadeHighlightColor("#ffffff"),
+                PropertyFactory.hillshadeAccentColor("#9aa0a6"),
+                // OFF by default (Google doesn't shade terrain unless you ask) - the Topography toggle
+                // flips it via ensureTopography. Added hidden so a fresh style starts flat.
+                PropertyFactory.visibility(Property.NONE),
+            )
+            hs.setMaxZoom(16f)
+            // Below the first road layer → above water/landuse (so terrain shades the
+            // land) but under roads + labels (which stay readable).
+            val firstRoad = style.layers.firstOrNull { it.id.startsWith("road") }?.id
+            if (firstRoad != null) style.addLayerBelow(hs, firstRoad) else style.addLayer(hs)
+        }
     }
 }
 
@@ -5011,9 +5029,12 @@ private fun ensureHillshade(style: Style) {
  *  re-applies without a style reload. The DEM raster + layer already exist (ensureHillshade); this
  *  only flips visibility, so turning it OFF costs nothing and stops the DEM tiles fetching. */
 private fun ensureTopography(style: Style, on: Boolean) {
-    style.getLayer(HILLSHADE_LAYER)?.setProperties(
-        PropertyFactory.visibility(if (on) Property.VISIBLE else Property.NONE),
-    )
+    if (!style.isFullyLoaded) return
+    runCatching {
+        style.getLayer(HILLSHADE_LAYER)?.setProperties(
+            PropertyFactory.visibility(if (on) Property.VISIBLE else Property.NONE),
+        )
+    }
 }
 
 /** Toggle Google's live-traffic raster overlay. Inserted below the route line +
@@ -5466,18 +5487,23 @@ private fun navLabelPassedFilter(tier: Expression): Expression = Expression.all(
  *  nearest callout ahead, recorded when the set is uploaded. */
 private var navLabelNextAt = Double.MAX_VALUE
 private fun applyNavLabelProgress(style: Style, progressM: Double) {
-    if (progressM + NAV_XLABEL_DROP_BEHIND_M < navLabelNextAt) return
-    if (kotlin.math.abs(progressM - lastPassedFilterM) < 25.0) return
-    lastPassedFilterM = progressM
-    navLabelPassed = progressM
-    navLabelNextAt = navLabelAts.firstOrNull { it > progressM + NAV_XLABEL_DROP_BEHIND_M } ?: Double.MAX_VALUE
-    (style.getLayer(NAV_ROADLABEL_LAYER) as? SymbolLayer)
-        ?.setFilter(navLabelPassedFilter(Expression.eq(Expression.get("tier"), Expression.literal("major"))))
-    (style.getLayer(NAV_ROADLABEL_MINOR_LAYER) as? SymbolLayer)
-        ?.setFilter(navLabelPassedFilter(Expression.eq(Expression.get("tier"), Expression.literal("minor"))))
+    if (!style.isFullyLoaded) return
+    runCatching {
+        if (progressM + NAV_XLABEL_DROP_BEHIND_M < navLabelNextAt) return
+        if (kotlin.math.abs(progressM - lastPassedFilterM) < 25.0) return
+        lastPassedFilterM = progressM
+        navLabelPassed = progressM
+        navLabelNextAt = navLabelAts.firstOrNull { it > progressM + NAV_XLABEL_DROP_BEHIND_M } ?: Double.MAX_VALUE
+        (style.getLayer(NAV_ROADLABEL_LAYER) as? SymbolLayer)
+            ?.setFilter(navLabelPassedFilter(Expression.eq(Expression.get("tier"), Expression.literal("major"))))
+        (style.getLayer(NAV_ROADLABEL_MINOR_LAYER) as? SymbolLayer)
+            ?.setFilter(navLabelPassedFilter(Expression.eq(Expression.get("tier"), Expression.literal("minor"))))
+    }
 }
 
 private fun ensureNavRoadLabels(style: Style, on: Boolean, dark: Boolean, density: Float, exclude: List<String>) {
+    if (!style.isFullyLoaded) return
+    runCatching {
     // Cheap self-gate so callers can invoke per recomposition (audit-3e rule: no per-frame JNI
     // probes) - a change in theme, nav state or the route's own road list re-runs it.
     val key = listOf(on, dark, exclude, uiWantsLatinLabels())
@@ -5618,52 +5644,56 @@ private fun ensureNavRoadLabels(style: Style, on: Boolean, dark: Boolean, densit
     // kept minors invisible above ~town speed. The include-list filter (<= 60 crossing names) and
     // the fat textPadding keep placement bounded, so the per-frame collision cost stays tame.
     layer(NAV_ROADLABEL_MINOR_LAYER, "minor", 15f, fade = 15.2f to 15.7f)
-    ids.forEach {
-        (style.getLayer(it) as? SymbolLayer)?.setProperties(
-            PropertyFactory.visibility(Property.VISIBLE),
-            PropertyFactory.textColor(if (dark) "#e8eaed" else "#202124"),
-        )
+        ids.forEach {
+            (style.getLayer(it) as? SymbolLayer)?.setProperties(
+                PropertyFactory.visibility(Property.VISIBLE),
+                PropertyFactory.textColor(if (dark) "#e8eaed" else "#202124"),
+            )
+        }
     }
 }
 
 private fun ensureTraffic(style: Style, on: Boolean) {
-    val present = style.getLayer(TRAFFIC_LAYER) != null
-    if (on && !present) {
-        if (style.getSource(TRAFFIC_SRC) == null) {
-            style.addSource(RasterSource(TRAFFIC_SRC, TileSet("2.2.0", TRAFFIC_TILES), 256))
+    if (!style.isFullyLoaded) return
+    runCatching {
+        val present = style.getLayer(TRAFFIC_LAYER) != null
+        if (on && !present) {
+            if (style.getSource(TRAFFIC_SRC) == null) {
+                style.addSource(RasterSource(TRAFFIC_SRC, TileSet("2.2.0", TRAFFIC_TILES), 256))
+            }
+            val layer = RasterLayer(TRAFFIC_LAYER, TRAFFIC_SRC).withProperties(
+                // Subdue it: it's a browse-only overlay now (nav uses the per-segment route
+                // line), and Google's baked tiles paint free-flow green everywhere — at
+                // full opacity that buries the basemap and reads as noise. ~0.6 keeps the
+                // red/amber congestion legible while the green recedes.
+                PropertyFactory.rasterOpacity(0.6f),
+                // Google's tiles expire while you drive, and a replaced tile used to pop: the old one
+                // vanished and the new one appeared on the next frame, which reads as the whole
+                // congestion layer flickering (user 2026-09-18). MapLibre cross-fades a tile over its
+                // predecessor for this long; the default 300 ms is still a blink on a full-screen
+                // overlay, and traffic has no detail that a slower fade can smear.
+                PropertyFactory.rasterFadeDuration(900f),
+            )
+            // Below the labels, ABOVE the buildings. "Below the first symbol layer" used to put it
+            // under Liberty's building fills: the first symbol is the one-way arrow, which sits
+            // before `building` / `building-3d` in the style, so at street zoom the gray footprints
+            // (and the 3D extrusions) painted over the congestion colors (issue #521). Anchoring on
+            // the topmost building layer keeps POI icons and labels on top and the buildings under.
+            // With satellite on, anchor above the imagery instead - the raster otherwise buries the
+            // traffic tiles entirely.
+            val satTop = style.getLayer(SAT_ROADS_LAYER) ?: style.getLayer(SAT_LAYER)
+            val buildingTop = style.getLayer("building-3d") ?: style.getLayer("building")
+            val firstSymbol = style.layers.firstOrNull { it is SymbolLayer }?.id
+            when {
+                satTop != null -> style.addLayerAbove(layer, satTop.id)
+                buildingTop != null -> style.addLayerAbove(layer, buildingTop.id)
+                firstSymbol != null -> style.addLayerBelow(layer, firstSymbol)
+                else -> style.addLayer(layer)
+            }
+        } else if (!on && present) {
+            style.removeLayer(TRAFFIC_LAYER)
+            style.getSource(TRAFFIC_SRC)?.let { runCatching { style.removeSource(it) } }
         }
-        val layer = RasterLayer(TRAFFIC_LAYER, TRAFFIC_SRC).withProperties(
-            // Subdue it: it's a browse-only overlay now (nav uses the per-segment route
-            // line), and Google's baked tiles paint free-flow green everywhere — at
-            // full opacity that buries the basemap and reads as noise. ~0.6 keeps the
-            // red/amber congestion legible while the green recedes.
-            PropertyFactory.rasterOpacity(0.6f),
-            // Google's tiles expire while you drive, and a replaced tile used to pop: the old one
-            // vanished and the new one appeared on the next frame, which reads as the whole
-            // congestion layer flickering (user 2026-09-18). MapLibre cross-fades a tile over its
-            // predecessor for this long; the default 300 ms is still a blink on a full-screen
-            // overlay, and traffic has no detail that a slower fade can smear.
-            PropertyFactory.rasterFadeDuration(900f),
-        )
-        // Below the labels, ABOVE the buildings. "Below the first symbol layer" used to put it
-        // under Liberty's building fills: the first symbol is the one-way arrow, which sits
-        // before `building` / `building-3d` in the style, so at street zoom the gray footprints
-        // (and the 3D extrusions) painted over the congestion colors (issue #521). Anchoring on
-        // the topmost building layer keeps POI icons and labels on top and the buildings under.
-        // With satellite on, anchor above the imagery instead - the raster otherwise buries the
-        // traffic tiles entirely.
-        val satTop = style.getLayer(SAT_ROADS_LAYER) ?: style.getLayer(SAT_LAYER)
-        val buildingTop = style.getLayer("building-3d") ?: style.getLayer("building")
-        val firstSymbol = style.layers.firstOrNull { it is SymbolLayer }?.id
-        when {
-            satTop != null -> style.addLayerAbove(layer, satTop.id)
-            buildingTop != null -> style.addLayerAbove(layer, buildingTop.id)
-            firstSymbol != null -> style.addLayerBelow(layer, firstSymbol)
-            else -> style.addLayer(layer)
-        }
-    } else if (!on && present) {
-        style.removeLayer(TRAFFIC_LAYER)
-        style.getSource(TRAFFIC_SRC)?.let { runCatching { style.removeSource(it) } }
     }
 }
 
@@ -5673,49 +5703,52 @@ private fun ensureTraffic(style: Style, on: Boolean) {
  *  symbol layer so station/road labels stay on top. No-op if the basemap isn't OpenMapTiles (e.g. a
  *  MapTiler variant whose source id differs, or the demo style); removed cleanly when off. */
 private fun ensureTransit(style: Style, on: Boolean) {
-    val present = style.getLayer(TRANSIT_LAYER) != null
-    if (on && !present) {
-        val basemapSource = basemapSrc(style) ?: return
-        val layer = LineLayer(TRANSIT_LAYER, basemapSource).apply {
-            setSourceLayer("transportation")
-            // class = "rail" (heavy rail) or "transit" (subway / light_rail / tram / monorail).
-            setFilter(
-                Expression.any(
-                    Expression.eq(Expression.get("class"), Expression.literal("rail")),
-                    Expression.eq(Expression.get("class"), Expression.literal("transit")),
-                ),
-            )
-            setProperties(
-                // Subways/trams a brighter teal, heavy rail a purple — both read on light AND dark maps.
-                PropertyFactory.lineColor(
-                    Expression.match(
-                        Expression.get("class"),
-                        Expression.literal("transit"), Expression.literal(TRANSIT_SUBWAY),
-                        Expression.literal(TRANSIT_RAIL),
+    if (!style.isFullyLoaded) return
+    runCatching {
+        val present = style.getLayer(TRANSIT_LAYER) != null
+        if (on && !present) {
+            val basemapSource = basemapSrc(style) ?: return
+            val layer = LineLayer(TRANSIT_LAYER, basemapSource).apply {
+                setSourceLayer("transportation")
+                // class = "rail" (heavy rail) or "transit" (subway / light_rail / tram / monorail).
+                setFilter(
+                    Expression.any(
+                        Expression.eq(Expression.get("class"), Expression.literal("rail")),
+                        Expression.eq(Expression.get("class"), Expression.literal("transit")),
                     ),
-                ),
-                PropertyFactory.lineWidth(
-                    Expression.interpolate(
-                        Expression.linear(), Expression.zoom(),
-                        Expression.stop(8, 1.0f), Expression.stop(13, 2.4f), Expression.stop(16, 4.2f),
+                )
+                setProperties(
+                    // Subways/trams a brighter teal, heavy rail a purple — both read on light AND dark maps.
+                    PropertyFactory.lineColor(
+                        Expression.match(
+                            Expression.get("class"),
+                            Expression.literal("transit"), Expression.literal(TRANSIT_SUBWAY),
+                            Expression.literal(TRANSIT_RAIL),
+                        ),
                     ),
-                ),
-                PropertyFactory.lineOpacity(0.9f),
-                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
-                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
-            )
+                    PropertyFactory.lineWidth(
+                        Expression.interpolate(
+                            Expression.linear(), Expression.zoom(),
+                            Expression.stop(8, 1.0f), Expression.stop(13, 2.4f), Expression.stop(16, 4.2f),
+                        ),
+                    ),
+                    PropertyFactory.lineOpacity(0.9f),
+                    PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                )
+            }
+            // Above the satellite raster when imagery is on (the raster otherwise buries this -
+            // same anchor bug the building overlay had); below the labels either way.
+            val satTop = style.getLayer(SAT_ROADS_LAYER) ?: style.getLayer(SAT_LAYER)
+            val firstSymbol = style.layers.firstOrNull { it is SymbolLayer }?.id
+            when {
+                satTop != null -> style.addLayerAbove(layer, satTop.id)
+                firstSymbol != null -> style.addLayerBelow(layer, firstSymbol)
+                else -> style.addLayer(layer)
+            }
+        } else if (!on && present) {
+            runCatching { style.removeLayer(TRANSIT_LAYER) }
         }
-        // Above the satellite raster when imagery is on (the raster otherwise buries this -
-        // same anchor bug the building overlay had); below the labels either way.
-        val satTop = style.getLayer(SAT_ROADS_LAYER) ?: style.getLayer(SAT_LAYER)
-        val firstSymbol = style.layers.firstOrNull { it is SymbolLayer }?.id
-        when {
-            satTop != null -> style.addLayerAbove(layer, satTop.id)
-            firstSymbol != null -> style.addLayerBelow(layer, firstSymbol)
-            else -> style.addLayer(layer)
-        }
-    } else if (!on && present) {
-        runCatching { style.removeLayer(TRANSIT_LAYER) }
     }
 }
 
@@ -5740,40 +5773,43 @@ private const val SAT_DEEP_MIN_ZOOM = 18.6f // = the cross-fade's first stop; be
  *  coverage tears the stale source down instead of stretching its old cap. Idempotent like
  *  [ensureSatellite]; `deep == 0` (or satellite off) removes everything. */
 private fun ensureSatelliteDeep(style: Style, on: Boolean, deep: Int) {
-    val wantId = when {
-        !on || deep == 0 -> null
-        deep == -1 -> "$SAT_DEEP_SRC-g"
-        else -> "$SAT_DEEP_SRC-esri-$deep"
-    }
-    val current = style.getLayer(SAT_DEEP_LAYER)
-    val currentSrc = style.sources.firstOrNull { it.id.startsWith(SAT_DEEP_SRC) }?.id
-    if (currentSrc == wantId && (current != null) == (wantId != null)) return
-    if (current != null) style.removeLayer(current)
-    style.sources.filter { it.id.startsWith(SAT_DEEP_SRC) }.forEach { runCatching { style.removeSource(it) } }
-    if (wantId == null) return
-    val base = style.getLayer(SAT_LAYER) ?: return // base imagery must exist to sit on
-    val tiles = if (deep == -1) SAT_G_TILES else SAT_TILES
-    val max = if (deep == -1) 21f else deep.toFloat()
-    style.addSource(RasterSource(wantId, TileSet("2.2.0", tiles).apply { maxZoom = max }, 256))
-    val layer = RasterLayer(SAT_DEEP_LAYER, wantId).withProperties(
-        // Same dim + desaturate as the base imagery so labels stay readable (see ensureSatellite).
-        PropertyFactory.rasterBrightnessMax(0.80f),
-        PropertyFactory.rasterSaturation(-0.1f),
-        // CROSS-FADE the deep tiles in over ~a zoom level instead of popping: Esri's z20+ metro
-        // tiles come from a DIFFERENT capture program (newer aerials) than the z17-19 satellite
-        // mosaic, so the handover is an era/lighting flip in the data itself - Google's app has
-        // the same seam and hides it exactly this way. Below the fade the base (era A) shows
-        // through; by z19.6 the deep capture (era B) fully owns the view.
-        PropertyFactory.rasterOpacity(
-            Expression.interpolate(
-                Expression.linear(), Expression.zoom(),
-                Expression.stop(18.6f, 0f),
-                Expression.stop(19.6f, 1f),
+    if (!style.isFullyLoaded) return
+    runCatching {
+        val wantId = when {
+            !on || deep == 0 -> null
+            deep == -1 -> "$SAT_DEEP_SRC-g"
+            else -> "$SAT_DEEP_SRC-esri-$deep"
+        }
+        val current = style.getLayer(SAT_DEEP_LAYER)
+        val currentSrc = style.sources.firstOrNull { it.id.startsWith(SAT_DEEP_SRC) }?.id
+        if (currentSrc == wantId && (current != null) == (wantId != null)) return
+        if (current != null) style.removeLayer(current)
+        style.sources.filter { it.id.startsWith(SAT_DEEP_SRC) }.forEach { runCatching { style.removeSource(it) } }
+        if (wantId == null) return
+        val base = style.getLayer(SAT_LAYER) ?: return // base imagery must exist to sit on
+        val tiles = if (deep == -1) SAT_G_TILES else SAT_TILES
+        val max = if (deep == -1) 21f else deep.toFloat()
+        style.addSource(RasterSource(wantId, TileSet("2.2.0", tiles).apply { maxZoom = max }, 256))
+        val layer = RasterLayer(SAT_DEEP_LAYER, wantId).withProperties(
+            // Same dim + desaturate as the base imagery so labels stay readable (see ensureSatellite).
+            PropertyFactory.rasterBrightnessMax(0.80f),
+            PropertyFactory.rasterSaturation(-0.1f),
+            // CROSS-FADE the deep tiles in over ~a zoom level instead of popping: Esri's z20+ metro
+            // tiles come from a DIFFERENT capture program (newer aerials) than the z17-19 satellite
+            // mosaic, so the handover is an era/lighting flip in the data itself - Google's app has
+            // the same seam and hides it exactly this way. Below the fade the base (era A) shows
+            // through; by z19.6 the deep capture (era B) fully owns the view.
+            PropertyFactory.rasterOpacity(
+                Expression.interpolate(
+                    Expression.linear(), Expression.zoom(),
+                    Expression.stop(18.6f, 0f),
+                    Expression.stop(19.6f, 1f),
+                ),
             ),
-        ),
-    )
-    layer.minZoom = SAT_DEEP_MIN_ZOOM
-    style.addLayerAbove(layer, base.id)
+        )
+        layer.minZoom = SAT_DEEP_MIN_ZOOM
+        style.addLayerAbove(layer, base.id)
+    }
 }
 
 /** Satellite imagery under the SYMBOL stack: the raster covers the vector fills and road lines,
@@ -5821,13 +5857,15 @@ private fun transitLegCoords(itin: app.vela.core.model.TransitItinerary?, leg: I
  * above roads and the satellite raster, below every label.
  */
 private fun ensureTransitPreview(style: Style, itin: app.vela.core.model.TransitItinerary?) {
-    if (itin == null) {
-        runCatching { style.removeLayer(TRANSIT_PREV_STOPS_LAYER) }
-        runCatching { style.removeLayer(TRANSIT_PREV_RIDE_LAYER) }
-        runCatching { style.removeLayer(TRANSIT_PREV_WALK_LAYER) }
-        runCatching { style.removeSource(TRANSIT_PREV_SRC) }
-        return
-    }
+    if (!style.isFullyLoaded) return
+    runCatching {
+        if (itin == null) {
+            runCatching { style.removeLayer(TRANSIT_PREV_STOPS_LAYER) }
+            runCatching { style.removeLayer(TRANSIT_PREV_RIDE_LAYER) }
+            runCatching { style.removeLayer(TRANSIT_PREV_WALK_LAYER) }
+            runCatching { style.removeSource(TRANSIT_PREV_SRC) }
+            return
+        }
     val feats = mutableListOf<Feature>()
     // Chains leg endpoints: a walk leg missing walkFrom (rare) starts from wherever the previous
     // leg ended instead of dropping the link.
@@ -5907,91 +5945,95 @@ private fun ensureTransitPreview(style: Style, itin: app.vela.core.model.Transit
         )
     }
     style.addLayerBelow(stops, ROUTE_LAYER)
+    }
 }
 
 private fun ensureSatellite(style: Style, on: Boolean) {
-    val present = style.getLayer(SAT_LAYER) != null
-    if (on && !present) {
-        if (style.getSource(SAT_SRC) == null) {
-            style.addSource(RasterSource(SAT_SRC, TileSet("2.2.0", SAT_TILES).apply { maxZoom = 19f }, 256))
-        }
-        val layer = RasterLayer(SAT_LAYER, SAT_SRC).withProperties(
-            // Dim + desaturate a touch so the white-halo labels stay readable over bright
-            // roofs/concrete (Google's hybrid does the same; full-brightness imagery drowned
-            // street names, user 2026-07-13).
-            PropertyFactory.rasterBrightnessMax(0.80f),
-            PropertyFactory.rasterSaturation(-0.1f),
-        )
-        // Anchor ABOVE the building stack: that's where the basemap's geometry ends and its
-        // labels begin. "Below the first symbol layer" was wrong - Liberty interleaves a low
-        // symbol layer beneath the road/building fills, so the raster sank under half the
-        // geometry and blue footprints + roads drew on top of the photo (user 2026-07-13).
-        val geomTop = style.getLayer("building-3d") ?: style.getLayer("building")
-        when {
-            geomTop != null -> style.addLayerAbove(layer, geomTop.id)
-            else -> style.layers.lastOrNull { it !is SymbolLayer }?.let { style.addLayerAbove(layer, it.id) }
-                ?: style.addLayer(layer)
-        }
-        // Ghost roads over the photo (Google hybrid does this): a single translucent white line
-        // layer from the basemap's transportation source, above the raster, below the labels -
-        // without it the road network disappears into tree cover and the map stops being
-        // navigable as a map (user 2026-07-13).
-        // Re-seat the overlay lines above the fresh raster: they were anchored for the vector
-        // map and the raster would bury them (transit lines vanished under imagery, user
-        // 2026-07-13). Removing here lets this same pass's ensureTraffic/ensureTransit re-add
-        // them with the satellite-aware anchor.
-        runCatching { style.removeLayer(TRANSIT_LAYER) }
-        runCatching { style.removeLayer(TRAFFIC_LAYER) }
-        if (style.getLayer(SAT_ROADS_LAYER) == null && basemapSrc(style) != null) {
-            val roads = LineLayer(SAT_ROADS_LAYER, basemapSrc(style) ?: "openmaptiles").apply {
-                setSourceLayer("transportation")
-                setProperties(
-                    // Freeways read YELLOW like the Google app's hybrid layer; everything else
-                    // stays the translucent white (user 2026-07-13).
-                    PropertyFactory.lineColor(
-                        Expression.match(
-                            Expression.get("class"),
-                            Expression.literal("motorway"), Expression.literal("#F7DD7C"),
-                            Expression.literal("trunk"), Expression.literal("#F7DD7C"),
-                            Expression.literal("#FFFFFF"),
-                        ),
-                    ),
-                    PropertyFactory.lineOpacity(
-                        Expression.match(
-                            Expression.get("class"),
-                            Expression.literal("motorway"), Expression.literal(0.55f),
-                            Expression.literal("trunk"), Expression.literal(0.50f),
-                            Expression.literal(0.38f),
-                        ),
-                    ),
-                    PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
-                    PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
-                    PropertyFactory.lineWidth(
-                        Expression.interpolate(
-                            Expression.exponential(1.5f), Expression.zoom(),
-                            Expression.stop(8, Expression.match(
-                                Expression.get("class"),
-                                Expression.literal("motorway"), Expression.literal(1.6f),
-                                Expression.literal("trunk"), Expression.literal(1.4f),
-                                Expression.literal(0.6f),
-                            )),
-                            Expression.stop(18, Expression.match(
-                                Expression.get("class"),
-                                Expression.literal("motorway"), Expression.literal(14f),
-                                Expression.literal("trunk"), Expression.literal(12f),
-                                Expression.literal("primary"), Expression.literal(10f),
-                                Expression.literal(7f),
-                            )),
-                        ),
-                    ),
-                )
+    if (!style.isFullyLoaded) return
+    runCatching {
+        val present = style.getLayer(SAT_LAYER) != null
+        if (on && !present) {
+            if (style.getSource(SAT_SRC) == null) {
+                style.addSource(RasterSource(SAT_SRC, TileSet("2.2.0", SAT_TILES).apply { maxZoom = 19f }, 256))
             }
-            style.addLayerAbove(roads, SAT_LAYER)
+            val layer = RasterLayer(SAT_LAYER, SAT_SRC).withProperties(
+                // Dim + desaturate a touch so the white-halo labels stay readable over bright
+                // roofs/concrete (Google's hybrid does the same; full-brightness imagery drowned
+                // street names, user 2026-07-13).
+                PropertyFactory.rasterBrightnessMax(0.80f),
+                PropertyFactory.rasterSaturation(-0.1f),
+            )
+            // Anchor ABOVE the building stack: that's where the basemap's geometry ends and its
+            // labels begin. "Below the first symbol layer" was wrong - Liberty interleaves a low
+            // symbol layer beneath the road/building fills, so the raster sank under half the
+            // geometry and blue footprints + roads drew on top of the photo (user 2026-07-13).
+            val geomTop = style.getLayer("building-3d") ?: style.getLayer("building")
+            when {
+                geomTop != null -> style.addLayerAbove(layer, geomTop.id)
+                else -> style.layers.lastOrNull { it !is SymbolLayer }?.let { style.addLayerAbove(layer, it.id) }
+                    ?: style.addLayer(layer)
+            }
+            // Ghost roads over the photo (Google hybrid does this): a single translucent white line
+            // layer from the basemap's transportation source, above the raster, below the labels -
+            // without it the road network disappears into tree cover and the map stops being
+            // navigable as a map (user 2026-07-13).
+            // Re-seat the overlay lines above the fresh raster: they were anchored for the vector
+            // map and the raster would bury them (transit lines vanished under imagery, user
+            // 2026-07-13). Removing here lets this same pass's ensureTraffic/ensureTransit re-add
+            // them with the satellite-aware anchor.
+            runCatching { style.removeLayer(TRANSIT_LAYER) }
+            runCatching { style.removeLayer(TRAFFIC_LAYER) }
+            if (style.getLayer(SAT_ROADS_LAYER) == null && basemapSrc(style) != null) {
+                val roads = LineLayer(SAT_ROADS_LAYER, basemapSrc(style) ?: "openmaptiles").apply {
+                    setSourceLayer("transportation")
+                    setProperties(
+                        // Freeways read YELLOW like the Google app's hybrid layer; everything else
+                        // stays the translucent white (user 2026-07-13).
+                        PropertyFactory.lineColor(
+                            Expression.match(
+                                Expression.get("class"),
+                                Expression.literal("motorway"), Expression.literal("#F7DD7C"),
+                                Expression.literal("trunk"), Expression.literal("#F7DD7C"),
+                                Expression.literal("#FFFFFF"),
+                            ),
+                        ),
+                        PropertyFactory.lineOpacity(
+                            Expression.match(
+                                Expression.get("class"),
+                                Expression.literal("motorway"), Expression.literal(0.55f),
+                                Expression.literal("trunk"), Expression.literal(0.50f),
+                                Expression.literal(0.38f),
+                            ),
+                        ),
+                        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                        PropertyFactory.lineWidth(
+                            Expression.interpolate(
+                                Expression.exponential(1.5f), Expression.zoom(),
+                                Expression.stop(8, Expression.match(
+                                    Expression.get("class"),
+                                    Expression.literal("motorway"), Expression.literal(1.6f),
+                                    Expression.literal("trunk"), Expression.literal(1.4f),
+                                    Expression.literal(0.6f),
+                                )),
+                                Expression.stop(18, Expression.match(
+                                    Expression.get("class"),
+                                    Expression.literal("motorway"), Expression.literal(14f),
+                                    Expression.literal("trunk"), Expression.literal(12f),
+                                    Expression.literal("primary"), Expression.literal(10f),
+                                    Expression.literal(7f),
+                                )),
+                            ),
+                        ),
+                    )
+                }
+                style.addLayerAbove(roads, SAT_LAYER)
+            }
+        } else if (!on && present) {
+            runCatching { style.removeLayer(SAT_LAYER) }
+            runCatching { style.removeLayer(SAT_ROADS_LAYER) }
+            runCatching { ensureSatelliteDeep(style, false, 0) } // deep imagery rides the base layer off
         }
-    } else if (!on && present) {
-        runCatching { style.removeLayer(SAT_LAYER) }
-        runCatching { style.removeLayer(SAT_ROADS_LAYER) }
-        runCatching { ensureSatelliteDeep(style, false, 0) } // deep imagery rides the base layer off
     }
 }
 
@@ -6005,7 +6047,9 @@ private fun ensureSatellite(style: Style, on: Boolean) {
  * sits INSIDE a shield icon and white-on-white would erase the route number.
  */
 private fun applySatelliteLabels(style: Style) {
-    style.layers.forEach { layer ->
+    if (!style.isFullyLoaded) return
+    runCatching {
+        style.layers.forEach { layer ->
         if (layer !is SymbolLayer) return@forEach
         if (layer.id.contains("shield")) return@forEach
         layer.setProperties(
@@ -6014,12 +6058,16 @@ private fun applySatelliteLabels(style: Style) {
             PropertyFactory.textHaloWidth(1.8f),
         )
     }
+    }
 }
 
 /** Route shields: Google-style bitmaps over the sprite's outline-only ones plus text-fit on the
  *  three shield layers, see [RoadShields]. Runs after the theme pass on every style (re)load. */
 private fun emphasizeShields(context: android.content.Context, style: Style) {
-    RoadShields.install(style, context.resources.displayMetrics.density, basemapSrc(style))
+    if (!style.isFullyLoaded) return
+    runCatching {
+        RoadShields.install(style, context.resources.displayMetrics.density, basemapSrc(style))
+    }
 }
 
 /**
@@ -7003,9 +7051,12 @@ private fun pointAtMeters(poly: List<LatLng>, cum: DoubleArray, meters: Double):
 
 /** Push a single point + heading into the location source (the puck/dot reads `bearing`). */
 private fun setMeSource(style: Style, p: LatLng, bearing: Float) {
-    style.getSourceAs<GeoJsonSource>(ME_SRC)?.setGeoJson(
-        Feature.fromGeometry(Point.fromLngLat(p.lng, p.lat)).apply { addNumberProperty("bearing", bearing) },
-    )
+    if (!style.isFullyLoaded) return
+    runCatching {
+        style.getSourceAs<GeoJsonSource>(ME_SRC)?.setGeoJson(
+            Feature.fromGeometry(Point.fromLngLat(p.lng, p.lat)).apply { addNumberProperty("bearing", bearing) },
+        )
+    }
 }
 
 /** A 64-point geodesic circle polygon of [radiusM] meters around [center] - the accuracy halo's
@@ -7172,6 +7223,8 @@ private fun applyData(
     poisEnabled: Boolean = true,
     svPose: DoubleArray? = null, // Street View pose [lat, lng, compassYawDeg]; null = viewer closed
 ) {
+    if (!style.isFullyLoaded) return
+    runCatching {
     // Accuracy halo: shown only for a vague fix (see ACCURACY_HALO_MIN_M) and never during nav,
     // where the puck snaps to the road anyway. Identity-gated like everything else here.
     val wantAcc = if (!navMode && me != null && meAccuracyM != null && meAccuracyM > ACCURACY_HALO_MIN_M) meAccuracyM else null
@@ -7657,6 +7710,7 @@ private fun applyData(
         style.getSourceAs<GeoJsonSource>(PREVIEW_SRC)?.setGeoJson(previewFc)
         lastAppliedPreview = preview
         previewApplied = true
+    }
     }
 }
 

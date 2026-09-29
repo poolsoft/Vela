@@ -19,9 +19,17 @@ interface StyleLayers {
 }
 
 class StyleHost(private val style: Style) : StyleLayers {
-    override fun getLayer(id: String): Layer? = style.getLayer(id)
-    override fun getSource(id: String): Source? = style.getSource(id)
-    override val layers: List<Layer> get() = style.layers
+    override fun getLayer(id: String): Layer? = runCatching {
+        if (style.isFullyLoaded) style.getLayer(id) else null
+    }.getOrNull()
+
+    override fun getSource(id: String): Source? = runCatching {
+        if (style.isFullyLoaded) style.getSource(id) else null
+    }.getOrNull()
+
+    override val layers: List<Layer> get() = runCatching {
+        if (style.isFullyLoaded) style.layers else emptyList()
+    }.getOrDefault(emptyList())
 }
 
 /** A snapshotter exposes layers and sources by id only; the loops over the whole list (Vela's own
