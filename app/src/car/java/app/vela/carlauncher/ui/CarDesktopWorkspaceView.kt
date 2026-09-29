@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -112,11 +113,24 @@ fun CarDesktopWorkspaceView(
     val widgets by widgetManager.widgetsFlow.collectAsState()
     val scope = rememberCoroutineScope()
 
+    // ═══════════════════════════════════════════════════════════════
+    // PERFORMANS VE LAZY YUKLEME: MASAUSTU ACIKSA YUKLENSIN, DEGILSE DURDURULSUN
+    // ═══════════════════════════════════════════════════════════════
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        widgetManager.startListening()
+        onDispose {
+            widgetManager.stopListening()
+        }
+    }
+
     val pageCount = widgetManager.getPageCount()
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { pageCount })
 
     var isEditMode by remember { mutableStateOf(false) }
     var showWidgetPicker by remember { mutableStateOf(false) }
+    var showWallpaperDialog by remember { mutableStateOf(false) }
+    var selectedWidgetForAction by remember { mutableStateOf<BaseWidget?>(null) }
+    var widgetToReplace by remember { mutableStateOf<BaseWidget?>(null) }
 
     var saatMetni by remember { mutableStateOf("12:00") }
     var tarihMetni by remember { mutableStateOf("") }
@@ -156,8 +170,8 @@ fun CarDesktopWorkspaceView(
             .pointerInput(Unit) {
                 detectTapGestures(
                     onLongPress = { 
-                        // Masaustu bos alana uzun basildiginda dogrudan Widget Secici acilir
-                        showWidgetPicker = true 
+                        // Masaustu bos alana uzun basildiginda Duvar Kagidi ve Masaustu Secenekleri acilir
+                        showWallpaperDialog = true 
                     },
                     onTap = { 
                         if (isEditMode) isEditMode = false 
@@ -188,6 +202,9 @@ fun CarDesktopWorkspaceView(
                 onOnceki = onOnceki,
                 onLaunchApp = onLaunchApp,
                 onEnterEditMode = { isEditMode = true },
+                onWidgetLongClick = { targetWidget ->
+                    selectedWidgetForAction = targetWidget
+                },
                 onDeleteWidget = { widgetId -> widgetManager.removeWidget(widgetId) },
                 onMoveWidget = { id, cellX, cellY ->
                     val w = pageWidgets.find { it.id == id }
@@ -243,13 +260,50 @@ fun CarDesktopWorkspaceView(
             }
         }
 
-        // Widget Secici Kutuphanesi Dialogu
+        // ═══════════════════════════════════════════════════════════════
+        // DIALOGLAR: WIDGET KUTUPHANESI, DUVAR KAGIDI VE WIDGET AKSIYON MENUSU
+        // ═══════════════════════════════════════════════════════════════
+        // 1. Masaustu Secenekleri ve Duvar Kagidi Dialogu
+        if (showWallpaperDialog) {
+            WorkspaceWallpaperDialog(
+                onDismiss = { showWallpaperDialog = false },
+                onOpenWidgetPicker = { showWidgetPicker = true }
+            )
+        }
+
+        // 2. Widget Uzerine Basili Tutulunca Acilan Aksiyon Menusu (Duzenle, Degistir, Kaldir)
+        if (selectedWidgetForAction != null) {
+            WidgetActionMenuDialog(
+                widget = selectedWidgetForAction!!,
+                onDismiss = { selectedWidgetForAction = null },
+                onOpenChangePicker = {
+                    widgetToReplace = selectedWidgetForAction
+                    selectedWidgetForAction = null
+                    showWidgetPicker = true
+                },
+                onEnterResizeMode = {
+                    selectedWidgetForAction = null
+                    isEditMode = true
+                },
+                onDeleteWidget = {
+                    selectedWidgetForAction?.let { widgetManager.removeWidget(it.id) }
+                    selectedWidgetForAction = null
+                }
+            )
+        }
+
+        // 3. Widget Secici Kutuphanesi Dialogu (Ekleme veya Degistirme)
         if (showWidgetPicker) {
             WidgetPickerDialogView(
                 activePageIndex = pagerState.currentPage,
-                onDismiss = { showWidgetPicker = false },
+                widgetToReplace = widgetToReplace,
+                onDismiss = { 
+                    showWidgetPicker = false 
+                    widgetToReplace = null
+                },
                 onWidgetAdded = {
                     showWidgetPicker = false
+                    widgetToReplace = null
                 }
             )
         }
@@ -273,6 +327,7 @@ fun WorkspaceCellPageLayout(
     onOnceki: () -> Unit,
     onLaunchApp: (String) -> Unit,
     onEnterEditMode: () -> Unit,
+    onWidgetLongClick: (BaseWidget) -> Unit,
     onDeleteWidget: (String) -> Unit,
     onMoveWidget: (String, Int, Int) -> Unit,
     onResizeWidget: (String, Int, Int) -> Unit
@@ -287,6 +342,12 @@ fun WorkspaceCellPageLayout(
     var dragCellX by remember { mutableIntStateOf(-1) }
     var dragCellY by remember { mutableIntStateOf(-1) }
     var isDragValid by remember { mutableStateOf(false) }
+
+    var resizingWidgetId by remember { mutableStateOf<String?>(null) }
+    var liveResizeSpanX by remember { mutableIntStateOf(1) }
+    var liveResizeSpanY by remember { mutableIntStateOf(1) }
+    var resizeDragX by remember { mutableFloatStateOf(0f) }
+    var resizeDragY by remember { mutableFloatStateOf(0f) }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -336,17 +397,40 @@ fun WorkspaceCellPageLayout(
                         )
                     }
                 }
+
+                // Canli Boyutlandirma Hedef Alan Maskesi (Mavi)
+                if (resizingWidgetId != null) {
+                    val resWidget = widgets.find { it.id == resizingWidgetId }
+                    if (resWidget != null) {
+                        val targetLeft = resWidget.cellX * (cellWidthPx + spacingPx)
+                        val targetTop = resWidget.cellY * (cellHeightPx + spacingPx)
+                        val targetWidth = liveResizeSpanX * cellWidthPx + (liveResizeSpanX - 1) * spacingPx
+                        val targetHeight = liveResizeSpanY * cellHeightPx + (liveResizeSpanY - 1) * spacingPx
+
+                        drawRoundRect(
+                            color = Color(0x550A84FF),
+                            topLeft = Offset(targetLeft, targetTop),
+                            size = Size(targetWidth, targetHeight),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(10.dp.toPx(), 10.dp.toPx()),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                        )
+                    }
+                }
             }
         }
 
         // 2. Widget Elemanlari
         widgets.forEach { widget ->
             val isCurrentDragging = draggingWidgetId == widget.id
+            val isCurrentResizing = resizingWidgetId == widget.id
 
             val safeCellX = widget.cellX.coerceIn(0, colCount - 1)
             val safeCellY = widget.cellY.coerceIn(0, rowCount - 1)
-            val safeSpanX = widget.spanX.coerceIn(1, colCount - safeCellX)
-            val safeSpanY = widget.spanY.coerceIn(1, rowCount - safeCellY)
+            val currentSpanX = if (isCurrentResizing) liveResizeSpanX else widget.spanX
+            val currentSpanY = if (isCurrentResizing) liveResizeSpanY else widget.spanY
+
+            val safeSpanX = currentSpanX.coerceIn(1, colCount - safeCellX)
+            val safeSpanY = currentSpanY.coerceIn(1, rowCount - safeCellY)
 
             val leftPx = safeCellX * (cellWidthPx + spacingPx)
             val topPx = safeCellY * (cellHeightPx + spacingPx)
@@ -378,7 +462,7 @@ fun WorkspaceCellPageLayout(
                 modifier = Modifier
                     .offset(x = leftDp, y = topDp)
                     .size(width = widthDp, height = heightDp)
-                    .zIndex(if (isCurrentDragging) 20f else 1f)
+                    .zIndex(if (isCurrentDragging || isCurrentResizing) 30f else 1f)
                     .graphicsLayer {
                         if (isCurrentDragging) {
                             translationX = liveDragOffset.x
@@ -393,7 +477,7 @@ fun WorkspaceCellPageLayout(
                     .pointerInput(widget.id, isEditMode) {
                         detectDragGestures(
                             onDragStart = {
-                                if (isEditMode) {
+                                if (isEditMode && resizingWidgetId == null) {
                                     draggingWidgetId = widget.id
                                     liveDragOffset = Offset.Zero
                                     dragCellX = widget.cellX
@@ -417,37 +501,42 @@ fun WorkspaceCellPageLayout(
                                 dragCellY = -1
                             },
                             onDrag = { change, dragAmount ->
-                                change.consume()
-                                liveDragOffset += dragAmount
+                                if (resizingWidgetId == null) {
+                                    change.consume()
+                                    liveDragOffset += dragAmount
 
-                                val absoluteX = leftPx + liveDragOffset.x + (widthPx / 2f)
-                                val absoluteY = topPx + liveDragOffset.y + (heightPx / 2f)
+                                    val absoluteX = leftPx + liveDragOffset.x + (widthPx / 2f)
+                                    val absoluteY = topPx + liveDragOffset.y + (heightPx / 2f)
 
-                                val targetCol = ((absoluteX - (widthPx / 2f)) / (cellWidthPx + spacingPx))
-                                    .roundToInt()
-                                    .coerceIn(0, colCount - widget.spanX)
-                                val targetRow = ((absoluteY - (heightPx / 2f)) / (cellHeightPx + spacingPx))
-                                    .roundToInt()
-                                    .coerceIn(0, rowCount - widget.spanY)
+                                    val targetCol = ((absoluteX - (widthPx / 2f)) / (cellWidthPx + spacingPx))
+                                        .roundToInt()
+                                        .coerceIn(0, colCount - widget.spanX)
+                                    val targetRow = ((absoluteY - (heightPx / 2f)) / (cellHeightPx + spacingPx))
+                                        .roundToInt()
+                                        .coerceIn(0, rowCount - widget.spanY)
 
-                                dragCellX = targetCol
-                                dragCellY = targetRow
+                                    dragCellX = targetCol
+                                    dragCellY = targetRow
 
-                                val wm = WidgetManager.getInstance(context)
-                                isDragValid = wm.isRegionVacant(
-                                    pageIndex = pageIndex,
-                                    cellX = targetCol,
-                                    cellY = targetRow,
-                                    spanX = widget.spanX,
-                                    spanY = widget.spanY,
-                                    ignoreWidgetId = widget.id
-                                )
+                                    val wm = WidgetManager.getInstance(context)
+                                    isDragValid = wm.isRegionVacant(
+                                        pageIndex = pageIndex,
+                                        cellX = targetCol,
+                                        cellY = targetRow,
+                                        spanX = widget.spanX,
+                                        spanY = widget.spanY,
+                                        ignoreWidgetId = widget.id
+                                    )
+                                }
                             }
                         )
                     }
                     .pointerInput(widget.id) {
                         detectTapGestures(
-                            onLongPress = { onEnterEditMode() },
+                            onLongPress = { 
+                                // Widget uzerine uzun basildiginda Aksiyon Menusu acilir
+                                onWidgetLongClick(widget) 
+                            },
                             onTap = {
                                 if (!isEditMode && widget.typeId == "shortcut" && widget.packageName != null) {
                                     onLaunchApp(widget.packageName!!)
@@ -456,15 +545,19 @@ fun WorkspaceCellPageLayout(
                         )
                     }
             ) {
-                // Widget Kart Cercevesi (Kısayollar için kaba kart yerine temiz ikon layout)
+                // Widget Kart Cercevesi (NORMAL MODDA CERCEVE TAMAMEN YOKTUR, TEMIZ VE CAM EFEKTLI)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (isShortcut) Color.Transparent else ClCardBg)
+                        .background(
+                            if (isShortcut) Color.Transparent
+                            else if (isEditMode) ClCardBg
+                            else Color(0x12FFFFFF)
+                        )
                         .border(
-                            width = if (isEditMode) 1.5.dp else if (isShortcut) 0.dp else 1.dp,
-                            color = if (isEditMode) Color.White.copy(alpha = 0.8f) else if (isShortcut) Color.Transparent else ClBorder,
+                            width = if (isEditMode) 1.5.dp else 0.dp,
+                            color = if (isEditMode) Color.White.copy(alpha = 0.8f) else Color.Transparent,
                             shape = RoundedCornerShape(12.dp)
                         )
                         .padding(if (isShortcut) 2.dp else 6.dp)
@@ -482,9 +575,8 @@ fun WorkspaceCellPageLayout(
                         onLaunchApp = onLaunchApp
                     )
                 }
-
                 // ═══════════════════════════════════════════════════════════
-                // DUZENLEME MODU: SIL BUTONU VE GENIS DOKUNMA ALANLI TUTAMACLAR
+                // DUZENLEME MODU: SIL BUTONU VE CANLI DRAG-TO-RESIZE TUTAMACLARI
                 // ═══════════════════════════════════════════════════════════
                 if (isEditMode) {
                     // Sag Ust Sil Butonu (Delete Badge ✕)
@@ -493,6 +585,7 @@ fun WorkspaceCellPageLayout(
                             .align(Alignment.TopEnd)
                             .offset(x = 6.dp, y = (-6).dp)
                             .size(36.dp)
+                            .zIndex(120f)
                             .clickable { onDeleteWidget(widget.id) },
                         contentAlignment = Alignment.Center
                     ) {
@@ -514,15 +607,44 @@ fun WorkspaceCellPageLayout(
 
                     // Kısayollar harici widget'lar icin Boyutlandirma Tutamacları
                     if (!isShortcut) {
-                        // Sag Kenar Boyut Tutamaci (Genis 44dp Touch Target)
+                        val minSpanX = if (widget.typeId == WidgetRegistry.TYPE_COMBINED) 4 else 1
+                        val maxSpanX = colCount - safeCellX
+                        val minSpanY = 1
+                        val maxSpanY = rowCount - safeCellY
+
+                        // 1. Sag Kenar Boyut Tutamaci (Genislik: Büyütme & Küçültme Drag)
                         Box(
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
-                                .offset(x = 18.dp)
+                                .offset(x = 16.dp)
                                 .size(44.dp)
+                                .zIndex(110f)
+                                .pointerInput(widget.id, safeSpanX) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            resizingWidgetId = widget.id
+                                            liveResizeSpanX = safeSpanX
+                                            liveResizeSpanY = safeSpanY
+                                            resizeDragX = 0f
+                                            resizeDragY = 0f
+                                        },
+                                        onDragCancel = { resizingWidgetId = null },
+                                        onDragEnd = {
+                                            if (resizingWidgetId == widget.id && liveResizeSpanX != safeSpanX) {
+                                                onResizeWidget(widget.id, liveResizeSpanX, safeSpanY)
+                                            }
+                                            resizingWidgetId = null
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            resizeDragX += dragAmount.x
+                                            val deltaCols = (resizeDragX / (cellWidthPx + spacingPx)).roundToInt()
+                                            liveResizeSpanX = (safeSpanX + deltaCols).coerceIn(minSpanX, maxSpanX)
+                                        }
+                                    )
+                                }
                                 .clickable {
-                                    val minSpanX = if (widget.typeId == WidgetRegistry.TYPE_COMBINED) 4 else 2
-                                    val maxSpanX = minOf(colCount - safeCellX, 8)
+                                    // Tiklama destegi: siniri asarsa min boyuta kuculur
                                     val nextSpanX = if (safeSpanX >= maxSpanX) minSpanX else (safeSpanX + 2).coerceAtMost(maxSpanX)
                                     onResizeWidget(widget.id, nextSpanX, safeSpanY)
                                 },
@@ -532,20 +654,44 @@ fun WorkspaceCellPageLayout(
                                 modifier = Modifier
                                     .size(14.dp)
                                     .clip(CircleShape)
-                                    .background(Color.White)
-                                    .border(1.5.dp, Color.Black, CircleShape)
+                                    .background(ClPrimary)
+                                    .border(2.dp, Color.White, CircleShape)
                             )
                         }
 
-                        // Alt Kenar Boyut Tutamaci (Genis 44dp Touch Target)
+                        // 2. Alt Kenar Boyut Tutamaci (Yukseklik: Büyütme & Küçültme Drag)
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .offset(y = 18.dp)
+                                .offset(y = 16.dp)
                                 .size(44.dp)
+                                .zIndex(110f)
+                                .pointerInput(widget.id, safeSpanY) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            resizingWidgetId = widget.id
+                                            liveResizeSpanX = safeSpanX
+                                            liveResizeSpanY = safeSpanY
+                                            resizeDragX = 0f
+                                            resizeDragY = 0f
+                                        },
+                                        onDragCancel = { resizingWidgetId = null },
+                                        onDragEnd = {
+                                            if (resizingWidgetId == widget.id && liveResizeSpanY != safeSpanY) {
+                                                onResizeWidget(widget.id, safeSpanX, liveResizeSpanY)
+                                            }
+                                            resizingWidgetId = null
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            resizeDragY += dragAmount.y
+                                            val deltaRows = (resizeDragY / (cellHeightPx + spacingPx)).roundToInt()
+                                            liveResizeSpanY = (safeSpanY + deltaRows).coerceIn(minSpanY, maxSpanY)
+                                        }
+                                    )
+                                }
                                 .clickable {
-                                    val minSpanY = 2
-                                    val maxSpanY = minOf(rowCount - safeCellY, 4)
+                                    // Tiklama destegi: siniri asarsa min boyuta kuculur
                                     val nextSpanY = if (safeSpanY >= maxSpanY) minSpanY else (safeSpanY + 1).coerceAtMost(maxSpanY)
                                     onResizeWidget(widget.id, safeSpanX, nextSpanY)
                                 },
@@ -555,8 +701,53 @@ fun WorkspaceCellPageLayout(
                                 modifier = Modifier
                                     .size(14.dp)
                                     .clip(CircleShape)
+                                    .background(ClPrimary)
+                                    .border(2.dp, Color.White, CircleShape)
+                            )
+                        }
+
+                        // 3. Sag-Alt Kose Tutamaci (Cift Yonlu En & Boy Drag)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .offset(x = 12.dp, y = 12.dp)
+                                .size(44.dp)
+                                .zIndex(115f)
+                                .pointerInput(widget.id, safeSpanX, safeSpanY) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            resizingWidgetId = widget.id
+                                            liveResizeSpanX = safeSpanX
+                                            liveResizeSpanY = safeSpanY
+                                            resizeDragX = 0f
+                                            resizeDragY = 0f
+                                        },
+                                        onDragCancel = { resizingWidgetId = null },
+                                        onDragEnd = {
+                                            if (resizingWidgetId == widget.id && (liveResizeSpanX != safeSpanX || liveResizeSpanY != safeSpanY)) {
+                                                onResizeWidget(widget.id, liveResizeSpanX, liveResizeSpanY)
+                                            }
+                                            resizingWidgetId = null
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            resizeDragX += dragAmount.x
+                                            resizeDragY += dragAmount.y
+                                            val deltaCols = (resizeDragX / (cellWidthPx + spacingPx)).roundToInt()
+                                            val deltaRows = (resizeDragY / (cellHeightPx + spacingPx)).roundToInt()
+                                            liveResizeSpanX = (safeSpanX + deltaCols).coerceIn(minSpanX, maxSpanX)
+                                            liveResizeSpanY = (safeSpanY + deltaRows).coerceIn(minSpanY, maxSpanY)
+                                        }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clip(CircleShape)
                                     .background(Color.White)
-                                    .border(1.5.dp, Color.Black, CircleShape)
+                                    .border(2.dp, ClPrimary, CircleShape)
                             )
                         }
                     }
@@ -584,6 +775,12 @@ fun RenderWidgetContent(
 ) {
     val context = LocalContext.current
     val widgetManager = remember { WidgetManager.getInstance(context) }
+
+    val cfg = remember(widget.customConfig) {
+        try {
+            if (!widget.customConfig.isNullOrBlank()) org.json.JSONObject(widget.customConfig!!) else null
+        } catch (e: Exception) { null }
+    }
 
     when {
         // 1. UYGULAMA KISAYOLU (Zarif Launcher İkonu Formatı)
@@ -665,6 +862,10 @@ fun RenderWidgetContent(
 
         // 3. DASHBOARD (BIRLESIK WIDGET: Saat + Hiz)
         widget.typeId == WidgetRegistry.TYPE_COMBINED -> {
+            val speedUnit = cfg?.optString("speedUnit", "KMH") ?: "KMH"
+            val displaySpeed = if (speedUnit == "MPH") (telemetri.anlikHizKmh * 0.621371f).roundToInt() else telemetri.anlikHizKmh
+            val speedUnitLabel = if (speedUnit == "MPH") "MPH" else "KM/S"
+
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -676,21 +877,25 @@ fun RenderWidgetContent(
                     Text(text = tarihMetni, color = Color.LightGray, fontSize = 11.sp, maxLines = 1)
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(text = "${telemetri.anlikHizKmh}", color = ClPrimary, fontSize = 38.sp, fontWeight = FontWeight.Black)
-                    Text(text = "KM/S", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "$displaySpeed", color = ClPrimary, fontSize = 38.sp, fontWeight = FontWeight.Black)
+                    Text(text = speedUnitLabel, color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
         // 4. HIZ & LIMIT
         widget.typeId == WidgetRegistry.TYPE_SPEED -> {
+            val speedUnit = cfg?.optString("speedUnit", "KMH") ?: "KMH"
+            val displaySpeed = if (speedUnit == "MPH") (telemetri.anlikHizKmh * 0.621371f).roundToInt() else telemetri.anlikHizKmh
+            val speedUnitLabel = if (speedUnit == "MPH") "MPH" else "KM / S"
+
             Column(
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(text = "${telemetri.anlikHizKmh}", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Black)
-                Text(text = "KM / S", color = ClPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(text = "$displaySpeed", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Black)
+                Text(text = speedUnitLabel, color = ClPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -763,6 +968,9 @@ fun RenderWidgetContent(
 
         // 7. HAVA DURUMU
         widget.typeId == WidgetRegistry.TYPE_WEATHER -> {
+            val tempUnit = cfg?.optString("tempUnit", "C") ?: "C"
+            val displayTemp = if (tempUnit == "F") "72°F" else "22°C"
+
             Row(
                 modifier = Modifier.fillMaxSize(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -773,7 +981,7 @@ fun RenderWidgetContent(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
-                    Text(text = "22°C", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(text = displayTemp, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Text(text = "Açık", color = Color.LightGray, fontSize = 10.sp)
                 }
             }

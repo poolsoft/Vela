@@ -350,6 +350,46 @@ class WidgetManager private constructor(private val context: Context) {
         updateWidgetPlacement(widgetId, targetPage, newCellX, newCellY, item.spanX, item.spanY)
     }
 
+    fun replaceWidget(oldWidgetId: String, newTypeId: String): BaseWidget? {
+        val currentList = _widgetsFlow.value.toMutableList()
+        val oldIndex = currentList.indexOfFirst { it.id == oldWidgetId }
+        if (oldIndex == -1) return null
+        val old = currentList[oldIndex]
+
+        if (old.appWidgetId != -1) {
+            try {
+                appWidgetHost.deleteAppWidgetId(old.appWidgetId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        val newWidget = WidgetRegistry.createWidget(
+            typeId = newTypeId,
+            pageIndex = old.pageIndex,
+            size = old.size,
+            cellX = old.cellX,
+            cellY = old.cellY,
+            spanX = old.spanX,
+            spanY = old.spanY
+        ) ?: return null
+
+        currentList[oldIndex] = newWidget
+        _widgetsFlow.value = currentList.toList()
+        saveConfig()
+        return newWidget
+    }
+
+    fun updateWidgetConfig(widgetId: String, newConfig: String) {
+        val currentList = _widgetsFlow.value.toMutableList()
+        val index = currentList.indexOfFirst { it.id == widgetId }
+        if (index != -1) {
+            currentList[index].customConfig = newConfig
+            _widgetsFlow.value = currentList.toList()
+            saveConfig()
+        }
+    }
+
     private fun loadConfig() {
         val jsonStr = prefs.getString(KEY_WIDGET_CONFIG, null)
         if (jsonStr.isNullOrBlank()) {
@@ -375,6 +415,7 @@ class WidgetManager private constructor(private val context: Context) {
                 val appWidgetId = obj.optInt("appWidgetId", -1)
                 val packageName = if (obj.has("packageName")) obj.getString("packageName") else null
                 val isVisible = obj.optBoolean("isVisible", true)
+                val customConfig = if (obj.has("customConfig")) obj.getString("customConfig") else null
 
                 val widget = GenericWidget(
                     id = id,
@@ -387,7 +428,8 @@ class WidgetManager private constructor(private val context: Context) {
                     spanX = spanX,
                     spanY = spanY,
                     appWidgetId = appWidgetId,
-                    packageName = packageName
+                    packageName = packageName,
+                    customConfig = customConfig
                 ).apply {
                     this.isVisible = isVisible
                 }
@@ -525,6 +567,9 @@ class WidgetManager private constructor(private val context: Context) {
                     put("appWidgetId", w.appWidgetId)
                     if (w.packageName != null) {
                         put("packageName", w.packageName)
+                    }
+                    if (w.customConfig != null) {
+                        put("customConfig", w.customConfig)
                     }
                     put("isVisible", w.isVisible)
                 }

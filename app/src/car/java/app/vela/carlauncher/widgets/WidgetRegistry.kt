@@ -127,7 +127,8 @@ object WidgetRegistry {
         spanX: Int = 1,
         spanY: Int = 1,
         appWidgetId: Int = -1,
-        packageName: String? = null
+        packageName: String? = null,
+        customConfig: String? = null
     ): BaseWidget? {
         val entry = availableWidgets.find { it.typeId == typeId }
         val uniqueId = "${typeId}_${System.currentTimeMillis()}"
@@ -144,7 +145,8 @@ object WidgetRegistry {
             spanX = spanX,
             spanY = spanY,
             appWidgetId = appWidgetId,
-            packageName = packageName
+            packageName = packageName,
+            customConfig = customConfig
         )
     }
 }
@@ -163,7 +165,8 @@ class GenericWidget(
     spanX: Int = 1,
     spanY: Int = 1,
     appWidgetId: Int = -1,
-    packageName: String? = null
+    packageName: String? = null,
+    customConfig: String? = null
 ) : BaseWidget(
     id = id,
     typeId = typeId,
@@ -175,5 +178,6 @@ class GenericWidget(
     spanX = spanX,
     spanY = spanY,
     appWidgetId = appWidgetId,
-    packageName = packageName
+    packageName = packageName,
+    customConfig = customConfig
 )

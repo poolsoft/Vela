@@ -18,7 +18,8 @@ abstract class BaseWidget(
     var spanY: Int = 1,
     var appWidgetId: Int = -1,
     var packageName: String? = null,
-    var isVisible: Boolean = true
+    var isVisible: Boolean = true,
+    var customConfig: String? = null
 ) {
 
     enum class WidgetSize {

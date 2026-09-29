@@ -113,6 +113,7 @@ data class SystemWidgetGroup(
 @Composable
 fun WidgetPickerDialogView(
     activePageIndex: Int,
+    widgetToReplace: BaseWidget? = null,
     onDismiss: () -> Unit,
     onWidgetAdded: () -> Unit
 ) {
@@ -402,13 +403,17 @@ fun WidgetPickerDialogView(
                                     sizeText = item.sizeText,
                                     previewType = item.previewType,
                                     onAddClick = {
-                                        widgetManager.addWidget(
-                                            typeId = item.typeId,
-                                            pageIndex = activePageIndex,
-                                            size = item.defaultSize,
-                                            spanX = item.spanX,
-                                            spanY = item.spanY
-                                        )
+                                        if (widgetToReplace != null) {
+                                            widgetManager.replaceWidget(widgetToReplace.id, item.typeId)
+                                        } else {
+                                            widgetManager.addWidget(
+                                                typeId = item.typeId,
+                                                pageIndex = activePageIndex,
+                                                size = item.defaultSize,
+                                                spanX = item.spanX,
+                                                spanY = item.spanY
+                                            )
+                                        }
                                         onWidgetAdded()
                                         onDismiss()
                                     }
