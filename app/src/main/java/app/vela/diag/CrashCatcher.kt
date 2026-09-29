@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Build
 import app.vela.BuildConfig
 import app.vela.core.diag.DiagEvent
+import app.vela.util.FileLogger
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -30,6 +31,17 @@ object CrashCatcher {
         val app = context.applicationContext
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, ex ->
+            // If the crash happened in TextureViewRenderer or EGL setup, immediately revert texture_render
+            // to false in SharedPreferences so the next launch uses the reliable GLSurfaceView.
+            runCatching {
+                val isTextureOrEglCrash = thread.name.contains("TextureViewRenderer") ||
+                    ex.stackTrace.any { it.className.contains("EGLImpl") || it.className.contains("TextureViewRenderThread") }
+                if (isTextureOrEglCrash) {
+                    val prefs = app.getSharedPreferences("vela_settings", Context.MODE_PRIVATE)
+                    prefs.edit().putBoolean("texture_render", false).remove("texture_render_auto_ms").putInt("map_init_crashes", 0).apply()
+                    FileLogger.e("CrashCatcher", "TextureView/EGL crash detected! Reverted texture_render to false for next launch.")
+                }
+            }
             runCatching { writeReport(app, ex, breadcrumbs()) }
             prev?.uncaughtException(thread, ex)
         }
@@ -58,7 +70,7 @@ object CrashCatcher {
         runCatching {
             val extLogsDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "logs").apply { mkdirs() }
             File(extLogsDir, "crash-${System.currentTimeMillis()}.txt").writeText(text)
-            app.vela.util.FileLogger.e("CrashCatcher", "CRASH RAPORU KAYDEDILDI:\n$text", ex)
+            FileLogger.e("CrashCatcher", "CRASH RAPORU KAYDEDILDI:\n$text", ex)
         }
         prune(context)
     }

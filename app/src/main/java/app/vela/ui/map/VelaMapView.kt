@@ -879,16 +879,16 @@ fun VelaMapView(
         // bugs at a small perf cost - and the flag sticks until the Developer toggle clears it.
         // A healthy device clears the sentinel every launch and never accumulates a count.
         val prefs = context.getSharedPreferences("vela_settings", android.content.Context.MODE_PRIVATE)
+        val autoTexture = prefs.contains("texture_render_auto_ms")
         if (prefs.getBoolean("map_init_inflight", false)) {
-            // Only a death the OS recorded as a NATIVE crash counts (that is what a GL driver
-            // fault is). Anything else that ends a process before its first render used to count
-            // too - a force-stop, a swipe from Recents, a low-memory kill, `adb` during testing,
-            // a Java crash elsewhere in the app - and two of those flipped a healthy Pixel 4a into
-            // TextureView for good, unnoticed: the renderer ran at 89% CPU and the resulting
-            // judder was chased as puck jitter for weeks (2026-09-03).
-            if (!isEmulator() && lastExitWasNativeCrash(context)) {
+            // If texture_render was enabled and the app died mid-init, texture_render itself crashed (e.g. TextureViewRenderer EGL failure)!
+            // Revert immediately to GLSurfaceView so the app does not enter an unrecoverable boot loop.
+            if (prefs.getBoolean("texture_render", false)) {
+                android.util.Log.w("VelaMap", "TextureView render failed mid-init, reverting to GLSurfaceView")
+                prefs.edit().putBoolean("texture_render", false).remove("texture_render_auto_ms").putInt("map_init_crashes", 0).apply()
+            } else if (!isEmulator() && lastExitWasNativeCrash(context)) {
                 val n = prefs.getInt("map_init_crashes", 0) + 1
-                if (n >= 2) {
+                if (n >= 2 && fragileGpuDefault()) {
                     prefs.edit().putBoolean("texture_render", true).putInt("map_init_crashes", 0)
                         .putLong("texture_render_auto_ms", System.currentTimeMillis()).apply()
                 } else {
@@ -897,6 +897,10 @@ fun VelaMapView(
             } else {
                 prefs.edit().putInt("map_init_crashes", 0).apply()
             }
+        } else if (autoTexture && !fragileGpuDefault()) {
+            // Auto texture_render fallback was erroneously set by previous versions on a non-fragile device: clear it
+            android.util.Log.i("VelaMap", "Clearing legacy auto-texture on non-fragile device")
+            prefs.edit().putBoolean("texture_render", false).remove("texture_render_auto_ms").putInt("map_init_crashes", 0).apply()
         }
         prefs.edit().putBoolean("map_init_inflight", true).apply()
         val textureDefault = if (isEmulator()) false else fragileGpuDefault()
@@ -6297,11 +6301,11 @@ internal fun applyMapTheme(style: StyleLayers, dark: Boolean, amoled: Boolean = 
  *  keeps that record; older devices report true (the old any-death behavior) because the
  *  fragile-driver class the sentinel exists for is Android 14. */
 internal fun lastExitWasNativeCrash(context: android.content.Context): Boolean {
-    if (android.os.Build.VERSION.SDK_INT < 30) return true
+    if (android.os.Build.VERSION.SDK_INT < 30) return false
     val am = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-        ?: return true
+        ?: return false
     val last = runCatching { am.getHistoricalProcessExitReasons(context.packageName, 0, 1).firstOrNull() }
-        .getOrNull() ?: return true
+        .getOrNull() ?: return false
     return last.reason == android.app.ApplicationExitInfo.REASON_CRASH_NATIVE
 }
 
