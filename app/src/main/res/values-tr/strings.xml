@@ -990,6 +990,7 @@
     <string name="car_backup_cat_tools">Sistem Araçları ve Tercihler</string>
     <string name="car_backup_cat_tools_desc">Açılış uygulaması, masaüstü yazı ölçeği ve anten ayarları</string>
     <string name="car_backup_count_files">%1$d dosya (%2$s)</string>
+    <string name="car_backup_cat_voice_desc">Çevrimdışı TTS sesleri, ses tanıma (ASR) ve uyandırma modelleri (KWS)</string>
     <string name="settings_voice_wake_title">Sesli komut ve eller serbest uyandırma</string>
     <string name="settings_voice_wake_toggle">Eller serbest uyandırma</string>
     <string name="settings_voice_wake_hint">Belirlediğiniz kelimeyi söylediğinizde Vela sesli dinlemeyi otomatik başlatır.</string>

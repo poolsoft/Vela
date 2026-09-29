@@ -40,7 +40,7 @@ object PortableBackup {
         ROUTES("routes", R.string.car_backup_cat_routes, R.string.car_backup_cat_routes_desc, setOf("trips")),
         PLACES("places", R.string.car_backup_cat_places, R.string.car_backup_cat_places_desc, setOf("places", "poipacks"), isPersonalMeta = true),
         LAUNCHER("launcher", R.string.car_backup_cat_launcher, R.string.car_backup_cat_launcher_desc, emptySet(), isLauncherMeta = true),
-        VOICE("voice", R.string.settings_voice, R.string.car_backup_cat_nav_settings_desc, setOf("piper", "asr"));
+        VOICE("voice", R.string.settings_voice, R.string.car_backup_cat_voice_desc, setOf("piper", "asr", "kws"));
 
         companion object {
             fun fromId(id: String) = values().firstOrNull { it.id == id }

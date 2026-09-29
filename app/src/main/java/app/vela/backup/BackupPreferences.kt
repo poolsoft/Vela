@@ -27,6 +27,7 @@ internal object BackupPreferences {
         "parking_lat" to "String", "parking_lng" to "String", "parking_at" to "Long",
         "parking_history" to "String", "voice_model" to "String", "asr_engine" to "String",
         "avoid_tolls" to "Boolean", "avoid_highways" to "Boolean", "avoid_ferries" to "Boolean",
+        "wake_word_enabled" to "Boolean", "wake_word_silent_mode" to "Boolean", "wake_word_phrase" to "String",
     )
     private fun settingType(key: String): String? = portableSettings[key] ?: if (
         key.startsWith("voice_speaker_") && key.length in 15..120
@@ -86,6 +87,7 @@ internal object BackupPreferences {
                 "parking_lng" -> require((value as String).toDouble() in -180.0..180.0)
                 "parking_history" -> json.decodeFromString<List<ParkedSpot>>(value as String)
                 "voice_model", "asr_engine" -> require((value as String).length <= 120 && ".." !in value)
+                "wake_word_phrase" -> require((value as String).length in 1..100)
             }
         }
         return groups

@@ -870,6 +870,7 @@
     <string name="settings_voice_search_engine_auto">Vela Voice</string>
     <string name="settings_voice_search_engine_default">Android default</string>
     <string name="settings_voice_search_engine_system">Other voice app</string>
+    <string name="car_backup_cat_voice_desc">Offline TTS voices, speech recognition (ASR) and wake word models (KWS)</string>
     <string name="settings_voice_wake_title">Hands-free voice wake</string>
     <string name="settings_voice_wake_toggle">Hands-free wake word</string>
     <string name="settings_voice_wake_hint">Say your wake phrase to start voice commands hands-free.</string>

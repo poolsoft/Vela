@@ -13,7 +13,7 @@ internal object BackupFiles {
     const val PART_BYTES = 256L * 1024 * 1024
     const val MAX_JSON = 16 * 1024 * 1024
     const val MANIFEST = "vela-backup.json"
-    val roots = setOf("basemap", "places", "obf", "overlays", "poipacks", "glyphs", "sprites", "trips", "piper", "asr")
+    val roots = setOf("basemap", "places", "obf", "overlays", "poipacks", "glyphs", "sprites", "trips", "piper", "asr", "kws")
     val metadata = setOf("personal.json", "launcher.json")
     data class Entry(val path: String, val size: Long, val sha256: String, val parts: List<String>)
     data class Manifest(val roots: List<String>, val entries: List<Entry>, val created: String, val version: String) {
