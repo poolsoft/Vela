@@ -997,4 +997,8 @@
     <string name="settings_voice_wake_phrase_placeholder">Örn: hey vela</string>
     <string name="settings_voice_wake_test_chime">Uyandırma sesini çal</string>
     <string name="settings_voice_wake_conflict_note">TTS konuşurken mikrofon çakışması önlenir (AEC yankı engelleme ve otomatik duraklatma etkindir).</string>
+    <string name="settings_voice_asr_model_title">Ses tanıma modeli (ASR)</string>
+    <string name="settings_voice_asr_installed">Çevrimdışı ses tanıma modeli hazır (Whisper %1$d MB)</string>
+    <string name="settings_voice_asr_not_installed">İnternetsiz eller serbest ses tanıma için model gereklidir.</string>
+    <string name="settings_voice_asr_download">Ses tanıma modelini indir (%1$d MB)</string>
 </resources>

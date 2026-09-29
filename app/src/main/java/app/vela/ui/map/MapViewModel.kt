@@ -5634,6 +5634,11 @@ class MapViewModel @Inject constructor(
         voiceWakeController.playWakeChime()
     }
 
+    /** Trigger voice recognition from UI buttons such as the Car Dock assistant mic button. */
+    fun triggerVoiceSearch() {
+        voiceWakeController.onWakeWordSpotted()
+    }
+
     /** Apply a transcript from either voice tier as the query and run the search. */
     fun applyVoiceQuery(text: String) {
         onQueryChange(text)

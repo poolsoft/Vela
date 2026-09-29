@@ -768,13 +768,6 @@ fun MapScreen(
             }
         }
     }
-    LaunchedEffect(vm.wakeTrigger) {
-        vm.wakeTrigger.collect {
-            if (!voiceListening && vm.voiceMicGranted()) {
-                startLocalVoice()
-            }
-        }
-    }
     val recordAudioLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -784,17 +777,23 @@ fun MapScreen(
     }
     voiceError?.let { reason ->
         // One dialog, the real reason, and a route to the fix. VelaDialog is already D-pad-correct.
+        val isModelMissing = reason == app.vela.voice.VoiceResult.Reason.MODEL
         app.vela.ui.VelaDialog(
             onDismissRequest = { voiceError = null },
             title = stringResource(R.string.voice_error_title),
-            // "Try again" is the confirm because most of these are transient (a mic another app was
-            // holding, a recording that dropped); the message names the Settings route for the two
-            // that are not. Dismiss auto-focuses, so one OK just closes.
-            confirmText = stringResource(R.string.voice_error_retry),
+            confirmText = if (isModelMissing) {
+                stringResource(R.string.settings_voice_search_download, app.vela.voice.AsrEngine.DEFAULT.sizeMb)
+            } else {
+                stringResource(R.string.voice_error_retry)
+            },
             onConfirm = {
                 voiceError = null
-                if (vm.voiceMicGranted()) startLocalVoice()
-                else recordAudioLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                if (isModelMissing) {
+                    vm.downloadAsrModel()
+                } else {
+                    if (vm.voiceMicGranted()) startLocalVoice()
+                    else recordAudioLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                }
             },
             dismissText = stringResource(R.string.mapscreen_got_it),
             onDismiss = { voiceError = null },
@@ -816,6 +815,37 @@ fun MapScreen(
 
     val voiceProviderAvailable = remember { app.vela.ui.VoiceSearch.hasProvider(context) }
     val voicePrompt = stringResource(R.string.search_voice_prompt)
+    var showAsrOffer by remember { mutableStateOf(false) }
+
+    val launchVoiceSearch: () -> Unit = {
+        if (!voiceListening) {
+            when {
+                state.asrInstalledIds.isNotEmpty() -> {
+                    if (vm.voiceMicGranted()) startLocalVoice()
+                    else recordAudioLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                }
+                voiceProviderAvailable -> {
+                    val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                        app.vela.ui.VoiceSearch.launchComponent(context)?.let { component = it }
+                        putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, app.vela.ui.AppLocale.effective().toLanguageTag())
+                        putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, voicePrompt)
+                    }
+                    runCatching { voiceLauncher.launch(intent) }
+                }
+                else -> {
+                    showAsrOffer = true
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(vm.wakeTrigger) {
+        vm.wakeTrigger.collect {
+            launchVoiceSearch()
+        }
+    }
+
     // Reactive resolve (mirrors VoiceSearch.resolvedMode but keyed on vm state so the mic reflects a
     // just-downloaded model without a relaunch): enabled/engine are mutableState, local rides state.
     val micMode = when {
@@ -830,28 +860,30 @@ fun MapScreen(
     }
     // With nothing installed the mic still shows (when the toggle is on) and tapping it OFFERS the
     // Vela voice download - a hidden mic made the whole feature undiscoverable on a fresh install.
-    var showAsrOffer by remember { mutableStateOf(false) }
     val onMic: (() -> Unit)? = if (app.vela.ui.VoiceSearch.enabled.value) {
         {
             when (micMode) {
-                app.vela.ui.VoiceSearch.Mode.NONE -> showAsrOffer = true
+                app.vela.ui.VoiceSearch.Mode.NONE -> {
+                    if (voiceProviderAvailable) launchVoiceSearch()
+                    else showAsrOffer = true
+                }
                 app.vela.ui.VoiceSearch.Mode.SYSTEM -> {
                     val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                        // Pin the voice app the user picked in Settings; with no pick, defer to
-                        // Android's own default app, and only pin the first installed one when
-                        // Android has no default either (else its chooser interrupts dictation).
                         app.vela.ui.VoiceSearch.launchComponent(context)?.let { component = it }
                         putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                         putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, app.vela.ui.AppLocale.effective().toLanguageTag())
                         putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, voicePrompt)
                     }
-                    // The resolver check can go stale (provider uninstalled since launch); catch so a
-                    // tap can never crash - it just does nothing.
                     runCatching { voiceLauncher.launch(intent) }
                 }
-                app.vela.ui.VoiceSearch.Mode.LOCAL ->
-                    if (vm.voiceMicGranted()) startLocalVoice()
-                    else recordAudioLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                app.vela.ui.VoiceSearch.Mode.LOCAL -> {
+                    if (state.asrInstalledIds.isNotEmpty()) {
+                        if (vm.voiceMicGranted()) startLocalVoice()
+                        else recordAudioLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                    } else {
+                        launchVoiceSearch()
+                    }
+                }
             }
         }
     } else {

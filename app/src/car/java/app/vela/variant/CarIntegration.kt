@@ -58,12 +58,21 @@ object CarIntegration {
             pusulaYonu = state.compassHeading ?: state.myBearing ?: 0f,
         )
     }
-    @Composable fun MapContainer(onOpenSettings: () -> Unit, content: @Composable () -> Unit) {
+    @Composable fun MapContainer(
+        onOpenSettings: () -> Unit,
+        onVoiceClick: () -> Unit = {},
+        content: @Composable () -> Unit
+    ) {
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
         val configuration = androidx.compose.ui.platform.LocalConfiguration.current
         val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT ||
             (configuration.screenWidthDp < configuration.screenHeightDp)
-        CarLauncherLayout(passthrough = !enabled || isPortrait, onOpenSettings = onOpenSettings, haritaIcerigi = content)
+        CarLauncherLayout(
+            passthrough = !enabled || isPortrait,
+            onOpenSettings = onOpenSettings,
+            onAsistanTiklandi = onVoiceClick,
+            haritaIcerigi = content
+        )
     }
     @Composable fun Settings(onBack: () -> Unit, onPermissions: () -> Unit, onBackup: () -> Unit) {
         CarLauncherSettingsView(

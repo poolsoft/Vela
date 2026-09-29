@@ -877,6 +877,10 @@
     <string name="settings_voice_wake_phrase_placeholder">e.g. hey vela</string>
     <string name="settings_voice_wake_test_chime">Test wake chime</string>
     <string name="settings_voice_wake_conflict_note">Echo cancellation (AEC) and automatic mute protect against TTS mic conflicts.</string>
+    <string name="settings_voice_asr_model_title">Speech recognition model</string>
+    <string name="settings_voice_asr_installed">Offline recognition model ready (Whisper %1$d MB)</string>
+    <string name="settings_voice_asr_not_installed">Required for offline hands-free recognition without internet.</string>
+    <string name="settings_voice_asr_download">Download recognition model (%1$d MB)</string>
     <string name="map_asr_offer_title">Voice search</string>
     <string name="map_asr_offer_body">Download Vela Voice to speak your searches. It runs entirely on your phone and uploads nothing.</string>
     <string name="voice_capture_examples_title">Things you can say</string>

@@ -411,6 +411,52 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
                         }
                         Spacer(Modifier.height(4.dp))
                         Hint(stringResource(R.string.settings_voice_wake_conflict_note))
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            stringResource(R.string.settings_voice_asr_model_title),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        val isAsrInstalled = state.asrInstalledIds.isNotEmpty()
+                        val isAsrDownloading = state.asrDownloadingId != null
+                        if (isAsrInstalled) {
+                            Text(
+                                stringResource(R.string.settings_voice_asr_installed, app.vela.voice.AsrEngine.DEFAULT.sizeMb),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        } else if (isAsrDownloading) {
+                            val pct = state.asrDownloadPct ?: 0f
+                            if (state.asrInstalling) {
+                                Text(stringResource(R.string.settings_voice_search_installing), style = MaterialTheme.typography.bodyMedium)
+                                Spacer(Modifier.height(6.dp))
+                                app.vela.ui.VelaProgressBar(null)
+                            } else {
+                                Text(
+                                    stringResource(R.string.settings_voice_search_downloading, (pct * 100).toInt()),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                app.vela.ui.VelaProgressBar(pct)
+                                androidx.compose.material3.TextButton(
+                                    onClick = { vm.cancelAsrDownload() },
+                                ) {
+                                    Text(stringResource(R.string.settings_cancel))
+                                }
+                            }
+                        } else {
+                            Text(
+                                stringResource(R.string.settings_voice_asr_not_installed),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            FilledTonalButton(
+                                onClick = { vm.downloadAsrModel() },
+                                modifier = Modifier.dpadHighlight(androidx.compose.material3.ButtonDefaults.filledTonalShape),
+                            ) {
+                                Text(stringResource(R.string.settings_voice_asr_download, app.vela.voice.AsrEngine.DEFAULT.sizeMb))
+                            }
+                        }
                         Spacer(Modifier.height(10.dp))
                     }
                 }

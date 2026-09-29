@@ -35,6 +35,7 @@ fun CarLauncherLayout(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     passthrough: Boolean = false,
+    onAsistanTiklandi: () -> Unit = {},
     haritaIcerigi: @Composable () -> Unit
 ) {
     if (passthrough) {
@@ -152,6 +153,7 @@ fun CarLauncherLayout(
             onScanMusic = scanMusic,
             onVisualizerPermission = requestVisualizer,
             onAyarlarAc = { onOpenSettings() },
+            onAsistanTiklandi = onAsistanTiklandi,
             modifier = Modifier.fillMaxSize(),
             haritaIcerigi = haritaIcerigi
         )

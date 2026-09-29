@@ -26,7 +26,8 @@ class CarAppDockHost(
     private val onShortcutClick: (AppShortcut) -> Unit,
     private val onMiniMusicClick: () -> Unit,
     private val onPlayPauseClick: () -> Unit,
-    private val onNextClick: () -> Unit
+    private val onNextClick: () -> Unit,
+    private val onAssistantClick: () -> Unit = {}
 ) {
 
     val rootView: View = LayoutInflater.from(context).inflate(
@@ -37,6 +38,7 @@ class CarAppDockHost(
 
     private val btnAppList: ImageButton? = rootView.findViewById(R.id.btn_app_list)
     private val btnDesktopMode: ImageButton? = rootView.findViewById(R.id.btn_desktop_mode)
+    private val btnAssistant: ImageButton? = rootView.findViewById(R.id.btn_assistant)
     private val dockRecycler: RecyclerView? = rootView.findViewById(R.id.dock_recycler)
     private val miniMusicContainer: View? = rootView.findViewById(R.id.mini_music_container)
     private val miniMusicTitle: TextView? = rootView.findViewById(R.id.mini_music_title)
@@ -65,6 +67,7 @@ class CarAppDockHost(
     init {
         btnAppList?.setOnClickListener { onAppDrawerClick() }
         btnDesktopMode?.setOnClickListener { onDesktopClick() }
+        btnAssistant?.setOnClickListener { onAssistantClick() }
         miniMusicContainer?.setOnClickListener { onMiniMusicClick() }
         miniMusicPlay?.setOnClickListener { onPlayPauseClick() }
         rootView.findViewById<View>(R.id.mini_btn_next)?.setOnClickListener { onNextClick() }

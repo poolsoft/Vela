@@ -51,6 +51,7 @@ fun CarLauncherHostView(
     onAyarlarAc: () -> Unit,
     onScanMusic: () -> Unit,
     onVisualizerPermission: () -> Unit,
+    onAsistanTiklandi: () -> Unit = {},
     modifier: Modifier = Modifier,
     haritaIcerigi: @Composable () -> Unit
 ) {
@@ -82,6 +83,7 @@ fun CarLauncherHostView(
     val latestToggle by rememberUpdatedState(onToggleMode)
     val latestLaunch by rememberUpdatedState(onLaunchApp)
     val latestMap by rememberUpdatedState(haritaIcerigi)
+    val latestAssistant by rememberUpdatedState(onAsistanTiklandi)
 
     val parentComposition = rememberCompositionContext()
     AndroidView(
@@ -135,7 +137,8 @@ fun CarLauncherHostView(
                     onShortcutClick = { latestLaunch(it.paketAdi) },
                     onMiniMusicClick = { latestPanel("MUSIC") },
                     onPlayPauseClick = { latestPlay() },
-                    onNextClick = { latestNext() }
+                    onNextClick = { latestNext() },
+                    onAssistantClick = { latestAssistant() }
                 ).also { dock.addView(it.rootView) }
             }
             binding.dockHost?.updateShortcuts(shortcuts)

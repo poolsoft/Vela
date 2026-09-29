@@ -160,7 +160,10 @@ fun VelaRoot(vm: MapViewModel = hiltViewModel()) {
     Box {
         // MapScreen stays composed even while Settings is open or CarMode toggles,
         // and CarLauncherLayout draws around or passes through it without recreating MapView.
-        CarIntegration.MapContainer(onOpenSettings = { settingsOpenCar = true; showSettings = true }) {
+        CarIntegration.MapContainer(
+            onOpenSettings = { settingsOpenCar = true; showSettings = true },
+            onVoiceClick = { vm.triggerVoiceSearch() },
+        ) {
             MapScreen(
                 vm = vm,
                 onOpenSettings = { showSettings = true },
