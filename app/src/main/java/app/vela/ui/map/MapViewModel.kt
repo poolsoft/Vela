@@ -319,6 +319,8 @@ data class MapUiState(
     val asrDownloadingId: String? = null,   // which AsrEngine.id is downloading (Settings row shows progress on it), else null
     val asrInstalledIds: Set<String> = emptySet(), // which voice-search engines are on disk (Whisper/SenseVoice/Moonshine)
     val asrActiveId: String = app.vela.voice.AsrEngine.DEFAULT.id, // the engine the mic will use
+    val wakeWordEnabled: Boolean = false, // hands-free voice wake enabled
+    val wakeWordPhrase: String = "Hey Vela", // customizable wake phrase (e.g. "Hey Vela", "Vela", "Asistan")
     val voiceSpeaker: Int = 0, // chosen speaker # for the multi-speaker Vela voice (playground stepper)
     val voiceSpeed: Float = 1.0f, // spoken-directions speed multiplier (1.0 = normal, >1 = faster)
     val showPsdsTip: Boolean = false,
@@ -420,7 +422,10 @@ class MapViewModel @Inject constructor(
     private val http: okhttp3.OkHttpClient,
     private val selfUpdater: app.vela.update.SelfUpdater,
     private val asrRecognizer: app.vela.voice.AsrRecognizer,
+    private val voiceWakeController: app.vela.voice.VoiceWakeController,
 ) : ViewModel() {
+
+    val wakeTrigger = voiceWakeController.wakeEvents
 
     private val _state = MutableStateFlow(MapUiState())
     val state: StateFlow<MapUiState> = _state.asStateFlow()
@@ -622,7 +627,12 @@ class MapViewModel @Inject constructor(
                 recents = recentStore.recent(), saved = savedStore.saved(),
                 recentPlaces = recentPlaceStore.recent(),
                 home = shortcutStore.get(ShortcutKind.HOME), work = shortcutStore.get(ShortcutKind.WORK),
+                wakeWordEnabled = voiceWakeController.isEnabled(),
+                wakeWordPhrase = voiceWakeController.getWakePhrase(),
             )
+        }
+        if (voiceWakeController.isEnabled()) {
+            voiceWakeController.startListening()
         }
         refreshNotices() // any cached notices, shown immediately
         // Fleet default map color set (a user's own Settings pick always wins - see MapColors).
@@ -5590,13 +5600,39 @@ class MapViewModel @Inject constructor(
     fun voiceMicGranted(): Boolean = asrRecognizer.hasMicPermission()
 
     /** Record + transcribe on-device (tier-1); returns the heard text or null. Driven by the capture
-     *  dialog, which supplies the loudness sink, a start callback and an early-stop check. */
+     *  dialog, which supplies the loudness sink, a start callback and an early-stop check.
+     *  Pauses background hands-free wake word listening while the capture dialog is recording. */
     suspend fun voiceListen(
         onLevel: (Float) -> Unit,
         onListening: () -> Unit,
         canceled: () -> Boolean,
-    ): app.vela.voice.VoiceResult =
-        asrRecognizer.listen(onLevel, onListening, canceled)
+    ): app.vela.voice.VoiceResult {
+        voiceWakeController.stopListening()
+        try {
+            return asrRecognizer.listen(onLevel, onListening, canceled)
+        } finally {
+            if (voiceWakeController.isEnabled()) {
+                voiceWakeController.startListening()
+            }
+        }
+    }
+
+    /** Enable or disable hands-free wake word detection ("Hey Vela" / custom keyword). */
+    fun setWakeWordEnabled(enabled: Boolean) {
+        voiceWakeController.setEnabled(enabled)
+        _state.update { it.copy(wakeWordEnabled = enabled) }
+    }
+
+    /** Customize the wake word phrase (persisted and dynamically updated). */
+    fun setWakeWordPhrase(phrase: String) {
+        voiceWakeController.setWakePhrase(phrase)
+        _state.update { it.copy(wakeWordPhrase = voiceWakeController.getWakePhrase()) }
+    }
+
+    /** Audition the pleasant wake chime earcon. */
+    fun testWakeChime() {
+        voiceWakeController.playWakeChime()
+    }
 
     /** Apply a transcript from either voice tier as the query and run the search. */
     fun applyVoiceQuery(text: String) {

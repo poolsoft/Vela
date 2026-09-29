@@ -350,6 +350,72 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
                 }
             } // end "Advanced voice options"
         }
+
+        // Hands-free Voice Wake & Command (KWS)
+        var voiceWakeExpanded by remember { mutableStateOf(state.wakeWordEnabled) }
+        CollapsibleSectionTitle(
+            stringResource(R.string.settings_voice_wake_title),
+            voiceWakeExpanded,
+        ) { voiceWakeExpanded = !voiceWakeExpanded }
+        if (voiceWakeExpanded) {
+            SettingsGroup {
+                ToggleRow(
+                    label = stringResource(R.string.settings_voice_wake_toggle),
+                    checked = state.wakeWordEnabled,
+                    onCheckedChange = { vm.setWakeWordEnabled(it) },
+                    hint = stringResource(R.string.settings_voice_wake_hint),
+                )
+                if (state.wakeWordEnabled) {
+                    androidx.compose.foundation.layout.Column(Modifier.padding(horizontal = 16.dp)) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.settings_voice_wake_phrase),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        var customPhrase by remember(state.wakeWordPhrase) { mutableStateOf(state.wakeWordPhrase) }
+                        OutlinedTextField(
+                            value = customPhrase,
+                            onValueChange = {
+                                customPhrase = it
+                                vm.setWakeWordPhrase(it)
+                            },
+                            singleLine = true,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                            colors = app.vela.ui.settings.settingsFieldColors(),
+                            placeholder = { Text(stringResource(R.string.settings_voice_wake_phrase_placeholder)) },
+                            modifier = Modifier.fillMaxWidth().dpadFieldEscape(),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("hey vela", "vela", "merhaba vela").forEach { preset ->
+                                FilterChip(
+                                    selected = customPhrase.trim().equals(preset, ignoreCase = true),
+                                    onClick = {
+                                        customPhrase = preset
+                                        vm.setWakeWordPhrase(preset)
+                                    },
+                                    label = { Text(preset) },
+                                    shape = androidx.compose.foundation.shape.CircleShape,
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FilledTonalButton(
+                                onClick = { vm.testWakeChime() },
+                                modifier = Modifier.dpadHighlight(androidx.compose.material3.ButtonDefaults.filledTonalShape),
+                            ) {
+                                Text(stringResource(R.string.settings_voice_wake_test_chime))
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Hint(stringResource(R.string.settings_voice_wake_conflict_note))
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(24.dp))
     }
 }

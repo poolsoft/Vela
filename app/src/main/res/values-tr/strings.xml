@@ -66,6 +66,15 @@
     <string name="settings_voice_variant_field">Varyant #</string>
     <string name="settings_voice_variant_go">Git</string>
     <string name="settings_voice_variant_hint">Bu sesin yüzlerce konuşmacısı vardır.</string>
+    <string name="settings_wake_word_title">Eller serbest sesle uyandırma</string>
+    <string name="settings_wake_word_toggle">Sesli komutla uyandır</string>
+    <string name="settings_wake_word_hint">Sürüş esnasında ekrana dokunmadan haritayı sesinizle eller serbest uyandırın.</string>
+    <string name="settings_wake_word_phrase_label">Uyandırma kelimesi / ifadesi</string>
+    <string name="settings_wake_word_phrase_hint">Vela\'yı uyandıracak kelimeyi dilediğiniz gibi belirleyin (Örn: Hey Vela, Vela, Asistan, Araba).</string>
+    <string name="settings_wake_word_echo_protection">Mikrofon çakışması koruması (AEC ve TTS Susturma)</string>
+    <string name="settings_wake_word_echo_protection_hint">Navigasyon konuşurken mikrofon dinlemesi geçici olarak susturulur ve donanımsal akustik yankı engelleme (AEC) aktiftir.</string>
+    <string name="settings_wake_word_test">Uyandırma sesini sına</string>
+    <string name="settings_wake_word_saved">Uyandırma kelimesi güncellendi: %1$s</string>
     <string name="settings_navigation">Navigasyon</string>
     <string name="settings_vibrate_on_turns">Dönüşlerde titre</string>
     <string name="settings_mode_driving">Araç</string>
@@ -981,7 +990,11 @@
     <string name="car_backup_cat_tools">Sistem Araçları ve Tercihler</string>
     <string name="car_backup_cat_tools_desc">Açılış uygulaması, masaüstü yazı ölçeği ve anten ayarları</string>
     <string name="car_backup_count_files">%1$d dosya (%2$s)</string>
-    <string name="car_backup_count_items">%1$d öğe</string>
-    <string name="car_backup_success">Yedekleme başarıyla tamamlandı.</string>
-    <string name="car_backup_restore_success">Seçilen öğeler başarıyla geri yüklendi.</string>
+    <string name="settings_voice_wake_title">Sesli komut ve eller serbest uyandırma</string>
+    <string name="settings_voice_wake_toggle">Eller serbest uyandırma</string>
+    <string name="settings_voice_wake_hint">Belirlediğiniz kelimeyi söylediğinizde Vela sesli dinlemeyi otomatik başlatır.</string>
+    <string name="settings_voice_wake_phrase">Uyandırma kelimesi</string>
+    <string name="settings_voice_wake_phrase_placeholder">Örn: hey vela</string>
+    <string name="settings_voice_wake_test_chime">Uyandırma sesini çal</string>
+    <string name="settings_voice_wake_conflict_note">TTS konuşurken mikrofon çakışması önlenir (AEC yankı engelleme ve otomatik duraklatma etkindir).</string>
 </resources>

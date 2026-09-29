@@ -768,6 +768,13 @@ fun MapScreen(
             }
         }
     }
+    LaunchedEffect(vm.wakeTrigger) {
+        vm.wakeTrigger.collect {
+            if (!voiceListening && vm.voiceMicGranted()) {
+                startLocalVoice()
+            }
+        }
+    }
     val recordAudioLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->

@@ -9,6 +9,8 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
 import androidx.core.content.ContextCompat
 
 import com.k2fsa.sherpa.onnx.FeatureConfig
@@ -45,6 +47,7 @@ import kotlin.math.sqrt
 @Singleton
 class AsrRecognizer @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val voiceGuide: app.vela.core.voice.VoiceGuide,
 ) {
     private val loadLock = Any()
     @Volatile private var recognizer: OfflineRecognizer? = null
@@ -399,18 +402,38 @@ class AsrRecognizer @Inject constructor(
             return@withContext fail(VoiceResult.Reason.AUDIO_INIT, detail)
         }
 
+        // Hardware Acoustic Echo Cancellation & Noise Suppression (anti-echo protection)
+        val audioSessionId = audio.audioSessionId
+        val aec = runCatching {
+            if (AcousticEchoCanceler.isAvailable()) {
+                AcousticEchoCanceler.create(audioSessionId)?.apply { enabled = true }
+            } else null
+        }.getOrNull()
+        val ns = runCatching {
+            if (NoiseSuppressor.isAvailable()) {
+                NoiseSuppressor.create(audioSessionId)?.apply { enabled = true }
+            } else null
+        }.getOrNull()
+
         val buf = ShortArray(VAD_WINDOW)
         val chunks = ArrayList<FloatArray>()
         var total = 0
         var sawSpeech = false
         var segment: FloatArray? = null
         try {
+            // Mute / stop any ongoing TTS speech so the microphone does not hear navigation prompts
+            voiceGuide.stop()
             requestAudioFocus() // pause any playing music/podcast while we listen
             audio.startRecording()
             onListening()
             while (!canceled() && segment == null && total < SAMPLE_RATE * MAX_SECONDS) {
                 val n = audio.read(buf, 0, VAD_WINDOW)
                 if (n <= 0) continue
+                // Anti-echo protection: if TTS is speaking, discard incoming mic samples
+                if (voiceGuide.isSpeaking) {
+                    onLevel(0f)
+                    continue
+                }
                 val f = FloatArray(n) { buf[it] / 32768f }
                 onLevel(rms(f))
                 chunks.add(f)
@@ -430,6 +453,8 @@ class AsrRecognizer @Inject constructor(
             // Abandon focus FIRST so the music resumes even if a later call throws; every step is
             // guarded so one failure can't skip the rest and leave playback paused forever.
             abandonAudioFocus() // let the music resume
+            runCatching { aec?.release() }
+            runCatching { ns?.release() }
             runCatching { audio.stop() }
             runCatching { audio.release() }
         }

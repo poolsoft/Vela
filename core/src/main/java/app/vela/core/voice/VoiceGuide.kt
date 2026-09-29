@@ -148,11 +148,29 @@ class VoiceGuide @Inject constructor(
     @Volatile private var focusHeld = false // do we currently hold audio focus? (so a new prompt during
                                             // the release-hold window doesn't needlessly re-request)
     private val focusHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** Fired when speech begins (true) or when all utterances finish and focus releases (false).
+     *  Used by KWS/ASR listeners to mute the microphone while TTS is speaking, preventing audio echo loops. */
+    @Volatile var onSpeakingStateChanged: ((Boolean) -> Unit)? = null
+
+    /** Returns true if TTS is currently active, speaking, or holding audio focus. */
+    val isSpeaking: Boolean
+        get() = synchronized(focusLock) { activeUtterances > 0 || focusHeld }
+
+    private fun notifySpeakingState(speaking: Boolean) {
+        focusHandler.post { onSpeakingStateChanged?.invoke(speaking) }
+    }
+
     // Abandon focus a beat AFTER the last prompt ends (see releaseFocus) rather than instantly, so the
     // driver's music stays ducked CONTINUOUSLY across closely-spaced prompts instead of snapping back to
     // full between them — the "didn't reliably duck / not ducking enough" bug.
     private val abandonFocusRunnable = Runnable {
-        synchronized(focusLock) { if (activeUtterances == 0) abandonFocus() }
+        synchronized(focusLock) {
+            if (activeUtterances == 0) {
+                abandonFocus()
+                notifySpeakingState(false)
+            }
+        }
     }
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
         // A phone call / VOIP taking focus must SILENCE guidance — the old request had no
@@ -166,6 +184,7 @@ class VoiceGuide @Inject constructor(
                 activeUtterances = 0
                 abandonFocus() // inside the lock — atomic with a racing acquire's count+request
             }
+            notifySpeakingState(false)
         }
     }
 
@@ -173,11 +192,18 @@ class VoiceGuide @Inject constructor(
      *  player has not reacted yet and the first word needs a beat of lead (see [FOCUS_LEAD_MS]). */
     private fun acquireFocus(): Boolean {
         focusHandler.removeCallbacks(abandonFocusRunnable) // cancel a pending release — keep the duck continuous
-        synchronized(focusLock) {
+        val newlySpeaking = synchronized(focusLock) {
+            val wasIdle = activeUtterances == 0 && !focusHeld
             activeUtterances += 1
-            if (!focusHeld) { requestFocus(); return true } // still held from the last prompt? don't re-request
+            if (!focusHeld) {
+                requestFocus()
+                wasIdle
+            } else false
         }
-        return false
+        if (newlySpeaking) {
+            notifySpeakingState(true)
+        }
+        return newlySpeaking
     }
 
     /** Run [go] now when focus was already held, else after [FOCUS_LEAD_MS]: a player that pauses
@@ -208,6 +234,7 @@ class VoiceGuide @Inject constructor(
             activeUtterances = 0
             abandonFocus()
         }
+        notifySpeakingState(false)
     }
 
     /** Initialize, or **re-initialize** if [enginePackage] differs from the engine
