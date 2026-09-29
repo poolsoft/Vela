@@ -40,7 +40,7 @@ class WidgetManager private constructor(private val context: Context) {
     private val _widgetsFlow = MutableStateFlow<List<BaseWidget>>(emptyList())
     val widgetsFlow: StateFlow<List<BaseWidget>> = _widgetsFlow.asStateFlow()
 
-    val appWidgetHost: AppWidgetHost = CarAppWidgetHost(context)
+    val appWidgetHost: AppWidgetHost = CarZeroPaddingWidgetHost(context, 1024)
 
     init {
         try {

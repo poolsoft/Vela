@@ -74,6 +74,7 @@ import androidx.core.graphics.drawable.toBitmap
 import app.vela.carlauncher.model.HizTelemetrisi
 import app.vela.carlauncher.model.MedyaParcasi
 import app.vela.carlauncher.widgets.BaseWidget
+import app.vela.carlauncher.widgets.CarWidgetSizing
 import app.vela.carlauncher.widgets.WidgetManager
 import app.vela.carlauncher.widgets.WidgetRegistry
 import kotlinx.coroutines.delay
@@ -505,15 +506,17 @@ fun WorkspaceCellPageLayout(
                                     change.consume()
                                     liveDragOffset += dragAmount
 
-                                    val absoluteX = leftPx + liveDragOffset.x + (widthPx / 2f)
-                                    val absoluteY = topPx + liveDragOffset.y + (heightPx / 2f)
-
-                                    val targetCol = ((absoluteX - (widthPx / 2f)) / (cellWidthPx + spacingPx))
-                                        .roundToInt()
-                                        .coerceIn(0, colCount - widget.spanX)
-                                    val targetRow = ((absoluteY - (heightPx / 2f)) / (cellHeightPx + spacingPx))
-                                        .roundToInt()
-                                        .coerceIn(0, rowCount - widget.spanY)
+                                    val (targetCol, targetRow) = CarWidgetSizing.adjustedWidgetDropCell(
+                                        sourceCellX = widget.cellX,
+                                        sourceCellY = widget.cellY,
+                                        spanX = widget.spanX,
+                                        spanY = widget.spanY,
+                                        dragOffsetX = liveDragOffset.x,
+                                        dragOffsetY = liveDragOffset.y,
+                                        cellWidthPx = cellWidthPx,
+                                        cellHeightPx = cellHeightPx,
+                                        spacingPx = spacingPx
+                                    )
 
                                     dragCellX = targetCol
                                     dragCellY = targetRow
@@ -607,18 +610,31 @@ fun WorkspaceCellPageLayout(
 
                     // Kısayollar harici widget'lar icin Boyutlandirma Tutamacları
                     if (!isShortcut) {
-                        val minSpanX = if (widget.typeId == WidgetRegistry.TYPE_COMBINED) 4 else 1
-                        val maxSpanX = colCount - safeCellX
-                        val minSpanY = 1
-                        val maxSpanY = rowCount - safeCellY
+                        val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
+                        val providerInfo = remember(widget.appWidgetId) {
+                            if (widget.appWidgetId != -1) {
+                                try { appWidgetManager.getAppWidgetInfo(widget.appWidgetId) } catch (e: Exception) { null }
+                            } else null
+                        }
+                        val cellWDp = with(density) { cellWidthPx.toDp().value }
+                        val cellHDp = with(density) { cellHeightPx.toDp().value }
+                        val constraints = remember(widget, providerInfo, cellWDp, cellHDp) {
+                            CarWidgetSizing.getConstraintsForWidget(widget, providerInfo, cellWDp, cellHDp)
+                        }
+
+                        val minSpanX = constraints.minSpanX
+                        val maxSpanX = minOf(constraints.maxSpanX, colCount - safeCellX)
+                        val minSpanY = constraints.minSpanY
+                        val maxSpanY = minOf(constraints.maxSpanY, rowCount - safeCellY)
 
                         // 1. Sag Kenar Boyut Tutamaci (Genislik: Büyütme & Küçültme Drag)
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .offset(x = 16.dp)
-                                .size(44.dp)
-                                .zIndex(110f)
+                        if (constraints.canResizeHorizontally) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .offset(x = 16.dp)
+                                    .size(44.dp)
+                                    .zIndex(110f)
                                 .pointerInput(widget.id, safeSpanX) {
                                     detectDragGestures(
                                         onDragStart = {
@@ -659,96 +675,100 @@ fun WorkspaceCellPageLayout(
                             )
                         }
 
-                        // 2. Alt Kenar Boyut Tutamaci (Yukseklik: Büyütme & Küçültme Drag)
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .offset(y = 16.dp)
-                                .size(44.dp)
-                                .zIndex(110f)
-                                .pointerInput(widget.id, safeSpanY) {
-                                    detectDragGestures(
-                                        onDragStart = {
-                                            resizingWidgetId = widget.id
-                                            liveResizeSpanX = safeSpanX
-                                            liveResizeSpanY = safeSpanY
-                                            resizeDragX = 0f
-                                            resizeDragY = 0f
-                                        },
-                                        onDragCancel = { resizingWidgetId = null },
-                                        onDragEnd = {
-                                            if (resizingWidgetId == widget.id && liveResizeSpanY != safeSpanY) {
-                                                onResizeWidget(widget.id, safeSpanX, liveResizeSpanY)
-                                            }
-                                            resizingWidgetId = null
-                                        },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            resizeDragY += dragAmount.y
-                                            val deltaRows = (resizeDragY / (cellHeightPx + spacingPx)).roundToInt()
-                                            liveResizeSpanY = (safeSpanY + deltaRows).coerceIn(minSpanY, maxSpanY)
+                            // 2. Alt Kenar Boyut Tutamaci (Yukseklik: Büyütme & Küçültme Drag)
+                            if (constraints.canResizeVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .offset(y = 16.dp)
+                                        .size(44.dp)
+                                        .zIndex(110f)
+                                        .pointerInput(widget.id, safeSpanY) {
+                                            detectDragGestures(
+                                                onDragStart = {
+                                                    resizingWidgetId = widget.id
+                                                    liveResizeSpanX = safeSpanX
+                                                    liveResizeSpanY = safeSpanY
+                                                    resizeDragX = 0f
+                                                    resizeDragY = 0f
+                                                },
+                                                onDragCancel = { resizingWidgetId = null },
+                                                onDragEnd = {
+                                                    if (resizingWidgetId == widget.id && liveResizeSpanY != safeSpanY) {
+                                                        onResizeWidget(widget.id, safeSpanX, liveResizeSpanY)
+                                                    }
+                                                    resizingWidgetId = null
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    resizeDragY += dragAmount.y
+                                                    val deltaRows = (resizeDragY / (cellHeightPx + spacingPx)).roundToInt()
+                                                    liveResizeSpanY = (safeSpanY + deltaRows).coerceIn(minSpanY, maxSpanY)
+                                                }
+                                            )
                                         }
+                                        .clickable {
+                                            val nextSpanY = if (safeSpanY >= maxSpanY) minSpanY else (safeSpanY + 1).coerceAtMost(maxSpanY)
+                                            onResizeWidget(widget.id, safeSpanX, nextSpanY)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clip(CircleShape)
+                                            .background(ClPrimary)
+                                            .border(2.dp, Color.White, CircleShape)
                                     )
                                 }
-                                .clickable {
-                                    // Tiklama destegi: siniri asarsa min boyuta kuculur
-                                    val nextSpanY = if (safeSpanY >= maxSpanY) minSpanY else (safeSpanY + 1).coerceAtMost(maxSpanY)
-                                    onResizeWidget(widget.id, safeSpanX, nextSpanY)
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .clip(CircleShape)
-                                    .background(ClPrimary)
-                                    .border(2.dp, Color.White, CircleShape)
-                            )
-                        }
+                            }
 
-                        // 3. Sag-Alt Kose Tutamaci (Cift Yonlu En & Boy Drag)
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .offset(x = 12.dp, y = 12.dp)
-                                .size(44.dp)
-                                .zIndex(115f)
-                                .pointerInput(widget.id, safeSpanX, safeSpanY) {
-                                    detectDragGestures(
-                                        onDragStart = {
-                                            resizingWidgetId = widget.id
-                                            liveResizeSpanX = safeSpanX
-                                            liveResizeSpanY = safeSpanY
-                                            resizeDragX = 0f
-                                            resizeDragY = 0f
+                            // 3. Sag-Alt Kose Tutamaci (Cift Yonlu En & Boy Drag)
+                            if (constraints.canResizeHorizontally && constraints.canResizeVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .offset(x = 12.dp, y = 12.dp)
+                                        .size(44.dp)
+                                        .zIndex(115f)
+                                        .pointerInput(widget.id, safeSpanX, safeSpanY) {
+                                            detectDragGestures(
+                                                onDragStart = {
+                                                    resizingWidgetId = widget.id
+                                                    liveResizeSpanX = safeSpanX
+                                                    liveResizeSpanY = safeSpanY
+                                                    resizeDragX = 0f
+                                                    resizeDragY = 0f
+                                                },
+                                                onDragCancel = { resizingWidgetId = null },
+                                                onDragEnd = {
+                                                    if (resizingWidgetId == widget.id && (liveResizeSpanX != safeSpanX || liveResizeSpanY != safeSpanY)) {
+                                                        onResizeWidget(widget.id, liveResizeSpanX, liveResizeSpanY)
+                                                    }
+                                                    resizingWidgetId = null
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    resizeDragX += dragAmount.x
+                                                    resizeDragY += dragAmount.y
+                                                    val deltaCols = (resizeDragX / (cellWidthPx + spacingPx)).roundToInt()
+                                                    val deltaRows = (resizeDragY / (cellHeightPx + spacingPx)).roundToInt()
+                                                    liveResizeSpanX = (safeSpanX + deltaCols).coerceIn(minSpanX, maxSpanX)
+                                                    liveResizeSpanY = (safeSpanY + deltaRows).coerceIn(minSpanY, maxSpanY)
+                                                }
+                                            )
                                         },
-                                        onDragCancel = { resizingWidgetId = null },
-                                        onDragEnd = {
-                                            if (resizingWidgetId == widget.id && (liveResizeSpanX != safeSpanX || liveResizeSpanY != safeSpanY)) {
-                                                onResizeWidget(widget.id, liveResizeSpanX, liveResizeSpanY)
-                                            }
-                                            resizingWidgetId = null
-                                        },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            resizeDragX += dragAmount.x
-                                            resizeDragY += dragAmount.y
-                                            val deltaCols = (resizeDragX / (cellWidthPx + spacingPx)).roundToInt()
-                                            val deltaRows = (resizeDragY / (cellHeightPx + spacingPx)).roundToInt()
-                                            liveResizeSpanX = (safeSpanX + deltaCols).coerceIn(minSpanX, maxSpanX)
-                                            liveResizeSpanY = (safeSpanY + deltaRows).coerceIn(minSpanY, maxSpanY)
-                                        }
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White)
+                                            .border(2.dp, ClPrimary, CircleShape)
                                     )
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White)
-                                    .border(2.dp, ClPrimary, CircleShape)
-                            )
+                                }
+                            }
                         }
                     }
                 }
