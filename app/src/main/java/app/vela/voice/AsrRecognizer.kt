@@ -174,6 +174,15 @@ class AsrRecognizer @Inject constructor(
             .putInt(KEY_LOAD_STRIKES + engine.id, 0).apply()
     }
 
+    fun clearAllQuarantines() {
+        val editor = prefs().edit()
+        AsrEngine.entries.forEach { engine ->
+            editor.putBoolean(KEY_MODEL_BAD + engine.id, false)
+            editor.putInt(KEY_LOAD_STRIKES + engine.id, 0)
+        }
+        editor.apply()
+    }
+
     fun hasMicPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
@@ -317,7 +326,7 @@ class AsrRecognizer @Inject constructor(
                 // missing .so (UnsatisfiedLinkError - the v7a strip, see app/build.gradle.kts) from
                 // an OOM on a small phone, and both surfaced as "re-download the model". A tester
                 // re-downloaded 47 MB twice on that advice. The class name alone decides it.
-                android.util.Log.e(TAG, "native ASR load failed (${engine.id}): ${it::class.java.simpleName}")
+                android.util.Log.e(TAG, "native ASR load failed (${engine.id}): ${it::class.java.simpleName}: ${it.message}", it)
             }.getOrNull()
             // The load RETURNED (success or a catchable failure), so the process survived it: zero
             // the strikes. Only a native abort (or a mid-load kill) leaves a strike standing, and

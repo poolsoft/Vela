@@ -634,6 +634,8 @@ class MapViewModel @Inject constructor(
         if (voiceWakeController.isEnabled()) {
             voiceWakeController.startListening()
         }
+        asrRecognizer.clearAllQuarantines()
+        refreshAsr()
         refreshNotices() // any cached notices, shown immediately
         // Fleet default map color set (a user's own Settings pick always wins - see MapColors).
         app.vela.ui.MapColors.remoteDefault.value = calibration.current().defaultMapPalette
@@ -5555,9 +5557,11 @@ class MapViewModel @Inject constructor(
         asrRecognizer.clearQuarantine(engine) // a fresh download replaces whatever was quarantined
         asrCancel.set(false)
         _state.update { it.copy(asrDownloadPct = 0f, asrInstalling = false, asrDownloadingId = engine.id) }
+        showStatus(appContext.getString(R.string.settings_voice_search_downloading, 0))
         downloadLaunch(engine.displayName) {
             val ok = kokoroInstaller.download(
                 engine.url, engine.dir(appContext), bytes,
+                fallbackUrl = engine.fallbackUrl,
                 onExtracting = { _state.update { it.copy(asrInstalling = true) } },
                 active = { !asrCancel.get() },
             ) { p -> _state.update { it.copy(asrDownloadPct = p) } }

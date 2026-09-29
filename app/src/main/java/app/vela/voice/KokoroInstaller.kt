@@ -37,6 +37,7 @@ class KokoroInstaller @Inject constructor(
         url: String,
         destDir: File,
         sizeEst: Long,
+        fallbackUrl: String? = null,
         onExtracting: () -> Unit = {},
         active: () -> Boolean = { true },
         onProgress: (Float) -> Unit,
@@ -44,22 +45,26 @@ class KokoroInstaller @Inject constructor(
         val tmp = File(context.filesDir, "voice.download.tmp")
         val staging = File(context.filesDir, "voice.staging")
         try {
-            // The download progress bar is the DOWNLOAD only (honest + fast). The bunzip2+untar of the
-            // ~67 MB archive is seconds of CPU that no % can meaningfully track, so instead of mapping it
-            // into the tail (which read as a download "hanging at 98%" / crawling the last 10%, user
-            // 2026-07-07) we flip to a separate "Installing…" phase via [onExtracting].
-            if (!stream(url, tmp, sizeEst, 0f, 1f, active, onProgress)) return@withContext false
+            var streamed = stream(url, tmp, sizeEst, 0f, 1f, active, onProgress)
+            if (!streamed && !fallbackUrl.isNullOrBlank() && active()) {
+                android.util.Log.i("KokoroInstaller", "primary download failed, trying fallback: $fallbackUrl")
+                streamed = stream(fallbackUrl, tmp, sizeEst, 0f, 1f, active, onProgress)
+            }
+            if (!streamed) return@withContext false
 
             onExtracting()
+            destDir.parentFile?.mkdirs()
             staging.deleteRecursively(); staging.mkdirs()
             extractTar(tmp, staging)
             val inner = staging.listFiles()?.firstOrNull { it.isDirectory } ?: staging
             destDir.deleteRecursively()
+            destDir.mkdirs()
             if (!inner.renameTo(destDir)) inner.copyRecursively(destDir, overwrite = true)
 
             onProgress(1f)
             true
         } catch (t: Throwable) {
+            android.util.Log.e("KokoroInstaller", "download failed for $url", t)
             destDir.deleteRecursively()
             false
         } finally {
@@ -70,10 +75,13 @@ class KokoroInstaller @Inject constructor(
 
     /** Stream [url] to [out], reporting progress mapped into the [base, base+span] slice of the bar.
      *  [active] is checked per chunk - a user cancel aborts the read within ~64 KB. */
-    private fun stream(url: String, out: File, sizeEst: Long, base: Float, span: Float, active: () -> Boolean, onProgress: (Float) -> Unit): Boolean =
+    private fun stream(url: String, out: File, sizeEst: Long, base: Float, span: Float, active: () -> Boolean, onProgress: (Float) -> Unit): Boolean = runCatching {
         downloadHttp.newCall(Request.Builder().url(url).header("User-Agent", "VelaMaps").build()).execute().use { resp ->
             val body = resp.body
-            if (!resp.isSuccessful || body == null) return@use false
+            if (!resp.isSuccessful || body == null) {
+                android.util.Log.w("KokoroInstaller", "HTTP error ${resp.code} for $url")
+                return@use false
+            }
             val total = body.contentLength().takeIf { it > 0 } ?: sizeEst
             body.byteStream().use { input ->
                 out.outputStream().use { o ->
@@ -90,6 +98,7 @@ class KokoroInstaller @Inject constructor(
             }
             true
         }
+    }.getOrDefault(false)
 
     private fun extractTar(src: File, destDir: File) {
         // Pick the decompressor by magic bytes: Vela's own archives are gzip (bzip2 unpacked at

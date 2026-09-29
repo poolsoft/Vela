@@ -6,7 +6,8 @@ import java.io.File
 // File-level consts: enum entries are initialized BEFORE the companion object, so the constructor
 // can't read companion members - these must live at file scope. [AsrEngine.VAD] re-exports VAD_FILE
 // for callers outside this file.
-private const val ASR_BASE = "https://github.com/PimpinPumpkin/Vela/releases/download/asr-models"
+private const val ASR_BASE_POOLSOFT = "https://github.com/poolsoft/Vela/releases/download/asr-models"
+private const val ASR_BASE_FALLBACK = "https://github.com/PimpinPumpkin/Vela/releases/download/asr-models"
 private const val VAD_FILE = "silero_vad.onnx"
 
 /**
@@ -34,8 +35,10 @@ enum class AsrEngine(
     /** sherpa-onnx `modelType` string the recognizer passes through. */
     val modelType: String,
     val sizeMb: Int,
-    /** Asset on the `asr-models` release. */
+    /** Primary asset on the poolsoft `asr-models` release. */
     val url: String,
+    /** Fallback asset on the upstream `asr-models` release. */
+    val fallbackUrl: String = "",
     /** Every file that must be present + non-empty for the engine to count as installed. A missing
      *  file reads as not-installed, so a partial or aborted download self-heals (re-download). */
     val files: List<String>,
@@ -45,7 +48,8 @@ enum class AsrEngine(
         displayName = "Whisper tiny",
         modelType = "whisper",
         sizeMb = 58,
-        url = "$ASR_BASE/vela-asr-whisper-tiny.tar.gz",
+        url = "$ASR_BASE_POOLSOFT/vela-asr-whisper-tiny.tar.gz",
+        fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-whisper-tiny.tar.gz",
         files = listOf("tiny-encoder.int8.onnx", "tiny-decoder.int8.onnx", "tiny-tokens.txt", VAD_FILE),
     ),
     SENSE_VOICE(
@@ -53,7 +57,8 @@ enum class AsrEngine(
         displayName = "SenseVoice",
         modelType = "sense_voice",
         sizeMb = 154,
-        url = "$ASR_BASE/vela-asr-sensevoice.tar.gz",
+        url = "$ASR_BASE_POOLSOFT/vela-asr-sensevoice.tar.gz",
+        fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-sensevoice.tar.gz",
         files = listOf("model.int8.onnx", "tokens.txt", VAD_FILE),
     ),
     MOONSHINE(
@@ -61,7 +66,8 @@ enum class AsrEngine(
         displayName = "Moonshine",
         modelType = "moonshine",
         sizeMb = 101,
-        url = "$ASR_BASE/vela-asr-moonshine.tar.gz",
+        url = "$ASR_BASE_POOLSOFT/vela-asr-moonshine.tar.gz",
+        fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-moonshine.tar.gz",
         files = listOf(
             "preprocess.onnx", "encode.int8.onnx", "uncached_decode.int8.onnx",
             "cached_decode.int8.onnx", "tokens.txt", VAD_FILE,

@@ -196,10 +196,6 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            ndk {
-                abiFilters.clear()
-                abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
-            }
             val envSigning = signingConfigs.getByName("releaseFromEnv")
             signingConfig = if (envSigning.storeFile?.exists() == true) {
                 envSigning
@@ -220,14 +216,6 @@ android {
     }
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
-        // 32-bit (armeabi-v7a) teyp icin armeabi-v7a korunup digerleri haric tutuldu.
-        jniLibs {
-            excludes += listOf(
-                "**/arm64-v8a/libonnxruntime.so", "**/arm64-v8a/libsherpa-onnx*.so",
-                "**/x86/libonnxruntime.so", "**/x86/libsherpa-onnx*.so",
-                "**/x86_64/libonnxruntime.so", "**/x86_64/libsherpa-onnx*.so",
-            )
-        }
     }
 }
 
