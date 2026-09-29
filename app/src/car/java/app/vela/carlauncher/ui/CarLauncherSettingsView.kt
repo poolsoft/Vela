@@ -32,17 +32,20 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewSidebar
 import androidx.compose.material.icons.filled.Widgets
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -84,9 +87,7 @@ private enum class CarSettingsSection {
     DOCK_PANEL,
     WIDGETS,
     MUSIC,
-    AUTOLAUNCH,
-    PERMISSIONS,
-    BACKUP
+    AUTOLAUNCH
 }
 
 @Composable
@@ -131,16 +132,6 @@ fun CarLauncherSettingsView(
         )
         CarSettingsSection.AUTOLAUNCH -> CarAutolaunchSettingsScreen(
             onBack = { section = CarSettingsSection.HUB },
-            modifier = modifier
-        )
-        CarSettingsSection.PERMISSIONS -> CarPermissionsSettingsScreen(
-            onBack = { section = CarSettingsSection.HUB },
-            onOpenFullPermissions = onPermissions,
-            modifier = modifier
-        )
-        CarSettingsSection.BACKUP -> CarBackupSettingsScreen(
-            onBack = { section = CarSettingsSection.HUB },
-            onOpenFullBackup = onBackup,
             modifier = modifier
         )
     }
@@ -221,20 +212,6 @@ private fun CarSettingsHubScreen(
                 title = "Otomatik Başlatma",
                 description = "Araç veya launcher açıldığında otomatik başlayacak favori uygulamalar",
                 onClick = { onOpenSection(CarSettingsSection.AUTOLAUNCH) }
-            )
-
-            HubCategoryRow(
-                icon = Icons.Default.Security,
-                title = "İzinler ve Sistem Araçları",
-                description = "Üzerinde gösterme, arka plan konumu, bildirim erişimi, ekran ve ses ayarları",
-                onClick = { onOpenSection(CarSettingsSection.PERMISSIONS) }
-            )
-
-            HubCategoryRow(
-                icon = Icons.Default.Backup,
-                title = "Yedekleme ve Geri Yükleme",
-                description = "Launcher yapılandırmasını dışa aktar, içe aktar veya sıfırla",
-                onClick = { onOpenSection(CarSettingsSection.BACKUP) }
             )
 
             Spacer(Modifier.height(16.dp))
@@ -734,31 +711,18 @@ private fun CarMusicSettingsScreen(
             Spacer(Modifier.height(16.dp))
 
             SettingsGroup(title = "Görselleştirici (Spectrum / Visualizer)") {
-                ChoicePillRow(
+                VisualizerSelectorRow(
                     label = "Küçük Panel Görselleştirici",
                     detail = "Panel küçültülmüş durumdayken çalışan animasyon stili",
-                    selectedKey = kucukGorsellestirici.toString(),
-                    options = listOf(
-                        "0" to "Kapalı",
-                        "1" to "Dalga",
-                        "2" to "Bar",
-                        "3" to "Daire",
-                        "4" to "Spektrum"
-                    ),
-                    onSelect = { CarLauncherSettings.setGorsellestiriciTipi(it.toIntOrNull() ?: 2) }
+                    currentMode = kucukGorsellestirici,
+                    onSelect = { CarLauncherSettings.setGorsellestiriciTipi(it) }
                 )
                 GroupDivider()
-                ChoicePillRow(
+                VisualizerSelectorRow(
                     label = "Büyük Panel Görselleştirici",
                     detail = "Genişletilmiş müzik ekranında çalışan görsel efekt",
-                    selectedKey = buyukGorsellestirici.toString(),
-                    options = listOf(
-                        "0" to "Kapalı",
-                        "1" to "Dalga",
-                        "2" to "Bar",
-                        "4" to "Spektrum"
-                    ),
-                    onSelect = { CarLauncherSettings.setLargeVisualizer(it.toIntOrNull() ?: 4) }
+                    currentMode = buyukGorsellestirici,
+                    onSelect = { CarLauncherSettings.setLargeVisualizer(it) }
                 )
                 GroupDivider()
                 ChoicePillRow(
@@ -865,153 +829,112 @@ private fun CarAutolaunchSettingsScreen(
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 7. İZİNLER VE SİSTEM ARAÇLARI (PERMISSIONS)
+// 7. GÖRSELLEŞTİRİCİ SEÇİM DİYALOĞU VE BİLEŞENİ
 // ═════════════════════════════════════════════════════════════════════════════
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CarPermissionsSettingsScreen(
-    onBack: () -> Unit,
-    onOpenFullPermissions: () -> Unit,
+private fun VisualizerSelectorRow(
+    label: String,
+    detail: String? = null,
+    currentMode: Int,
+    onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
+    var showDialog by remember { mutableStateOf(false) }
+    val modes = listOf(
+        0 to "Klasik Bar Spektrum",
+        1 to "Işıltılı Tepe Noktaları",
+        2 to "Neon Modern Barlar",
+        3 to "Akıcı Bezier Dalgası",
+        4 to "Radyal Patlama Spektrumu",
+        5 to "Ortadan Simetrik Barlar",
+        6 to "Düşen Ritmik Parçacıklar",
+        7 to "İç İçe Ritmik Daireler"
+    )
+    val currentTitle = modes.find { it.first == currentMode }?.second ?: "Mod $currentMode"
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("İzinler ve Sistem Araçları") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
-                    }
-                }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { showDialog = true }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
             )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-        modifier = modifier.fillMaxSize()
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+            if (detail != null) {
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.padding(start = 8.dp)
         ) {
-            SettingsGroup(title = "Uygulama İzin Durumu") {
-                ActionRow(
-                    label = "Tüm İzinleri Denetle",
-                    detail = "Navigasyon, sesli asistan ve araç telemetrisi için gerekli izinleri yönetin",
-                    actionText = "Yönet",
-                    onClick = onOpenFullPermissions
-                )
-                GroupDivider()
-                ActionRow(
-                    label = "Bildirim Dinleyici İzni",
-                    detail = "Diğer müzik uygulamalarından parça başlığı ve kapak çekmek için gereklidir",
-                    actionText = "Ayarla",
-                    onClick = {
-                        val i = android.content.Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
-                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
-                        runCatching { context.startActivity(i) }
-                    }
-                )
-                GroupDivider()
-                ActionRow(
-                    label = "Diğer Uygulamaların Üzerinde Gösterme",
-                    detail = "Yüzen buton ve mini harita penceresi için zorunludur",
-                    actionText = "Ayarla",
-                    onClick = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            val i = android.content.Intent(
-                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                android.net.Uri.parse("package:${context.packageName}")
-                            ).apply { flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK }
-                            runCatching { context.startActivity(i) }
-                        }
-                    }
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            SettingsGroup(title = "Android Sistem Araçları") {
-                ActionRow(
-                    label = "Sistem Ekran Ayarları",
-                    detail = "Parlaklık, uyku modu ve ekran koruyucu",
-                    actionText = "Aç",
-                    onClick = {
-                        runCatching {
-                            context.startActivity(android.content.Intent(Settings.ACTION_DISPLAY_SETTINGS).apply {
-                                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                            })
-                        }
-                    }
-                )
-                GroupDivider()
-                ActionRow(
-                    label = "Sistem Ses Ayarları",
-                    detail = "Medya, navigasyon ve bildirim ses düzeyleri",
-                    actionText = "Aç",
-                    onClick = {
-                        runCatching {
-                            context.startActivity(android.content.Intent(Settings.ACTION_SOUND_SETTINGS).apply {
-                                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                            })
-                        }
-                    }
-                )
-            }
-
-            Spacer(Modifier.height(24.dp))
+            Text(
+                text = currentTitle,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+            )
         }
     }
-}
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 8. YEDEKLEME VE GERİ YÜKLEME (BACKUP & RESTORE)
-// ═════════════════════════════════════════════════════════════════════════════
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CarBackupSettingsScreen(
-    onBack: () -> Unit,
-    onOpenFullBackup: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Yedekleme ve Geri Yükleme") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text(label) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    modes.forEach { (modeId, modeTitle) ->
+                        val isSelected = modeId == currentMode
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSelect(modeId)
+                                    showDialog = false
+                                }
+                                .padding(vertical = 10.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = {
+                                    onSelect(modeId)
+                                    showDialog = false
+                                }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = modeTitle,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     }
                 }
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-        modifier = modifier.fillMaxSize()
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            SettingsGroup(title = "Yapılandırma Yedekleme") {
-                ActionRow(
-                    label = "Vela Taşınabilir Yedekleme",
-                    detail = "Tüm harita ayarları, car launcher düzeni, ses modelleri ve favorileri tek dosyada yedekleyin",
-                    actionText = "Aç",
-                    onClick = onOpenFullBackup
-                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Kapat")
+                }
             }
-
-            Spacer(Modifier.height(24.dp))
-        }
+        )
     }
 }
 
