@@ -81,8 +81,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val ClCardBg = Color(0xDD14151E)
-private val ClBorder = Color(0x28FFFFFF)
+private val ClCardBg = Color(0xFF141624)
+private val ClBorder = Color(0x33FFFFFF)
 private val ClPrimary = Color(0xFF0A84FF)
 
 /**
@@ -102,7 +102,7 @@ fun CarDesktopWorkspaceView(
     onSonraki: () -> Unit,
     onOnceki: () -> Unit,
     onMuzikPaneliAc: () -> Unit,
-    onKapat: () -> Unit,
+    onKapat: (() -> Unit)? = null,
     onLaunchApp: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -141,20 +141,20 @@ fun CarDesktopWorkspaceView(
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color(0xAA090A0E), Color(0xAA10121A))
+                    colors = listOf(Color(0xFF090A0F), Color(0xFF10121C), Color(0xFF131524))
                 )
             )
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
             // ═══════════════════════════════════════════════════════════════
-            // UST BAR: SAYFA GOSTERGESI, "+ WIDGET EKLE" & KAPAT
+            // UST BAR: SAYFA GOSTERGESI, "+ WIDGET EKLE"
             // ═══════════════════════════════════════════════════════════════
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 6.dp),
+                    .padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -167,7 +167,7 @@ fun CarDesktopWorkspaceView(
                         val aktif = pagerState.currentPage == p
                         Box(
                             modifier = Modifier
-                                .size(if (aktif) 10.dp else 7.dp)
+                                .size(if (aktif) 10.dp else 6.dp)
                                 .clip(CircleShape)
                                 .background(if (aktif) ClPrimary else Color(0x44FFFFFF))
                                 .clickable {
@@ -175,16 +175,16 @@ fun CarDesktopWorkspaceView(
                                 }
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         text = "Sayfa ${pagerState.currentPage + 1} / $pageCount",
-                        color = Color.Gray,
+                        color = Color.LightGray,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
 
-                // Sag Butonlar: + Widget Ekle ve Kapat
+                // Sag Butonlar: + Widget Ekle ve (varsa) Kapat
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
@@ -200,15 +200,17 @@ fun CarDesktopWorkspaceView(
                         }
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(Color(0x33FFFFFF))
-                            .clickable { onKapat() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Kapat", tint = Color.White, modifier = Modifier.size(18.dp))
+                    if (onKapat != null) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x33FFFFFF))
+                                .clickable { onKapat() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "Kapat", tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
                     }
                 }
             }
@@ -559,19 +561,55 @@ private fun ObdWidgetView(telemetri: HizTelemetrisi) {
 
 @Composable
 private fun ShortcutsWidgetView(kisayollar: List<app.vela.carlauncher.model.AppShortcut>, onLaunchApp: (String) -> Unit) {
-    Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        kisayollar.take(4).forEach { item ->
-            Box(
+    Row(
+        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        kisayollar.take(5).forEach { item ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0x33FFFFFF))
-                    .clickable {
-                        onLaunchApp(item.paketAdi)
-                    },
-                contentAlignment = Alignment.Center
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onLaunchApp(item.paketAdi) }
+                    .padding(4.dp)
             ) {
-                Text(text = item.ad.take(1).uppercase(), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x22FFFFFF)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (item.ikon != null) {
+                        androidx.compose.ui.viewinterop.AndroidView(
+                            factory = { ctx ->
+                                android.widget.ImageView(ctx).apply {
+                                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                                }
+                            },
+                            update = { imageView ->
+                                imageView.setImageDrawable(item.ikon)
+                            },
+                            modifier = Modifier.size(36.dp)
+                        )
+                    } else {
+                        Text(
+                            text = item.ad.take(1).uppercase(),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = item.ad,
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
             }
         }
     }

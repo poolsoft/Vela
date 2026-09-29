@@ -75,6 +75,7 @@ fun CarLauncherHostView(
     val largeVisualizer by CarLauncherSettings.largeVisualizer.collectAsState()
     val visualizerFps by CarLauncherSettings.visualizerFps.collectAsState()
     val latestTelemetry by rememberUpdatedState(telemetri)
+    val latestMedya by rememberUpdatedState(medya)
     val latestPlay by rememberUpdatedState(onOynatDuraklat)
     val latestNext by rememberUpdatedState(onSonraki)
     val latestPrevious by rememberUpdatedState(onOnceki)
@@ -148,10 +149,32 @@ fun CarLauncherHostView(
             binding.dockHost?.updateModeButton(desktop, fullScreenMap)
             binding.dockHost?.setVoiceListening(isVoiceListening, voiceAudioLevel)
 
-            if (binding.contentMode != contentMode) {
+            val effectiveMode = if (desktop) "DESKTOP" else contentMode
+            if (binding.contentMode != effectiveMode) {
                 binding.releasePanel()
-                binding.contentMode = contentMode
-                when (contentMode) {
+                binding.contentMode = effectiveMode
+                when (effectiveMode) {
+                    "DESKTOP" -> {
+                        binding.panelCompose = ComposeView(root.context).apply {
+                            setParentCompositionContext(parentComposition)
+                            setContent {
+                                androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme()) {
+                                    app.vela.carlauncher.tools.DesktopAppearance {
+                                        CarDesktopWorkspaceView(
+                                            telemetri = latestTelemetry,
+                                            medya = latestMedya,
+                                            onOynatDuraklat = { latestPlay() },
+                                            onSonraki = { latestNext() },
+                                            onOnceki = { latestPrevious() },
+                                            onMuzikPaneliAc = { latestPanel("MUSIC") },
+                                            onKapat = null,
+                                            onLaunchApp = { latestLaunch(it) }
+                                        )
+                                    }
+                                }
+                            }
+                        }.also { panel.addView(it) }
+                    }
                     "MUSIC" -> {
                         binding.musicHost = CarMusicPlayerHost(
                             root.context, { latestPanel("UNIFIED") },

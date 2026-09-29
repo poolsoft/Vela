@@ -161,19 +161,5 @@ fun CarLauncherLayout(
             modifier = Modifier.fillMaxSize(),
             haritaIcerigi = haritaIcerigi
         )
-        AnimatedVisibility(desktop, enter = fadeIn(tween(250)), exit = fadeOut(tween(250)), modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).zIndex(500f)) {
-            app.vela.carlauncher.tools.DesktopAppearance {
-            CarDesktopWorkspaceView(
-                telemetri = telemetryState, medya = media,
-                onOynatDuraklat = { mediaManager.oynatVeyaDuraklat() },
-                onSonraki = { mediaManager.sonrakiParca() },
-                onOnceki = { mediaManager.oncekiParca() },
-                onMuzikPaneliAc = { launchApp(InternalApp.MUSIC.uri) },
-                onLaunchApp = ::launchApp,
-                onKapat = ::showSplit
-            )
-            }
-        }
-
     }
 }
