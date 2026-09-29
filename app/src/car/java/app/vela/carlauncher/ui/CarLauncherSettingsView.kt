@@ -1,11 +1,12 @@
 package app.vela.carlauncher.ui
 
-import android.widget.Toast
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,59 +18,54 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DisplaySettings
-import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewSidebar
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.res.stringResource
-import kotlinx.coroutines.launch
-import app.vela.carlauncher.apps.CarAppManager
-import app.vela.R
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import app.vela.R
+import app.vela.carlauncher.apps.CarAppManager
 import app.vela.carlauncher.hardware.CarHardwareManager
+import app.vela.carlauncher.media.MediaNotificationListener
 import app.vela.carlauncher.settings.CarLauncherSettings
 import app.vela.ui.AppLocale
-
-private val ClPrimary = Color(0xFF0A84FF)
-private val ClCardBg = Color(0xFF141419)
-private val ClSidebarBg = Color(0xFF101014)
-private val ClDivider = Color(0x1FFFFFFF)
+import app.vela.ui.settings.GroupDivider
+import app.vela.ui.settings.SettingsGroup
+import app.vela.ui.settings.SmartFocusPreferences
+import app.vela.ui.settings.ToggleRow
+import kotlinx.coroutines.launch
 
 /**
- * OsmAnd CarLauncherSettingsFragment Uyumlu Iki Kolonlu (Split-Screen) Ayarlar Ekrani.
- * Yatay arac bas uniteleri (Head Unit) icin ozel olarak tasarlanmistir.
- * Sol Kolon: Kategori Secimi ve Kapatma Butonu
- * Sag Kolon: Secilen Kategoriye Ait Detayli Dokunmatik Ayar Kartlari
- * Kod icerisinde Turkce karakter kullanilmamistir (identifier ve degiskenlerde).
+ * Vela Ayarlar Arayuzu ile Tam Uyumlu Modern M3 Car Launcher Ayarlar Ekrani.
+ * Yatay ekranlarda hizli erisim icin sol gezinme sutunu + sagda Vela M3 ayar kartlari sunar.
  */
 @Composable
 fun CarLauncherSettingsView(
@@ -81,591 +77,541 @@ fun CarLauncherSettingsView(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val panelHeight by CarLauncherSettings.panelYukseklikYuzdesi.collectAsState()
-    val expansion by CarLauncherSettings.panelGenislemeDavranisi.collectAsState()
-    val largeVisualizer by CarLauncherSettings.largeVisualizer.collectAsState()
-    val visualizerFps by CarLauncherSettings.visualizerFps.collectAsState()
-    val preferredMusic by CarLauncherSettings.tercihEdilenMuzikUygulamasi.collectAsState()
-    var aktifKategori by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("GORUNUM") } // GORUNUM, DOCK, MUZIK, SISTEM
 
-    // Reaktif Ayar Degerleri
-    val tamEkran by CarLauncherSettings.tamEkranModu.collectAsState()
+    var aktifKategori by rememberSaveable { mutableStateOf("GORUNUM") } // GORUNUM, DOCK, MUZIK, SISTEM
+
+    // Reaktif ayar degerleri
     val durumCubugu by CarLauncherSettings.durumCubuguGoster.collectAsState()
     val dockKonumu by CarLauncherSettings.dockKonumu.collectAsState()
     val dockBoyutu by CarLauncherSettings.dockBoyutu.collectAsState()
     val panelKonumu by CarLauncherSettings.panelKonumu.collectAsState()
     val panelGenislikYuzdesi by CarLauncherSettings.panelGenislikYuzdesi.collectAsState()
-    val otomatikOynat by CarLauncherSettings.otomatikOynat.collectAsState()
-    val gorsellestiriciTipi by CarLauncherSettings.gorsellestiriciTipi.collectAsState()
-    val geceKarartma by CarLauncherSettings.geceKarartmaEtkin.collectAsState()
-    val geceKarartmaSeviyesi by CarLauncherSettings.geceKarartmaSeviyesi.collectAsState()
+    val panelHeight by CarLauncherSettings.panelYukseklikYuzdesi.collectAsState()
+    val expansion by CarLauncherSettings.panelGenislemeDavranisi.collectAsState()
     val desktopModu by CarLauncherSettings.desktopModu.collectAsState()
     val desktopDongudeEtkin by CarLauncherSettings.desktopDongudeEtkin.collectAsState()
     val baslangicEkrani by CarLauncherSettings.baslangicEkrani.collectAsState()
-    val ambiyansGorsellestirici by CarLauncherSettings.ambiyansGorsellestirici.collectAsState()
+
     val floatingButtonModu by CarLauncherSettings.floatingButtonModu.collectAsState()
     val floatingButtonBoyutu by CarLauncherSettings.floatingButtonBoyutu.collectAsState()
+    val geceKarartma by CarLauncherSettings.geceKarartmaEtkin.collectAsState()
+    val geceKarartmaSeviyesi by CarLauncherSettings.geceKarartmaSeviyesi.collectAsState()
 
-    androidx.activity.compose.BackHandler(onBack = onKapat)
+    val preferredMusic by CarLauncherSettings.tercihEdilenMuzikUygulamasi.collectAsState()
+    val otomatikOynat by CarLauncherSettings.otomatikOynat.collectAsState()
+    val gorsellestiriciTipi by CarLauncherSettings.gorsellestiriciTipi.collectAsState()
+    val largeVisualizer by CarLauncherSettings.largeVisualizer.collectAsState()
+    val visualizerFps by CarLauncherSettings.visualizerFps.collectAsState()
+    val ambiyansGorsellestirici by CarLauncherSettings.ambiyansGorsellestirici.collectAsState()
 
-    androidx.compose.foundation.layout.BoxWithConstraints(modifier.fillMaxSize()) {
-    val sidebarWidth = if (maxWidth < 600.dp) 120.dp else 220.dp
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                indication = null
-            ) { /* alttaki harita ve bilesenlere dokunmatik gecisini engelle */ }
-            .background(Color(0xFF09090C))
+    BackHandler(onBack = onKapat)
+
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface
     ) {
-        // ═══════════════════════════════════════════════════════════════
-        // SOL KOLON: KATEGORI LISTESI & BASLIK
-        // ═══════════════════════════════════════════════════════════════
-        Column(
-            modifier = Modifier
-                .width(sidebarWidth)
-                .fillMaxHeight()
-                .background(ClSidebarBg)
-                .verticalScroll(rememberScrollState())
-                .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Baslik ve Kapat Butonu
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val isCompact = maxWidth < 680.dp
+            val sidebarWidth = if (isCompact) 140.dp else 220.dp
+
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { /* alttaki harita ve bilesenlere dokunmatik gecisini engelle */ }
             ) {
-                Text(
-                    text = stringResource(R.string.car_internal_settings),
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Box(
+                // ═══════════════════════════════════════════════════════════════
+                // SOL KOLON: KATEGORI LISTESI & GERI BUTONU
+                // ═══════════════════════════════════════════════════════════════
+                Surface(
                     modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x22FFFFFF))
-                        .clickable(onClick = onKapat),
-                    contentAlignment = Alignment.Center
+                        .width(sidebarWidth)
+                        .fillMaxHeight(),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = stringResource(R.string.settings_close),
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
-            HorizontalDivider(color = ClDivider)
-
-            // Kategori Menuleri
-            KategoriSecimButonu(
-                baslik = stringResource(R.string.car_settings_category_appearance),
-                ikon = Icons.Default.DisplaySettings,
-                secili = aktifKategori == "GORUNUM",
-                onClick = { aktifKategori = "GORUNUM" }
-            )
-
-            KategoriSecimButonu(
-                baslik = stringResource(R.string.car_settings_category_dock),
-                ikon = Icons.Default.ViewSidebar,
-                secili = aktifKategori == "DOCK",
-                onClick = { aktifKategori = "DOCK" }
-            )
-
-            KategoriSecimButonu(
-                baslik = stringResource(R.string.car_settings_category_music),
-                ikon = Icons.Default.MusicNote,
-                secili = aktifKategori == "MUZIK",
-                onClick = { aktifKategori = "MUZIK" }
-            )
-
-            KategoriSecimButonu(
-                baslik = stringResource(R.string.car_settings_category_system),
-                ikon = Icons.Default.Tune,
-                secili = aktifKategori == "SISTEM",
-                onClick = { aktifKategori = "SISTEM" }
-            )
-        }
-
-        // ═══════════════════════════════════════════════════════════════
-        // SAG KOLON: SECILEN KATEGORIYE AIT AYARLAR
-        // ═══════════════════════════════════════════════════════════════
-        val sagScrollState = rememberScrollState()
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .padding(16.dp)
-                .verticalScroll(sagScrollState),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            when (aktifKategori) {
-                "GORUNUM" -> {
-                    Text(
-                        text = stringResource(R.string.car_settings_title_appearance),
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    AyarKategoriKarti(baslik = stringResource(R.string.car_settings_windows_layout), ikon = Icons.Default.DisplaySettings) {
-                        AyarAnahtarSatiri(
-                            baslik = stringResource(R.string.car_settings_immersive_mode),
-                            aciklama = stringResource(R.string.car_settings_immersive_desc),
-                            secili = tamEkran,
-                            onDegisim = { CarLauncherSettings.setTamEkranModu(it) }
-                        )
-
-                        HorizontalDivider(color = ClDivider)
-
-                        if (!tamEkran) {
-                            AyarAnahtarSatiri(
-                                baslik = stringResource(R.string.car_settings_status_bar),
-                                aciklama = stringResource(R.string.car_settings_status_bar_desc),
-                                secili = durumCubugu,
-                                onDegisim = { CarLauncherSettings.setDurumCubuguGoster(it) }
-                            )
-
-                            HorizontalDivider(color = ClDivider)
-                        }
-
-                        // Panel Konumu (Sol / Sag)
-                        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-                            Text(text = stringResource(R.string.car_settings_panel_pos), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text(text = stringResource(R.string.car_settings_panel_pos_desc), color = Color.Gray, fontSize = 12.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                SegmentButon(
-                                    metin = stringResource(R.string.car_settings_panel_left),
-                                    secili = panelKonumu == "left",
-                                    onClick = { CarLauncherSettings.setPanelKonumu("left") }
-                                )
-                                SegmentButon(
-                                    metin = stringResource(R.string.car_settings_panel_right),
-                                    secili = panelKonumu == "right",
-                                    onClick = { CarLauncherSettings.setPanelKonumu("right") }
-                                )
-                            }
-                        }
-
-                        HorizontalDivider(color = ClDivider)
-
-                        // Panel Genislik Slider'i (%15 - %65)
-                        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(text = stringResource(R.string.car_settings_panel_width_ratio), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                Text(text = "%${(panelGenislikYuzdesi * 100).toInt()}", color = ClPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Text(text = stringResource(R.string.car_settings_panel_width_ratio_desc), color = Color.Gray, fontSize = 12.sp)
-                            Slider(
-                                value = panelGenislikYuzdesi,
-                                onValueChange = { CarLauncherSettings.setWidgetPanelWidthPercent(it, persist = true) },
-                                valueRange = 0.20f..0.50f,
-                                colors = SliderDefaults.colors(thumbColor = ClPrimary, activeTrackColor = ClPrimary)
-                            )
-                        }
-
-                        HorizontalDivider(color = ClDivider)
-
-                        Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                            Text(stringResource(R.string.car_panel_height), color = Color.White)
-                            Slider(value = panelHeight,
-                                onValueChange = { CarLauncherSettings.setWidgetPanelHeightPortrait(it, true) },
-                                valueRange = 0.15f..0.65f)
-                            Text(stringResource(R.string.car_panel_expansion), color = Color.White)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                SegmentButon(stringResource(R.string.car_panel_swap), expansion == "swap", { CarLauncherSettings.setPanelGenislemeDavranisi("swap") })
-                                SegmentButon(stringResource(R.string.car_panel_overlay), expansion == "overlay", { CarLauncherSettings.setPanelGenislemeDavranisi("overlay") })
-                            }
-                        }
-
-                        AyarAnahtarSatiri(
-                            baslik = stringResource(R.string.car_settings_desktop_mode),
-                            aciklama = stringResource(R.string.car_settings_desktop_mode_desc),
-                            secili = desktopModu,
-                            onDegisim = { CarLauncherSettings.setDesktopModu(it) }
-                        )
-
-                        HorizontalDivider(color = ClDivider)
-
-                        AyarAnahtarSatiri(
-                            baslik = stringResource(R.string.car_settings_desktop_loop),
-                            aciklama = stringResource(R.string.car_settings_desktop_loop_desc),
-                            secili = desktopDongudeEtkin,
-                            onDegisim = { CarLauncherSettings.setDesktopDongudeEtkin(it) }
-                        )
-
-                        HorizontalDivider(color = ClDivider)
-
-                        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-                            Text(text = stringResource(R.string.car_settings_startup_page), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text(text = stringResource(R.string.car_settings_startup_page_desc), color = Color.Gray, fontSize = 12.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                SegmentButon(
-                                    metin = stringResource(R.string.car_settings_startup_normal),
-                                    secili = baslangicEkrani == "normal",
-                                    onClick = { CarLauncherSettings.setBaslangicEkrani("normal") }
-                                )
-                                SegmentButon(
-                                    metin = stringResource(R.string.car_settings_startup_map_only),
-                                    secili = baslangicEkrani == "map_only",
-                                    onClick = { CarLauncherSettings.setBaslangicEkrani("map_only") }
-                                )
-                                SegmentButon(
-                                    metin = stringResource(R.string.car_settings_startup_desktop),
-                                    secili = baslangicEkrani == "desktop",
-                                    onClick = { CarLauncherSettings.setBaslangicEkrani("desktop") }
-                                )
-                            }
-                        }
-                    }
-
-                    AyarKategoriKarti(baslik = stringResource(R.string.car_settings_floating_btn_title), ikon = Icons.Default.Tune) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-                            Text(text = stringResource(R.string.car_settings_floating_btn_mode), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text(text = stringResource(R.string.car_settings_floating_btn_mode_desc), color = Color.Gray, fontSize = 12.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                SegmentButon(
-                                    metin = stringResource(R.string.car_settings_btn_always),
-                                    secili = floatingButtonModu == "always",
-                                    onClick = {
-                                        CarLauncherSettings.setFloatingButtonModu("always")
-                                        CarFloatingButtonManager.getInstance(context).updateButtonState()
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                SegmentButon(
-                                    metin = stringResource(R.string.car_settings_btn_background),
-                                    secili = floatingButtonModu == "background_only",
-                                    onClick = {
-                                        CarLauncherSettings.setFloatingButtonModu("background_only")
-                                        CarFloatingButtonManager.getInstance(context).updateButtonState()
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                SegmentButon(
-                                    metin = stringResource(R.string.car_settings_btn_never),
-                                    secili = floatingButtonModu == "never",
-                                    onClick = {
-                                        CarLauncherSettings.setFloatingButtonModu("never")
-                                        CarFloatingButtonManager.getInstance(context).updateButtonState()
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-
-                        if (floatingButtonModu != "never") {
-                            HorizontalDivider(color = ClDivider)
-
-                            Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(text = stringResource(R.string.car_settings_btn_size), color = Color.White, fontSize = 14.sp)
-                                    Text(text = "${floatingButtonBoyutu} dp", color = ClPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                }
-                                Slider(
-                                    value = floatingButtonBoyutu.toFloat(),
-                                    onValueChange = {
-                                        CarLauncherSettings.setFloatingButtonBoyutu(it.toInt())
-                                    },
-                                    valueRange = 60f..110f,
-                                    colors = SliderDefaults.colors(thumbColor = ClPrimary, activeTrackColor = ClPrimary)
-                                )
-                            }
-
-                            // Overlay Izni Kontrolu
-                            val overlayIzniVar = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                                android.provider.Settings.canDrawOverlays(context)
-                            } else true
-
-                            if (!overlayIzniVar) {
-                                HorizontalDivider(color = ClDivider)
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                                                val intent = android.content.Intent(
-                                                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                                    android.net.Uri.parse("package:${context.packageName}")
-                                                )
-                                                context.startActivity(intent)
-                                            }
-                                        }
-                                        .padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(text = stringResource(R.string.car_settings_overlay_permission), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                        Text(text = stringResource(R.string.car_settings_overlay_permission_desc), color = Color.Gray, fontSize = 12.sp)
-                                    }
-                                    Text(text = stringResource(R.string.car_settings_grant_permission), color = ClPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-
-                    AyarKategoriKarti(baslik = stringResource(R.string.car_settings_night_mode), ikon = Icons.Default.DisplaySettings) {
-                        AyarAnahtarSatiri(
-                            baslik = stringResource(R.string.car_settings_night_filter),
-                            aciklama = stringResource(R.string.car_settings_night_filter_desc),
-                            secili = geceKarartma,
-                            onDegisim = { CarLauncherSettings.setGeceKarartmaEtkin(it) }
-                        )
-
-                        if (geceKarartma) {
-                            HorizontalDivider(color = ClDivider)
-                            Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(text = stringResource(R.string.car_settings_dimming_level), color = Color.White, fontSize = 14.sp)
-                                    Text(text = "%${(geceKarartmaSeviyesi * 100).toInt()}", color = ClPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                }
-                                Slider(
-                                    value = geceKarartmaSeviyesi,
-                                    onValueChange = { CarLauncherSettings.setGeceKarartmaSeviyesi(it) },
-                                    valueRange = 0.1f..0.8f,
-                                    colors = SliderDefaults.colors(thumbColor = ClPrimary, activeTrackColor = ClPrimary)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                "DOCK" -> {
-                    Text(
-                        text = stringResource(R.string.car_settings_dock_title),
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    AyarKategoriKarti(baslik = stringResource(R.string.car_settings_dock_pos_size), ikon = Icons.Default.ViewSidebar) {
-                        // Dock Konumu (Sol / Alt / Sag)
-                        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-                            Text(text = stringResource(R.string.car_settings_dock_screen_pos), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text(text = stringResource(R.string.car_settings_dock_screen_pos_desc), color = Color.Gray, fontSize = 12.sp)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                SegmentButon(
-                                    metin = stringResource(R.string.car_settings_dock_left),
-                                    secili = dockKonumu == "left",
-                                    onClick = { CarLauncherSettings.setDockKonumu("left") }
-                                )
-                                SegmentButon(
-                                    metin = stringResource(R.string.car_settings_dock_bottom),
-                                    secili = dockKonumu == "bottom",
-                                    onClick = { CarLauncherSettings.setDockKonumu("bottom") }
-                                )
-                                SegmentButon(
-                                    metin = stringResource(R.string.car_settings_dock_right),
-                                    secili = dockKonumu == "right",
-                                    onClick = { CarLauncherSettings.setDockKonumu("right") }
-                                )
-                            }
-                        }
-
-                        HorizontalDivider(color = ClDivider)
-
-                        // Dock Boyutu Olcegi Slider'i
-                        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(text = stringResource(R.string.car_settings_dock_scale), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                Text(text = "%$dockBoyutu", color = ClPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Text(text = stringResource(R.string.car_settings_dock_scale_desc), color = Color.Gray, fontSize = 12.sp)
-                            Slider(
-                                value = dockBoyutu.toFloat(),
-                                onValueChange = { CarLauncherSettings.setDockBoyutu(it.toInt()) },
-                                valueRange = 20f..100f,
-                                colors = SliderDefaults.colors(thumbColor = ClPrimary, activeTrackColor = ClPrimary)
-                            )
-                        }
-                    }
-                }
-
-                "MUZIK" -> {
-                    app.vela.ui.settings.SmartFocusPreferences()
-                    Text(
-                        text = stringResource(R.string.car_settings_music_title),
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    AyarKategoriKarti(baslik = stringResource(R.string.car_settings_playback_visualizer), ikon = Icons.Default.MusicNote) {
-                        Column(Modifier.fillMaxWidth().padding(14.dp).clickable {
-                            scope.launch {
-                                val apps = CarAppManager.getInstance(context).yukluUygulamalariGetir().filter { !it.isInternal }
-                                val labels = arrayOf(context.getString(R.string.car_music_internal)) + apps.map { it.ad }
-                                val selected = apps.indexOfFirst { it.paketAdi == preferredMusic } + 1
-                                android.app.AlertDialog.Builder(context)
-                                    .setTitle(R.string.car_music_preferred)
-                                    .setSingleChoiceItems(labels, selected) { dialog, which ->
-                                        CarLauncherSettings.setTercihEdilenMuzikUygulamasi(if (which == 0) null else apps[which - 1].paketAdi)
-                                        dialog.dismiss()
-                                    }.setNegativeButton(android.R.string.cancel, null).show()
-                            }
-                        }) {
-                            Text(stringResource(R.string.car_music_preferred), color = Color.White)
-                            Text(if (preferredMusic == null) stringResource(R.string.car_music_internal) else
-                                runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(preferredMusic!!, 0)).toString() }
-                                    .getOrDefault(context.getString(R.string.car_app_launch_failed)), color = Color.Gray)
-                        }
-                        AyarAnahtarSatiri(
-                            baslik = stringResource(R.string.car_settings_auto_play),
-                            aciklama = stringResource(R.string.car_settings_auto_play_desc),
-                            secili = otomatikOynat,
-                            onDegisim = { CarLauncherSettings.setOtomatikOynat(it) }
-                        )
-
-                        HorizontalDivider(color = ClDivider)
-
-                        Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                            val modes = context.resources.getStringArray(R.array.car_visualizer_modes)
-                            Text(stringResource(R.string.car_visualizer_small), color = Color.White)
-                            Text(modes[gorsellestiriciTipi.coerceIn(0, 7)], color = ClPrimary,
-                                modifier = Modifier.padding(vertical = 12.dp).clickable {
-                                    android.app.AlertDialog.Builder(context).setTitle(R.string.car_visualizer_small)
-                                        .setSingleChoiceItems(modes, gorsellestiriciTipi) { dialog, which ->
-                                            CarLauncherSettings.setGorsellestiriciTipi(which); dialog.dismiss()
-                                        }.setNegativeButton(android.R.string.cancel, null).show()
-                                })
-                            Text(stringResource(R.string.car_visualizer_large), color = Color.White)
-                            Text(modes[largeVisualizer.coerceIn(0, 7)], color = ClPrimary,
-                                modifier = Modifier.padding(vertical = 12.dp).clickable {
-                                    android.app.AlertDialog.Builder(context).setTitle(R.string.car_visualizer_large)
-                                        .setSingleChoiceItems(modes, largeVisualizer) { dialog, which ->
-                                            CarLauncherSettings.setLargeVisualizer(which); dialog.dismiss()
-                                        }.setNegativeButton(android.R.string.cancel, null).show()
-                                })
-                            Text(stringResource(R.string.car_visualizer_rate), color = Color.White)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                listOf(15, 30, 60).forEach { fps ->
-                                    SegmentButon("$fps fps", visualizerFps == fps, { CarLauncherSettings.setVisualizerFps(fps) })
-                                }
-                            }
-                        }
-
-                        HorizontalDivider(color = ClDivider)
-
-                        AyarAnahtarSatiri(
-                            baslik = stringResource(R.string.car_settings_ambient_visualizer),
-                            aciklama = stringResource(R.string.car_settings_ambient_visualizer_desc),
-                            secili = ambiyansGorsellestirici,
-                            onDegisim = { CarLauncherSettings.setAmbiyansGorsellestirici(it) }
-                        )
-
-                        HorizontalDivider(color = ClDivider)
-
-                        // Bildirim Erisim Izni (Spotify, YouTube Music)
-                        val bildirimIzniVar = app.vela.carlauncher.media.MediaNotificationListener.bildirimIzniVerildiMi(context)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { app.vela.carlauncher.media.MediaNotificationListener.bildirimAyarlariniAc(context) }
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(text = stringResource(R.string.car_settings_external_media), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                Text(text = stringResource(R.string.car_settings_external_media_desc), color = Color.Gray, fontSize = 12.sp)
-                            }
-                            Text(
-                                text = if (bildirimIzniVar) stringResource(R.string.car_settings_permission_active) else stringResource(R.string.car_settings_grant_permission),
-                                color = if (bildirimIzniVar) Color(0xFF30D158) else ClPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        HorizontalDivider(color = ClDivider)
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { app.vela.carlauncher.hardware.CarHardwareManager.dspAc(context) }
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(imageVector = Icons.Default.Equalizer, contentDescription = null, tint = ClPrimary, modifier = Modifier.size(20.dp))
-                                Text(text = stringResource(R.string.car_settings_dsp_launch), color = Color.White, fontSize = 14.sp)
-                            }
-                            Text(text = stringResource(R.string.car_settings_dsp_open), color = ClPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                "SISTEM" -> {
-                    androidx.compose.material3.TextButton(onClick = onPermissions) {
-                        Text(stringResource(R.string.car_permissions_title))
-                    }
-                    androidx.compose.material3.TextButton(onClick = onBackup) {
-                        Text(stringResource(R.string.backup_title))
-                    }
-                    app.vela.carlauncher.tools.LauncherToolsSettings()
-
-                    Text(
-                        text = stringResource(R.string.car_pref_category_language),
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    AyarKategoriKarti(
-                        baslik = stringResource(R.string.car_pref_language_title),
-                        ikon = Icons.Default.Language
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        val guncelDil = AppLocale.language.value
-                        val sistemDiliniTakipEt = guncelDil.isBlank()
-
-                        AyarAnahtarSatiri(
-                            baslik = stringResource(R.string.car_settings_language_follow_system),
-                            aciklama = stringResource(R.string.car_pref_language_desc),
-                            secili = sistemDiliniTakipEt,
-                            onDegisim = { takipEt ->
-                                if (takipEt) {
-                                    AppLocale.set(context, "")
-                                } else {
-                                    val varsayilan = AppLocale.deviceDefaultSupported()
-                                    AppLocale.set(context, varsayilan)
-                                }
+                        // Ust Bar: Geri Butonu ve Baslik
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = onKapat, modifier = Modifier.size(38.dp)) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.settings_close),
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
                             }
+                            if (!isCompact) {
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = stringResource(R.string.car_internal_settings),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+
+                        // Kategori Secim Butonlari
+                        KategoriNavButton(
+                            title = stringResource(R.string.car_settings_category_appearance),
+                            icon = Icons.Default.DisplaySettings,
+                            selected = aktifKategori == "GORUNUM",
+                            compact = isCompact,
+                            onClick = { aktifKategori = "GORUNUM" }
                         )
 
-                        if (!sistemDiliniTakipEt) {
-                            HorizontalDivider(color = ClDivider)
-                            Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                                Text(
-                                    text = stringResource(R.string.car_pref_language_title),
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium
+                        KategoriNavButton(
+                            title = stringResource(R.string.car_settings_dock_title),
+                            icon = Icons.Default.ViewSidebar,
+                            selected = aktifKategori == "DOCK",
+                            compact = isCompact,
+                            onClick = { aktifKategori = "DOCK" }
+                        )
+
+                        KategoriNavButton(
+                            title = stringResource(R.string.car_settings_music_title),
+                            icon = Icons.Default.MusicNote,
+                            selected = aktifKategori == "MUZIK",
+                            compact = isCompact,
+                            onClick = { aktifKategori = "MUZIK" }
+                        )
+
+                        KategoriNavButton(
+                            title = stringResource(R.string.car_settings_system_title),
+                            icon = Icons.Default.Tune,
+                            selected = aktifKategori == "SISTEM",
+                            compact = isCompact,
+                            onClick = { aktifKategori = "SISTEM" }
+                        )
+
+                        Spacer(Modifier.weight(1f))
+
+                        // Arac Modundan Cik Butonu (Altta Zarif Buton)
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    CarLauncherSettings.setCarModeEtkin(false)
+                                    onCarModeKapatildi()
+                                    onKapat()
+                                },
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.car_settings_exit_car_mode_btn),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp)
+                            )
+                        }
+                    }
+                }
+
+                // ═══════════════════════════════════════════════════════════════
+                // SAG KOLON: SECILI KATEGORI AYARLARI
+                // ═══════════════════════════════════════════════════════════════
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    when (aktifKategori) {
+                        "GORUNUM" -> {
+                            SettingsGroup(title = stringResource(R.string.car_settings_category_appearance)) {
+                                ToggleRow(
+                                    label = stringResource(R.string.car_settings_status_bar),
+                                    checked = durumCubugu,
+                                    onCheckedChange = { CarLauncherSettings.setDurumCubuguGoster(it) },
+                                    hint = stringResource(R.string.car_settings_status_bar_desc)
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                val seciliDilAdi = AppLocale.endonym(guncelDil)
-                                Text(
-                                    text = seciliDilAdi,
-                                    color = ClPrimary,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0x220A84FF))
-                                        .clickable {
+
+                                GroupDivider()
+
+                                ChoicePillRow(
+                                    label = stringResource(R.string.car_settings_panel_pos),
+                                    hint = stringResource(R.string.car_settings_panel_pos_desc),
+                                    options = listOf(
+                                        stringResource(R.string.car_settings_panel_left) to (panelKonumu == "left"),
+                                        stringResource(R.string.car_settings_panel_right) to (panelKonumu == "right")
+                                    ),
+                                    onSelect = { index ->
+                                        CarLauncherSettings.setPanelKonumu(if (index == 0) "left" else "right")
+                                    }
+                                )
+
+                                GroupDivider()
+
+                                SliderRow(
+                                    label = stringResource(R.string.car_settings_panel_width_ratio),
+                                    valueLabel = "%${(panelGenislikYuzdesi * 100).toInt()}",
+                                    value = panelGenislikYuzdesi,
+                                    valueRange = 0.20f..0.50f,
+                                    onValueChange = { CarLauncherSettings.setWidgetPanelWidthPercent(it, persist = true) },
+                                    hint = stringResource(R.string.car_settings_panel_width_ratio_desc)
+                                )
+
+                                GroupDivider()
+
+                                SliderRow(
+                                    label = stringResource(R.string.car_panel_height),
+                                    valueLabel = "%${(panelHeight * 100).toInt()}",
+                                    value = panelHeight,
+                                    valueRange = 0.15f..0.65f,
+                                    onValueChange = { CarLauncherSettings.setWidgetPanelHeightPortrait(it, persist = true) }
+                                )
+
+                                GroupDivider()
+
+                                ChoicePillRow(
+                                    label = stringResource(R.string.car_panel_expansion),
+                                    options = listOf(
+                                        stringResource(R.string.car_panel_swap) to (expansion == "swap"),
+                                        stringResource(R.string.car_panel_overlay) to (expansion == "overlay")
+                                    ),
+                                    onSelect = { index ->
+                                        CarLauncherSettings.setPanelGenislemeDavranisi(if (index == 0) "swap" else "overlay")
+                                    }
+                                )
+
+                                GroupDivider()
+
+                                ToggleRow(
+                                    label = stringResource(R.string.car_settings_desktop_mode),
+                                    checked = desktopModu,
+                                    onCheckedChange = { CarLauncherSettings.setDesktopModu(it) },
+                                    hint = stringResource(R.string.car_settings_desktop_mode_desc)
+                                )
+
+                                GroupDivider()
+
+                                ToggleRow(
+                                    label = stringResource(R.string.car_settings_desktop_loop),
+                                    checked = desktopDongudeEtkin,
+                                    onCheckedChange = { CarLauncherSettings.setDesktopDongudeEtkin(it) },
+                                    hint = stringResource(R.string.car_settings_desktop_loop_desc)
+                                )
+
+                                GroupDivider()
+
+                                ChoicePillRow(
+                                    label = stringResource(R.string.car_settings_startup_page),
+                                    hint = stringResource(R.string.car_settings_startup_page_desc),
+                                    options = listOf(
+                                        stringResource(R.string.car_settings_startup_normal) to (baslangicEkrani == "normal"),
+                                        stringResource(R.string.car_settings_startup_map_only) to (baslangicEkrani == "map_only"),
+                                        stringResource(R.string.car_settings_startup_desktop) to (baslangicEkrani == "desktop")
+                                    ),
+                                    onSelect = { index ->
+                                        val secim = when (index) {
+                                            0 -> "normal"
+                                            1 -> "map_only"
+                                            else -> "desktop"
+                                        }
+                                        CarLauncherSettings.setBaslangicEkrani(secim)
+                                    }
+                                )
+                            }
+
+                            // Yuzen Buton Grubu
+                            SettingsGroup(title = stringResource(R.string.car_settings_floating_btn_title)) {
+                                ChoicePillRow(
+                                    label = stringResource(R.string.car_settings_floating_btn_mode),
+                                    hint = stringResource(R.string.car_settings_floating_btn_mode_desc),
+                                    options = listOf(
+                                        stringResource(R.string.car_settings_btn_always) to (floatingButtonModu == "always"),
+                                        stringResource(R.string.car_settings_btn_background) to (floatingButtonModu == "background_only"),
+                                        stringResource(R.string.car_settings_btn_never) to (floatingButtonModu == "never")
+                                    ),
+                                    onSelect = { index ->
+                                        val secim = when (index) {
+                                            0 -> "always"
+                                            1 -> "background_only"
+                                            else -> "never"
+                                        }
+                                        CarLauncherSettings.setFloatingButtonModu(secim)
+                                        CarFloatingButtonManager.getInstance(context).updateButtonState()
+                                    }
+                                )
+
+                                if (floatingButtonModu != "never") {
+                                    GroupDivider()
+
+                                    SliderRow(
+                                        label = stringResource(R.string.car_settings_btn_size),
+                                        valueLabel = "${floatingButtonBoyutu} dp",
+                                        value = floatingButtonBoyutu.toFloat(),
+                                        valueRange = 60f..110f,
+                                        onValueChange = {
+                                            CarLauncherSettings.setFloatingButtonBoyutu(it.toInt())
+                                        }
+                                    )
+
+                                    val overlayIzniVar = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                        Settings.canDrawOverlays(context)
+                                    } else true
+
+                                    if (!overlayIzniVar) {
+                                        GroupDivider()
+                                        ActionRow(
+                                            label = stringResource(R.string.car_settings_overlay_permission),
+                                            hint = stringResource(R.string.car_settings_overlay_permission_desc),
+                                            actionText = stringResource(R.string.car_settings_grant_permission),
+                                            onClick = {
+                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                                    val intent = android.content.Intent(
+                                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                        android.net.Uri.parse("package:${context.packageName}")
+                                                    )
+                                                    context.startActivity(intent)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Gece Filtresi Grubu
+                            SettingsGroup(title = stringResource(R.string.car_settings_night_mode)) {
+                                ToggleRow(
+                                    label = stringResource(R.string.car_settings_night_filter),
+                                    checked = geceKarartma,
+                                    onCheckedChange = { CarLauncherSettings.setGeceKarartmaEtkin(it) },
+                                    hint = stringResource(R.string.car_settings_night_filter_desc)
+                                )
+
+                                if (geceKarartma) {
+                                    GroupDivider()
+                                    SliderRow(
+                                        label = stringResource(R.string.car_settings_dimming_level),
+                                        valueLabel = "%${(geceKarartmaSeviyesi * 100).toInt()}",
+                                        value = geceKarartmaSeviyesi,
+                                        valueRange = 0.1f..0.8f,
+                                        onValueChange = { CarLauncherSettings.setGeceKarartmaSeviyesi(it) }
+                                    )
+                                }
+                            }
+                        }
+
+                        "DOCK" -> {
+                            SettingsGroup(title = stringResource(R.string.car_settings_dock_pos_size)) {
+                                ChoicePillRow(
+                                    label = stringResource(R.string.car_settings_dock_screen_pos),
+                                    hint = stringResource(R.string.car_settings_dock_screen_pos_desc),
+                                    options = listOf(
+                                        stringResource(R.string.car_settings_dock_left) to (dockKonumu == "left"),
+                                        stringResource(R.string.car_settings_dock_bottom) to (dockKonumu == "bottom"),
+                                        stringResource(R.string.car_settings_dock_right) to (dockKonumu == "right")
+                                    ),
+                                    onSelect = { index ->
+                                        val secim = when (index) {
+                                            0 -> "left"
+                                            1 -> "bottom"
+                                            else -> "right"
+                                        }
+                                        CarLauncherSettings.setDockKonumu(secim)
+                                    }
+                                )
+
+                                GroupDivider()
+
+                                SliderRow(
+                                    label = stringResource(R.string.car_settings_dock_scale),
+                                    valueLabel = "%$dockBoyutu",
+                                    value = dockBoyutu.toFloat(),
+                                    valueRange = 20f..100f,
+                                    onValueChange = { CarLauncherSettings.setDockBoyutu(it.toInt()) },
+                                    hint = stringResource(R.string.car_settings_dock_scale_desc)
+                                )
+                            }
+                        }
+
+                        "MUZIK" -> {
+                            SmartFocusPreferences()
+
+                            SettingsGroup(title = stringResource(R.string.car_settings_playback_visualizer)) {
+                                ActionRow(
+                                    label = stringResource(R.string.car_music_preferred),
+                                    hint = if (preferredMusic == null) stringResource(R.string.car_music_internal) else
+                                        runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(preferredMusic!!, 0)).toString() }
+                                            .getOrDefault(stringResource(R.string.car_app_launch_failed)),
+                                    actionText = stringResource(R.string.car_settings_change_btn),
+                                    onClick = {
+                                        scope.launch {
+                                            val apps = CarAppManager.getInstance(context).yukluUygulamalariGetir().filter { !it.isInternal }
+                                            val labels = arrayOf(context.getString(R.string.car_music_internal)) + apps.map { it.ad }
+                                            val selected = apps.indexOfFirst { it.paketAdi == preferredMusic } + 1
+                                            android.app.AlertDialog.Builder(context)
+                                                .setTitle(R.string.car_music_preferred)
+                                                .setSingleChoiceItems(labels, selected) { dialog, which ->
+                                                    CarLauncherSettings.setTercihEdilenMuzikUygulamasi(if (which == 0) null else apps[which - 1].paketAdi)
+                                                    dialog.dismiss()
+                                                }.setNegativeButton(android.R.string.cancel, null).show()
+                                        }
+                                    }
+                                )
+
+                                GroupDivider()
+
+                                ToggleRow(
+                                    label = stringResource(R.string.car_settings_auto_play),
+                                    checked = otomatikOynat,
+                                    onCheckedChange = { CarLauncherSettings.setOtomatikOynat(it) },
+                                    hint = stringResource(R.string.car_settings_auto_play_desc)
+                                )
+
+                                GroupDivider()
+
+                                val modes = context.resources.getStringArray(R.array.car_visualizer_modes)
+
+                                ActionRow(
+                                    label = stringResource(R.string.car_visualizer_small),
+                                    hint = modes[gorsellestiriciTipi.coerceIn(0, 7)],
+                                    actionText = stringResource(R.string.car_settings_change_btn),
+                                    onClick = {
+                                        android.app.AlertDialog.Builder(context).setTitle(R.string.car_visualizer_small)
+                                            .setSingleChoiceItems(modes, gorsellestiriciTipi) { dialog, which ->
+                                                CarLauncherSettings.setGorsellestiriciTipi(which); dialog.dismiss()
+                                            }.setNegativeButton(android.R.string.cancel, null).show()
+                                    }
+                                )
+
+                                GroupDivider()
+
+                                ActionRow(
+                                    label = stringResource(R.string.car_visualizer_large),
+                                    hint = modes[largeVisualizer.coerceIn(0, 7)],
+                                    actionText = stringResource(R.string.car_settings_change_btn),
+                                    onClick = {
+                                        android.app.AlertDialog.Builder(context).setTitle(R.string.car_visualizer_large)
+                                            .setSingleChoiceItems(modes, largeVisualizer) { dialog, which ->
+                                                CarLauncherSettings.setLargeVisualizer(which); dialog.dismiss()
+                                            }.setNegativeButton(android.R.string.cancel, null).show()
+                                    }
+                                )
+
+                                GroupDivider()
+
+                                ChoicePillRow(
+                                    label = stringResource(R.string.car_visualizer_rate),
+                                    options = listOf(15, 30, 60).map { fps ->
+                                        "$fps fps" to (visualizerFps == fps)
+                                    },
+                                    onSelect = { index ->
+                                        val fpsList = listOf(15, 30, 60)
+                                        CarLauncherSettings.setVisualizerFps(fpsList[index])
+                                    }
+                                )
+
+                                GroupDivider()
+
+                                ToggleRow(
+                                    label = stringResource(R.string.car_settings_ambient_visualizer),
+                                    checked = ambiyansGorsellestirici,
+                                    onCheckedChange = { CarLauncherSettings.setAmbiyansGorsellestirici(it) },
+                                    hint = stringResource(R.string.car_settings_ambient_visualizer_desc)
+                                )
+
+                                GroupDivider()
+
+                                val bildirimIzniVar = MediaNotificationListener.bildirimIzniVerildiMi(context)
+                                ActionRow(
+                                    label = stringResource(R.string.car_settings_external_media),
+                                    hint = stringResource(R.string.car_settings_external_media_desc),
+                                    actionText = if (bildirimIzniVar) stringResource(R.string.car_settings_permission_active) else stringResource(R.string.car_settings_grant_permission),
+                                    onClick = {
+                                        MediaNotificationListener.bildirimAyarlariniAc(context)
+                                    }
+                                )
+
+                                GroupDivider()
+
+                                ActionRow(
+                                    label = stringResource(R.string.car_settings_dsp_launch),
+                                    actionText = stringResource(R.string.car_settings_dsp_open),
+                                    onClick = {
+                                        CarHardwareManager.dspAc(context)
+                                    }
+                                )
+                            }
+                        }
+
+                        "SISTEM" -> {
+                            // Baglantili Ekranlar Grubu (Izinler ve Yedekleme)
+                            SettingsGroup(title = stringResource(R.string.car_settings_system_title)) {
+                                ActionRow(
+                                    label = stringResource(R.string.car_permissions_title),
+                                    hint = stringResource(R.string.car_permissions_subtitle),
+                                    actionText = stringResource(R.string.car_settings_open_btn),
+                                    onClick = onPermissions
+                                )
+
+                                GroupDivider()
+
+                                ActionRow(
+                                    label = stringResource(R.string.backup_title),
+                                    hint = stringResource(R.string.backup_hub_sub),
+                                    actionText = stringResource(R.string.car_settings_open_btn),
+                                    onClick = onBackup
+                                )
+
+                                GroupDivider()
+
+                                ActionRow(
+                                    label = stringResource(R.string.car_settings_clean_ram),
+                                    hint = stringResource(R.string.car_settings_clean_ram_desc),
+                                    actionText = stringResource(R.string.car_settings_clean_ram_btn),
+                                    onClick = { CarHardwareManager.getInstance(context).cleanRam(context) }
+                                )
+                            }
+
+                            // Sistem Araclari ve Anten Ayarlari
+                            app.vela.carlauncher.tools.LauncherToolsSettings()
+
+                            // Dil Ayarlari Grubu
+                            SettingsGroup(title = stringResource(R.string.car_pref_category_language)) {
+                                val guncelDil = AppLocale.language.value
+                                val sistemDiliniTakipEt = guncelDil.isBlank()
+
+                                ToggleRow(
+                                    label = stringResource(R.string.car_settings_language_follow_system),
+                                    checked = sistemDiliniTakipEt,
+                                    onCheckedChange = { takipEt ->
+                                        if (takipEt) {
+                                            AppLocale.set(context, "")
+                                        } else {
+                                            val varsayilan = AppLocale.deviceDefaultSupported()
+                                            AppLocale.set(context, varsayilan)
+                                        }
+                                    },
+                                    hint = stringResource(R.string.car_pref_language_desc)
+                                )
+
+                                if (!sistemDiliniTakipEt) {
+                                    GroupDivider()
+                                    val seciliDilAdi = AppLocale.endonym(guncelDil)
+                                    ActionRow(
+                                        label = stringResource(R.string.car_pref_language_title),
+                                        hint = seciliDilAdi,
+                                        actionText = stringResource(R.string.car_settings_change_btn),
+                                        onClick = {
                                             val diller = AppLocale.SUPPORTED
                                             val etiketler = diller.map { AppLocale.endonym(it) }.toTypedArray()
                                             val seciliIndex = diller.indexOf(guncelDil).coerceAtLeast(0)
@@ -678,56 +624,9 @@ fun CarLauncherSettingsView(
                                                 .setNegativeButton(android.R.string.cancel, null)
                                                 .show()
                                         }
-                                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = stringResource(R.string.car_settings_system_title),
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    AyarKategoriKarti(baslik = stringResource(R.string.car_settings_system_actions), ikon = Icons.Default.Tune) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { CarHardwareManager.getInstance(context).cleanRam(context) }
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(text = stringResource(R.string.car_settings_clean_ram), color = Color.White, fontSize = 14.sp)
-                                Text(text = stringResource(R.string.car_settings_clean_ram_desc), color = Color.Gray, fontSize = 12.sp)
-                            }
-                            Text(text = stringResource(R.string.car_settings_clean_ram_btn), color = ClPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        HorizontalDivider(color = ClDivider)
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    CarLauncherSettings.setCarModeEtkin(false)
-                                    onCarModeKapatildi()
-                                    onKapat()
+                                    )
                                 }
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(text = stringResource(R.string.car_settings_exit_car_mode), color = Color(0xFFFF453A), fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                Text(text = stringResource(R.string.car_settings_exit_car_mode_desc), color = Color.Gray, fontSize = 12.sp)
                             }
-                            Text(text = stringResource(R.string.car_settings_exit_car_mode_btn), color = Color(0xFFFF453A), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -735,123 +634,180 @@ fun CarLauncherSettingsView(
         }
     }
 }
-}
 
+/** Sol Gezinme Kolonundaki Kategori Butonu */
 @Composable
-private fun KategoriSecimButonu(
-    baslik: String,
-    ikon: ImageVector,
-    secili: Boolean,
+private fun KategoriNavButton(
+    title: String,
+    icon: ImageVector,
+    selected: Boolean,
+    compact: Boolean,
     onClick: () -> Unit
 ) {
-    val bgRenk = if (secili) Color(0x330A84FF) else Color.Transparent
-    val kenar = if (secili) Color(0xFF0A84FF) else Color.Transparent
-    val metinRenk = if (secili) Color.White else Color(0xFFAAAAAA)
+    val containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer
+    val contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    val iconColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
 
-    Row(
+    Surface(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(bgRenk)
-            .border(1.dp, kenar, RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Icon(
-            imageVector = ikon,
-            contentDescription = null,
-            tint = if (secili) ClPrimary else Color.Gray,
-            modifier = Modifier.size(18.dp)
-        )
-        Text(
-            text = baslik,
-            color = metinRenk,
-            fontSize = 13.sp,
-            fontWeight = if (secili) FontWeight.SemiBold else FontWeight.Normal
-        )
-    }
-}
-
-@Composable
-private fun SegmentButon(
-    metin: String,
-    secili: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val bg = if (secili) ClPrimary else Color(0x22FFFFFF)
-    val textC = if (secili) Color.White else Color(0xFFCCCCCC)
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text = metin, color = textC, fontSize = 12.sp, fontWeight = if (secili) FontWeight.Bold else FontWeight.Normal)
-    }
-}
-
-@Composable
-private fun AyarKategoriKarti(
-    baslik: String,
-    ikon: ImageVector,
-    modifier: Modifier = Modifier,
-    icerik: @Composable () -> Unit
-) {
-    Column(
-        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(ClCardBg)
-            .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = containerColor
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(imageVector = ikon, contentDescription = null, tint = ClPrimary, modifier = Modifier.size(18.dp))
-            Text(text = baslik, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(20.dp)
+            )
+            if (!compact) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    color = contentColor
+                )
+            }
         }
-        HorizontalDivider(color = ClDivider)
-        icerik()
     }
 }
 
+/** Slider Iceren Ayar Satiri */
 @Composable
-private fun AyarAnahtarSatiri(
-    baslik: String,
-    aciklama: String,
-    secili: Boolean,
-    onDegisim: (Boolean) -> Unit
+private fun SliderRow(
+    label: String,
+    valueLabel: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit,
+    hint: String? = null
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = valueLabel,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        if (hint != null) {
+            Text(
+                hint,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+            )
+        )
+    }
+}
+
+/** Yan yana secim etiketleri (Pill Chip Row) */
+@Composable
+private fun ChoicePillRow(
+    label: String,
+    hint: String? = null,
+    options: List<Pair<String, Boolean>>,
+    onSelect: (Int) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        if (hint != null) {
+            Text(
+                hint,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
+            )
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 4.dp)
+        ) {
+            options.forEachIndexed { index, (title, selected) ->
+                FilterChip(
+                    selected = selected,
+                    onClick = { onSelect(index) },
+                    label = { Text(title) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                )
+            }
+        }
+    }
+}
+
+/** Tiklanabilir Aksiyon ve Gecis Satiri */
+@Composable
+private fun ActionRow(
+    label: String,
+    hint: String? = null,
+    actionText: String? = null,
+    isDanger: Boolean = false,
+    onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onDegisim(!secili) }
-            .padding(14.dp),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = baslik, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Text(text = aciklama, color = Color.Gray, fontSize = 12.sp)
-        }
-        Switch(
-            checked = secili,
-            onCheckedChange = onDegisim,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = ClPrimary,
-                uncheckedThumbColor = Color.Gray,
-                uncheckedTrackColor = Color(0x33FFFFFF)
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (isDanger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
             )
-        )
+            if (hint != null) {
+                Text(
+                    hint,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+        }
+        if (actionText != null) {
+            Text(
+                text = actionText,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (isDanger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }

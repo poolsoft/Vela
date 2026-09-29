@@ -279,5 +279,8 @@
     <string name="car_settings_exit_car_mode_desc">Standart tam ekran harita görünümüne döner</string>
     <string name="car_settings_exit_car_mode_btn">Çıkış</string>
     <string name="car_settings_language_follow_system">Sistem Dilini Takip Et</string>
+    <string name="car_settings_change_btn">Değiştir</string>
+    <string name="car_settings_open_btn">Aç</string>
+    <string name="car_permissions_subtitle">Konum, bildirim ve sistem erişim izinleri</string>
     <string name="settings_close">Kapat</string>
 </resources>
