@@ -54,7 +54,7 @@ object PiperCatalog {
         "en" to "English", "fr" to "Français", "de" to "Deutsch", "es" to "Español",
         "it" to "Italiano", "pt" to "Português", "nl" to "Nederlands", "ru" to "Русский",
         "pl" to "Polski", "sv" to "Svenska", "uk" to "Українська", "hu" to "Magyar",
-        "zh" to "中文", "ja" to "日本語",
+        "zh" to "中文", "ja" to "日本語", "tr" to "Türkçe",
     )
 
     /** The recommended default voice for a language code (used to auto-suggest a voice for the app
@@ -121,6 +121,10 @@ object PiperCatalog {
         // is a per-LANGUAGE model, and langCode "zh" pairs it with both zh and zh-TW nav text.
         // No Japanese Piper voice exists; ja spoken guidance uses the system-TTS fallback.)
         PiperVoice("zh_CN-huayan-medium", "Huayan", VoiceGender.FEMALE, VoiceQuality.MEDIUM, 64, 1, "清晰自然的普通话女声", recommended = true),
+        // ── Türkçe ──
+        PiperVoice("tr_TR-dfki-medium", "DFKI", VoiceGender.FEMALE, VoiceQuality.MEDIUM, 67, 1, "Berrak ve akıcı Türkçe kadın sesi", recommended = true),
+        PiperVoice("tr_TR-fahrettin-medium", "Fahrettin", VoiceGender.MALE, VoiceQuality.MEDIUM, 67, 1, "Doğal Türkçe erkek sesi"),
+        PiperVoice("tr_TR-fettah-medium", "Fettah", VoiceGender.MALE, VoiceQuality.MEDIUM, 67, 1, "Tok ve net Türkçe erkek sesi"),
     )
 
     fun byId(id: String): PiperVoice? = ALL.firstOrNull { it.id == id }
