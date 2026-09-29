@@ -188,4 +188,9 @@ class AppDockManager private constructor(private val context: Context) {
         _kisayollar.value = yenidenSirali
         return true
     }
+
+    fun resetDockShortcuts() {
+        prefs.edit().remove(KEY_SHORTCUTS).apply()
+        yukleKisayollar()
+    }
 }

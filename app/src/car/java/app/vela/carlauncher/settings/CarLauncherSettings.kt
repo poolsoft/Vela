@@ -38,6 +38,18 @@ object CarLauncherSettings {
     private const val KEY_WEATHER_ENABLED = "car_launcher_weather_enabled"
     private const val KEY_EQUALIZER_APP = "car_launcher_equalizer_app"
 
+    // Widget Gorunurluk Anahtarlari (CoMaps uyumlu)
+    private const val KEY_WIDGET_SPEED = "car_launcher_widget_speed"
+    private const val KEY_WIDGET_COMPASS = "car_launcher_widget_compass"
+    private const val KEY_WIDGET_MUSIC = "car_launcher_widget_music"
+    private const val KEY_WIDGET_CLOCK = "car_launcher_widget_clock"
+    private const val KEY_WIDGET_WEATHER = "car_launcher_widget_weather"
+    private const val KEY_WIDGET_APPS = "car_launcher_widget_apps"
+
+    // Ekran Yonu ve Dikey Mod
+    private const val KEY_SCREEN_ORIENTATION = "car_launcher_screen_orientation"
+    private const val KEY_PORTRAIT_MAP_ONLY = "car_launcher_portrait_map_only"
+
     // Floating Button Anahtarlari
     private const val KEY_FLOATING_BUTTON_MODE = "car_launcher_floating_button_mode" // always, background_only, never
     private const val KEY_FLOATING_BUTTON_SIZE = "car_launcher_floating_button_size" // dp, varsayilan 86
@@ -118,6 +130,32 @@ object CarLauncherSettings {
     private val _ekolayzirPaketi = MutableStateFlow<String?>(null)
     val ekolayzirPaketi: StateFlow<String?> = _ekolayzirPaketi.asStateFlow()
 
+    // Widget Gorunurluk StateFlow'lari
+    private val _widgetHizGoster = MutableStateFlow(true)
+    val widgetHizGoster: StateFlow<Boolean> = _widgetHizGoster.asStateFlow()
+
+    private val _widgetPusulaGoster = MutableStateFlow(true)
+    val widgetPusulaGoster: StateFlow<Boolean> = _widgetPusulaGoster.asStateFlow()
+
+    private val _widgetMuzikGoster = MutableStateFlow(true)
+    val widgetMuzikGoster: StateFlow<Boolean> = _widgetMuzikGoster.asStateFlow()
+
+    private val _widgetSaatGoster = MutableStateFlow(true)
+    val widgetSaatGoster: StateFlow<Boolean> = _widgetSaatGoster.asStateFlow()
+
+    private val _widgetHavaDurumuGoster = MutableStateFlow(true)
+    val widgetHavaDurumuGoster: StateFlow<Boolean> = _widgetHavaDurumuGoster.asStateFlow()
+
+    private val _widgetSistemGoster = MutableStateFlow(true)
+    val widgetSistemGoster: StateFlow<Boolean> = _widgetSistemGoster.asStateFlow()
+
+    // Ekran Yonu
+    private val _ekranYonu = MutableStateFlow("landscape") // landscape, portrait, sensor
+    val ekranYonu: StateFlow<String> = _ekranYonu.asStateFlow()
+
+    private val _dikeydeSadeceHarita = MutableStateFlow(false)
+    val dikeydeSadeceHarita: StateFlow<Boolean> = _dikeydeSadeceHarita.asStateFlow()
+
     fun baslat(context: Context, force: Boolean = false) {
         if (force || !::prefs.isInitialized) {
             prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -147,6 +185,14 @@ object CarLauncherSettings {
             _floatingButtonBoyutu.value = prefs.getInt(KEY_FLOATING_BUTTON_SIZE, 86)
             _havaDurumuEtkin.value = prefs.getBoolean(KEY_WEATHER_ENABLED, true)
             _ekolayzirPaketi.value = prefs.getString(KEY_EQUALIZER_APP, null)
+            _widgetHizGoster.value = prefs.getBoolean(KEY_WIDGET_SPEED, true)
+            _widgetPusulaGoster.value = prefs.getBoolean(KEY_WIDGET_COMPASS, true)
+            _widgetMuzikGoster.value = prefs.getBoolean(KEY_WIDGET_MUSIC, true)
+            _widgetSaatGoster.value = prefs.getBoolean(KEY_WIDGET_CLOCK, true)
+            _widgetHavaDurumuGoster.value = prefs.getBoolean(KEY_WIDGET_WEATHER, true)
+            _widgetSistemGoster.value = prefs.getBoolean(KEY_WIDGET_APPS, true)
+            _ekranYonu.value = prefs.getString(KEY_SCREEN_ORIENTATION, "landscape") ?: "landscape"
+            _dikeydeSadeceHarita.value = prefs.getBoolean(KEY_PORTRAIT_MAP_ONLY, false)
         }
     }
 
@@ -188,6 +234,11 @@ object CarLauncherSettings {
     fun setPanelGenislikYuzdesi(yuzde: Float) {
         _panelGenislikYuzdesi.value = yuzde.coerceIn(0.15f, 0.65f)
         if (::prefs.isInitialized) prefs.edit().putFloat(KEY_PANEL_WIDTH_PERCENT, _panelGenislikYuzdesi.value).apply()
+    }
+
+    fun setPanelYukseklikYuzdesi(yuzde: Float) {
+        _panelYukseklikYuzdesi.value = yuzde.coerceIn(0.15f, 0.65f)
+        if (::prefs.isInitialized) prefs.edit().putFloat(KEY_PANEL_HEIGHT_PERCENT, _panelYukseklikYuzdesi.value).apply()
     }
 
     fun setOtomatikOynat(otomatik: Boolean) {
@@ -284,6 +335,46 @@ object CarLauncherSettings {
     fun setEkolayzirPaketi(paket: String?) {
         _ekolayzirPaketi.value = paket
         if (::prefs.isInitialized) prefs.edit().putString(KEY_EQUALIZER_APP, paket).apply()
+    }
+
+    fun setWidgetHizGoster(goster: Boolean) {
+        _widgetHizGoster.value = goster
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_WIDGET_SPEED, goster).apply()
+    }
+
+    fun setWidgetPusulaGoster(goster: Boolean) {
+        _widgetPusulaGoster.value = goster
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_WIDGET_COMPASS, goster).apply()
+    }
+
+    fun setWidgetMuzikGoster(goster: Boolean) {
+        _widgetMuzikGoster.value = goster
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_WIDGET_MUSIC, goster).apply()
+    }
+
+    fun setWidgetSaatGoster(goster: Boolean) {
+        _widgetSaatGoster.value = goster
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_WIDGET_CLOCK, goster).apply()
+    }
+
+    fun setWidgetHavaDurumuGoster(goster: Boolean) {
+        _widgetHavaDurumuGoster.value = goster
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_WIDGET_WEATHER, goster).apply()
+    }
+
+    fun setWidgetSistemGoster(goster: Boolean) {
+        _widgetSistemGoster.value = goster
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_WIDGET_APPS, goster).apply()
+    }
+
+    fun setEkranYonu(yon: String) {
+        _ekranYonu.value = yon
+        if (::prefs.isInitialized) prefs.edit().putString(KEY_SCREEN_ORIENTATION, yon).apply()
+    }
+
+    fun setDikeydeSadeceHarita(sadeceHarita: Boolean) {
+        _dikeydeSadeceHarita.value = sadeceHarita
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_PORTRAIT_MAP_ONLY, sadeceHarita).apply()
     }
 
     // --- OsmAnd CarLayoutManager Uyumluluk Metodlari (Turkce karakter yok) ---

@@ -62,6 +62,7 @@ fun CarLauncherHostView(
     var measuredPortrait by remember { mutableStateOf(configuration.orientation == Configuration.ORIENTATION_PORTRAIT) }
     val shortcuts by AppDockManager.getInstance(context).kisayollar.collectAsState()
     val tamEkran by CarLauncherSettings.tamEkranModu.collectAsState()
+    val durumCubugu by CarLauncherSettings.durumCubuguGoster.collectAsState()
     val dockKonumu by CarLauncherSettings.dockKonumu.collectAsState()
     val dockBoyutu by CarLauncherSettings.dockBoyutu.collectAsState()
     val panelKonumu by CarLauncherSettings.panelKonumu.collectAsState()
@@ -89,10 +90,22 @@ fun CarLauncherHostView(
     val latestAssistant by rememberUpdatedState(onAsistanTiklandi)
 
     val parentComposition = rememberCompositionContext()
+    androidx.compose.runtime.LaunchedEffect(tamEkran, durumCubugu) {
+        val window = (context as? android.app.Activity)?.window
+        if (window != null) {
+            val wic = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+            if (tamEkran || !durumCubugu) {
+                wic.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                wic.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                wic.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                wic.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                wic.isAppearanceLightStatusBars = false
+            }
+        }
+    }
     AndroidView(
-        modifier = modifier.windowInsetsPadding(
-            if (tamEkran) WindowInsets.displayCutout else WindowInsets.safeDrawing
-        ),
+        modifier = modifier.fillMaxSize(),
         factory = { ctx ->
             val root = LayoutInflater.from(ctx).inflate(R.layout.activity_car_launcher, null, false) as ConstraintLayout
             val map = root.findViewById<ExactFrameLayout>(R.id.map_container)
