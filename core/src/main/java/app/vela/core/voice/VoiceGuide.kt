@@ -38,7 +38,7 @@ class VoiceGuide @Inject constructor(
     // KEY_PARAM_VOLUME caps at 1.0); the boost tiers act on the neural voice's own PCM.
     @Volatile private var volume = 1.0f
     fun setVolume(v: Float) {
-        volume = v.coerceIn(0.2f, 3.0f)
+        volume = v.coerceIn(0.2f, 3.5f)
     }
     fun setRate(rate: Float) {
         speechRate = rate.coerceIn(0.5f, 2.0f)
@@ -273,6 +273,13 @@ class VoiceGuide @Inject constructor(
             if (useNeural) langUnavailable?.invoke(targetLang()) // fallback engine dead → "download a <lang> voice"
             return
         }
+        // Navigasyon rehberlik ses akisi ve konusma niteligi: arac teybi ve Android mikseri icin kritik
+        val attrs = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
+        t.setAudioAttributes(attrs)
+
         // A measured pace + neutral pitch reads more like a real nav voice than the engine default.
         // The LANGUAGE is set per-utterance now (speakViaSystem), keyed on the nav-text language —
         // so a mid-drive app/system-language change is honored and the engine never reads a

@@ -90,7 +90,7 @@ class PiperSynth @Inject constructor(
      *  there, so the boosted settings stay clean and only the loudest syllables flatten. */
     private fun volume(): Float =
         context.getSharedPreferences("vela_settings", android.content.Context.MODE_PRIVATE)
-            .getFloat("voice_volume", 1.0f).coerceIn(0.2f, 3.0f)
+            .getFloat("voice_volume", 1.0f).coerceIn(0.2f, 3.5f)
 
     override fun warmUp() {
         // No `tts != null` short-circuit: ensureLoaded must be able to REBUILD when the selected voice

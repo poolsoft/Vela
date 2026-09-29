@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -222,29 +223,72 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
                     FilledTonalButton(modifier = Modifier.dpadRowSibling(speedFocus, 1), onClick = { vm.setVoiceSpeed(0.1f) }) { Text("+") }
                 }
                 Hint(stringResource(R.string.settings_voice_speed_hint))
-                // Guidance volume (issue #245): tiers, not a slider - the useful range is small and
-                // discrete choices read instantly. Boost applies to the Vela voice's own audio;
-                // system voices can only be made softer (Android caps their volume param at 1.0).
+                // Guidance volume (Seekbar + steppers + 5 quick steps up to 3.0x boost)
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    stringResource(R.string.settings_voice_volume),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
                 val volPrefs = androidx.compose.ui.platform.LocalContext.current
                     .getSharedPreferences("vela_settings", android.content.Context.MODE_PRIVATE)
                 var voiceVol by remember { mutableStateOf(volPrefs.getFloat("voice_volume", 1.0f)) }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "${stringResource(R.string.settings_voice_volume)}: %d%% (%.1fx)".format(
+                            (voiceVol * 100).toInt(),
+                            voiceVol,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    val volFocus = remember { List(2) { FocusRequester() } }
+                    FilledTonalButton(
+                        modifier = Modifier.dpadRowSibling(volFocus, 0),
+                        onClick = {
+                            val next = (Math.round((voiceVol - 0.1f) * 10f) / 10f).coerceIn(0.5f, 3.0f)
+                            voiceVol = next
+                            vm.setVoiceVolume(next, preview = true)
+                        },
+                    ) { Text("−") }
+                    Spacer(Modifier.width(6.dp))
+                    FilledTonalButton(
+                        modifier = Modifier.dpadRowSibling(volFocus, 1),
+                        onClick = {
+                            val next = (Math.round((voiceVol + 0.1f) * 10f) / 10f).coerceIn(0.5f, 3.0f)
+                            voiceVol = next
+                            vm.setVoiceVolume(next, preview = true)
+                        },
+                    ) { Text("+") }
+                }
+
+                Slider(
+                    value = voiceVol,
+                    onValueChange = {
+                        voiceVol = (Math.round(it * 10f) / 10f).coerceIn(0.5f, 3.0f)
+                    },
+                    onValueChangeFinished = {
+                        vm.setVoiceVolume(voiceVol, preview = true)
+                    },
+                    valueRange = 0.5f..3.0f,
+                    steps = 24,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                )
+
                 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(
-                        0.6f to stringResource(R.string.settings_voice_volume_softer),
-                        1.0f to stringResource(R.string.settings_voice_volume_normal),
-                        1.6f to stringResource(R.string.settings_voice_volume_louder),
-                        2.2f to stringResource(R.string.settings_voice_volume_loudest),
+                        0.6f to "%60 " + stringResource(R.string.settings_voice_volume_softer),
+                        1.0f to "%100 " + stringResource(R.string.settings_voice_volume_normal),
+                        1.5f to "%150 " + stringResource(R.string.settings_voice_volume_louder),
+                        2.0f to "%200 " + stringResource(R.string.settings_voice_volume_loudest),
+                        3.0f to "%300 Max",
                     ).forEach { (v, label) ->
                         FilterChip(
-                            selected = voiceVol == v,
-                            onClick = { voiceVol = v; vm.setVoiceVolume(v) },
+                            selected = kotlin.math.abs(voiceVol - v) < 0.05f,
+                            onClick = {
+                                voiceVol = v
+                                vm.setVoiceVolume(v, preview = true)
+                            },
                             label = { Text(label) },
                             shape = androidx.compose.foundation.shape.CircleShape,
                             modifier = Modifier.dpadHighlight(androidx.compose.foundation.shape.CircleShape),

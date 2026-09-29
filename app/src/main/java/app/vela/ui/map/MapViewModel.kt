@@ -5430,11 +5430,13 @@ class MapViewModel @Inject constructor(
     /** Guidance volume tier (issue #245): persisted multiplier the neural voice applies to its
      *  own PCM (boost possible) and the system TTS takes capped at 1.0 (Android can only
      *  attenuate). Auditions the nav sample so the change is heard immediately. */
-    fun setVoiceVolume(v: Float) {
-        val vol = v.coerceIn(0.2f, 3.0f)
+    fun setVoiceVolume(v: Float, preview: Boolean = true) {
+        val vol = v.coerceIn(0.2f, 3.5f)
         settingsPrefs.edit().putFloat("voice_volume", vol).apply()
         voice.setVolume(vol)
-        voice.speak(appContext.getString(R.string.mapvm_voice_sample), interrupt = true)
+        if (preview) {
+            voice.speak(appContext.getString(R.string.mapvm_voice_sample), interrupt = true)
+        }
     }
 
     fun setVoiceSpeed(delta: Float) {
