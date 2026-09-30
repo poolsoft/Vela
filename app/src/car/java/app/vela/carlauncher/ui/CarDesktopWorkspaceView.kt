@@ -204,7 +204,10 @@ fun CarDesktopWorkspaceView(
 
             WorkspaceCellPageLayout(
                 pageIndex = pageIndex,
+                currentPage = pagerState.currentPage,
+                pageCount = pageCount,
                 widgets = pageWidgets,
+                allWidgets = widgets,
                 isEditMode = isEditMode,
                 saatMetni = saatMetni,
                 tarihMetni = tarihMetni,
@@ -215,20 +218,25 @@ fun CarDesktopWorkspaceView(
                 onOnceki = onOnceki,
                 onLaunchApp = onLaunchApp,
                 onEnterEditMode = { isEditMode = true },
+                onRequestPageChange = { targetPage ->
+                    scope.launch {
+                        pagerState.animateScrollToPage(targetPage.coerceIn(0, pageCount - 1))
+                    }
+                },
                 onWidgetLongClick = { targetWidget ->
                     selectedWidgetForAction = targetWidget
                 },
                 onDeleteWidget = { widgetId -> widgetManager.removeWidget(widgetId) },
-                onMoveWidget = { id, cellX, cellY ->
+                onMoveWidget = { id, targetPage, cellX, cellY ->
                     val latest = widgetManager.widgetsFlow.value.find { it.id == id }
                     if (latest != null) {
-                        widgetManager.updateWidgetPlacement(id, pageIndex, cellX, cellY, latest.spanX, latest.spanY)
+                        widgetManager.updateWidgetPlacement(id, targetPage, cellX, cellY, latest.spanX, latest.spanY)
                     }
                 },
                 onResizeWidget = { id, spanX, spanY ->
                     val latest = widgetManager.widgetsFlow.value.find { it.id == id }
                     if (latest != null) {
-                        widgetManager.updateWidgetPlacement(id, pageIndex, latest.cellX, latest.cellY, spanX, spanY)
+                        widgetManager.updateWidgetPlacement(id, latest.pageIndex, latest.cellX, latest.cellY, spanX, spanY)
                     }
                 }
             )
@@ -342,7 +350,10 @@ fun CarDesktopWorkspaceView(
 @Composable
 fun WorkspaceCellPageLayout(
     pageIndex: Int,
+    currentPage: Int,
+    pageCount: Int,
     widgets: List<BaseWidget>,
+    allWidgets: List<BaseWidget>,
     isEditMode: Boolean,
     saatMetni: String,
     tarihMetni: String,
@@ -353,9 +364,10 @@ fun WorkspaceCellPageLayout(
     onOnceki: () -> Unit,
     onLaunchApp: (String) -> Unit,
     onEnterEditMode: () -> Unit,
+    onRequestPageChange: (Int) -> Unit,
     onWidgetLongClick: (BaseWidget) -> Unit,
     onDeleteWidget: (String) -> Unit,
-    onMoveWidget: (String, Int, Int) -> Unit,
+    onMoveWidget: (String, Int, Int, Int) -> Unit,
     onResizeWidget: (String, Int, Int) -> Unit
 ) {
     val context = LocalContext.current
@@ -369,6 +381,8 @@ fun WorkspaceCellPageLayout(
     var dragCellX by remember { mutableIntStateOf(-1) }
     var dragCellY by remember { mutableIntStateOf(-1) }
     var isDragValid by remember { mutableStateOf(false) }
+    var dragTargetPage by remember { mutableIntStateOf(pageIndex) }
+    var lastPageTurnTime by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
 
     var resizingWidgetId by remember { mutableStateOf<String?>(null) }
     var liveResizeSpanX by remember { mutableIntStateOf(1) }
@@ -448,96 +462,197 @@ fun WorkspaceCellPageLayout(
 
         // 2. Widget Elemanlari
         widgets.forEach { widget ->
-            val isCurrentDragging = draggingWidgetId == widget.id
-            val isCurrentResizing = resizingWidgetId == widget.id
+            androidx.compose.runtime.key(widget.id) {
+                val isCurrentDragging = draggingWidgetId == widget.id
+                val isCurrentResizing = resizingWidgetId == widget.id
 
-            val safeCellX = widget.cellX.coerceIn(0, colCount - 1)
-            val safeCellY = widget.cellY.coerceIn(0, rowCount - 1)
-            val currentSpanX = if (isCurrentResizing) liveResizeSpanX else widget.spanX
-            val currentSpanY = if (isCurrentResizing) liveResizeSpanY else widget.spanY
+                val safeCellX = widget.cellX.coerceIn(0, colCount - 1)
+                val safeCellY = widget.cellY.coerceIn(0, rowCount - 1)
+                val currentSpanX = if (isCurrentResizing) liveResizeSpanX else widget.spanX
+                val currentSpanY = if (isCurrentResizing) liveResizeSpanY else widget.spanY
 
-            val safeSpanX = currentSpanX.coerceIn(1, colCount - safeCellX)
-            val safeSpanY = currentSpanY.coerceIn(1, rowCount - safeCellY)
+                val safeSpanX = currentSpanX.coerceIn(1, colCount - safeCellX)
+                val safeSpanY = currentSpanY.coerceIn(1, rowCount - safeCellY)
 
-            val leftPx = safeCellX * (cellWidthPx + spacingPx)
-            val topPx = safeCellY * (cellHeightPx + spacingPx)
-            val widthPx = safeSpanX * cellWidthPx + (safeSpanX - 1) * spacingPx
-            val heightPx = safeSpanY * cellHeightPx + (safeSpanY - 1) * spacingPx
+                val leftPx = safeCellX * (cellWidthPx + spacingPx)
+                val topPx = safeCellY * (cellHeightPx + spacingPx)
+                val widthPx = safeSpanX * cellWidthPx + (safeSpanX - 1) * spacingPx
+                val heightPx = safeSpanY * cellHeightPx + (safeSpanY - 1) * spacingPx
 
-            val leftDp = with(density) { leftPx.toDp() }
-            val topDp = with(density) { topPx.toDp() }
-            val widthDp = with(density) { widthPx.toDp() }
-            val heightDp = with(density) { heightPx.toDp() }
+                val leftDp = with(density) { leftPx.toDp() }
+                val topDp = with(density) { topPx.toDp() }
+                val widthDp = with(density) { widthPx.toDp() }
+                val heightDp = with(density) { heightPx.toDp() }
 
-            val isShortcut = widget.typeId == "shortcut" || (safeSpanX <= 2 && safeSpanY <= 2 && widget.packageName != null)
+                val isShortcut = widget.typeId == "shortcut" || (safeSpanX <= 2 && safeSpanY <= 2 && widget.packageName != null)
 
-            // Titreme (Jiggle/Shake) Animasyonu
-            val infiniteTransition = rememberInfiniteTransition()
-            val rotation by infiniteTransition.animateFloat(
-                initialValue = -1.2f,
-                targetValue = 1.2f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(130, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
+                // Titreme (Jiggle/Shake) Animasyonu
+                val infiniteTransition = rememberInfiniteTransition()
+                val rotation by infiniteTransition.animateFloat(
+                    initialValue = -1.2f,
+                    targetValue = 1.2f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(130, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    )
                 )
-            )
 
-            // Canli Surukleme Ofseti (Widget'in parmakla birlikte akmasi)
-            var liveDragOffset by remember { mutableStateOf(Offset.Zero) }
-            var totalDragDistance by remember { mutableFloatStateOf(0f) }
+                // Canli Surukleme Ofseti (Widget'in parmakla birlikte akmasi)
+                var liveDragOffset by remember(widget.id) { mutableStateOf(Offset.Zero) }
+                var totalDragDistance by remember(widget.id) { mutableFloatStateOf(0f) }
 
-            Box(
-                modifier = Modifier
-                    .offset(x = leftDp, y = topDp)
-                    .size(width = widthDp, height = heightDp)
-                    .zIndex(if (isCurrentDragging || isCurrentResizing) 35f else 1f)
-                    .graphicsLayer {
-                        if (isCurrentDragging) {
-                            translationX = liveDragOffset.x
-                            translationY = liveDragOffset.y
-                            scaleX = 1.06f
-                            scaleY = 1.06f
-                            alpha = 0.92f
-                        } else if (isEditMode) {
-                            rotationZ = rotation
+                Box(
+                    modifier = Modifier
+                        .offset(x = leftDp, y = topDp)
+                        .size(width = widthDp, height = heightDp)
+                        .zIndex(if (isCurrentDragging || isCurrentResizing) 35f else 1f)
+                        .graphicsLayer {
+                            if (isCurrentDragging) {
+                                translationX = liveDragOffset.x
+                                translationY = liveDragOffset.y
+                                scaleX = 1.06f
+                                scaleY = 1.06f
+                                alpha = 0.92f
+                            } else if (isEditMode) {
+                                rotationZ = rotation
+                            }
                         }
-                    }
-                    .pointerInput(widget.id, isEditMode) {
-                        if (isEditMode) {
-                            // Duzenleme modundayken hafif dokunup suruklemeyle aninda tasima
-                            detectDragGestures(
-                                onDragStart = {
-                                    if (resizingWidgetId == null) {
+                        .pointerInput(widget.id, isEditMode, safeCellX, safeCellY, safeSpanX, safeSpanY) {
+                            if (isEditMode) {
+                                // Duzenleme modundayken hafif dokunup suruklemeyle aninda tasima
+                                detectDragGestures(
+                                    onDragStart = {
+                                        if (resizingWidgetId == null) {
+                                            draggingWidgetId = widget.id
+                                            liveDragOffset = Offset.Zero
+                                            totalDragDistance = 0f
+                                            dragCellX = widget.cellX
+                                            dragCellY = widget.cellY
+                                            dragTargetPage = pageIndex
+                                            isDragValid = true
+                                        }
+                                    },
+                                    onDragCancel = {
+                                        draggingWidgetId = null
+                                        liveDragOffset = Offset.Zero
+                                        totalDragDistance = 0f
+                                        dragCellX = -1
+                                        dragCellY = -1
+                                    },
+                                    onDragEnd = {
+                                        if (draggingWidgetId == widget.id && isDragValid && dragCellX >= 0 && dragCellY >= 0 && totalDragDistance > 12f) {
+                                            onMoveWidget(widget.id, dragTargetPage, dragCellX, dragCellY)
+                                        }
+                                        draggingWidgetId = null
+                                        liveDragOffset = Offset.Zero
+                                        totalDragDistance = 0f
+                                        dragCellX = -1
+                                        dragCellY = -1
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        if (resizingWidgetId == null) {
+                                            change.consume()
+                                            liveDragOffset += dragAmount
+                                            totalDragDistance += kotlin.math.hypot(dragAmount.x, dragAmount.y)
+
+                                            // Ekran Kenari Sayfa Gecis Kontrolu (Cross-Page Drag)
+                                            val currentFingerX = leftPx + liveDragOffset.x + change.position.x
+                                            val now = System.currentTimeMillis()
+                                            if (now - lastPageTurnTime > 800L) {
+                                                if (currentFingerX > totalWidthPx - 45f && dragTargetPage < pageCount - 1) {
+                                                    dragTargetPage++
+                                                    lastPageTurnTime = now
+                                                    onRequestPageChange(dragTargetPage)
+                                                } else if (currentFingerX < 45f && dragTargetPage > 0) {
+                                                    dragTargetPage--
+                                                    lastPageTurnTime = now
+                                                    onRequestPageChange(dragTargetPage)
+                                                }
+                                            }
+
+                                            val (targetCol, targetRow) = CarWidgetSizing.adjustedWidgetDropCell(
+                                                sourceCellX = widget.cellX,
+                                                sourceCellY = widget.cellY,
+                                                spanX = widget.spanX,
+                                                spanY = widget.spanY,
+                                                dragOffsetX = liveDragOffset.x,
+                                                dragOffsetY = liveDragOffset.y,
+                                                cellWidthPx = cellWidthPx,
+                                                cellHeightPx = cellHeightPx,
+                                                spacingPx = spacingPx
+                                            )
+
+                                            dragCellX = targetCol
+                                            dragCellY = targetRow
+
+                                            val wm = WidgetManager.getInstance(context)
+                                            isDragValid = wm.isRegionVacant(
+                                                pageIndex = dragTargetPage,
+                                                cellX = targetCol,
+                                                cellY = targetRow,
+                                                spanX = widget.spanX,
+                                                spanY = widget.spanY,
+                                                ignoreWidgetId = widget.id
+                                            )
+                                        }
+                                    }
+                                )
+                            } else {
+                                // Normal moddayken uzun basip surukleme (Launcher3 & DuoLauncher standardi)
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onEnterEditMode()
                                         draggingWidgetId = widget.id
                                         liveDragOffset = Offset.Zero
                                         totalDragDistance = 0f
                                         dragCellX = widget.cellX
                                         dragCellY = widget.cellY
+                                        dragTargetPage = pageIndex
                                         isDragValid = true
-                                    }
-                                },
-                                onDragCancel = {
-                                    draggingWidgetId = null
-                                    liveDragOffset = Offset.Zero
-                                    totalDragDistance = 0f
-                                    dragCellX = -1
-                                    dragCellY = -1
-                                },
-                                onDragEnd = {
-                                    if (draggingWidgetId == widget.id && isDragValid && dragCellX >= 0 && dragCellY >= 0 && totalDragDistance > 12f) {
-                                        onMoveWidget(widget.id, dragCellX, dragCellY)
-                                    }
-                                    draggingWidgetId = null
-                                    liveDragOffset = Offset.Zero
-                                    totalDragDistance = 0f
-                                    dragCellX = -1
-                                    dragCellY = -1
-                                },
-                                onDrag = { change, dragAmount ->
-                                    if (resizingWidgetId == null) {
+                                    },
+                                    onDragCancel = {
+                                        draggingWidgetId = null
+                                        liveDragOffset = Offset.Zero
+                                        totalDragDistance = 0f
+                                        dragCellX = -1
+                                        dragCellY = -1
+                                    },
+                                    onDragEnd = {
+                                        if (draggingWidgetId == widget.id) {
+                                            if (totalDragDistance > 16f && isDragValid && dragCellX >= 0 && dragCellY >= 0) {
+                                                // Surukleme tamamlandi, yeni hucreye tasi
+                                                onMoveWidget(widget.id, dragTargetPage, dragCellX, dragCellY)
+                                            } else if (totalDragDistance <= 16f) {
+                                                // Uzun basildi ama suruklenmedi: Aksiyon Menusunu ac
+                                                onWidgetLongClick(widget)
+                                            }
+                                        }
+                                        draggingWidgetId = null
+                                        liveDragOffset = Offset.Zero
+                                        totalDragDistance = 0f
+                                        dragCellX = -1
+                                        dragCellY = -1
+                                    },
+                                    onDrag = { change, dragAmount ->
                                         change.consume()
                                         liveDragOffset += dragAmount
                                         totalDragDistance += kotlin.math.hypot(dragAmount.x, dragAmount.y)
+
+                                        // Ekran Kenari Sayfa Gecis Kontrolu (Cross-Page Drag)
+                                        val currentFingerX = leftPx + liveDragOffset.x + change.position.x
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastPageTurnTime > 800L) {
+                                            if (currentFingerX > totalWidthPx - 45f && dragTargetPage < pageCount - 1) {
+                                                dragTargetPage++
+                                                lastPageTurnTime = now
+                                                onRequestPageChange(dragTargetPage)
+                                            } else if (currentFingerX < 45f && dragTargetPage > 0) {
+                                                dragTargetPage--
+                                                lastPageTurnTime = now
+                                                onRequestPageChange(dragTargetPage)
+                                            }
+                                        }
 
                                         val (targetCol, targetRow) = CarWidgetSizing.adjustedWidgetDropCell(
                                             sourceCellX = widget.cellX,
@@ -556,7 +671,7 @@ fun WorkspaceCellPageLayout(
 
                                         val wm = WidgetManager.getInstance(context)
                                         isDragValid = wm.isRegionVacant(
-                                            pageIndex = pageIndex,
+                                            pageIndex = dragTargetPage,
                                             cellX = targetCol,
                                             cellY = targetRow,
                                             spanX = widget.spanX,
@@ -564,89 +679,21 @@ fun WorkspaceCellPageLayout(
                                             ignoreWidgetId = widget.id
                                         )
                                     }
-                                }
-                            )
-                        } else {
-                            // Normal moddayken uzun basip surukleme (Launcher3 & DuoLauncher standardi)
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onEnterEditMode()
-                                    draggingWidgetId = widget.id
-                                    liveDragOffset = Offset.Zero
-                                    totalDragDistance = 0f
-                                    dragCellX = widget.cellX
-                                    dragCellY = widget.cellY
-                                    isDragValid = true
-                                },
-                                onDragCancel = {
-                                    draggingWidgetId = null
-                                    liveDragOffset = Offset.Zero
-                                    totalDragDistance = 0f
-                                    dragCellX = -1
-                                    dragCellY = -1
-                                },
-                                onDragEnd = {
-                                    if (draggingWidgetId == widget.id) {
-                                        if (totalDragDistance > 16f && isDragValid && dragCellX >= 0 && dragCellY >= 0) {
-                                            // Surukleme tamamlandi, yeni hucreye tasi
-                                            onMoveWidget(widget.id, dragCellX, dragCellY)
-                                        } else if (totalDragDistance <= 16f) {
-                                            // Uzun basildi ama suruklenmedi: Aksiyon Menusunu ac
-                                            onWidgetLongClick(widget)
-                                        }
+                                )
+                            }
+                        }
+                        .pointerInput(widget.id, isEditMode) {
+                            detectTapGestures(
+                                onTap = {
+                                    if (isEditMode) {
+                                        // Duzenleme modunda widget'a dokunuldugunda Aksiyon Menusunu goster
+                                        onWidgetLongClick(widget)
+                                    } else if (widget.typeId == "shortcut" && widget.packageName != null) {
+                                        onLaunchApp(widget.packageName!!)
                                     }
-                                    draggingWidgetId = null
-                                    liveDragOffset = Offset.Zero
-                                    totalDragDistance = 0f
-                                    dragCellX = -1
-                                    dragCellY = -1
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    liveDragOffset += dragAmount
-                                    totalDragDistance += kotlin.math.hypot(dragAmount.x, dragAmount.y)
-
-                                    val (targetCol, targetRow) = CarWidgetSizing.adjustedWidgetDropCell(
-                                        sourceCellX = widget.cellX,
-                                        sourceCellY = widget.cellY,
-                                        spanX = widget.spanX,
-                                        spanY = widget.spanY,
-                                        dragOffsetX = liveDragOffset.x,
-                                        dragOffsetY = liveDragOffset.y,
-                                        cellWidthPx = cellWidthPx,
-                                        cellHeightPx = cellHeightPx,
-                                        spacingPx = spacingPx
-                                    )
-
-                                    dragCellX = targetCol
-                                    dragCellY = targetRow
-
-                                    val wm = WidgetManager.getInstance(context)
-                                    isDragValid = wm.isRegionVacant(
-                                        pageIndex = pageIndex,
-                                        cellX = targetCol,
-                                        cellY = targetRow,
-                                        spanX = widget.spanX,
-                                        spanY = widget.spanY,
-                                        ignoreWidgetId = widget.id
-                                    )
                                 }
                             )
                         }
-                    }
-                    .pointerInput(widget.id, isEditMode) {
-                        detectTapGestures(
-                            onTap = {
-                                if (isEditMode) {
-                                    // Duzenleme modunda widget'a dokunuldugunda Aksiyon Menusunu goster
-                                    onWidgetLongClick(widget)
-                                } else if (widget.typeId == "shortcut" && widget.packageName != null) {
-                                    onLaunchApp(widget.packageName!!)
-                                }
-                            }
-                        )
-                    }
             ) {
                 // Widget Kart Cercevesi (NORMAL MODDA CERCEVE TAMAMEN YOKTUR, TEMIZ VE CAM EFEKTLI)
                 Box(
@@ -748,10 +795,37 @@ fun WorkspaceCellPageLayout(
                             CarWidgetSizing.getConstraintsForWidget(widget, providerInfo, cellWDp, cellHDp)
                         }
 
-                        val minSpanX = constraints.minSpanX
-                        val maxSpanX = minOf(constraints.maxSpanX, colCount - safeCellX)
-                        val minSpanY = constraints.minSpanY
-                        val maxSpanY = minOf(constraints.maxSpanY, rowCount - safeCellY)
+                        // Diger widget'lar ile cakismayi onleyen dinamik maxSpan hesaplamasi
+                        val maxSpanX = run {
+                            var maxAllowed = minOf(constraints.maxSpanX, colCount - safeCellX)
+                            for (other in widgets) {
+                                if (other.id == widget.id) continue
+                                val overlapY = maxOf(0, minOf(safeCellY + safeSpanY, other.cellY + other.spanY) - maxOf(safeCellY, other.cellY))
+                                if (overlapY > 0 && other.cellX >= safeCellX + safeSpanX) {
+                                    val dist = other.cellX - safeCellX
+                                    if (dist in safeSpanX until maxAllowed) {
+                                        maxAllowed = dist
+                                    }
+                                }
+                            }
+                            maxAllowed
+                        }
+                        val maxSpanY = run {
+                            var maxAllowed = minOf(constraints.maxSpanY, rowCount - safeCellY)
+                            for (other in widgets) {
+                                if (other.id == widget.id) continue
+                                val overlapX = maxOf(0, minOf(safeCellX + safeSpanX, other.cellX + other.spanX) - maxOf(safeCellX, other.cellX))
+                                if (overlapX > 0 && other.cellY >= safeCellY + safeSpanY) {
+                                    val dist = other.cellY - safeCellY
+                                    if (dist in safeSpanY until maxAllowed) {
+                                        maxAllowed = dist
+                                    }
+                                }
+                            }
+                            maxAllowed
+                        }
+                        val minSpanX = constraints.minSpanX.coerceAtMost(maxSpanX)
+                        val minSpanY = constraints.minSpanY.coerceAtMost(maxSpanY)
 
                         // 1. Sag Kenar Boyut Tutamaci (Genislik: Büyütme & Küçültme Drag)
                         if (constraints.canResizeHorizontally) {
@@ -761,139 +835,130 @@ fun WorkspaceCellPageLayout(
                                     .offset(x = 16.dp)
                                     .size(44.dp)
                                     .zIndex(110f)
-                                .pointerInput(widget.id, safeSpanX) {
-                                    detectDragGestures(
-                                        onDragStart = {
-                                            resizingWidgetId = widget.id
-                                            liveResizeSpanX = safeSpanX
-                                            liveResizeSpanY = safeSpanY
-                                            resizeDragX = 0f
-                                            resizeDragY = 0f
-                                        },
-                                        onDragCancel = { resizingWidgetId = null },
-                                        onDragEnd = {
-                                            if (resizingWidgetId == widget.id && liveResizeSpanX != safeSpanX) {
-                                                onResizeWidget(widget.id, liveResizeSpanX, safeSpanY)
+                                    .pointerInput(widget.id, safeSpanX, safeSpanY, safeCellX, safeCellY) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                resizingWidgetId = widget.id
+                                                liveResizeSpanX = safeSpanX
+                                                liveResizeSpanY = safeSpanY
+                                                resizeDragX = 0f
+                                                resizeDragY = 0f
+                                            },
+                                            onDragCancel = { resizingWidgetId = null },
+                                            onDragEnd = {
+                                                if (resizingWidgetId == widget.id && liveResizeSpanX != safeSpanX) {
+                                                    onResizeWidget(widget.id, liveResizeSpanX, safeSpanY)
+                                                }
+                                                resizingWidgetId = null
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                resizeDragX += dragAmount.x
+                                                val deltaCols = (resizeDragX / (cellWidthPx + spacingPx)).roundToInt()
+                                                liveResizeSpanX = (safeSpanX + deltaCols).coerceIn(minSpanX, maxSpanX)
                                             }
-                                            resizingWidgetId = null
-                                        },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            resizeDragX += dragAmount.x
-                                            val deltaCols = (resizeDragX / (cellWidthPx + spacingPx)).roundToInt()
-                                            liveResizeSpanX = (safeSpanX + deltaCols).coerceIn(minSpanX, maxSpanX)
-                                        }
-                                    )
-                                }
-                                .clickable {
-                                    // Tiklama destegi: siniri asarsa min boyuta kuculur
-                                    val nextSpanX = if (safeSpanX >= maxSpanX) minSpanX else (safeSpanX + 2).coerceAtMost(maxSpanX)
-                                    onResizeWidget(widget.id, nextSpanX, safeSpanY)
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .clip(CircleShape)
-                                    .background(ClPrimary)
-                                    .border(2.dp, Color.White, CircleShape)
-                            )
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(14.dp)
+                                        .clip(CircleShape)
+                                        .background(ClPrimary)
+                                        .border(2.dp, Color.White, CircleShape)
+                                )
+                            }
                         }
 
-                            // 2. Alt Kenar Boyut Tutamaci (Yukseklik: Büyütme & Küçültme Drag)
-                            if (constraints.canResizeVertically) {
+                        // 2. Alt Kenar Boyut Tutamaci (Yukseklik: Büyütme & Küçültme Drag)
+                        if (constraints.canResizeVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .offset(y = 16.dp)
+                                    .size(44.dp)
+                                    .zIndex(110f)
+                                    .pointerInput(widget.id, safeSpanX, safeSpanY, safeCellX, safeCellY) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                resizingWidgetId = widget.id
+                                                liveResizeSpanX = safeSpanX
+                                                liveResizeSpanY = safeSpanY
+                                                resizeDragX = 0f
+                                                resizeDragY = 0f
+                                            },
+                                            onDragCancel = { resizingWidgetId = null },
+                                            onDragEnd = {
+                                                if (resizingWidgetId == widget.id && liveResizeSpanY != safeSpanY) {
+                                                    onResizeWidget(widget.id, safeSpanX, liveResizeSpanY)
+                                                }
+                                                resizingWidgetId = null
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                resizeDragY += dragAmount.y
+                                                val deltaRows = (resizeDragY / (cellHeightPx + spacingPx)).roundToInt()
+                                                liveResizeSpanY = (safeSpanY + deltaRows).coerceIn(minSpanY, maxSpanY)
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Box(
                                     modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .offset(y = 16.dp)
-                                        .size(44.dp)
-                                        .zIndex(110f)
-                                        .pointerInput(widget.id, safeSpanY) {
-                                            detectDragGestures(
-                                                onDragStart = {
-                                                    resizingWidgetId = widget.id
-                                                    liveResizeSpanX = safeSpanX
-                                                    liveResizeSpanY = safeSpanY
-                                                    resizeDragX = 0f
-                                                    resizeDragY = 0f
-                                                },
-                                                onDragCancel = { resizingWidgetId = null },
-                                                onDragEnd = {
-                                                    if (resizingWidgetId == widget.id && liveResizeSpanY != safeSpanY) {
-                                                        onResizeWidget(widget.id, safeSpanX, liveResizeSpanY)
-                                                    }
-                                                    resizingWidgetId = null
-                                                },
-                                                onDrag = { change, dragAmount ->
-                                                    change.consume()
-                                                    resizeDragY += dragAmount.y
-                                                    val deltaRows = (resizeDragY / (cellHeightPx + spacingPx)).roundToInt()
-                                                    liveResizeSpanY = (safeSpanY + deltaRows).coerceIn(minSpanY, maxSpanY)
-                                                }
-                                            )
-                                        }
-                                        .clickable {
-                                            val nextSpanY = if (safeSpanY >= maxSpanY) minSpanY else (safeSpanY + 1).coerceAtMost(maxSpanY)
-                                            onResizeWidget(widget.id, safeSpanX, nextSpanY)
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(14.dp)
-                                            .clip(CircleShape)
-                                            .background(ClPrimary)
-                                            .border(2.dp, Color.White, CircleShape)
-                                    )
-                                }
+                                        .size(14.dp)
+                                        .clip(CircleShape)
+                                        .background(ClPrimary)
+                                        .border(2.dp, Color.White, CircleShape)
+                                )
                             }
+                        }
 
-                            // 3. Sag-Alt Kose Tutamaci (Cift Yonlu En & Boy Drag)
-                            if (constraints.canResizeHorizontally && constraints.canResizeVertically) {
+                        // 3. Sag-Alt Kose Tutamaci (Cift Yonlu En & Boy Drag)
+                        if (constraints.canResizeHorizontally && constraints.canResizeVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = 12.dp, y = 12.dp)
+                                    .size(44.dp)
+                                    .zIndex(115f)
+                                    .pointerInput(widget.id, safeSpanX, safeSpanY, safeCellX, safeCellY) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                resizingWidgetId = widget.id
+                                                liveResizeSpanX = safeSpanX
+                                                liveResizeSpanY = safeSpanY
+                                                resizeDragX = 0f
+                                                resizeDragY = 0f
+                                            },
+                                            onDragCancel = { resizingWidgetId = null },
+                                            onDragEnd = {
+                                                if (resizingWidgetId == widget.id && (liveResizeSpanX != safeSpanX || liveResizeSpanY != safeSpanY)) {
+                                                    onResizeWidget(widget.id, liveResizeSpanX, liveResizeSpanY)
+                                                }
+                                                resizingWidgetId = null
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                resizeDragX += dragAmount.x
+                                                resizeDragY += dragAmount.y
+                                                val deltaCols = (resizeDragX / (cellWidthPx + spacingPx)).roundToInt()
+                                                val deltaRows = (resizeDragY / (cellHeightPx + spacingPx)).roundToInt()
+                                                liveResizeSpanX = (safeSpanX + deltaCols).coerceIn(minSpanX, maxSpanX)
+                                                liveResizeSpanY = (safeSpanY + deltaRows).coerceIn(minSpanY, maxSpanY)
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Box(
                                     modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .offset(x = 12.dp, y = 12.dp)
-                                        .size(44.dp)
-                                        .zIndex(115f)
-                                        .pointerInput(widget.id, safeSpanX, safeSpanY) {
-                                            detectDragGestures(
-                                                onDragStart = {
-                                                    resizingWidgetId = widget.id
-                                                    liveResizeSpanX = safeSpanX
-                                                    liveResizeSpanY = safeSpanY
-                                                    resizeDragX = 0f
-                                                    resizeDragY = 0f
-                                                },
-                                                onDragCancel = { resizingWidgetId = null },
-                                                onDragEnd = {
-                                                    if (resizingWidgetId == widget.id && (liveResizeSpanX != safeSpanX || liveResizeSpanY != safeSpanY)) {
-                                                        onResizeWidget(widget.id, liveResizeSpanX, liveResizeSpanY)
-                                                    }
-                                                    resizingWidgetId = null
-                                                },
-                                                onDrag = { change, dragAmount ->
-                                                    change.consume()
-                                                    resizeDragX += dragAmount.x
-                                                    resizeDragY += dragAmount.y
-                                                    val deltaCols = (resizeDragX / (cellWidthPx + spacingPx)).roundToInt()
-                                                    val deltaRows = (resizeDragY / (cellHeightPx + spacingPx)).roundToInt()
-                                                    liveResizeSpanX = (safeSpanX + deltaCols).coerceIn(minSpanX, maxSpanX)
-                                                    liveResizeSpanY = (safeSpanY + deltaRows).coerceIn(minSpanY, maxSpanY)
-                                                }
-                                            )
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(16.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White)
-                                            .border(2.dp, ClPrimary, CircleShape)
-                                    )
-                                }
+                                        .size(16.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White)
+                                        .border(2.dp, ClPrimary, CircleShape)
+                                )
                             }
                         }
                     }
@@ -901,6 +966,7 @@ fun WorkspaceCellPageLayout(
             }
         }
     }
+}
 }
 
 /**
