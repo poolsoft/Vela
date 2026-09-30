@@ -25,6 +25,8 @@ class WidgetManager private constructor(private val context: Context) {
 
         private const val PREFS_NAME = "vela_car_launcher_widgets"
         private const val KEY_WIDGET_CONFIG = "widget_config"
+        const val PREFS_WALLPAPER_TYPE = "wallpaper_type"
+        const val PREFS_WALLPAPER_VALUE = "wallpaper_value"
 
         @Volatile
         private var instance: WidgetManager? = null
@@ -39,6 +41,22 @@ class WidgetManager private constructor(private val context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val _widgetsFlow = MutableStateFlow<List<BaseWidget>>(emptyList())
     val widgetsFlow: StateFlow<List<BaseWidget>> = _widgetsFlow.asStateFlow()
+
+    private val _wallpaperFlow = MutableStateFlow(
+        Pair(
+            prefs.getString(PREFS_WALLPAPER_TYPE, "system") ?: "system",
+            prefs.getString(PREFS_WALLPAPER_VALUE, "") ?: ""
+        )
+    )
+    val wallpaperFlow: StateFlow<Pair<String, String>> = _wallpaperFlow.asStateFlow()
+
+    fun setWallpaper(type: String, value: String) {
+        prefs.edit()
+            .putString(PREFS_WALLPAPER_TYPE, type)
+            .putString(PREFS_WALLPAPER_VALUE, value)
+            .apply()
+        _wallpaperFlow.value = Pair(type, value)
+    }
 
     val appWidgetHost: AppWidgetHost = CarZeroPaddingWidgetHost(context, 1024)
 
@@ -290,18 +308,35 @@ class WidgetManager private constructor(private val context: Context) {
         val index = currentList.indexOfFirst { it.id == widgetId }
         if (index != -1) {
             val item = currentList[index]
-            item.pageIndex = pageIndex
-            item.cellX = cellX.coerceIn(0, COL_COUNT - 1)
-            item.cellY = cellY.coerceIn(0, ROW_COUNT - 1)
-            item.spanX = spanX.coerceIn(1, COL_COUNT - item.cellX)
-            item.spanY = spanY.coerceIn(1, ROW_COUNT - item.cellY)
+            val safeCellX = cellX.coerceIn(0, COL_COUNT - 1)
+            val safeCellY = cellY.coerceIn(0, ROW_COUNT - 1)
+            val safeSpanX = spanX.coerceIn(1, COL_COUNT - safeCellX)
+            val safeSpanY = spanY.coerceIn(1, ROW_COUNT - safeCellY)
 
-            item.size = when {
-                item.spanX >= 3 || item.spanY >= 2 -> BaseWidget.WidgetSize.LARGE
-                item.spanX >= 2 -> BaseWidget.WidgetSize.MEDIUM
+            val newSize = when {
+                safeSpanX >= 3 || safeSpanY >= 2 -> BaseWidget.WidgetSize.LARGE
+                safeSpanX >= 2 -> BaseWidget.WidgetSize.MEDIUM
                 else -> BaseWidget.WidgetSize.SMALL
             }
 
+            val updated = GenericWidget(
+                id = item.id,
+                typeId = item.typeId,
+                title = item.title,
+                size = newSize,
+                pageIndex = pageIndex,
+                cellX = safeCellX,
+                cellY = safeCellY,
+                spanX = safeSpanX,
+                spanY = safeSpanY,
+                appWidgetId = item.appWidgetId,
+                packageName = item.packageName,
+                customConfig = item.customConfig
+            ).apply {
+                this.isVisible = item.isVisible
+            }
+
+            currentList[index] = updated
             _widgetsFlow.value = currentList.toList()
             saveConfig()
         }
@@ -435,11 +470,104 @@ class WidgetManager private constructor(private val context: Context) {
                 }
                 list.add(widget)
             }
-            _widgetsFlow.value = list
+            val resolvedList = resolveOverlappingWidgets(list)
+            _widgetsFlow.value = resolvedList
+            saveConfig()
         } catch (e: Exception) {
             e.printStackTrace()
             loadDefaultWidgets()
         }
+    }
+
+    /**
+     * Ust uste binen (ayni hucreyi paylasan) widget'lari tespit eder
+     * ve bos hucrelere tasiyarak dagitir.
+     */
+    private fun resolveOverlappingWidgets(inputList: List<BaseWidget>): List<BaseWidget> {
+        val result = mutableListOf<BaseWidget>()
+        val maxPage = inputList.maxOfOrNull { it.pageIndex } ?: 0
+
+        for (page in 0..maxPage) {
+            val pageWidgets = inputList.filter { it.pageIndex == page }
+            val occupied = Array(ROW_COUNT) { BooleanArray(COL_COUNT) }
+
+            for (w in pageWidgets) {
+                // Minimum boyut: 1x1 cok kucuk kaldigi icin en az 2x2 yapilir (kisayol haric)
+                var spanX = w.spanX
+                var spanY = w.spanY
+                if (w.typeId != "shortcut" && w.typeId != "system") {
+                    if (spanX < 2) spanX = 2
+                    if (spanY < 2) spanY = 2
+                }
+
+                var cellX = w.cellX.coerceIn(0, (COL_COUNT - spanX).coerceAtLeast(0))
+                var cellY = w.cellY.coerceIn(0, (ROW_COUNT - spanY).coerceAtLeast(0))
+
+                // Hucre bos mu kontrol et
+                var fits = true
+                for (r in cellY until (cellY + spanY).coerceAtMost(ROW_COUNT)) {
+                    for (c in cellX until (cellX + spanX).coerceAtMost(COL_COUNT)) {
+                        if (occupied[r][c]) {
+                            fits = false
+                            break
+                        }
+                    }
+                    if (!fits) break
+                }
+
+                if (!fits) {
+                    // Cakisiyor! Bu sayfada ilk bos hucreyi bul
+                    var foundVacant = false
+                    for (r in 0..(ROW_COUNT - spanY)) {
+                        for (c in 0..(COL_COUNT - spanX)) {
+                            var canFit = true
+                            for (dr in 0 until spanY) {
+                                for (dc in 0 until spanX) {
+                                    if (occupied[r + dr][c + dc]) {
+                                        canFit = false
+                                        break
+                                    }
+                                }
+                                if (!canFit) break
+                            }
+                            if (canFit) {
+                                cellX = c
+                                cellY = r
+                                foundVacant = true
+                                break
+                            }
+                        }
+                        if (foundVacant) break
+                    }
+                }
+
+                // Alanı dolu olarak isaretle
+                for (r in cellY until (cellY + spanY).coerceAtMost(ROW_COUNT)) {
+                    for (c in cellX until (cellX + spanX).coerceAtMost(COL_COUNT)) {
+                        occupied[r][c] = true
+                    }
+                }
+
+                val resolvedWidget = GenericWidget(
+                    id = w.id,
+                    typeId = w.typeId,
+                    title = w.title,
+                    size = w.size,
+                    pageIndex = page,
+                    cellX = cellX,
+                    cellY = cellY,
+                    spanX = spanX,
+                    spanY = spanY,
+                    appWidgetId = w.appWidgetId,
+                    packageName = w.packageName,
+                    customConfig = w.customConfig
+                ).apply {
+                    this.isVisible = w.isVisible
+                }
+                result.add(resolvedWidget)
+            }
+        }
+        return result
     }
 
     private fun loadDefaultWidgets() {

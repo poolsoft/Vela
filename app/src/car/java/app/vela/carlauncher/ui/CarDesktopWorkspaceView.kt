@@ -1,7 +1,10 @@
 package app.vela.carlauncher.ui
 
 import android.appwidget.AppWidgetManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -163,19 +166,15 @@ fun CarDesktopWorkspaceView(
         }
     }
 
+    val wallpaperState by widgetManager.wallpaperFlow.collectAsState()
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFF090A0F), Color(0xFF10121C), Color(0xFF131524))
-                )
-            )
-            .padding(horizontal = 6.dp, vertical = 2.dp)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onLongPress = { 
-                        // Masaustu bos alana uzun basildiginda Duvar Kagidi ve Masaustu Secenekleri acilir
+                        // Masaustu bos alana uzun basildiginda Duvar Kagidi Secenekleri acilir
                         showWallpaperDialog = true 
                     },
                     onTap = { 
@@ -184,13 +183,22 @@ fun CarDesktopWorkspaceView(
                 )
             }
     ) {
+        // 0. MASAUSTU ARKA PLAN DUVAR KAGIDI (Sistem, Ozel Resim veya Tematik Preset)
+        DesktopWallpaperView(
+            wallpaperType = wallpaperState.first,
+            wallpaperValue = wallpaperState.second,
+            modifier = Modifier.fillMaxSize()
+        )
+
         // ═══════════════════════════════════════════════════════════════
         // TAM SAYFA 12x6 HUCRESEL MASAUSTU (PAGER)
         // ═══════════════════════════════════════════════════════════════
         HorizontalPager(
             state = pagerState,
             userScrollEnabled = !isEditMode,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 6.dp, vertical = 2.dp)
         ) { pageIndex ->
             val pageWidgets = widgets.filter { it.pageIndex == pageIndex && it.isVisible }
 
@@ -212,15 +220,15 @@ fun CarDesktopWorkspaceView(
                 },
                 onDeleteWidget = { widgetId -> widgetManager.removeWidget(widgetId) },
                 onMoveWidget = { id, cellX, cellY ->
-                    val w = pageWidgets.find { it.id == id }
-                    if (w != null) {
-                        widgetManager.updateWidgetPlacement(id, pageIndex, cellX, cellY, w.spanX, w.spanY)
+                    val latest = widgetManager.widgetsFlow.value.find { it.id == id }
+                    if (latest != null) {
+                        widgetManager.updateWidgetPlacement(id, pageIndex, cellX, cellY, latest.spanX, latest.spanY)
                     }
                 },
                 onResizeWidget = { id, spanX, spanY ->
-                    val w = pageWidgets.find { it.id == id }
-                    if (w != null) {
-                        widgetManager.updateWidgetPlacement(id, pageIndex, w.cellX, w.cellY, spanX, spanY)
+                    val latest = widgetManager.widgetsFlow.value.find { it.id == id }
+                    if (latest != null) {
+                        widgetManager.updateWidgetPlacement(id, pageIndex, latest.cellX, latest.cellY, spanX, spanY)
                     }
                 }
             )
@@ -309,6 +317,19 @@ fun CarDesktopWorkspaceView(
                 onWidgetAdded = {
                     showWidgetPicker = false
                     widgetToReplace = null
+                }
+            )
+        }
+
+        // 4. Duvar Kagidi Secici Dialogu
+        if (showWallpaperDialog) {
+            WallpaperPickerDialogView(
+                currentType = wallpaperState.first,
+                currentValue = wallpaperState.second,
+                onDismiss = { showWallpaperDialog = false },
+                onSelectWallpaper = { type, value ->
+                    widgetManager.setWallpaper(type, value)
+                    showWallpaperDialog = false
                 }
             )
         }
@@ -1161,6 +1182,310 @@ fun RenderWidgetContent(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(text = widget.title, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}
+
+/**
+ * Masaustu Arka Plan Duvar Kagidi Render Bileseni.
+ * - Sistem Duvar Kagidi (WallpaperManager)
+ * - Kullanici Galerisi / Ozel Resim (URI)
+ * - Otomobil Tematik Presetleri (Karbon, Gece Kokpiti, Spor Mavi, Saf Siyah)
+ */
+@Composable
+fun DesktopWallpaperView(
+    wallpaperType: String,
+    wallpaperValue: String,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+
+    when (wallpaperType) {
+        "system" -> {
+            val systemWallpaper = remember {
+                try {
+                    val wm = android.app.WallpaperManager.getInstance(context)
+                    wm.drawable?.toBitmap()?.asImageBitmap()
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            if (systemWallpaper != null) {
+                Image(
+                    bitmap = systemWallpaper,
+                    contentDescription = "Sistem Duvar Kağıdı",
+                    contentScale = ContentScale.Crop,
+                    modifier = modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0xFF090A0F), Color(0xFF10121C), Color(0xFF131524))
+                            )
+                        )
+                )
+            }
+        }
+        "custom" -> {
+            val customBitmap = remember(wallpaperValue) {
+                try {
+                    if (wallpaperValue.isNotBlank()) {
+                        val uri = android.net.Uri.parse(wallpaperValue)
+                        val inputStream = context.contentResolver.openInputStream(uri)
+                        val bmp = android.graphics.BitmapFactory.decodeStream(inputStream)
+                        inputStream?.close()
+                        bmp?.asImageBitmap()
+                    } else null
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            if (customBitmap != null) {
+                Image(
+                    bitmap = customBitmap,
+                    contentDescription = "Özel Duvar Kağıdı",
+                    contentScale = ContentScale.Crop,
+                    modifier = modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0xFF090A0F), Color(0xFF10121C), Color(0xFF131524))
+                            )
+                        )
+                )
+            }
+        }
+        "carbon" -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(Color(0xFF1E2129), Color(0xFF111216), Color(0xFF07080A))
+                        )
+                    )
+            )
+        }
+        "cockpit" -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color(0xFF070C18), Color(0xFF121B35), Color(0xFF0A0F20))
+                        )
+                    )
+            )
+        }
+        "sport" -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF041829), Color(0xFF0B3356), Color(0xFF03101C))
+                        )
+                    )
+            )
+        }
+        "pure_black" -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            )
+        }
+        else -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color(0xFF090A0F), Color(0xFF10121C), Color(0xFF131524))
+                        )
+                    )
+            )
+        }
+    }
+}
+
+/**
+ * Duvar Kagidi Secim Dialogu
+ */
+@Composable
+fun WallpaperPickerDialogView(
+    currentType: String,
+    currentValue: String,
+    onDismiss: () -> Unit,
+    onSelectWallpaper: (type: String, value: String) -> Unit
+) {
+    val context = LocalContext.current
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            try {
+                // URI yetkisini kalici tut
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                // Bazi sistemlerde takePersistableUriPermission desteklenmeyebilir
+            }
+            onSelectWallpaper("custom", uri.toString())
+        }
+    }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .width(440.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color(0xF0181A29))
+                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(20.dp))
+                .padding(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Duvar Kağıdı Seçimi",
+                        color = Color.White,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x22FFFFFF))
+                            .clickable { onDismiss() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Kapat",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                // Secenekler
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // 1. Sistem Duvar Kagidi
+                    WallpaperOptionItem(
+                        title = "Sistem Duvar Kağıdı",
+                        subtitle = "Android telefon/cihaz duvar kağıdını kullan",
+                        isSelected = currentType == "system",
+                        onClick = { onSelectWallpaper("system", "") }
+                    )
+
+                    // 2. Galeriden Resim Sec
+                    WallpaperOptionItem(
+                        title = "Galeriden Resim Seç",
+                        subtitle = "Kendi fotoğrafınızı veya araba arka planınızı yükleyin",
+                        isSelected = currentType == "custom",
+                        onClick = { imagePickerLauncher.launch("image/*") }
+                    )
+
+                    // 3. Karbon Fiber Siyah
+                    WallpaperOptionItem(
+                        title = "Karbon Fiber Siyah",
+                        subtitle = "Karanlık ve şık araba kokpit teması",
+                        isSelected = currentType == "carbon",
+                        onClick = { onSelectWallpaper("carbon", "") }
+                    )
+
+                    // 4. Gece Kokpiti (Lacivert/Mor)
+                    WallpaperOptionItem(
+                        title = "Gece Kokpiti",
+                        subtitle = "Derin mavi gece sürüş teması",
+                        isSelected = currentType == "cockpit",
+                        onClick = { onSelectWallpaper("cockpit", "") }
+                    )
+
+                    // 5. Spor Mavi
+                    WallpaperOptionItem(
+                        title = "Elektrik Mavi",
+                        subtitle = "Dinamik modern otomobil arayüzü",
+                        isSelected = currentType == "sport",
+                        onClick = { onSelectWallpaper("sport", "") }
+                    )
+
+                    // 6. Saf AMOLED Siyah
+                    WallpaperOptionItem(
+                        title = "Minimal Saf Siyah",
+                        subtitle = "Pil tasarruflu ve sıfır parazit",
+                        isSelected = currentType == "pure_black",
+                        onClick = { onSelectWallpaper("pure_black", "") }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WallpaperOptionItem(
+    title: String,
+    subtitle: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isSelected) Color(0x330A84FF) else Color(0x11FFFFFF))
+            .border(
+                width = if (isSelected) 1.5.dp else 1.dp,
+                color = if (isSelected) Color(0xFF0A84FF) else Color(0x22FFFFFF),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = if (isSelected) Color(0xFF64B5F6) else Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = subtitle,
+                    color = Color.LightGray,
+                    fontSize = 10.sp
+                )
+            }
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Seçili",
+                    tint = Color(0xFF0A84FF),
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
     }
