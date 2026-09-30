@@ -21,9 +21,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
@@ -49,14 +52,19 @@ fun MovableWidget(
     resizable: Boolean = true,
     dragViaHandle: Boolean = true,
     showControls: Boolean = true,
+    workspaceWidth: Float = Float.MAX_VALUE,
+    workspaceHeight: Float = Float.MAX_VALUE,
     onRemove: (() -> Unit)? = null,
     onCommit: (WidgetPlacement) -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    val density = LocalDensity.current.density
     var dx by remember { mutableFloatStateOf(placement.dx) }
     var dy by remember { mutableFloatStateOf(placement.dy) }
     var scale by remember { mutableFloatStateOf(placement.scale) }
+    var widgetWidth by remember { mutableFloatStateOf(0f) }
+    var widgetHeight by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(placement) {
         dx = placement.dx
@@ -65,19 +73,29 @@ fun MovableWidget(
     }
 
     fun commitSnapped() {
-        val snappedDx = (dx / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP
-        val snappedDy = (dy / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP
+        val snappedDx = ((dx / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP)
+            .coerceIn(0f, (workspaceWidth - widgetWidth * scale).coerceAtLeast(0f))
+        val snappedDy = ((dy / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP)
+            .coerceIn(0f, (workspaceHeight - widgetHeight * scale).coerceAtLeast(0f))
         dx = snappedDx
         dy = snappedDy
-        onCommit(WidgetPlacement(snappedDx, snappedDy, scale))
+        onCommit(placement.copy(dx = snappedDx, dy = snappedDy, scale = scale))
     }
 
-    Box(modifier = modifier.offset(dx.dp, dy.dp)) {
+    Box(modifier = modifier.offset(
+        dx.coerceIn(0f, (workspaceWidth - widgetWidth * scale).coerceAtLeast(0f)).dp,
+        dy.coerceIn(0f, (workspaceHeight - widgetHeight * scale).coerceAtLeast(0f)).dp
+    )) {
         Box(
             modifier = Modifier
+                .onSizeChanged {
+                    widgetWidth = it.width / density
+                    widgetHeight = it.height / density
+                }
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
+                    transformOrigin = TransformOrigin(0f, 0f)
                 }
         ) {
             content()
@@ -123,7 +141,7 @@ fun MovableWidget(
                         .offset(6.dp, 6.dp)
                         .zIndex(10f)
                         .pointerInput(Unit) {
-                            detectDragGestures(onDragEnd = { onCommit(WidgetPlacement(dx, dy, scale)) }) { change, drag ->
+                            detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
                                 change.consume()
                                 val delta = (drag.x + drag.y).toDp().value / 180f
                                 scale = (scale + delta).coerceIn(MIN_SCALE, MAX_SCALE)

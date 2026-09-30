@@ -110,14 +110,15 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
                 val dx = coords.getOrNull(0)?.toFloatOrNull() ?: 0f
                 val dy = coords.getOrNull(1)?.toFloatOrNull() ?: 0f
                 val scale = coords.getOrNull(2)?.toFloatOrNull() ?: 1.0f
-                id to WidgetPlacement(dx, dy, scale)
+                val page = coords.getOrNull(3)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+                id to WidgetPlacement(dx, dy, scale, page)
             }.getOrNull()
         }.toMap()
     }
 
     private fun formatLayout(map: Map<String, WidgetPlacement>): String {
         return map.entries.joinToString(";") { (id, p) ->
-            "$id:${p.dx},${p.dy},${p.scale}"
+            "$id:${p.dx},${p.dy},${p.scale},${p.page}"
         }
     }
 }
