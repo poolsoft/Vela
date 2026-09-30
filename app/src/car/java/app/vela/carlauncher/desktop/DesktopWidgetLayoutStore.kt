@@ -34,7 +34,11 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
             WidgetIds.CLOCK to WidgetPlacement(dx = 30f, dy = 24f, scale = 1.0f),
             WidgetIds.STATUS to WidgetPlacement(dx = 320f, dy = 24f, scale = 1.0f),
             WidgetIds.SPEEDOMETER to WidgetPlacement(dx = 30f, dy = 140f, scale = 1.0f),
-            WidgetIds.MUSIC to WidgetPlacement(dx = 420f, dy = 140f, scale = 1.0f),
+            WidgetIds.MUSIC to WidgetPlacement(dx = 380f, dy = 140f, scale = 1.0f),
+            WidgetIds.COMBINED to WidgetPlacement(dx = 30f, dy = 140f, scale = 1.0f),
+            WidgetIds.WEATHER to WidgetPlacement(dx = 30f, dy = 320f, scale = 1.0f),
+            WidgetIds.COMPASS to WidgetPlacement(dx = 200f, dy = 320f, scale = 1.0f),
+            WidgetIds.OBD to WidgetPlacement(dx = 380f, dy = 320f, scale = 1.0f),
             WidgetIds.DOCK to WidgetPlacement(dx = 30f, dy = 440f, scale = 1.0f)
         )
     }

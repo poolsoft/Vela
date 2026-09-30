@@ -2,8 +2,12 @@ package app.vela.carlauncher.ui
 
 import android.app.Activity
 import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Drawable
+import android.os.Build
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -12,7 +16,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +29,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,11 +38,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Wallpaper
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -60,10 +64,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -88,14 +90,14 @@ import kotlin.math.roundToInt
 private val ClCardBg = Color(0xF0141624)
 private val ClBorder = Color(0x33FFFFFF)
 private val ClPrimary = Color(0xFF00E5FF)
-private val ClAccent = Color(0xFF0A84FF)
+private val ClSuccess = Color(0xFF30D158)
 
 /**
- * UmainLauncher Tabanli Kararli Desktop Modu (CarDesktopWorkspaceView).
- * - Govde dokunmalari %100 ozgurdur (dragViaHandle). Muzik dugmeleri, tiklamalar sifir cakisma ile calisir.
- * - Her widget'in dx, dy ve scale degerleri DesktopWidgetLayoutStore icinde bagimsiz saklanir.
- * - Bir widget boyutlandirildiginda veya tasindiginda diger widget'larin boyutu kesinlikle bozulmaz/sifirlanmaz.
- * - 3. Parti Android AppWidget destegi (AppWidgetHost).
+ * UmainLauncher Tabanli Tam Kapsamli Masaustu (CarDesktopWorkspaceView).
+ * - Yalnizca tutamac ile tasima (govde dokunmalari %100 serbest, kazara tasima yok).
+ * - Sistem Duvar Kagidi destegi (windowShowWallpaper ve transparan zemin).
+ * - Kullanicinin 7-8 araba widget'inin hepsi (Hiz, Saat, Dashboard, Muzik, Hava, Pusula, OBD, Durum, Dock).
+ * - Sistem AppWidget secici ("Choose widget" - cihazdaki tum widget'lari gorsel listeleyen secici).
  *
  * Kod icerisinde Turkce karakter kullanilmamistir (identifier ve degiskenlerde).
  */
@@ -116,6 +118,11 @@ fun CarDesktopWorkspaceView(
     val layout by layoutStore.layout.collectAsState()
     val activeWidgets by layoutStore.activeWidgets.collectAsState()
 
+    // Sistem Duvar Kagidinin arkadan gorunebilmesi icin Activity pencere bayragi
+    LaunchedEffect(Unit) {
+        (context as? Activity)?.window?.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+    }
+
     val hostController = remember { CarAppWidgetHostController(context) }
     DisposableEffect(Unit) {
         hostController.startListening()
@@ -126,6 +133,7 @@ fun CarDesktopWorkspaceView(
 
     var isEditMode by remember { mutableStateOf(false) }
     var showWidgetPicker by remember { mutableStateOf(false) }
+    var showSystemWidgetPicker by remember { mutableStateOf(false) }
     var showWallpaperDialog by remember { mutableStateOf(false) }
 
     var saatMetni by remember { mutableStateOf("12:00") }
@@ -142,7 +150,7 @@ fun CarDesktopWorkspaceView(
         }
     }
 
-    // AppWidgetHost secici launcher'i
+    // AppWidgetHost yapilandirma launcher'i
     var pendingAppWidgetId by remember { mutableStateOf(-1) }
     val configureLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -152,34 +160,9 @@ fun CarDesktopWorkspaceView(
         if (id != -1) {
             if (result.resultCode == Activity.RESULT_OK) {
                 val widgetKey = "${WidgetIds.AW_PREFIX}$id"
-                layoutStore.addWidget(widgetKey, WidgetPlacement(dx = 100f, dy = 100f, scale = 1.0f))
+                layoutStore.addWidget(widgetKey, WidgetPlacement(dx = 60f, dy = 160f, scale = 1.0f))
             } else {
                 hostController.deleteId(id)
-            }
-        }
-    }
-
-    val pickLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val id = result.data?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1) ?: -1
-        val configure = if (id != -1) hostController.info(id)?.configure else null
-        when {
-            result.resultCode != Activity.RESULT_OK || id == -1 -> {
-                if (id != -1) hostController.deleteId(id)
-            }
-            configure != null -> {
-                pendingAppWidgetId = id
-                configureLauncher.launch(
-                    Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
-                        component = configure
-                        putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                    }
-                )
-            }
-            else -> {
-                val widgetKey = "${WidgetIds.AW_PREFIX}$id"
-                layoutStore.addWidget(widgetKey, WidgetPlacement(dx = 100f, dy = 100f, scale = 1.0f))
             }
         }
     }
@@ -196,10 +179,10 @@ fun CarDesktopWorkspaceView(
                     )
                 }
         ) {
-            // 0. MASAUSTU DUVAR KAGIDI
+            // 0. MASAUSTU ARKA PLANI (Sistem Duvar Kagidi veya Tema)
             DesktopWallpaperView(modifier = Modifier.fillMaxSize())
 
-            // 1. MASAUSTU SERBEST WIDGET KATMANI (UmainLauncher MovableWidget)
+            // 1. MASAUSTU WIDGETLARI (UmainLauncher MovableWidget Mimarisi)
             Box(modifier = Modifier.fillMaxSize()) {
                 activeWidgets.forEach { widgetId ->
                     val placement = layout[widgetId]
@@ -209,7 +192,7 @@ fun CarDesktopWorkspaceView(
                     MovableWidget(
                         placement = placement,
                         resizable = true,
-                        dragViaHandle = isEditMode,
+                        dragViaHandle = true,
                         showControls = isEditMode,
                         onRemove = {
                             if (widgetId.startsWith(WidgetIds.AW_PREFIX)) {
@@ -238,7 +221,7 @@ fun CarDesktopWorkspaceView(
                 }
             }
 
-            // 2. YUZEN KONTROL CUBUGU (Edit / Lock / Add Widget / Reset)
+            // 2. YUZEN KONTROL CUBUGU (Edit / Lock / Add / Reset)
             FloatingDesktopControls(
                 isEditMode = isEditMode,
                 onToggleEditMode = { isEditMode = !isEditMode },
@@ -251,7 +234,7 @@ fun CarDesktopWorkspaceView(
                     .zIndex(200f)
             )
 
-            // 3. WIDGET EKLEME DIYALOGU
+            // 3. WIDGET EKLEME DIYALOGU (Kullanicinin 7-8 Widget'i)
             if (showWidgetPicker) {
                 AddWidgetDialog(
                     activeWidgets = activeWidgets,
@@ -260,18 +243,42 @@ fun CarDesktopWorkspaceView(
                         layoutStore.addWidget(id)
                         showWidgetPicker = false
                     },
-                    onLaunchAppWidgetPick = {
-                        val id = hostController.allocateId()
-                        val pickIntent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
-                            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                        }
-                        pickLauncher.launch(pickIntent)
+                    onOpenSystemWidgetPicker = {
                         showWidgetPicker = false
+                        showSystemWidgetPicker = true
                     }
                 )
             }
 
-            // 4. DUVAR KAGIDI DIYALOGU
+            // 4. SISTEM WIDGET SECICI DIYALOGU ("Choose widget" - 3. Ekran Goruntusu)
+            if (showSystemWidgetPicker) {
+                ChooseSystemWidgetDialog(
+                    onDismiss = { showSystemWidgetPicker = false },
+                    onSelectProvider = { providerInfo ->
+                        showSystemWidgetPicker = false
+                        val appWidgetId = hostController.allocateId()
+                        val canBind = runCatching {
+                            hostController.manager.bindAppWidgetIdIfAllowed(appWidgetId, providerInfo.provider)
+                        }.getOrDefault(false)
+
+                        val configure = providerInfo.configure
+                        if (configure != null) {
+                            pendingAppWidgetId = appWidgetId
+                            configureLauncher.launch(
+                                Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
+                                    component = configure
+                                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                                }
+                            )
+                        } else {
+                            val widgetKey = "${WidgetIds.AW_PREFIX}$appWidgetId"
+                            layoutStore.addWidget(widgetKey, WidgetPlacement(dx = 60f, dy = 160f, scale = 1.0f))
+                        }
+                    }
+                )
+            }
+
+            // 5. DUVAR KAGIDI DIYALOGU
             if (showWallpaperDialog) {
                 WallpaperDialog(
                     onDismiss = { showWallpaperDialog = false }
@@ -281,9 +288,10 @@ fun CarDesktopWorkspaceView(
     }
 }
 
-/**
- * Masaustundeki her widget'in gorsel cizimi.
- */
+// ═══════════════════════════════════════════════════════════════════════════
+// WIDGET CERIK RENDERLARI (KULLANICININ 7-8 WIDGET'I)
+// ═══════════════════════════════════════════════════════════════════════════
+
 @Composable
 private fun RenderDesktopWidgetContent(
     widgetId: String,
@@ -298,15 +306,19 @@ private fun RenderDesktopWidgetContent(
     onLaunchApp: (String) -> Unit
 ) {
     when {
+        // 1. DIJITAL SAAT & TARIH
         widgetId == WidgetIds.CLOCK -> {
             ClockWidgetCard(saatMetni = saatMetni, tarihMetni = tarihMetni)
         }
+        // 2. SISTEM / CIHAZ DURUMU (PIL, RAM, HAFIZA)
         widgetId == WidgetIds.STATUS -> {
             StatusWidgetView()
         }
+        // 3. CANLI HIZ GOSTERGESI
         widgetId == WidgetIds.SPEEDOMETER -> {
             SpeedometerWidgetCard(telemetri = telemetri)
         }
+        // 4. MUZIK CALAR KARTI
         widgetId == WidgetIds.MUSIC -> {
             MusicPlayerWidgetCard(
                 medya = medya,
@@ -316,16 +328,34 @@ private fun RenderDesktopWidgetContent(
                 onMuzikPaneliAc = onMuzikPaneliAc
             )
         }
+        // 5. BIRLESIK DASHBOARD (SAAT + HIZ)
+        widgetId == WidgetIds.COMBINED -> {
+            CombinedDashboardCard(saatMetni = saatMetni, tarihMetni = tarihMetni, telemetri = telemetri)
+        }
+        // 6. HAVA DURUMU
+        widgetId == WidgetIds.WEATHER -> {
+            WeatherWidgetCard()
+        }
+        // 7. PUSULA & YON
+        widgetId == WidgetIds.COMPASS -> {
+            CompassWidgetCard(telemetri = telemetri)
+        }
+        // 8. OBD2 / TELEMETRI VERILERI
+        widgetId == WidgetIds.OBD -> {
+            ObdWidgetCard()
+        }
+        // 9. UYGULAMA KISAYOLLARI DOCK'U
         widgetId == WidgetIds.DOCK -> {
             DockWidgetCard(onLaunchApp = onLaunchApp)
         }
+        // 10. ANDROID 3. PARTI APP WIDGETLARI
         widgetId.startsWith(WidgetIds.AW_PREFIX) -> {
             val awId = widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()
             if (awId != null) {
                 Surface(
                     color = Color.Transparent,
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.size(width = 240.dp, height = 140.dp)
+                    modifier = Modifier.size(width = 280.dp, height = 140.dp)
                 ) {
                     HostedAppWidgetView(appWidgetId = awId, modifier = Modifier.fillMaxSize())
                 }
@@ -347,7 +377,7 @@ private fun RenderDesktopWidgetContent(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// WIDGET BILESENLERI
+// WIDGET KART DETAYLARI
 // ═══════════════════════════════════════════════════════════════════════════
 
 @Composable
@@ -357,7 +387,7 @@ private fun ClockWidgetCard(saatMetni: String, tarihMetni: String) {
         shape = RoundedCornerShape(20.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
         shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 270.dp, height = 100.dp)
+        modifier = Modifier.size(width = 260.dp, height = 100.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -428,6 +458,31 @@ private fun SpeedometerWidgetCard(telemetri: HizTelemetrisi) {
 }
 
 @Composable
+private fun CombinedDashboardCard(saatMetni: String, tarihMetni: String, telemetri: HizTelemetrisi) {
+    Surface(
+        color = ClCardBg,
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+        shadowElevation = 8.dp,
+        modifier = Modifier.size(width = 340.dp, height = 120.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = saatMetni, color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.Bold)
+                Text(text = tarihMetni, color = Color.LightGray, fontSize = 11.sp, maxLines = 1)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(text = "${telemetri.anlikHizKmh}", color = ClPrimary, fontSize = 44.sp, fontWeight = FontWeight.Black)
+                Text(text = "KM / S", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
 private fun MusicPlayerWidgetCard(
     medya: MedyaParcasi,
     onOynatDuraklat: () -> Unit,
@@ -458,12 +513,7 @@ private fun MusicPlayerWidgetCard(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "♪",
-                        color = Color.White,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(text = "♪", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -530,11 +580,93 @@ private fun MusicPlayerWidgetCard(
 }
 
 @Composable
+private fun WeatherWidgetCard() {
+    Surface(
+        color = ClCardBg,
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+        shadowElevation = 8.dp,
+        modifier = Modifier.size(width = 170.dp, height = 90.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Canvas(modifier = Modifier.size(28.dp)) {
+                drawCircle(color = Color(0xFFFFCC00), radius = size.minDimension / 2.2f)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(text = "22°C", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text(text = "Güneşli", color = Color.LightGray, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompassWidgetCard(telemetri: HizTelemetrisi) {
+    Surface(
+        color = ClCardBg,
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+        shadowElevation = 8.dp,
+        modifier = Modifier.size(width = 170.dp, height = 90.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Canvas(modifier = Modifier.size(28.dp)) {
+                drawCircle(
+                    color = Color(0xFF32ADE6),
+                    radius = size.minDimension / 2f,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = "YÖN: ${telemetri.pusulaYonu.roundToInt()}°", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun ObdWidgetCard() {
+    Surface(
+        color = ClCardBg,
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+        shadowElevation = 8.dp,
+        modifier = Modifier.size(width = 280.dp, height = 90.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceAround
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(text = "RPM", color = Color.Gray, fontSize = 10.sp)
+                Text(text = "2200", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(text = "HARARET", color = Color.Gray, fontSize = 10.sp)
+                Text(text = "90°C", color = ClSuccess, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(text = "VOLTAJ", color = Color.Gray, fontSize = 10.sp)
+                Text(text = "14.2V", color = ClPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
 private fun DockWidgetCard(onLaunchApp: (String) -> Unit) {
     val context = LocalContext.current
     val pm = context.packageManager
 
-    // Sık kullanılan araç uygulamaları listesi
     val dockApps = listOf(
         "com.google.android.apps.maps" to "Harita",
         "net.osmand.plus" to "OsmAnd",
@@ -644,17 +776,24 @@ private fun FloatingDesktopControls(
     }
 }
 
+/**
+ * Kullanicinin tum 7-8 widget'ini eklemesini saglayan ana dialog.
+ */
 @Composable
 private fun AddWidgetDialog(
     activeWidgets: Set<String>,
     onDismiss: () -> Unit,
     onAddWidget: (String) -> Unit,
-    onLaunchAppWidgetPick: () -> Unit
+    onOpenSystemWidgetPicker: () -> Unit
 ) {
     val items = listOf(
-        WidgetIds.MUSIC to "🎵 Müzik Çalar Widget'ı",
-        WidgetIds.SPEEDOMETER to "⏱️ Canlı Hız Göstergesi",
+        WidgetIds.COMBINED to "⏱️ Dashboard (Saat + Hız)",
+        WidgetIds.SPEEDOMETER to "🏎️ Canlı Hız Göstergesi",
         WidgetIds.CLOCK to "🕒 Dijital Saat & Tarih",
+        WidgetIds.MUSIC to "🎵 Müzik Çalar Kartı",
+        WidgetIds.WEATHER to "⛅ Hava Durumu",
+        WidgetIds.COMPASS to "🧭 Pusula & Yön",
+        WidgetIds.OBD to "🚗 OBD2 / Araç Telemetrisi",
         WidgetIds.STATUS to "📊 Sistem / Pil / RAM Durumu",
         WidgetIds.DOCK to "🚀 Uygulama Kısayolları Dock'u"
     )
@@ -663,8 +802,8 @@ private fun AddWidgetDialog(
         onDismissRequest = onDismiss,
         title = { Text("Widget Ekle", color = Color.White, fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items.forEach { (id, title) ->
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(items) { (id, title) ->
                     val isAlreadyActive = id in activeWidgets
                     Surface(
                         color = if (isAlreadyActive) Color(0x22FFFFFF) else Color(0x442A2D40),
@@ -684,22 +823,30 @@ private fun AddWidgetDialog(
                                 fontSize = 14.sp
                             )
                             if (isAlreadyActive) {
-                                Text("Eklendi", color = Color(0xFF30D158), fontSize = 12.sp)
+                                Text("Masaüstünde", color = Color(0xFF30D158), fontSize = 12.sp)
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
-                Surface(
-                    color = Color(0xFF0072FF),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onLaunchAppWidgetPick() }
-                ) {
-                    Box(modifier = Modifier.padding(14.dp), contentAlignment = Alignment.Center) {
-                        Text("+ Android Uygulama Widget'ı Ekle", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        color = Color(0xFF0072FF),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenSystemWidgetPicker() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Widgets, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("📱 Android Sistem Widget'ı Ekle (Choose Widget)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
                     }
                 }
             }
@@ -713,6 +860,109 @@ private fun AddWidgetDialog(
     )
 }
 
+/**
+ * UmainLauncher 3. Ekran Goruntusundeki "Choose widget" Dialogunun Birebir Karsiligi.
+ * Cihazdaki tum yuklu Android AppWidget'larini uygulama ikonu ve adiyla listeler.
+ */
+@Composable
+private fun ChooseSystemWidgetDialog(
+    onDismiss: () -> Unit,
+    onSelectProvider: (AppWidgetProviderInfo) -> Unit
+) {
+    val context = LocalContext.current
+    val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
+    val providers = remember {
+        try {
+            appWidgetManager.installedProviders.sortedBy { it.loadLabel(context.packageManager) }
+        } catch (e: Exception) {
+            emptyList<AppWidgetProviderInfo>()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Choose widget", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        },
+        text = {
+            if (providers.isEmpty()) {
+                Text("Cihazda kullanılabilir widget bulunamadı.", color = Color.Gray)
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().height(400.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(providers) { info ->
+                        val pm = context.packageManager
+                        val label = remember(info) { info.loadLabel(pm) }
+                        val iconBmp = remember(info) {
+                            try {
+                                val d: Drawable? = info.loadIcon(context, context.resources.displayMetrics.densityDpi)
+                                    ?: pm.getApplicationIcon(info.provider.packageName)
+                                d?.toBitmap(64, 64)?.asImageBitmap()
+                            } catch (e: Exception) {
+                                null
+                            }
+                        }
+
+                        Surface(
+                            color = Color(0x332A2D40),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelectProvider(info) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (iconBmp != null) {
+                                    Image(
+                                        bitmap = iconBmp,
+                                        contentDescription = label,
+                                        modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp))
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x33FFFFFF)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(text = label.take(1), color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = label,
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = info.provider.packageName,
+                                        color = Color(0xFF8E92A8),
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("İptal", color = Color(0xFF00E5FF))
+            }
+        },
+        containerColor = Color(0xFF161824)
+    )
+}
+
 @Composable
 private fun WallpaperDialog(
     onDismiss: () -> Unit
@@ -720,7 +970,7 @@ private fun WallpaperDialog(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("vela_desktop_wallpaper", Context.MODE_PRIVATE) }
     val options = listOf(
-        "system" to "Sistem Duvar Kağıdı",
+        "system" to "Sistem Duvar Kağıdı (Canlı)",
         "carbon" to "Karbon Fiber",
         "cockpit" to "Gece Kokpiti (Koyu Mavi)",
         "pure_black" to "Saf Siyah (OLED)"
@@ -762,26 +1012,12 @@ private fun WallpaperDialog(
 private fun DesktopWallpaperView(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("vela_desktop_wallpaper", Context.MODE_PRIVATE) }
-    val type = remember { prefs.getString("wallpaper_type", "carbon") ?: "carbon" }
+    val type = remember { prefs.getString("wallpaper_type", "system") ?: "system" }
 
     when (type) {
         "system" -> {
-            val systemWallpaper = remember {
-                try {
-                    val wm = android.app.WallpaperManager.getInstance(context)
-                    wm.drawable?.toBitmap()?.asImageBitmap()
-                } catch (e: Exception) { null }
-            }
-            if (systemWallpaper != null) {
-                Image(
-                    bitmap = systemWallpaper,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = modifier
-                )
-            } else {
-                Box(modifier = modifier.background(Color(0xFF0D0F18)))
-            }
+            // Pencere transparan oldugu icin arkadaki Spider-Man gibi sistem duvar kagidi dogrudan gorunur!
+            Box(modifier = modifier.background(Color.Transparent))
         }
         "pure_black" -> {
             Box(modifier = modifier.background(Color.Black))

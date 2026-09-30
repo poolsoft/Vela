@@ -79,19 +79,6 @@ fun MovableWidget(
                     scaleX = scale
                     scaleY = scale
                 }
-                .then(
-                    if (!dragViaHandle) {
-                        Modifier.pointerInput(Unit) {
-                            detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
-                                change.consume()
-                                dx += drag.x.toDp().value
-                                dy += drag.y.toDp().value
-                            }
-                        }
-                    } else {
-                        Modifier
-                    }
-                )
         ) {
             content()
         }

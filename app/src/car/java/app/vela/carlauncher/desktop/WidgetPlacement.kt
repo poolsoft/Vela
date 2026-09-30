@@ -19,6 +19,10 @@ object WidgetIds {
     const val SPEEDOMETER = "speedometer"
     const val STATUS = "status"
     const val DOCK = "dock"
+    const val COMBINED = "combined"
+    const val WEATHER = "weather"
+    const val COMPASS = "compass"
+    const val OBD = "obd"
     const val MINIMAP = "minimap"
     const val AW_PREFIX = "aw_"
 }
