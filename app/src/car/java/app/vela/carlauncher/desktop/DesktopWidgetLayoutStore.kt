@@ -88,6 +88,26 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
         _pageCount.value = count
     }
 
+    fun removePage(page: Int): Boolean {
+        if (_pageCount.value <= 1 || page !in 0 until _pageCount.value) return false
+        val targetPage = (page - 1).coerceAtLeast(0)
+        val current = _layout.value.mapValues { (_, placement) ->
+            when {
+                placement.page == page -> placement.copy(page = targetPage)
+                placement.page > page -> placement.copy(page = placement.page - 1)
+                else -> placement
+            }
+        }
+        val newCount = _pageCount.value - 1
+        prefs.edit()
+            .putString(KEY_LAYOUT, formatLayout(current))
+            .putInt(KEY_PAGE_COUNT, newCount)
+            .apply()
+        _layout.value = current
+        _pageCount.value = newCount
+        return true
+    }
+
     fun removePlacement(id: String) {
         val current = _layout.value.toMutableMap()
         current.remove(id)
@@ -131,14 +151,16 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
                 val dy = coords.getOrNull(1)?.toFloatOrNull() ?: 0f
                 val scale = coords.getOrNull(2)?.toFloatOrNull() ?: 1.0f
                 val page = coords.getOrNull(3)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-                id to WidgetPlacement(dx, dy, scale, page)
+                val widthScale = coords.getOrNull(4)?.toFloatOrNull() ?: scale
+                val heightScale = coords.getOrNull(5)?.toFloatOrNull() ?: scale
+                id to WidgetPlacement(dx, dy, scale, page, widthScale, heightScale)
             }.getOrNull()
         }.toMap()
     }
 
     private fun formatLayout(map: Map<String, WidgetPlacement>): String {
         return map.entries.joinToString(";") { (id, p) ->
-            "$id:${p.dx},${p.dy},${p.scale},${p.page}"
+            "$id:${p.dx},${p.dy},${p.scale},${p.page},${p.widthScale},${p.heightScale}"
         }
     }
 }

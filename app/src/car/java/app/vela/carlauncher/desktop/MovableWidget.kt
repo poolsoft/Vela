@@ -1,11 +1,12 @@
 package app.vela.carlauncher.desktop
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -66,29 +67,37 @@ fun MovableWidget(
     val density = LocalDensity.current.density
     var dx by remember { mutableFloatStateOf(placement.dx) }
     var dy by remember { mutableFloatStateOf(placement.dy) }
-    var scale by remember { mutableFloatStateOf(placement.scale) }
+    var widthScale by remember { mutableFloatStateOf(placement.widthScale) }
+    var heightScale by remember { mutableFloatStateOf(placement.heightScale) }
     var widgetWidth by remember { mutableFloatStateOf(0f) }
     var widgetHeight by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(placement) {
         dx = placement.dx
         dy = placement.dy
-        scale = placement.scale
+        widthScale = placement.widthScale
+        heightScale = placement.heightScale
     }
 
     fun commitSnapped() {
         val snappedDx = ((dx / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP)
-            .coerceIn(0f, (workspaceWidth - widgetWidth * scale).coerceAtLeast(0f))
+            .coerceIn(0f, (workspaceWidth - widgetWidth * widthScale).coerceAtLeast(0f))
         val snappedDy = ((dy / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP)
-            .coerceIn(0f, (workspaceHeight - widgetHeight * scale).coerceAtLeast(0f))
+            .coerceIn(0f, (workspaceHeight - widgetHeight * heightScale).coerceAtLeast(0f))
         dx = snappedDx
         dy = snappedDy
-        onCommit(placement.copy(dx = snappedDx, dy = snappedDy, scale = scale))
+        onCommit(placement.copy(
+            dx = snappedDx,
+            dy = snappedDy,
+            scale = minOf(widthScale, heightScale),
+            widthScale = widthScale,
+            heightScale = heightScale
+        ))
     }
 
     Box(modifier = modifier.offset(
-        dx.coerceIn(0f, (workspaceWidth - widgetWidth * scale).coerceAtLeast(0f)).dp,
-        dy.coerceIn(0f, (workspaceHeight - widgetHeight * scale).coerceAtLeast(0f)).dp
+        dx.coerceIn(0f, (workspaceWidth - widgetWidth * widthScale).coerceAtLeast(0f)).dp,
+        dy.coerceIn(0f, (workspaceHeight - widgetHeight * heightScale).coerceAtLeast(0f)).dp
     )) {
         Box(
             modifier = Modifier
@@ -97,16 +106,20 @@ fun MovableWidget(
                     widgetHeight = it.height / density
                 }
                 .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
+                    scaleX = widthScale
+                    scaleY = heightScale
                     transformOrigin = TransformOrigin(0f, 0f)
                 }
         ) {
             content()
-            if (showControls) {
+        }
+
+        if (showControls) {
+            if (widgetWidth > 0f && widgetHeight > 0f) {
                 Box(
                     Modifier
-                        .fillMaxSize()
+                        .size((widgetWidth * widthScale).dp, (widgetHeight * heightScale).dp)
+                        .border(1.dp, Color(0xAA00E5FF), RoundedCornerShape(10.dp))
                         .pointerInput(Unit) {
                             awaitPointerEventScope {
                                 while (true) {
@@ -116,9 +129,6 @@ fun MovableWidget(
                         }
                 )
             }
-        }
-
-        if (showControls) {
             if (dragViaHandle) {
                 HandleSurface(
                     icon = Icons.Default.OpenWith,
@@ -152,7 +162,39 @@ fun MovableWidget(
             if (resizable) {
                 HandleSurface(
                     icon = Icons.Default.OpenInFull,
-                    description = "Boyutlandir",
+                    description = "Yatay boyutlandir",
+                    rotation = 45f,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .offset(6.dp, 0.dp)
+                        .zIndex(10f)
+                        .pointerInput(Unit) {
+                            detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
+                                change.consume()
+                                widthScale = (widthScale + drag.x.toDp().value / 180f)
+                                    .coerceIn(MIN_SCALE, MAX_SCALE)
+                            }
+                        }
+                )
+                HandleSurface(
+                    icon = Icons.Default.OpenInFull,
+                    description = "Dikey boyutlandir",
+                    rotation = 45f,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .offset(0.dp, 6.dp)
+                        .zIndex(10f)
+                        .pointerInput(Unit) {
+                            detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
+                                change.consume()
+                                heightScale = (heightScale + drag.y.toDp().value / 180f)
+                                    .coerceIn(MIN_SCALE, MAX_SCALE)
+                            }
+                        }
+                )
+                HandleSurface(
+                    icon = Icons.Default.OpenInFull,
+                    description = "Orantili boyutlandir",
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .offset(6.dp, 6.dp)
@@ -161,7 +203,8 @@ fun MovableWidget(
                             detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
                                 change.consume()
                                 val delta = (drag.x + drag.y).toDp().value / 180f
-                                scale = (scale + delta).coerceIn(MIN_SCALE, MAX_SCALE)
+                                widthScale = (widthScale + delta).coerceIn(MIN_SCALE, MAX_SCALE)
+                                heightScale = (heightScale + delta).coerceIn(MIN_SCALE, MAX_SCALE)
                             }
                         }
                 )
@@ -186,6 +229,7 @@ fun MovableWidget(
 private fun HandleSurface(
     icon: ImageVector,
     description: String,
+    rotation: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -199,7 +243,7 @@ private fun HandleSurface(
             Icon(
                 imageVector = icon,
                 contentDescription = description,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = rotation }
             )
         }
     }

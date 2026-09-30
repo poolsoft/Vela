@@ -73,6 +73,7 @@ import app.vela.ui.settings.GroupDivider
 import app.vela.ui.settings.SettingsGroup
 import app.vela.ui.settings.ToggleRow
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * Vela Hub-and-Spoke Tasarim Standardinda Arac ve Launcher Ayarlari Ekrani.
@@ -555,6 +556,8 @@ private fun CarWidgetsSettingsScreen(
     val havaGoster by CarLauncherSettings.widgetHavaDurumuGoster.collectAsState()
     val sistemGoster by CarLauncherSettings.widgetSistemGoster.collectAsState()
     val desktopDongude by CarLauncherSettings.desktopDongudeEtkin.collectAsState()
+    val swipeThreshold by CarLauncherSettings.workspaceSwipeThreshold.collectAsState()
+    val indicatorSeconds by CarLauncherSettings.workspaceIndicatorSeconds.collectAsState()
 
     Scaffold(
         topBar = {
@@ -629,6 +632,24 @@ private fun CarWidgetsSettingsScreen(
                     hint = "Dock mod butonuna tıklandığında Harita ile Masaüstü arasında geçiş yapılmasını sağlar",
                     checked = desktopDongude,
                     onCheckedChange = { CarLauncherSettings.setDesktopDongudeEtkin(it) }
+                )
+                GroupDivider()
+                SliderRow(
+                    label = "Sayfa Geçiş Hassasiyeti",
+                    detail = "Yüksek değer, sayfanın yanlışlıkla değişmesini zorlaştırır",
+                    value = swipeThreshold * 100f,
+                    valueRange = 20f..60f,
+                    unit = "%",
+                    onValueChange = { CarLauncherSettings.setWorkspaceSwipeThreshold(it / 100f) }
+                )
+                GroupDivider()
+                SliderRow(
+                    label = "Sayfa Noktalarını Göster",
+                    detail = "Son dokunuştan sonra göstergenin ekranda kalma süresi",
+                    value = indicatorSeconds.toFloat(),
+                    valueRange = 1f..5f,
+                    unit = " sn",
+                    onValueChange = { CarLauncherSettings.setWorkspaceIndicatorSeconds(it.roundToInt()) }
                 )
             }
 

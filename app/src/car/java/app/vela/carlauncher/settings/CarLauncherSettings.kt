@@ -34,6 +34,8 @@ object CarLauncherSettings {
     private const val KEY_NIGHT_DIM_LEVEL = "car_launcher_night_dim_level"
     private const val KEY_DESKTOP_MODE = "car_launcher_desktop_mode"
     private const val KEY_DESKTOP_IN_MODE_CYCLE = "car_launcher_desktop_in_mode_cycle"
+    private const val KEY_WORKSPACE_SWIPE_THRESHOLD = "car_launcher_workspace_swipe_threshold"
+    private const val KEY_WORKSPACE_INDICATOR_SECONDS = "car_launcher_workspace_indicator_seconds"
     private const val KEY_STARTUP_SCREEN = "car_launcher_startup_screen"
     private const val KEY_WEATHER_ENABLED = "car_launcher_weather_enabled"
     private const val KEY_EQUALIZER_APP = "car_launcher_equalizer_app"
@@ -115,6 +117,12 @@ object CarLauncherSettings {
     private val _desktopDongudeEtkin = MutableStateFlow(true)
     val desktopDongudeEtkin: StateFlow<Boolean> = _desktopDongudeEtkin.asStateFlow()
 
+    private val _workspaceSwipeThreshold = MutableStateFlow(0.35f)
+    val workspaceSwipeThreshold: StateFlow<Float> = _workspaceSwipeThreshold.asStateFlow()
+
+    private val _workspaceIndicatorSeconds = MutableStateFlow(2)
+    val workspaceIndicatorSeconds: StateFlow<Int> = _workspaceIndicatorSeconds.asStateFlow()
+
     private val _baslangicEkrani = MutableStateFlow("normal") // normal, map_only, desktop
     val baslangicEkrani: StateFlow<String> = _baslangicEkrani.asStateFlow()
 
@@ -180,6 +188,8 @@ object CarLauncherSettings {
             _geceKarartmaSeviyesi.value = prefs.getFloat(KEY_NIGHT_DIM_LEVEL, 0.40f)
             _desktopModu.value = prefs.getBoolean(KEY_DESKTOP_MODE, false)
             _desktopDongudeEtkin.value = prefs.getBoolean(KEY_DESKTOP_IN_MODE_CYCLE, true)
+            _workspaceSwipeThreshold.value = prefs.getFloat(KEY_WORKSPACE_SWIPE_THRESHOLD, 0.35f).coerceIn(0.2f, 0.6f)
+            _workspaceIndicatorSeconds.value = prefs.getInt(KEY_WORKSPACE_INDICATOR_SECONDS, 2).coerceIn(1, 5)
             _baslangicEkrani.value = prefs.getString(KEY_STARTUP_SCREEN, "normal") ?: "normal"
             _floatingButtonModu.value = prefs.getString(KEY_FLOATING_BUTTON_MODE, "always") ?: "always"
             _floatingButtonBoyutu.value = prefs.getInt(KEY_FLOATING_BUTTON_SIZE, 86)
@@ -289,6 +299,16 @@ object CarLauncherSettings {
     fun setDesktopDongudeEtkin(etkin: Boolean) {
         _desktopDongudeEtkin.value = etkin
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_DESKTOP_IN_MODE_CYCLE, etkin).apply()
+    }
+
+    fun setWorkspaceSwipeThreshold(threshold: Float) {
+        _workspaceSwipeThreshold.value = threshold.coerceIn(0.2f, 0.6f)
+        if (::prefs.isInitialized) prefs.edit().putFloat(KEY_WORKSPACE_SWIPE_THRESHOLD, _workspaceSwipeThreshold.value).apply()
+    }
+
+    fun setWorkspaceIndicatorSeconds(seconds: Int) {
+        _workspaceIndicatorSeconds.value = seconds.coerceIn(1, 5)
+        if (::prefs.isInitialized) prefs.edit().putInt(KEY_WORKSPACE_INDICATOR_SECONDS, _workspaceIndicatorSeconds.value).apply()
     }
 
     fun setBaslangicEkrani(ekran: String) {

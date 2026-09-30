@@ -7,10 +7,13 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Drawable
 import android.os.Build
+import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
@@ -41,6 +44,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -69,6 +73,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -84,6 +89,7 @@ import app.vela.carlauncher.desktop.StatusWidgetView
 import app.vela.carlauncher.desktop.WidgetIds
 import app.vela.carlauncher.desktop.WidgetPlacement
 import app.vela.carlauncher.desktop.WorkspaceGrid
+import app.vela.carlauncher.settings.CarLauncherSettings
 import app.vela.carlauncher.apps.CarAppManager
 import app.vela.carlauncher.model.AracUygulamasi
 import app.vela.carlauncher.model.InternalApp
@@ -126,6 +132,9 @@ fun CarDesktopWorkspaceView(
     val layout by layoutStore.layout.collectAsState()
     val activeWidgets by layoutStore.activeWidgets.collectAsState()
     val pageCount by layoutStore.pageCount.collectAsState()
+    val swipeThresholdFraction by CarLauncherSettings.workspaceSwipeThreshold.collectAsState()
+    val indicatorSeconds by CarLauncherSettings.workspaceIndicatorSeconds.collectAsState()
+    val density = LocalDensity.current.density
 
     // Sistem Duvar Kagidinin arkadan gorunebilmesi icin Activity pencere bayragi
     LaunchedEffect(Unit) {
@@ -146,6 +155,7 @@ fun CarDesktopWorkspaceView(
     var currentPage by remember { mutableStateOf(0) }
     var selectedWidgetId by remember { mutableStateOf<String?>(null) }
     var showPageIndicator by remember { mutableStateOf(true) }
+    var lastPageChangeAt by remember { mutableStateOf(0L) }
 
     var saatMetni by remember { mutableStateOf("12:00") }
     var tarihMetni by remember { mutableStateOf("") }
@@ -220,10 +230,10 @@ fun CarDesktopWorkspaceView(
             LaunchedEffect(lastPage, isEditMode) {
                 if (!isEditMode && currentPage > lastPage) currentPage = lastPage
             }
-            LaunchedEffect(currentPage, pageCount, isEditMode) {
+            LaunchedEffect(currentPage, pageCount, isEditMode, indicatorSeconds) {
                 showPageIndicator = true
                 if (!isEditMode) {
-                    delay(1800L)
+                    delay(indicatorSeconds * 1000L)
                     showPageIndicator = false
                 }
             }
@@ -231,18 +241,34 @@ fun CarDesktopWorkspaceView(
             DesktopWallpaperView(modifier = Modifier.fillMaxSize())
 
             // 1. MASAUSTU WIDGETLARI (UmainLauncher MovableWidget Mimarisi)
-            Box(modifier = Modifier.fillMaxSize().pointerInput(currentPage, lastPage, isEditMode) {
+            Box(modifier = Modifier.fillMaxSize().pointerInput(currentPage, lastPage, isEditMode, swipeThresholdFraction) {
                 var dragDistance = 0f
                 detectHorizontalDragGestures(
                     onDragEnd = {
-                        if (!isEditMode && dragDistance < -80f && currentPage < lastPage) currentPage++
-                        if (!isEditMode && dragDistance > 80f && currentPage > 0) currentPage--
+                        val now = SystemClock.elapsedRealtime()
+                        val thresholdPx = workspaceWidth * density * swipeThresholdFraction
+                        if (!isEditMode && now - lastPageChangeAt >= 450L) {
+                            if (dragDistance < -thresholdPx && currentPage < lastPage) {
+                                currentPage++
+                                lastPageChangeAt = now
+                            } else if (dragDistance > thresholdPx && currentPage > 0) {
+                                currentPage--
+                                lastPageChangeAt = now
+                            }
+                        }
                         dragDistance = 0f
                     },
                     onHorizontalDrag = { _, amount -> dragDistance += amount }
                 )
             }) {
-                activeWidgets.filter { resolvedLayout[it]?.page == currentPage }.forEach { widgetId ->
+                Crossfade(
+                    targetState = currentPage,
+                    animationSpec = tween(durationMillis = 420),
+                    label = "workspacePage",
+                    modifier = Modifier.fillMaxSize()
+                ) { visiblePage ->
+                    Box(Modifier.fillMaxSize()) {
+                    activeWidgets.filter { resolvedLayout[it]?.page == visiblePage }.forEach { widgetId ->
                     val placement = resolvedLayout[widgetId] ?: return@forEach
 
                     MovableWidget(
@@ -278,6 +304,8 @@ fun CarDesktopWorkspaceView(
                         )
                     }
                 }
+                    }
+                }
             }
 
             AnimatedVisibility(
@@ -306,6 +334,15 @@ fun CarDesktopWorkspaceView(
                                 Icons.Default.Add, "Yeni sayfa", tint = ClPrimary,
                                 modifier = Modifier.size(22.dp).clickable {
                                     currentPage = layoutStore.addPage()
+                                }
+                            )
+                        }
+                        if (isEditMode && lastPage > 0) item {
+                            Icon(
+                                Icons.Default.Delete, "Sayfayı sil", tint = Color(0xFFFF6B6B),
+                                modifier = Modifier.size(22.dp).clickable {
+                                    val nextPage = (currentPage - 1).coerceAtLeast(0)
+                                    if (layoutStore.removePage(currentPage)) currentPage = nextPage
                                 }
                             )
                         }
@@ -905,9 +942,9 @@ private fun DesktopWidgetSettingsDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(0.75f to "Küçük", 1f to "Normal", 1.35f to "Büyük").forEach { (scale, label) ->
                         TextButton(
-                            onClick = { draft = draft.copy(scale = scale) },
+                            onClick = { draft = draft.copy(scale = scale, widthScale = scale, heightScale = scale) },
                             modifier = Modifier.background(
-                                if (kotlin.math.abs(draft.scale - scale) < 0.05f) ClPrimary.copy(alpha = 0.25f) else Color.Transparent,
+                                if (kotlin.math.abs(draft.widthScale - scale) < 0.05f && kotlin.math.abs(draft.heightScale - scale) < 0.05f) ClPrimary.copy(alpha = 0.25f) else Color.Transparent,
                                 RoundedCornerShape(10.dp)
                             )
                         ) { Text(label, color = Color.White) }

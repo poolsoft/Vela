@@ -36,10 +36,10 @@ object WorkspaceGrid {
         }.thenBy { it }).forEach { id ->
             val preferred = saved[id] ?: DesktopWidgetLayoutStore.DEFAULT_PLACEMENTS[id] ?: WidgetPlacement()
             val (baseWidth, baseHeight) = size(id)
-            val fitScale = minOf(1f, width / baseWidth, usableHeight / baseHeight)
-            val scale = preferred.scale.coerceIn(0.6f, 2.2f).coerceAtMost(fitScale)
-            val cardWidth = baseWidth * scale
-            val cardHeight = baseHeight * scale
+            val widthScale = preferred.widthScale.coerceIn(0.6f, 2.2f).coerceAtMost(width / baseWidth)
+            val heightScale = preferred.heightScale.coerceIn(0.6f, 2.2f).coerceAtMost(usableHeight / baseHeight)
+            val cardWidth = baseWidth * widthScale
+            val cardHeight = baseHeight * heightScale
             val columns = ((width - cardWidth) / STEP).coerceAtLeast(0f).toInt()
             val rows = ((usableHeight - cardHeight) / STEP).coerceAtLeast(0f).toInt()
             val preferredX = (preferred.dx / STEP).roundToInt().coerceIn(0, columns)
@@ -54,7 +54,14 @@ object WorkspaceGrid {
                 } ?: continue
                 val rect = Rect(location.first * STEP, location.second * STEP, cardWidth, cardHeight)
                 rectangles += rect
-                result[id] = WidgetPlacement(rect.x, rect.y, scale, page)
+                result[id] = preferred.copy(
+                    dx = rect.x,
+                    dy = rect.y,
+                    scale = minOf(widthScale, heightScale),
+                    page = page,
+                    widthScale = widthScale,
+                    heightScale = heightScale
+                )
                 break
             }
         }

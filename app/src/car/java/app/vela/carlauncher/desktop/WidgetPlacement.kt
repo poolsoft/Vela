@@ -11,7 +11,9 @@ data class WidgetPlacement(
     val dx: Float = 0f,
     val dy: Float = 0f,
     val scale: Float = 1f,
-    val page: Int = 0
+    val page: Int = 0,
+    val widthScale: Float = scale,
+    val heightScale: Float = scale
 )
 
 object WidgetIds {

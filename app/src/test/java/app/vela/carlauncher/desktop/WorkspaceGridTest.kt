@@ -55,4 +55,22 @@ class WorkspaceGridTest {
 
         assertEquals(50, result.page)
     }
+
+    @Test
+    fun independentResizeDimensionsSurviveReflow() {
+        val saved = mapOf(
+            WidgetIds.MUSIC to WidgetPlacement(
+                dx = 16f,
+                dy = 16f,
+                widthScale = 1.4f,
+                heightScale = 0.75f
+            )
+        )
+
+        val result = WorkspaceGrid.resolve(setOf(WidgetIds.MUSIC), saved, 600f, 400f)
+            .getValue(WidgetIds.MUSIC)
+
+        assertEquals(1.4f, result.widthScale, 0.001f)
+        assertEquals(0.75f, result.heightScale, 0.001f)
+    }
 }
