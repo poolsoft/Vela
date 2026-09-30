@@ -16,7 +16,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -335,6 +339,7 @@ fun WorkspaceCellPageLayout(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
     val colCount = WidgetManager.COL_COUNT
     val rowCount = WidgetManager.ROW_COUNT
     val spacingDp = 6.dp
@@ -458,53 +463,128 @@ fun WorkspaceCellPageLayout(
 
             // Canli Surukleme Ofseti (Widget'in parmakla birlikte akmasi)
             var liveDragOffset by remember { mutableStateOf(Offset.Zero) }
+            var totalDragDistance by remember { mutableFloatStateOf(0f) }
 
             Box(
                 modifier = Modifier
                     .offset(x = leftDp, y = topDp)
                     .size(width = widthDp, height = heightDp)
-                    .zIndex(if (isCurrentDragging || isCurrentResizing) 30f else 1f)
+                    .zIndex(if (isCurrentDragging || isCurrentResizing) 35f else 1f)
                     .graphicsLayer {
                         if (isCurrentDragging) {
                             translationX = liveDragOffset.x
                             translationY = liveDragOffset.y
-                            scaleX = 1.05f
-                            scaleY = 1.05f
-                            alpha = 0.88f
+                            scaleX = 1.06f
+                            scaleY = 1.06f
+                            alpha = 0.92f
                         } else if (isEditMode) {
                             rotationZ = rotation
                         }
                     }
                     .pointerInput(widget.id, isEditMode) {
-                        detectDragGestures(
-                            onDragStart = {
-                                if (isEditMode && resizingWidgetId == null) {
+                        if (isEditMode) {
+                            // Duzenleme modundayken hafif dokunup suruklemeyle aninda tasima
+                            detectDragGestures(
+                                onDragStart = {
+                                    if (resizingWidgetId == null) {
+                                        draggingWidgetId = widget.id
+                                        liveDragOffset = Offset.Zero
+                                        totalDragDistance = 0f
+                                        dragCellX = widget.cellX
+                                        dragCellY = widget.cellY
+                                        isDragValid = true
+                                    }
+                                },
+                                onDragCancel = {
+                                    draggingWidgetId = null
+                                    liveDragOffset = Offset.Zero
+                                    totalDragDistance = 0f
+                                    dragCellX = -1
+                                    dragCellY = -1
+                                },
+                                onDragEnd = {
+                                    if (draggingWidgetId == widget.id && isDragValid && dragCellX >= 0 && dragCellY >= 0 && totalDragDistance > 12f) {
+                                        onMoveWidget(widget.id, dragCellX, dragCellY)
+                                    }
+                                    draggingWidgetId = null
+                                    liveDragOffset = Offset.Zero
+                                    totalDragDistance = 0f
+                                    dragCellX = -1
+                                    dragCellY = -1
+                                },
+                                onDrag = { change, dragAmount ->
+                                    if (resizingWidgetId == null) {
+                                        change.consume()
+                                        liveDragOffset += dragAmount
+                                        totalDragDistance += kotlin.math.hypot(dragAmount.x, dragAmount.y)
+
+                                        val (targetCol, targetRow) = CarWidgetSizing.adjustedWidgetDropCell(
+                                            sourceCellX = widget.cellX,
+                                            sourceCellY = widget.cellY,
+                                            spanX = widget.spanX,
+                                            spanY = widget.spanY,
+                                            dragOffsetX = liveDragOffset.x,
+                                            dragOffsetY = liveDragOffset.y,
+                                            cellWidthPx = cellWidthPx,
+                                            cellHeightPx = cellHeightPx,
+                                            spacingPx = spacingPx
+                                        )
+
+                                        dragCellX = targetCol
+                                        dragCellY = targetRow
+
+                                        val wm = WidgetManager.getInstance(context)
+                                        isDragValid = wm.isRegionVacant(
+                                            pageIndex = pageIndex,
+                                            cellX = targetCol,
+                                            cellY = targetRow,
+                                            spanX = widget.spanX,
+                                            spanY = widget.spanY,
+                                            ignoreWidgetId = widget.id
+                                        )
+                                    }
+                                }
+                            )
+                        } else {
+                            // Normal moddayken uzun basip surukleme (Launcher3 & DuoLauncher standardi)
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onEnterEditMode()
                                     draggingWidgetId = widget.id
                                     liveDragOffset = Offset.Zero
+                                    totalDragDistance = 0f
                                     dragCellX = widget.cellX
                                     dragCellY = widget.cellY
                                     isDragValid = true
-                                }
-                            },
-                            onDragCancel = {
-                                draggingWidgetId = null
-                                liveDragOffset = Offset.Zero
-                                dragCellX = -1
-                                dragCellY = -1
-                            },
-                            onDragEnd = {
-                                if (draggingWidgetId == widget.id && isDragValid && dragCellX >= 0 && dragCellY >= 0) {
-                                    onMoveWidget(widget.id, dragCellX, dragCellY)
-                                }
-                                draggingWidgetId = null
-                                liveDragOffset = Offset.Zero
-                                dragCellX = -1
-                                dragCellY = -1
-                            },
-                            onDrag = { change, dragAmount ->
-                                if (resizingWidgetId == null) {
+                                },
+                                onDragCancel = {
+                                    draggingWidgetId = null
+                                    liveDragOffset = Offset.Zero
+                                    totalDragDistance = 0f
+                                    dragCellX = -1
+                                    dragCellY = -1
+                                },
+                                onDragEnd = {
+                                    if (draggingWidgetId == widget.id) {
+                                        if (totalDragDistance > 16f && isDragValid && dragCellX >= 0 && dragCellY >= 0) {
+                                            // Surukleme tamamlandi, yeni hucreye tasi
+                                            onMoveWidget(widget.id, dragCellX, dragCellY)
+                                        } else if (totalDragDistance <= 16f) {
+                                            // Uzun basildi ama suruklenmedi: Aksiyon Menusunu ac
+                                            onWidgetLongClick(widget)
+                                        }
+                                    }
+                                    draggingWidgetId = null
+                                    liveDragOffset = Offset.Zero
+                                    totalDragDistance = 0f
+                                    dragCellX = -1
+                                    dragCellY = -1
+                                },
+                                onDrag = { change, dragAmount ->
                                     change.consume()
                                     liveDragOffset += dragAmount
+                                    totalDragDistance += kotlin.math.hypot(dragAmount.x, dragAmount.y)
 
                                     val (targetCol, targetRow) = CarWidgetSizing.adjustedWidgetDropCell(
                                         sourceCellX = widget.cellX,
@@ -531,17 +611,16 @@ fun WorkspaceCellPageLayout(
                                         ignoreWidgetId = widget.id
                                     )
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
-                    .pointerInput(widget.id) {
+                    .pointerInput(widget.id, isEditMode) {
                         detectTapGestures(
-                            onLongPress = { 
-                                // Widget uzerine uzun basildiginda Aksiyon Menusu acilir
-                                onWidgetLongClick(widget) 
-                            },
                             onTap = {
-                                if (!isEditMode && widget.typeId == "shortcut" && widget.packageName != null) {
+                                if (isEditMode) {
+                                    // Duzenleme modunda widget'a dokunuldugunda Aksiyon Menusunu goster
+                                    onWidgetLongClick(widget)
+                                } else if (widget.typeId == "shortcut" && widget.packageName != null) {
                                     onLaunchApp(widget.packageName!!)
                                 }
                             }
@@ -582,6 +661,32 @@ fun WorkspaceCellPageLayout(
                 // DUZENLEME MODU: SIL BUTONU VE CANLI DRAG-TO-RESIZE TUTAMACLARI
                 // ═══════════════════════════════════════════════════════════
                 if (isEditMode) {
+                    // Sol Ust Ayar / Aksiyon Menusu Butonu (Settings Badge ⋮)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .offset(x = (-6).dp, y = (-6).dp)
+                            .size(36.dp)
+                            .zIndex(120f)
+                            .clickable { onWidgetLongClick(widget) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(ClPrimary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Aksiyonlar",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+
                     // Sag Ust Sil Butonu (Delete Badge ✕)
                     Box(
                         modifier = Modifier
