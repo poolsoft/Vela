@@ -18,8 +18,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,6 +37,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
@@ -79,6 +83,10 @@ import app.vela.carlauncher.desktop.MovableWidget
 import app.vela.carlauncher.desktop.StatusWidgetView
 import app.vela.carlauncher.desktop.WidgetIds
 import app.vela.carlauncher.desktop.WidgetPlacement
+import app.vela.carlauncher.desktop.WorkspaceGrid
+import app.vela.carlauncher.apps.CarAppManager
+import app.vela.carlauncher.model.AracUygulamasi
+import app.vela.carlauncher.model.InternalApp
 import app.vela.carlauncher.model.HizTelemetrisi
 import app.vela.carlauncher.model.MedyaParcasi
 import kotlinx.coroutines.delay
@@ -134,7 +142,9 @@ fun CarDesktopWorkspaceView(
     var isEditMode by remember { mutableStateOf(false) }
     var showWidgetPicker by remember { mutableStateOf(false) }
     var showSystemWidgetPicker by remember { mutableStateOf(false) }
+    var showShortcutPicker by remember { mutableStateOf(false) }
     var showWallpaperDialog by remember { mutableStateOf(false) }
+    var currentPage by remember { mutableStateOf(0) }
 
     var saatMetni by remember { mutableStateOf("12:00") }
     var tarihMetni by remember { mutableStateOf("") }
@@ -160,15 +170,37 @@ fun CarDesktopWorkspaceView(
         if (id != -1) {
             if (result.resultCode == Activity.RESULT_OK) {
                 val widgetKey = "${WidgetIds.AW_PREFIX}$id"
-                layoutStore.addWidget(widgetKey, WidgetPlacement(dx = 60f, dy = 160f, scale = 1.0f))
+                layoutStore.addWidget(widgetKey, WidgetPlacement(dx = 60f, dy = 160f, scale = 1.0f, page = currentPage))
             } else {
                 hostController.deleteId(id)
             }
         }
     }
+    fun finishWidgetBinding(id: Int) {
+        val info = hostController.info(id)
+        if (info == null) {
+            hostController.deleteId(id)
+        } else if (info.configure != null) {
+            pendingAppWidgetId = id
+            configureLauncher.launch(Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
+                component = info.configure
+                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+            })
+        } else {
+            layoutStore.addWidget("${WidgetIds.AW_PREFIX}$id", WidgetPlacement(60f, 160f, 1f, currentPage))
+        }
+    }
+    val bindLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val id = pendingAppWidgetId
+        pendingAppWidgetId = -1
+        if (id >= 0 && result.resultCode == Activity.RESULT_OK) finishWidgetBinding(id)
+        else if (id >= 0) hostController.deleteId(id)
+    }
 
     CompositionLocalProvider(LocalCarAppWidgetHost provides hostController) {
-        Box(
+        BoxWithConstraints(
             modifier = modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
@@ -179,21 +211,38 @@ fun CarDesktopWorkspaceView(
                     )
                 }
         ) {
+            val workspaceWidth = maxWidth.value
+            val workspaceHeight = maxHeight.value
+            val resolvedLayout = WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight)
+            val lastPage = resolvedLayout.values.maxOfOrNull { it.page } ?: 0
+            LaunchedEffect(lastPage, isEditMode) {
+                if (!isEditMode && currentPage > lastPage) currentPage = lastPage
+            }
             // 0. MASAUSTU ARKA PLANI (Sistem Duvar Kagidi veya Tema)
             DesktopWallpaperView(modifier = Modifier.fillMaxSize())
 
             // 1. MASAUSTU WIDGETLARI (UmainLauncher MovableWidget Mimarisi)
-            Box(modifier = Modifier.fillMaxSize()) {
-                activeWidgets.forEach { widgetId ->
-                    val placement = layout[widgetId]
-                        ?: DesktopWidgetLayoutStore.DEFAULT_PLACEMENTS[widgetId]
-                        ?: WidgetPlacement()
+            Box(modifier = Modifier.fillMaxSize().pointerInput(currentPage, lastPage, isEditMode) {
+                var dragDistance = 0f
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        if (!isEditMode && dragDistance < -80f && currentPage < lastPage) currentPage++
+                        if (!isEditMode && dragDistance > 80f && currentPage > 0) currentPage--
+                        dragDistance = 0f
+                    },
+                    onHorizontalDrag = { _, amount -> dragDistance += amount }
+                )
+            }) {
+                activeWidgets.filter { resolvedLayout[it]?.page == currentPage }.forEach { widgetId ->
+                    val placement = resolvedLayout[widgetId] ?: return@forEach
 
                     MovableWidget(
                         placement = placement,
                         resizable = true,
                         dragViaHandle = true,
                         showControls = isEditMode,
+                        workspaceWidth = workspaceWidth,
+                        workspaceHeight = workspaceHeight,
                         onRemove = {
                             if (widgetId.startsWith(WidgetIds.AW_PREFIX)) {
                                 val awId = widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()
@@ -221,13 +270,30 @@ fun CarDesktopWorkspaceView(
                 }
             }
 
+            Row(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.ArrowBack, contentDescription = "Önceki sayfa",
+                    tint = if (currentPage > 0) Color.White else Color.Gray,
+                    modifier = Modifier.size(36.dp).clickable(enabled = currentPage > 0) { currentPage-- }
+                )
+                Text("${currentPage + 1} / ${maxOf(lastPage + 1, currentPage + 1)}", color = Color.White)
+                Icon(
+                    Icons.Default.ArrowForward, contentDescription = "Sonraki sayfa",
+                    tint = if (currentPage < lastPage || (isEditMode && currentPage == lastPage)) Color.White else Color.Gray,
+                    modifier = Modifier.size(36.dp).clickable(enabled = currentPage < lastPage || (isEditMode && currentPage == lastPage)) { currentPage++ }
+                )
+            }
+
             // 2. YUZEN KONTROL CUBUGU (Edit / Lock / Add / Reset)
             FloatingDesktopControls(
                 isEditMode = isEditMode,
                 onToggleEditMode = { isEditMode = !isEditMode },
                 onOpenWidgetPicker = { showWidgetPicker = true },
                 onOpenWallpaperPicker = { showWallpaperDialog = true },
-                onResetLayout = { layoutStore.resetLayout() },
+                onResetLayout = { layoutStore.resetLayout(); currentPage = 0 },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(16.dp)
@@ -240,12 +306,26 @@ fun CarDesktopWorkspaceView(
                     activeWidgets = activeWidgets,
                     onDismiss = { showWidgetPicker = false },
                     onAddWidget = { id ->
-                        layoutStore.addWidget(id)
+                        layoutStore.addWidget(id, (layout[id] ?: DesktopWidgetLayoutStore.DEFAULT_PLACEMENTS[id] ?: WidgetPlacement()).copy(page = currentPage))
                         showWidgetPicker = false
                     },
                     onOpenSystemWidgetPicker = {
                         showWidgetPicker = false
                         showSystemWidgetPicker = true
+                    },
+                    onOpenShortcutPicker = {
+                        showWidgetPicker = false
+                        showShortcutPicker = true
+                    }
+                )
+            }
+
+            if (showShortcutPicker) {
+                ChooseShortcutDialog(
+                    onDismiss = { showShortcutPicker = false },
+                    onSelect = { app ->
+                        layoutStore.addWidget("${WidgetIds.APP_PREFIX}${app.paketAdi}", WidgetPlacement(page = currentPage))
+                        showShortcutPicker = false
                     }
                 )
             }
@@ -261,18 +341,14 @@ fun CarDesktopWorkspaceView(
                             hostController.manager.bindAppWidgetIdIfAllowed(appWidgetId, providerInfo.provider)
                         }.getOrDefault(false)
 
-                        val configure = providerInfo.configure
-                        if (configure != null) {
+                        if (!canBind) {
                             pendingAppWidgetId = appWidgetId
-                            configureLauncher.launch(
-                                Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
-                                    component = configure
-                                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                                }
-                            )
+                            bindLauncher.launch(Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
+                                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                                putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, providerInfo.provider)
+                            })
                         } else {
-                            val widgetKey = "${WidgetIds.AW_PREFIX}$appWidgetId"
-                            layoutStore.addWidget(widgetKey, WidgetPlacement(dx = 60f, dy = 160f, scale = 1.0f))
+                            finishWidgetBinding(appWidgetId)
                         }
                     }
                 )
@@ -347,6 +423,9 @@ private fun RenderDesktopWidgetContent(
         // 9. UYGULAMA KISAYOLLARI DOCK'U
         widgetId == WidgetIds.DOCK -> {
             DockWidgetCard(onLaunchApp = onLaunchApp)
+        }
+        widgetId.startsWith(WidgetIds.APP_PREFIX) -> {
+            DesktopAppShortcut(widgetId.removePrefix(WidgetIds.APP_PREFIX), onLaunchApp)
         }
         // 10. ANDROID 3. PARTI APP WIDGETLARI
         widgetId.startsWith(WidgetIds.AW_PREFIX) -> {
@@ -710,6 +789,61 @@ private fun DockWidgetCard(onLaunchApp: (String) -> Unit) {
     }
 }
 
+@Composable
+private fun DesktopAppShortcut(packageName: String, onLaunchApp: (String) -> Unit) {
+    val context = LocalContext.current
+    val label = remember(packageName) {
+        InternalApp.fromUri(packageName)?.getAd(context) ?: runCatching {
+            context.packageManager.getApplicationLabel(
+                context.packageManager.getApplicationInfo(packageName, 0)
+            ).toString()
+        }.getOrDefault(packageName.substringAfterLast('.'))
+    }
+    val icon = remember(packageName) {
+        runCatching {
+            (InternalApp.fromUri(packageName)?.getIkon(context)
+                ?: context.packageManager.getApplicationIcon(packageName))
+                .toBitmap(64, 64).asImageBitmap()
+        }.getOrNull()
+    }
+    Column(
+        modifier = Modifier.size(width = 80.dp, height = 96.dp).clickable { onLaunchApp(packageName) },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (icon != null) Image(icon, contentDescription = label, modifier = Modifier.size(56.dp))
+        else Text(label.take(1), color = Color.White, fontSize = 30.sp)
+        Text(label, color = Color.White, fontSize = 11.sp, maxLines = 2,
+            overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun ChooseShortcutDialog(onDismiss: () -> Unit, onSelect: (AracUygulamasi) -> Unit) {
+    val context = LocalContext.current
+    var apps by remember { mutableStateOf<List<AracUygulamasi>>(emptyList()) }
+    LaunchedEffect(Unit) { apps = CarAppManager.getInstance(context).yukluUygulamalariGetir() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Uygulama seç") },
+        text = {
+            LazyColumn {
+                items(apps) { app ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { onSelect(app) }.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val icon = remember(app.paketAdi) { app.ikon?.toBitmap(48, 48)?.asImageBitmap() }
+                        if (icon != null) Image(icon, contentDescription = null, modifier = Modifier.size(36.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text(app.ad, color = Color.White)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } }
+    )
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // KONTROLLER VE DIYALOGLAR
 // ═══════════════════════════════════════════════════════════════════════════
@@ -784,7 +918,8 @@ private fun AddWidgetDialog(
     activeWidgets: Set<String>,
     onDismiss: () -> Unit,
     onAddWidget: (String) -> Unit,
-    onOpenSystemWidgetPicker: () -> Unit
+    onOpenSystemWidgetPicker: () -> Unit,
+    onOpenShortcutPicker: () -> Unit
 ) {
     val items = listOf(
         WidgetIds.COMBINED to "⏱️ Dashboard (Saat + Hız)",
@@ -803,6 +938,12 @@ private fun AddWidgetDialog(
         title = { Text("Widget Ekle", color = Color.White, fontWeight = FontWeight.Bold) },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
+                    Surface(color = Color(0xFF0072FF), shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { onOpenShortcutPicker() }) {
+                        Text("Uygulama kısayolu ekle", color = Color.White, modifier = Modifier.padding(14.dp))
+                    }
+                }
                 items(items) { (id, title) ->
                     val isAlreadyActive = id in activeWidgets
                     Surface(

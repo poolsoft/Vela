@@ -10,7 +10,8 @@ package app.vela.carlauncher.desktop
 data class WidgetPlacement(
     val dx: Float = 0f,
     val dy: Float = 0f,
-    val scale: Float = 1f
+    val scale: Float = 1f,
+    val page: Int = 0
 )
 
 object WidgetIds {
@@ -25,4 +26,5 @@ object WidgetIds {
     const val OBD = "obd"
     const val MINIMAP = "minimap"
     const val AW_PREFIX = "aw_"
+    const val APP_PREFIX = "app_"
 }

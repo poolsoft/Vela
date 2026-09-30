@@ -94,6 +94,7 @@ object LauncherBackup {
         ),
         "car_launcher_app_dock" to mapOf("shortcuts" to "String"),
         "vela_car_launcher_widgets" to mapOf("widget_config" to "String"),
+        "vela_desktop_widget_layout" to mapOf("widget_layout" to "String", "active_widgets" to "StringSet"),
         "vela_music_focus" to mapOf("auto_follow" to "Boolean", "startup_source" to "String", "bt_wait_seconds" to "Int"),
         "vela_music_playlists" to mapOf("library" to "String"),
         "vela_launcher_tools" to mapOf(
@@ -106,7 +107,7 @@ object LauncherBackup {
     private fun getCategoryPrefFiles(category: BackupCategory): List<String> = when (category) {
         BackupCategory.LAUNCHER -> listOf("vela_car_launcher_prefs")
         BackupCategory.DOCK -> listOf("car_launcher_app_dock")
-        BackupCategory.WIDGETS -> listOf("vela_car_launcher_widgets")
+        BackupCategory.WIDGETS -> listOf("vela_car_launcher_widgets", "vela_desktop_widget_layout")
         BackupCategory.MUSIC -> listOf("vela_music_playlists", "vela_music_focus")
         BackupCategory.TOOLS -> listOf("vela_launcher_tools")
         BackupCategory.NAV_SETTINGS -> listOf("vela_settings")
@@ -261,6 +262,21 @@ object LauncherBackup {
             }
             entry.put("value", portable.toString())
         }
+        if (prefName == "vela_desktop_widget_layout") {
+            values.optJSONObject("widget_layout")?.let { entry ->
+                entry.put("value", entry.optString("value").split(';')
+                    .filterNot { it.startsWith("aw_") }.joinToString(";"))
+            }
+            values.optJSONObject("active_widgets")?.let { entry ->
+                val portable = JSONArray()
+                val active = entry.optJSONArray("value") ?: JSONArray()
+                for (i in 0 until active.length()) {
+                    val id = active.optString(i)
+                    if (!id.startsWith("aw_")) portable.put(id)
+                }
+                entry.put("value", portable)
+            }
+        }
         return values
     }
 
@@ -344,7 +360,7 @@ object LauncherBackup {
                         val cat = when (prefName) {
                             "vela_car_launcher_prefs" -> BackupCategory.LAUNCHER
                             "car_launcher_app_dock" -> BackupCategory.DOCK
-                            "vela_car_launcher_widgets" -> BackupCategory.WIDGETS
+                            "vela_car_launcher_widgets", "vela_desktop_widget_layout" -> BackupCategory.WIDGETS
                             "vela_music_playlists", "vela_music_focus" -> BackupCategory.MUSIC
                             "vela_launcher_tools" -> BackupCategory.TOOLS
                             "vela_settings" -> BackupCategory.NAV_SETTINGS
@@ -384,7 +400,7 @@ object LauncherBackup {
 
             if (groups.has("vela_car_launcher_prefs")) categoriesInJson.add(BackupCategory.LAUNCHER)
             if (groups.has("car_launcher_app_dock")) categoriesInJson.add(BackupCategory.DOCK)
-            if (groups.has("vela_car_launcher_widgets")) categoriesInJson.add(BackupCategory.WIDGETS)
+            if (groups.has("vela_car_launcher_widgets") || groups.has("vela_desktop_widget_layout")) categoriesInJson.add(BackupCategory.WIDGETS)
             if (groups.has("vela_music_playlists") || groups.has("vela_music_focus")) categoriesInJson.add(BackupCategory.MUSIC)
             if (groups.has("vela_launcher_tools")) categoriesInJson.add(BackupCategory.TOOLS)
 
@@ -440,7 +456,7 @@ object LauncherBackup {
                     val cat = when (prefName) {
                         "vela_car_launcher_prefs" -> BackupCategory.LAUNCHER
                         "car_launcher_app_dock" -> BackupCategory.DOCK
-                        "vela_car_launcher_widgets" -> BackupCategory.WIDGETS
+                        "vela_car_launcher_widgets", "vela_desktop_widget_layout" -> BackupCategory.WIDGETS
                         "vela_music_playlists", "vela_music_focus" -> BackupCategory.MUSIC
                         "vela_launcher_tools" -> BackupCategory.TOOLS
                         "vela_settings" -> BackupCategory.NAV_SETTINGS
@@ -495,6 +511,10 @@ object LauncherBackup {
                 "Long" -> editor.putLong(key, entry.optLong("value"))
                 "Float" -> editor.putFloat(key, entry.optDouble("value").toFloat())
                 "String" -> editor.putString(key, entry.optString("value"))
+                "StringSet" -> {
+                    val valuesArray = entry.optJSONArray("value") ?: JSONArray()
+                    editor.putStringSet(key, (0 until valuesArray.length()).map { valuesArray.optString(it) }.toSet())
+                }
             }
         }
 
