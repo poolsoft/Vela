@@ -20,6 +20,7 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
         private const val PREFS_NAME = "vela_desktop_widget_layout"
         private const val KEY_LAYOUT = "widget_layout"
         private const val KEY_ACTIVE_WIDGETS = "active_widgets"
+        private const val KEY_PAGE_COUNT = "page_count"
 
         @Volatile
         private var instance: DesktopWidgetLayoutStore? = null
@@ -51,6 +52,11 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
     private val _activeWidgets = MutableStateFlow<Set<String>>(loadActiveWidgets())
     val activeWidgets: StateFlow<Set<String>> = _activeWidgets.asStateFlow()
 
+    private val _pageCount = MutableStateFlow(
+        maxOf(1, prefs.getInt(KEY_PAGE_COUNT, 1), (_layout.value.values.maxOfOrNull { it.page } ?: 0) + 1)
+    )
+    val pageCount: StateFlow<Int> = _pageCount.asStateFlow()
+
     private fun loadLayout(): Map<String, WidgetPlacement> {
         val raw = prefs.getString(KEY_LAYOUT, null)
         val loaded = parseLayout(raw)
@@ -67,6 +73,19 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
         current[id] = placement
         prefs.edit().putString(KEY_LAYOUT, formatLayout(current)).apply()
         _layout.value = current
+        ensurePageCount(placement.page + 1)
+    }
+
+    fun addPage(): Int {
+        val page = _pageCount.value
+        ensurePageCount(page + 1)
+        return page
+    }
+
+    fun ensurePageCount(count: Int) {
+        if (count <= _pageCount.value) return
+        prefs.edit().putInt(KEY_PAGE_COUNT, count).apply()
+        _pageCount.value = count
     }
 
     fun removePlacement(id: String) {
@@ -94,9 +113,10 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
     }
 
     fun resetLayout() {
-        prefs.edit().remove(KEY_LAYOUT).remove(KEY_ACTIVE_WIDGETS).apply()
+        prefs.edit().remove(KEY_LAYOUT).remove(KEY_ACTIVE_WIDGETS).putInt(KEY_PAGE_COUNT, 1).apply()
         _layout.value = DEFAULT_PLACEMENTS
         _activeWidgets.value = setOf(WidgetIds.CLOCK, WidgetIds.STATUS, WidgetIds.SPEEDOMETER, WidgetIds.MUSIC, WidgetIds.DOCK)
+        _pageCount.value = 1
     }
 
     private fun parseLayout(raw: String?): Map<String, WidgetPlacement> {

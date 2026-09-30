@@ -6,7 +6,6 @@ import kotlin.math.roundToInt
 /** Places the existing cards on a bounded grid without changing the saved user layout. */
 object WorkspaceGrid {
     private const val STEP = 16f
-    private const val PAGE_LIMIT = 32
 
     private fun size(id: String): Pair<Float, Float> = when {
         id.startsWith(WidgetIds.APP_PREFIX) -> 80f to 96f
@@ -47,7 +46,7 @@ object WorkspaceGrid {
             val preferredY = (preferred.dy / STEP).roundToInt().coerceIn(0, rows)
             val cells = (0..rows).flatMap { y -> (0..columns).map { x -> x to y } }
                 .sortedBy { (x, y) -> abs(x - preferredX) + abs(y - preferredY) }
-            for (page in preferred.page until PAGE_LIMIT) {
+            for (page in preferred.page..preferred.page + ids.size) {
                 val rectangles = occupied.getOrPut(page) { mutableListOf() }
                 val location = cells.firstOrNull { (x, y) ->
                     val candidate = Rect(x * STEP, y * STEP, cardWidth, cardHeight)

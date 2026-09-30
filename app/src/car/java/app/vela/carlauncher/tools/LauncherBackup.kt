@@ -94,7 +94,9 @@ object LauncherBackup {
         ),
         "car_launcher_app_dock" to mapOf("shortcuts" to "String"),
         "vela_car_launcher_widgets" to mapOf("widget_config" to "String"),
-        "vela_desktop_widget_layout" to mapOf("widget_layout" to "String", "active_widgets" to "StringSet"),
+        "vela_desktop_widget_layout" to mapOf(
+            "widget_layout" to "String", "active_widgets" to "StringSet", "page_count" to "Int"
+        ),
         "vela_music_focus" to mapOf("auto_follow" to "Boolean", "startup_source" to "String", "bt_wait_seconds" to "Int"),
         "vela_music_playlists" to mapOf("library" to "String"),
         "vela_launcher_tools" to mapOf(

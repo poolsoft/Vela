@@ -4,12 +4,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.OpenWith
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -25,6 +27,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -55,6 +58,7 @@ fun MovableWidget(
     workspaceWidth: Float = Float.MAX_VALUE,
     workspaceHeight: Float = Float.MAX_VALUE,
     onRemove: (() -> Unit)? = null,
+    onSettings: (() -> Unit)? = null,
     onCommit: (WidgetPlacement) -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
@@ -99,6 +103,19 @@ fun MovableWidget(
                 }
         ) {
             content()
+            if (showControls) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+                                }
+                            }
+                        }
+                )
+            }
         }
 
         if (showControls) {
@@ -147,6 +164,18 @@ fun MovableWidget(
                                 scale = (scale + delta).coerceIn(MIN_SCALE, MAX_SCALE)
                             }
                         }
+                )
+            }
+
+            if (onSettings != null) {
+                HandleSurface(
+                    icon = Icons.Default.Settings,
+                    description = "Widget ayarlari",
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .offset((-6).dp, 6.dp)
+                        .zIndex(10f)
+                        .clickable { onSettings() }
                 )
             }
         }

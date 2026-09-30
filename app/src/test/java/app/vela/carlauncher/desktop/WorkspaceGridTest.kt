@@ -43,4 +43,16 @@ class WorkspaceGridTest {
         assertTrue(result.dx <= 100f)
         assertTrue(result.dy <= 384f)
     }
+
+    @Test
+    fun pageIndexIsNotCapped() {
+        val result = WorkspaceGrid.resolve(
+            setOf(WidgetIds.CLOCK),
+            mapOf(WidgetIds.CLOCK to WidgetPlacement(page = 50)),
+            400f,
+            600f
+        ).getValue(WidgetIds.CLOCK)
+
+        assertEquals(50, result.page)
+    }
 }

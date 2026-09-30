@@ -31,14 +31,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
@@ -125,6 +125,7 @@ fun CarDesktopWorkspaceView(
     val layoutStore = remember { DesktopWidgetLayoutStore.getInstance(context) }
     val layout by layoutStore.layout.collectAsState()
     val activeWidgets by layoutStore.activeWidgets.collectAsState()
+    val pageCount by layoutStore.pageCount.collectAsState()
 
     // Sistem Duvar Kagidinin arkadan gorunebilmesi icin Activity pencere bayragi
     LaunchedEffect(Unit) {
@@ -141,10 +142,10 @@ fun CarDesktopWorkspaceView(
 
     var isEditMode by remember { mutableStateOf(false) }
     var showWidgetPicker by remember { mutableStateOf(false) }
-    var showSystemWidgetPicker by remember { mutableStateOf(false) }
-    var showShortcutPicker by remember { mutableStateOf(false) }
     var showWallpaperDialog by remember { mutableStateOf(false) }
     var currentPage by remember { mutableStateOf(0) }
+    var selectedWidgetId by remember { mutableStateOf<String?>(null) }
+    var showPageIndicator by remember { mutableStateOf(true) }
 
     var saatMetni by remember { mutableStateOf("12:00") }
     var tarihMetni by remember { mutableStateOf("") }
@@ -214,9 +215,17 @@ fun CarDesktopWorkspaceView(
             val workspaceWidth = maxWidth.value
             val workspaceHeight = maxHeight.value
             val resolvedLayout = WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight)
-            val lastPage = resolvedLayout.values.maxOfOrNull { it.page } ?: 0
+            val lastPage = maxOf(pageCount - 1, resolvedLayout.values.maxOfOrNull { it.page } ?: 0)
+            LaunchedEffect(lastPage) { layoutStore.ensurePageCount(lastPage + 1) }
             LaunchedEffect(lastPage, isEditMode) {
                 if (!isEditMode && currentPage > lastPage) currentPage = lastPage
+            }
+            LaunchedEffect(currentPage, pageCount, isEditMode) {
+                showPageIndicator = true
+                if (!isEditMode) {
+                    delay(1800L)
+                    showPageIndicator = false
+                }
             }
             // 0. MASAUSTU ARKA PLANI (Sistem Duvar Kagidi veya Tema)
             DesktopWallpaperView(modifier = Modifier.fillMaxSize())
@@ -250,6 +259,7 @@ fun CarDesktopWorkspaceView(
                             }
                             layoutStore.removePlacement(widgetId)
                         },
+                        onSettings = { selectedWidgetId = widgetId },
                         onCommit = { newPlacement ->
                             layoutStore.setPlacement(widgetId, newPlacement)
                         }
@@ -270,21 +280,37 @@ fun CarDesktopWorkspaceView(
                 }
             }
 
-            Row(
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            AnimatedVisibility(
+                visible = showPageIndicator,
+                enter = fadeIn(), exit = fadeOut(),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp)
             ) {
-                Icon(
-                    Icons.Default.ArrowBack, contentDescription = "Önceki sayfa",
-                    tint = if (currentPage > 0) Color.White else Color.Gray,
-                    modifier = Modifier.size(36.dp).clickable(enabled = currentPage > 0) { currentPage-- }
-                )
-                Text("${currentPage + 1} / ${maxOf(lastPage + 1, currentPage + 1)}", color = Color.White)
-                Icon(
-                    Icons.Default.ArrowForward, contentDescription = "Sonraki sayfa",
-                    tint = if (currentPage < lastPage || (isEditMode && currentPage == lastPage)) Color.White else Color.Gray,
-                    modifier = Modifier.size(36.dp).clickable(enabled = currentPage < lastPage || (isEditMode && currentPage == lastPage)) { currentPage++ }
-                )
+                Surface(color = Color(0x99141624), shape = RoundedCornerShape(20.dp)) {
+                    LazyRow(
+                        modifier = Modifier.widthIn(max = 360.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        items(lastPage + 1) { page ->
+                            Box(
+                                Modifier
+                                    .size(if (page == currentPage) 10.dp else 7.dp)
+                                    .clip(CircleShape)
+                                    .background(if (page == currentPage) Color.White else Color(0x66FFFFFF))
+                                    .clickable(enabled = isEditMode) { currentPage = page }
+                            )
+                        }
+                        if (isEditMode) item {
+                            Icon(
+                                Icons.Default.Add, "Yeni sayfa", tint = ClPrimary,
+                                modifier = Modifier.size(22.dp).clickable {
+                                    currentPage = layoutStore.addPage()
+                                }
+                            )
+                        }
+                    }
+                }
             }
 
             // 2. YUZEN KONTROL CUBUGU (Edit / Lock / Add / Reset)
@@ -302,45 +328,23 @@ fun CarDesktopWorkspaceView(
 
             // 3. WIDGET EKLEME DIYALOGU (Kullanicinin 7-8 Widget'i)
             if (showWidgetPicker) {
-                AddWidgetDialog(
+                DesktopWidgetPicker(
                     activeWidgets = activeWidgets,
                     onDismiss = { showWidgetPicker = false },
                     onAddWidget = { id ->
                         layoutStore.addWidget(id, (layout[id] ?: DesktopWidgetLayoutStore.DEFAULT_PLACEMENTS[id] ?: WidgetPlacement()).copy(page = currentPage))
                         showWidgetPicker = false
                     },
-                    onOpenSystemWidgetPicker = {
-                        showWidgetPicker = false
-                        showSystemWidgetPicker = true
-                    },
-                    onOpenShortcutPicker = {
-                        showWidgetPicker = false
-                        showShortcutPicker = true
-                    }
-                )
-            }
-
-            if (showShortcutPicker) {
-                ChooseShortcutDialog(
-                    onDismiss = { showShortcutPicker = false },
-                    onSelect = { app ->
+                    onAddShortcut = { app ->
                         layoutStore.addWidget("${WidgetIds.APP_PREFIX}${app.paketAdi}", WidgetPlacement(page = currentPage))
-                        showShortcutPicker = false
-                    }
-                )
-            }
-
-            // 4. SISTEM WIDGET SECICI DIYALOGU ("Choose widget" - 3. Ekran Goruntusu)
-            if (showSystemWidgetPicker) {
-                ChooseSystemWidgetDialog(
-                    onDismiss = { showSystemWidgetPicker = false },
-                    onSelectProvider = { providerInfo ->
-                        showSystemWidgetPicker = false
+                        showWidgetPicker = false
+                    },
+                    onAddSystemWidget = { providerInfo ->
+                        showWidgetPicker = false
                         val appWidgetId = hostController.allocateId()
                         val canBind = runCatching {
                             hostController.manager.bindAppWidgetIdIfAllowed(appWidgetId, providerInfo.provider)
                         }.getOrDefault(false)
-
                         if (!canBind) {
                             pendingAppWidgetId = appWidgetId
                             bindLauncher.launch(Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
@@ -350,6 +354,31 @@ fun CarDesktopWorkspaceView(
                         } else {
                             finishWidgetBinding(appWidgetId)
                         }
+                    }
+                )
+            }
+
+            selectedWidgetId?.let { widgetId ->
+                DesktopWidgetSettingsDialog(
+                    widgetId = widgetId,
+                    placement = layout[widgetId] ?: resolvedLayout[widgetId] ?: WidgetPlacement(page = currentPage),
+                    pageCount = pageCount,
+                    providerInfo = widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()?.let(hostController::info),
+                    onDismiss = { selectedWidgetId = null },
+                    onSave = { placement -> layoutStore.setPlacement(widgetId, placement); selectedWidgetId = null },
+                    onConfigure = { info, id ->
+                        runCatching {
+                            context.startActivity(Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
+                                component = info.configure
+                                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                            })
+                        }
+                        selectedWidgetId = null
+                    },
+                    onRemove = {
+                        widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()?.let(hostController::deleteId)
+                        layoutStore.removePlacement(widgetId)
+                        selectedWidgetId = null
                     }
                 )
             }
@@ -841,6 +870,69 @@ private fun ChooseShortcutDialog(onDismiss: () -> Unit, onSelect: (AracUygulamas
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Kapat") } }
+    )
+}
+
+@Composable
+private fun DesktopWidgetSettingsDialog(
+    widgetId: String,
+    placement: WidgetPlacement,
+    pageCount: Int,
+    providerInfo: AppWidgetProviderInfo?,
+    onDismiss: () -> Unit,
+    onSave: (WidgetPlacement) -> Unit,
+    onConfigure: (AppWidgetProviderInfo, Int) -> Unit,
+    onRemove: () -> Unit
+) {
+    var draft by remember(widgetId, placement) { mutableStateOf(placement) }
+    val title = when {
+        widgetId.startsWith(WidgetIds.APP_PREFIX) -> "Uygulama kısayolu"
+        widgetId.startsWith(WidgetIds.AW_PREFIX) -> providerInfo?.loadLabel(LocalContext.current.packageManager) ?: "Sistem widget'ı"
+        else -> mapOf(
+            WidgetIds.CLOCK to "Dijital saat", WidgetIds.MUSIC to "Müzik çalar",
+            WidgetIds.SPEEDOMETER to "Hız göstergesi", WidgetIds.STATUS to "Sistem durumu",
+            WidgetIds.DOCK to "Uygulama dock'u", WidgetIds.COMBINED to "Dashboard",
+            WidgetIds.WEATHER to "Hava durumu", WidgetIds.COMPASS to "Pusula", WidgetIds.OBD to "OBD2"
+        )[widgetId] ?: widgetId
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1A1D2E),
+        title = { Text("$title ayarları", color = Color.White, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Boyut", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(0.75f to "Küçük", 1f to "Normal", 1.35f to "Büyük").forEach { (scale, label) ->
+                        TextButton(
+                            onClick = { draft = draft.copy(scale = scale) },
+                            modifier = Modifier.background(
+                                if (kotlin.math.abs(draft.scale - scale) < 0.05f) ClPrimary.copy(alpha = 0.25f) else Color.Transparent,
+                                RoundedCornerShape(10.dp)
+                            )
+                        ) { Text(label, color = Color.White) }
+                    }
+                }
+                Text("Sayfa", color = Color.White, fontWeight = FontWeight.SemiBold)
+                LazyColumn(modifier = Modifier.height(120.dp)) {
+                    items(pageCount) { page ->
+                        Text(
+                            "Sayfa ${page + 1}",
+                            color = if (draft.page == page) ClPrimary else Color.White,
+                            modifier = Modifier.fillMaxWidth().clickable { draft = draft.copy(page = page) }.padding(10.dp)
+                        )
+                    }
+                }
+                if (providerInfo?.configure != null) {
+                    TextButton(onClick = {
+                        widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()?.let { onConfigure(providerInfo, it) }
+                    }) { Text("Widget yapılandırmasını aç", color = ClPrimary) }
+                }
+                TextButton(onClick = onRemove) { Text("Masaüstünden kaldır", color = Color(0xFFFF6B6B)) }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(draft) }) { Text("Uygula", color = ClPrimary) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Vazgeç", color = Color.White) } }
     )
 }
 
