@@ -377,6 +377,7 @@ fun WorkspaceCellPageLayout(
     val rowCount = WidgetManager.ROW_COUNT
     val spacingDp = 6.dp
 
+    var selectedWidgetId by remember { mutableStateOf<String?>(null) }
     var draggingWidgetId by remember { mutableStateOf<String?>(null) }
     var dragCellX by remember { mutableIntStateOf(-1) }
     var dragCellY by remember { mutableIntStateOf(-1) }
@@ -395,6 +396,11 @@ fun WorkspaceCellPageLayout(
             .fillMaxSize()
             .clip(RoundedCornerShape(12.dp))
             .background(Color(0x04FFFFFF))
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { selectedWidgetId = null }
+                )
+            }
     ) {
         val totalWidthPx = constraints.maxWidth.toFloat()
         val totalHeightPx = constraints.maxHeight.toFloat()
@@ -485,17 +491,7 @@ fun WorkspaceCellPageLayout(
                 val heightDp = with(density) { heightPx.toDp() }
 
                 val isShortcut = widget.typeId == "shortcut" || (safeSpanX <= 2 && safeSpanY <= 2 && widget.packageName != null)
-
-                // Titreme (Jiggle/Shake) Animasyonu
-                val infiniteTransition = rememberInfiniteTransition()
-                val rotation by infiniteTransition.animateFloat(
-                    initialValue = -1.2f,
-                    targetValue = 1.2f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(130, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Reverse
-                    )
-                )
+                val isWidgetActive = (selectedWidgetId == widget.id)
 
                 // Canli Surukleme Ofseti (Widget'in parmakla birlikte akmasi)
                 var liveDragOffset by remember(widget.id) { mutableStateOf(Offset.Zero) }
@@ -505,189 +501,106 @@ fun WorkspaceCellPageLayout(
                     modifier = Modifier
                         .offset(x = leftDp, y = topDp)
                         .size(width = widthDp, height = heightDp)
-                        .zIndex(if (isCurrentDragging || isCurrentResizing) 35f else 1f)
+                        .zIndex(if (isCurrentDragging || isCurrentResizing) 35f else if (isWidgetActive) 25f else 1f)
                         .graphicsLayer {
                             if (isCurrentDragging) {
                                 translationX = liveDragOffset.x
                                 translationY = liveDragOffset.y
-                                scaleX = 1.06f
-                                scaleY = 1.06f
+                                scaleX = 1.05f
+                                scaleY = 1.05f
                                 alpha = 0.92f
-                            } else if (isEditMode) {
-                                rotationZ = rotation
                             }
                         }
-                        .pointerInput(widget.id, isEditMode, safeCellX, safeCellY, safeSpanX, safeSpanY) {
-                            if (isEditMode) {
-                                // Duzenleme modundayken hafif dokunup suruklemeyle aninda tasima
-                                detectDragGestures(
-                                    onDragStart = {
-                                        if (resizingWidgetId == null) {
-                                            draggingWidgetId = widget.id
-                                            liveDragOffset = Offset.Zero
-                                            totalDragDistance = 0f
-                                            dragCellX = widget.cellX
-                                            dragCellY = widget.cellY
-                                            dragTargetPage = pageIndex
-                                            isDragValid = true
-                                        }
-                                    },
-                                    onDragCancel = {
-                                        draggingWidgetId = null
-                                        liveDragOffset = Offset.Zero
-                                        totalDragDistance = 0f
-                                        dragCellX = -1
-                                        dragCellY = -1
-                                    },
-                                    onDragEnd = {
-                                        if (draggingWidgetId == widget.id && isDragValid && dragCellX >= 0 && dragCellY >= 0 && totalDragDistance > 12f) {
+                        .pointerInput(widget.id, safeCellX, safeCellY, safeSpanX, safeSpanY) {
+                            // Android & DuoLauncher Standardi: Uzun basinca parmakla surukleme baslar
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    draggingWidgetId = widget.id
+                                    selectedWidgetId = null
+                                    liveDragOffset = Offset.Zero
+                                    totalDragDistance = 0f
+                                    dragCellX = widget.cellX
+                                    dragCellY = widget.cellY
+                                    dragTargetPage = pageIndex
+                                    isDragValid = true
+                                },
+                                onDragCancel = {
+                                    draggingWidgetId = null
+                                    liveDragOffset = Offset.Zero
+                                    totalDragDistance = 0f
+                                    dragCellX = -1
+                                    dragCellY = -1
+                                },
+                                onDragEnd = {
+                                    if (draggingWidgetId == widget.id) {
+                                        if (totalDragDistance > 16f && isDragValid && dragCellX >= 0 && dragCellY >= 0) {
+                                            // Surukleme tamamlandi, yeni hucreye tasi
                                             onMoveWidget(widget.id, dragTargetPage, dragCellX, dragCellY)
-                                        }
-                                        draggingWidgetId = null
-                                        liveDragOffset = Offset.Zero
-                                        totalDragDistance = 0f
-                                        dragCellX = -1
-                                        dragCellY = -1
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        if (resizingWidgetId == null) {
-                                            change.consume()
-                                            liveDragOffset += dragAmount
-                                            totalDragDistance += kotlin.math.hypot(dragAmount.x, dragAmount.y)
-
-                                            // Ekran Kenari Sayfa Gecis Kontrolu (Cross-Page Drag)
-                                            val currentFingerX = leftPx + liveDragOffset.x + change.position.x
-                                            val now = System.currentTimeMillis()
-                                            if (now - lastPageTurnTime > 800L) {
-                                                if (currentFingerX > totalWidthPx - 45f && dragTargetPage < pageCount - 1) {
-                                                    dragTargetPage++
-                                                    lastPageTurnTime = now
-                                                    onRequestPageChange(dragTargetPage)
-                                                } else if (currentFingerX < 45f && dragTargetPage > 0) {
-                                                    dragTargetPage--
-                                                    lastPageTurnTime = now
-                                                    onRequestPageChange(dragTargetPage)
-                                                }
-                                            }
-
-                                            val (targetCol, targetRow) = CarWidgetSizing.adjustedWidgetDropCell(
-                                                sourceCellX = widget.cellX,
-                                                sourceCellY = widget.cellY,
-                                                spanX = widget.spanX,
-                                                spanY = widget.spanY,
-                                                dragOffsetX = liveDragOffset.x,
-                                                dragOffsetY = liveDragOffset.y,
-                                                cellWidthPx = cellWidthPx,
-                                                cellHeightPx = cellHeightPx,
-                                                spacingPx = spacingPx
-                                            )
-
-                                            dragCellX = targetCol
-                                            dragCellY = targetRow
-
-                                            val wm = WidgetManager.getInstance(context)
-                                            isDragValid = wm.isRegionVacant(
-                                                pageIndex = dragTargetPage,
-                                                cellX = targetCol,
-                                                cellY = targetRow,
-                                                spanX = widget.spanX,
-                                                spanY = widget.spanY,
-                                                ignoreWidgetId = widget.id
-                                            )
+                                        } else if (totalDragDistance <= 16f) {
+                                            // Uzun basildi ama suruklenmedi: Tekil olarak BU widget'i sec (Boyutlandirma modu)
+                                            selectedWidgetId = widget.id
                                         }
                                     }
-                                )
-                            } else {
-                                // Normal moddayken uzun basip surukleme (Launcher3 & DuoLauncher standardi)
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onEnterEditMode()
-                                        draggingWidgetId = widget.id
-                                        liveDragOffset = Offset.Zero
-                                        totalDragDistance = 0f
-                                        dragCellX = widget.cellX
-                                        dragCellY = widget.cellY
-                                        dragTargetPage = pageIndex
-                                        isDragValid = true
-                                    },
-                                    onDragCancel = {
-                                        draggingWidgetId = null
-                                        liveDragOffset = Offset.Zero
-                                        totalDragDistance = 0f
-                                        dragCellX = -1
-                                        dragCellY = -1
-                                    },
-                                    onDragEnd = {
-                                        if (draggingWidgetId == widget.id) {
-                                            if (totalDragDistance > 16f && isDragValid && dragCellX >= 0 && dragCellY >= 0) {
-                                                // Surukleme tamamlandi, yeni hucreye tasi
-                                                onMoveWidget(widget.id, dragTargetPage, dragCellX, dragCellY)
-                                            } else if (totalDragDistance <= 16f) {
-                                                // Uzun basildi ama suruklenmedi: Aksiyon Menusunu ac
-                                                onWidgetLongClick(widget)
-                                            }
+                                    draggingWidgetId = null
+                                    liveDragOffset = Offset.Zero
+                                    totalDragDistance = 0f
+                                    dragCellX = -1
+                                    dragCellY = -1
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    liveDragOffset += dragAmount
+                                    totalDragDistance += kotlin.math.hypot(dragAmount.x, dragAmount.y)
+
+                                    // Ekran Kenari Sayfa Gecis Kontrolu (Cross-Page Drag)
+                                    val currentFingerX = leftPx + liveDragOffset.x + change.position.x
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastPageTurnTime > 800L) {
+                                        if (currentFingerX > totalWidthPx - 45f && dragTargetPage < pageCount - 1) {
+                                            dragTargetPage++
+                                            lastPageTurnTime = now
+                                            onRequestPageChange(dragTargetPage)
+                                        } else if (currentFingerX < 45f && dragTargetPage > 0) {
+                                            dragTargetPage--
+                                            lastPageTurnTime = now
+                                            onRequestPageChange(dragTargetPage)
                                         }
-                                        draggingWidgetId = null
-                                        liveDragOffset = Offset.Zero
-                                        totalDragDistance = 0f
-                                        dragCellX = -1
-                                        dragCellY = -1
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        liveDragOffset += dragAmount
-                                        totalDragDistance += kotlin.math.hypot(dragAmount.x, dragAmount.y)
-
-                                        // Ekran Kenari Sayfa Gecis Kontrolu (Cross-Page Drag)
-                                        val currentFingerX = leftPx + liveDragOffset.x + change.position.x
-                                        val now = System.currentTimeMillis()
-                                        if (now - lastPageTurnTime > 800L) {
-                                            if (currentFingerX > totalWidthPx - 45f && dragTargetPage < pageCount - 1) {
-                                                dragTargetPage++
-                                                lastPageTurnTime = now
-                                                onRequestPageChange(dragTargetPage)
-                                            } else if (currentFingerX < 45f && dragTargetPage > 0) {
-                                                dragTargetPage--
-                                                lastPageTurnTime = now
-                                                onRequestPageChange(dragTargetPage)
-                                            }
-                                        }
-
-                                        val (targetCol, targetRow) = CarWidgetSizing.adjustedWidgetDropCell(
-                                            sourceCellX = widget.cellX,
-                                            sourceCellY = widget.cellY,
-                                            spanX = widget.spanX,
-                                            spanY = widget.spanY,
-                                            dragOffsetX = liveDragOffset.x,
-                                            dragOffsetY = liveDragOffset.y,
-                                            cellWidthPx = cellWidthPx,
-                                            cellHeightPx = cellHeightPx,
-                                            spacingPx = spacingPx
-                                        )
-
-                                        dragCellX = targetCol
-                                        dragCellY = targetRow
-
-                                        val wm = WidgetManager.getInstance(context)
-                                        isDragValid = wm.isRegionVacant(
-                                            pageIndex = dragTargetPage,
-                                            cellX = targetCol,
-                                            cellY = targetRow,
-                                            spanX = widget.spanX,
-                                            spanY = widget.spanY,
-                                            ignoreWidgetId = widget.id
-                                        )
                                     }
-                                )
-                            }
+
+                                    val (targetCol, targetRow) = CarWidgetSizing.adjustedWidgetDropCell(
+                                        sourceCellX = widget.cellX,
+                                        sourceCellY = widget.cellY,
+                                        spanX = widget.spanX,
+                                        spanY = widget.spanY,
+                                        dragOffsetX = liveDragOffset.x,
+                                        dragOffsetY = liveDragOffset.y,
+                                        cellWidthPx = cellWidthPx,
+                                        cellHeightPx = cellHeightPx,
+                                        spacingPx = spacingPx
+                                    )
+
+                                    dragCellX = targetCol
+                                    dragCellY = targetRow
+
+                                    val wm = WidgetManager.getInstance(context)
+                                    isDragValid = wm.isRegionVacant(
+                                        pageIndex = dragTargetPage,
+                                        cellX = targetCol,
+                                        cellY = targetRow,
+                                        spanX = widget.spanX,
+                                        spanY = widget.spanY,
+                                        ignoreWidgetId = widget.id
+                                    )
+                                }
+                            )
                         }
-                        .pointerInput(widget.id, isEditMode) {
+                        .pointerInput(widget.id) {
                             detectTapGestures(
                                 onTap = {
-                                    if (isEditMode) {
-                                        // Duzenleme modunda widget'a dokunuldugunda Aksiyon Menusunu goster
-                                        onWidgetLongClick(widget)
+                                    if (isWidgetActive) {
+                                        // Tekrar dokunulursa secim kapanir
+                                        selectedWidgetId = null
                                     } else if (widget.typeId == "shortcut" && widget.packageName != null) {
                                         onLaunchApp(widget.packageName!!)
                                     }
@@ -695,19 +608,19 @@ fun WorkspaceCellPageLayout(
                             )
                         }
             ) {
-                // Widget Kart Cercevesi (NORMAL MODDA CERCEVE TAMAMEN YOKTUR, TEMIZ VE CAM EFEKTLI)
+                // Widget Kart Cercevesi (Sadece bu widget seciliyse beyaz cerceve cikar, digerleri tertemiz kalir)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(RoundedCornerShape(12.dp))
                         .background(
                             if (isShortcut) Color.Transparent
-                            else if (isEditMode) ClCardBg
+                            else if (isWidgetActive) ClCardBg
                             else Color(0x12FFFFFF)
                         )
                         .border(
-                            width = if (isEditMode) 1.5.dp else 0.dp,
-                            color = if (isEditMode) Color.White.copy(alpha = 0.8f) else Color.Transparent,
+                            width = if (isWidgetActive) 1.5.dp else 0.dp,
+                            color = if (isWidgetActive) Color.White.copy(alpha = 0.9f) else Color.Transparent,
                             shape = RoundedCornerShape(12.dp)
                         )
                         .padding(if (isShortcut) 2.dp else 6.dp)
@@ -726,9 +639,10 @@ fun WorkspaceCellPageLayout(
                     )
                 }
                 // ═══════════════════════════════════════════════════════════
-                // DUZENLEME MODU: SIL BUTONU VE CANLI DRAG-TO-RESIZE TUTAMACLARI
+                // TEKIL SECIM: SIL BUTONU VE CANLI DRAG-TO-RESIZE TUTAMACLARI
+                // Yalnizca kullanicinin uzun basarak sectigi tekil widget icin cikar!
                 // ═══════════════════════════════════════════════════════════
-                if (isEditMode) {
+                if (isWidgetActive) {
                     // Sol Ust Ayar / Aksiyon Menusu Butonu (Settings Badge ⋮)
                     Box(
                         modifier = Modifier

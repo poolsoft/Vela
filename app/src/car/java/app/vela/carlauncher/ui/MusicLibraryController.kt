@@ -235,8 +235,8 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         val isScanning = repository.taraniyorMu.value
         val status = when {
             repository.lastError.value != null -> repository.lastError.value
-            rows.isEmpty() -> context.getString(if (isScanning) R.string.car_music_scanning else if (tab == Tab.QUEUE) R.string.car_music_queue_empty else R.string.car_music_empty)
-            isScanning -> context.getString(R.string.car_music_scanning)
+            rows.isEmpty() && isScanning -> context.getString(R.string.car_music_scanning)
+            rows.isEmpty() -> context.getString(if (tab == Tab.QUEUE) R.string.car_music_queue_empty else R.string.car_music_empty)
             else -> null
         }
         if (status != null) rows.add(0, LibraryRow(status))

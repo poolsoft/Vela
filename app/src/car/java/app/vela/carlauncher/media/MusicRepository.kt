@@ -62,6 +62,7 @@ class MusicRepository private constructor(private val context: Context) {
     }
 
     init {
+        loadCachedIndex()
         val filter = android.content.IntentFilter().apply {
             addAction(android.content.Intent.ACTION_MEDIA_MOUNTED)
             addAction(android.content.Intent.ACTION_MEDIA_UNMOUNTED)
@@ -222,6 +223,7 @@ class MusicRepository private constructor(private val context: Context) {
 
             _parcalar.value = bulunanParcalar
             _klasorler.value = klasorListesi
+            saveCachedIndex(bulunanParcalar)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -362,5 +364,102 @@ class MusicRepository private constructor(private val context: Context) {
             p.contains("/ringtones") ||
             p.contains("/alarms") ||
             p.contains("/recordings")
+    }
+
+    private fun getIndexFile(): File {
+        return File(context.filesDir, "car_music_index_v1.json")
+    }
+
+    private fun loadCachedIndex() {
+        val indexFile = getIndexFile()
+        if (!indexFile.isFile || indexFile.length() == 0L) return
+        try {
+            val jsonStr = indexFile.readText(Charsets.UTF_8)
+            val array = org.json.JSONArray(jsonStr)
+            val yuklenenParcalar = mutableListOf<SesParcasi>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                val dosyaYolu = obj.optString("dosyaYolu", "")
+                if (dosyaYolu.isNotBlank()) {
+                    val f = File(dosyaYolu)
+                    if (f.exists() && f.length() > 0) {
+                        yuklenenParcalar.add(
+                            SesParcasi(
+                                id = obj.optLong("id", i.toLong()),
+                                baslik = obj.optString("baslik", f.nameWithoutExtension),
+                                sanatci = obj.optString("sanatci", "Bilinmeyen Sanatçı"),
+                                album = obj.optString("album", "Bilinmeyen Albüm"),
+                                sureMs = obj.optLong("sureMs", 0L),
+                                dosyaYolu = dosyaYolu,
+                                albumArtUri = null,
+                                eklenmeTarihi = obj.optLong("eklenmeTarihi", f.lastModified() / 1000L),
+                                contentUri = obj.optString("contentUri", Uri.fromFile(f).toString()),
+                                folderPath = obj.optString("folderPath", f.parent ?: "")
+                            )
+                        )
+                    }
+                }
+            }
+
+            if (yuklenenParcalar.isNotEmpty()) {
+                val klasorMap = mutableMapOf<String, MutableList<SesParcasi>>()
+                for (p in yuklenenParcalar) {
+                    val parent = File(p.dosyaYolu).parent ?: "Dahili Depolama"
+                    klasorMap.getOrPut(parent) { mutableListOf() }.add(p)
+                }
+
+                val klasorListesi = klasorMap.map { (yol, list) ->
+                    val folderFile = File(yol)
+                    val isUsb = isUsbYolu(yol)
+                    SesKlasoru(
+                        yol = yol,
+                        ad = folderFile.name.ifBlank { "Müzik Klasörü" },
+                        parcaSayisi = list.size,
+                        isUsb = isUsb
+                    )
+                }.sortedWith(compareByDescending<SesKlasoru> { it.isUsb }.thenBy { it.ad })
+
+                _parcalar.value = yuklenenParcalar
+                _klasorler.value = klasorListesi
+                FileLogger.i(TAG, "Önbellekten ${yuklenenParcalar.size} müzik ve ${klasorListesi.size} klasör anında yüklendi.")
+            }
+        } catch (e: Exception) {
+            FileLogger.w(TAG, "Müzik önbelleği okunamadı: ${e.message}")
+        }
+    }
+
+    private fun saveCachedIndex(tracks: List<SesParcasi>) {
+        if (tracks.isEmpty()) return
+        try {
+            val array = org.json.JSONArray()
+            for (p in tracks) {
+                val obj = org.json.JSONObject().apply {
+                    put("id", p.id)
+                    put("baslik", p.baslik)
+                    put("sanatci", p.sanatci)
+                    put("album", p.album)
+                    put("sureMs", p.sureMs)
+                    put("dosyaYolu", p.dosyaYolu)
+                    put("contentUri", p.contentUri)
+                    put("folderPath", p.folderPath)
+                    put("eklenmeTarihi", p.eklenmeTarihi)
+                }
+                array.put(obj)
+            }
+            val target = getIndexFile()
+            val atomicFile = android.util.AtomicFile(target)
+            var fos: java.io.FileOutputStream? = null
+            try {
+                fos = atomicFile.startWrite()
+                fos.write(array.toString().toByteArray(Charsets.UTF_8))
+                atomicFile.finishWrite(fos)
+                FileLogger.i(TAG, "Müzik listesi önbelleğe başarıyla kaydedildi (${tracks.size} parça).")
+            } catch (e: Exception) {
+                if (fos != null) atomicFile.failWrite(fos)
+                FileLogger.e(TAG, "Müzik önbelleği kaydedilemedi: ${e.message}")
+            }
+        } catch (e: Exception) {
+            FileLogger.e(TAG, "Müzik önbellek JSON hatası: ${e.message}")
+        }
     }
 }
