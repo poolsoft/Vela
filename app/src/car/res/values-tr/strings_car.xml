@@ -33,6 +33,7 @@
     <string name="car_music_visualizer_permission">Yerel müzik görselleştiricisi için ses izni gerekiyor.</string>
     <string name="car_music_play_failed">Parça çalınamadı. Depolama bağlantısını kontrol edin.</string>
     <string name="car_music_favorites">Favoriler</string>
+    <string name="car_music_recently_added">Son Eklenenler</string>
     <string name="car_music_unknown_folder">Müzik klasörü</string>
     <string name="car_music_track_count">%1$d parça</string>
     <string name="car_music_new_playlist">Yeni çalma listesi</string>

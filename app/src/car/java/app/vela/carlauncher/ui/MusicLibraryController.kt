@@ -154,9 +154,12 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         MusicPlaylistStore.FAVORITES -> context.getString(R.string.car_music_favorites)
         MusicPlaylistStore.RECENT -> context.getString(R.string.car_music_recent)
         MusicPlaylistStore.MOST_PLAYED -> context.getString(R.string.car_music_most_played)
+        MusicPlaylistStore.RECENTLY_ADDED -> context.getString(R.string.car_music_recently_added)
         else -> item.name
     }
-    private fun readOnly(item: MusicPlaylist) = item.id == MusicPlaylistStore.RECENT || item.id == MusicPlaylistStore.MOST_PLAYED
+    private fun readOnly(item: MusicPlaylist) = item.id == MusicPlaylistStore.RECENT ||
+        item.id == MusicPlaylistStore.MOST_PLAYED ||
+        item.id == MusicPlaylistStore.RECENTLY_ADDED
 
     private fun folderOf(track: SesParcasi): String = track.folderPath.ifBlank { File(track.dosyaYolu).parent.orEmpty() }
     private fun sortedTracks(items: List<SesParcasi>): List<SesParcasi> = when (sortOrder) {
@@ -174,8 +177,21 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         Tab.TRACKS -> sortedTracks(tracks)
         Tab.FOLDERS -> sortedTracks(tracks.filter { folderOf(it) == folder })
         Tab.PLAYLISTS -> {
-            val byKey = tracks.associateBy { it.libraryKey() }
-            playlist()?.trackKeys?.mapNotNull { byKey[it] }.orEmpty()
+            val pl = playlist()
+            when (pl?.id) {
+                MusicPlaylistStore.RECENTLY_ADDED -> sortedTracks(tracks).sortedByDescending { it.eklenmeTarihi }
+                MusicPlaylistStore.MOST_PLAYED -> {
+                    val counts = store.history.value.toMap()
+                    tracks.sortedByDescending { counts[it.libraryKey()] ?: 0 }
+                }
+                MusicPlaylistStore.RECENT -> {
+                    val recentKeys = store.history.value.map { it.first }
+                    recentKeys.mapNotNull { repository.findTrackPortAgnostic(it) }
+                }
+                else -> {
+                    pl?.trackKeys?.mapNotNull { repository.findTrackPortAgnostic(it) }.orEmpty()
+                }
+            }
         }
     }
     private fun matches(text: String): Boolean = text.contains(search.text.toString().trim(), ignoreCase = true)
@@ -220,8 +236,9 @@ class MusicLibraryController(private val context: Context, private val root: Vie
                         }, onLongClick = { trackMenu(it, track) })
                 }
                 if (tab == Tab.PLAYLISTS) {
-                    val available = tracks.map { it.libraryKey() }.toSet()
-                    playlist()?.takeUnless { readOnly(it) }?.trackKeys?.filter { it !in available && matches(it) }?.forEach { key ->
+                    playlist()?.takeUnless { readOnly(it) }?.trackKeys?.filter { key ->
+                        repository.findTrackPortAgnostic(key) == null && matches(key)
+                    }?.forEach { key ->
                         rows += LibraryRow(File(key).name, context.getString(R.string.car_music_unavailable),
                             onLongClick = { anchor -> PopupMenu(context, anchor).apply {
                                 menu.add(R.string.car_music_remove_track).setOnMenuItemClickListener {

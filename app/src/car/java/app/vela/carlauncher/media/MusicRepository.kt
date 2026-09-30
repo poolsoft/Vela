@@ -52,7 +52,17 @@ class MusicRepository private constructor(private val context: Context) {
     private val MIN_TARAMA_ARALIGI_MS = 60_000L // 1 dakika icinde tekrar tam disk taramasi yapma
     private val storageReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: android.content.Intent?) {
-            FileLogger.i(TAG, "Depolama degisikligi algilandi: ${intent?.action}")
+            val action = intent?.action
+            FileLogger.i(TAG, "Depolama degisikligi algilandi: $action")
+            if (action == android.content.Intent.ACTION_MEDIA_UNMOUNTED ||
+                action == android.content.Intent.ACTION_MEDIA_EJECT ||
+                action == android.content.Intent.ACTION_MEDIA_REMOVED) {
+                val player = InternalMusicPlayer.getInstance(context)
+                val currentTrack = player.anlikParca.value
+                if (currentTrack != null && !File(currentTrack.dosyaYolu).exists()) {
+                    player.duraklat()
+                }
+            }
             mediaScanJob?.cancel()
             mediaScanJob = scanScope.launch {
                 kotlinx.coroutines.delay(1000)
@@ -66,6 +76,7 @@ class MusicRepository private constructor(private val context: Context) {
         val filter = android.content.IntentFilter().apply {
             addAction(android.content.Intent.ACTION_MEDIA_MOUNTED)
             addAction(android.content.Intent.ACTION_MEDIA_UNMOUNTED)
+            addAction(android.content.Intent.ACTION_MEDIA_EJECT)
             addAction(android.content.Intent.ACTION_MEDIA_REMOVED)
             addAction(android.content.Intent.ACTION_MEDIA_BAD_REMOVAL)
             addDataScheme("file")
@@ -461,5 +472,26 @@ class MusicRepository private constructor(private val context: Context) {
         } catch (e: Exception) {
             FileLogger.e(TAG, "Müzik önbellek JSON hatası: ${e.message}")
         }
+    }
+
+    /**
+     * Port-Agnostic parca arama.
+     * USB portu degisse dahi playlistlerdeki veya kaydedilmis sarki referanslarini bulur.
+     */
+    fun findTrackPortAgnostic(savedPathOrRef: String?): SesParcasi? {
+        if (savedPathOrRef.isNullOrBlank()) return null
+        val currentTracks = _parcalar.value
+        // 1. Dogrudan eslesme (libraryKey veya dosyaYolu)
+        currentTracks.firstOrNull { it.libraryKey() == savedPathOrRef || it.dosyaYolu == savedPathOrRef }?.let { return it }
+        // 2. MusicTrackIdentity ile bagil yol ve dosya adi eslesmesi
+        currentTracks.firstOrNull { MusicTrackIdentity.matchesReference(savedPathOrRef, it) }?.let { return it }
+        // 3. Fallback: Sadece bagil yol (relativePath) eslesmesi
+        val targetRel = MusicTrackIdentity.extractRelativePath(savedPathOrRef)
+        if (targetRel.isNotEmpty()) {
+            currentTracks.firstOrNull {
+                MusicTrackIdentity.extractRelativePath(it.dosyaYolu).equals(targetRel, ignoreCase = true)
+            }?.let { return it }
+        }
+        return null
     }
 }

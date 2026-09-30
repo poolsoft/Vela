@@ -33,6 +33,7 @@
     <string name="car_music_visualizer_permission">Audio permission is needed to visualize local music playback.</string>
     <string name="car_music_play_failed">Unable to play this track. Check the storage connection.</string>
     <string name="car_music_favorites">Favorites</string>
+    <string name="car_music_recently_added">Recently Added</string>
     <string name="car_music_unknown_folder">Music folder</string>
     <string name="car_music_track_count">%1$d tracks</string>
     <string name="car_music_new_playlist">New playlist</string>

@@ -19,6 +19,7 @@ class MusicPlaylistStore private constructor(context: Context) {
         const val FAVORITES = "favorites"
         const val RECENT = "recent"
         const val MOST_PLAYED = "most_played"
+        const val RECENTLY_ADDED = "recently_added"
         @Volatile private var instance: MusicPlaylistStore? = null
         fun getInstance(context: Context): MusicPlaylistStore = instance ?: synchronized(this) {
             instance ?: MusicPlaylistStore(context.applicationContext).also { instance = it }
@@ -53,7 +54,8 @@ class MusicPlaylistStore private constructor(context: Context) {
     fun displayedPlaylists(): List<MusicPlaylist> = listOf(
         state.value.firstOrNull { it.id == FAVORITES } ?: MusicPlaylist(FAVORITES, "", emptyList()),
         MusicPlaylist(RECENT, "", historyState.value.map { it.first }),
-        MusicPlaylist(MOST_PLAYED, "", historyState.value.sortedByDescending { it.second }.map { it.first })
+        MusicPlaylist(MOST_PLAYED, "", historyState.value.sortedByDescending { it.second }.map { it.first }),
+        MusicPlaylist(RECENTLY_ADDED, "", emptyList())
     ) + state.value.filterNot { it.id == FAVORITES }
 
     fun reload() { state.value = load(); historyState.value = readHistory() }
@@ -118,13 +120,22 @@ class MusicPlaylistStore private constructor(context: Context) {
         save(state.value.map { it.copy(trackKeys = it.trackKeys - key) })
     }
 
-    fun isFavorite(track: SesParcasi): Boolean = state.value.firstOrNull { it.id == FAVORITES }
-        ?.trackKeys?.contains(track.libraryKey()) == true
+    fun isFavorite(track: SesParcasi): Boolean {
+        val favKeys = state.value.firstOrNull { it.id == FAVORITES }?.trackKeys ?: return false
+        val currentKey = track.libraryKey()
+        if (currentKey in favKeys) return true
+        return favKeys.any { MusicTrackIdentity.matchesReference(it, track) }
+    }
 
     fun toggleFavorite(track: SesParcasi) {
         val favorites = state.value.firstOrNull { it.id == FAVORITES }
             ?: MusicPlaylist(FAVORITES, "", emptyList()).also { save(state.value + it) }
-        val key = track.libraryKey()
-        setTracks(FAVORITES, if (key in favorites.trackKeys) favorites.trackKeys - key else favorites.trackKeys + key)
+        val currentKey = track.libraryKey()
+        val existingMatch = favorites.trackKeys.firstOrNull { it == currentKey || MusicTrackIdentity.matchesReference(it, track) }
+        if (existingMatch != null) {
+            setTracks(FAVORITES, favorites.trackKeys - existingMatch)
+        } else {
+            setTracks(FAVORITES, favorites.trackKeys + currentKey)
+        }
     }
 }

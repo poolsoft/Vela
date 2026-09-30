@@ -221,17 +221,19 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         }.getOrDefault(emptyList())
         val queueKeys = savedKeys("last_queue")
         val baseKeys = savedKeys("last_base_queue").ifEmpty { queueKeys }
+        val repo = MusicRepository.getInstance(context)
+        fun resolveTrack(key: String): SesParcasi? = byKey[key] ?: repo.findTrackPortAgnostic(key)
         _calismaListesi.clear()
-        _calismaListesi.addAll(baseKeys.mapNotNull { byKey[it] })
+        _calismaListesi.addAll(baseKeys.mapNotNull(::resolveTrack))
         _calmaKuyrugu.clear()
-        _calmaKuyrugu.addAll(queueKeys.mapNotNull { byKey[it] }.ifEmpty { _calismaListesi })
+        _calmaKuyrugu.addAll(queueKeys.mapNotNull(::resolveTrack).ifEmpty { _calismaListesi })
         _kuyruk.value = _calmaKuyrugu.toList()
         val saved = prefs.getString(KEY_LAST_PATH, null) ?: return true
-        val track = byKey[saved] ?: return false
+        val track = resolveTrack(saved) ?: return false
         val position = prefs.getLong(KEY_LAST_POS, 0L).coerceAtLeast(0L)
-        if (_calmaKuyrugu.none { it.libraryKey() == saved }) _calmaKuyrugu.add(track)
-        if (_calismaListesi.none { it.libraryKey() == saved }) _calismaListesi.add(track)
-        suAnkiIndex = _calmaKuyrugu.indexOfFirst { it.libraryKey() == saved }
+        if (_calmaKuyrugu.none { it.libraryKey() == track.libraryKey() }) _calmaKuyrugu.add(track)
+        if (_calismaListesi.none { it.libraryKey() == track.libraryKey() }) _calismaListesi.add(track)
+        suAnkiIndex = _calmaKuyrugu.indexOfFirst { it.libraryKey() == track.libraryKey() }
         _kuyruk.value = _calmaKuyrugu.toList()
         calParca(track, autoPlay && prefs.getBoolean("was_playing", false), position)
         return true
@@ -578,6 +580,10 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         _caliyorMu.value = false
         listener?.onCalmaDurumuDegisti(false)
         hazirMi = false
+        // Bozuk veya calinamayan dosyada takilip kalmak yerine bir sonraki sarkiya atla (Auto-skip)
+        if (_calmaKuyrugu.size > 1) {
+            anaHandler.postDelayed({ sonraki() }, 500)
+        }
         return true
     }
 
