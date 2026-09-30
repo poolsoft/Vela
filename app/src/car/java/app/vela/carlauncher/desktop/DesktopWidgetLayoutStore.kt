@@ -1,0 +1,119 @@
+package app.vela.carlauncher.desktop
+
+import android.content.Context
+import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+/**
+ * Masaustu widget yerlesimlerini kalici olarak saklayan magaza (DesktopWidgetLayoutStore).
+ * UmainLauncher'in parseLayout ve formatLayout mantigini uygular.
+ * Bir widget'in boyutu degistiginde yalnizca o widget guncellenir;
+ * komsu widget'larin boyutu veya konumu asla bozulmaz.
+ *
+ * Kod icerisinde Turkce karakter kullanilmamistir (identifier ve degiskenlerde).
+ */
+class DesktopWidgetLayoutStore private constructor(context: Context) {
+
+    companion object {
+        private const val PREFS_NAME = "vela_desktop_widget_layout"
+        private const val KEY_LAYOUT = "widget_layout"
+        private const val KEY_ACTIVE_WIDGETS = "active_widgets"
+
+        @Volatile
+        private var instance: DesktopWidgetLayoutStore? = null
+
+        fun getInstance(context: Context): DesktopWidgetLayoutStore {
+            return instance ?: synchronized(this) {
+                instance ?: DesktopWidgetLayoutStore(context.applicationContext).also { instance = it }
+            }
+        }
+
+        val DEFAULT_PLACEMENTS = mapOf(
+            WidgetIds.CLOCK to WidgetPlacement(dx = 30f, dy = 24f, scale = 1.0f),
+            WidgetIds.STATUS to WidgetPlacement(dx = 320f, dy = 24f, scale = 1.0f),
+            WidgetIds.SPEEDOMETER to WidgetPlacement(dx = 30f, dy = 140f, scale = 1.0f),
+            WidgetIds.MUSIC to WidgetPlacement(dx = 420f, dy = 140f, scale = 1.0f),
+            WidgetIds.DOCK to WidgetPlacement(dx = 30f, dy = 440f, scale = 1.0f)
+        )
+    }
+
+    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val _layout = MutableStateFlow<Map<String, WidgetPlacement>>(loadLayout())
+    val layout: StateFlow<Map<String, WidgetPlacement>> = _layout.asStateFlow()
+
+    private val _activeWidgets = MutableStateFlow<Set<String>>(loadActiveWidgets())
+    val activeWidgets: StateFlow<Set<String>> = _activeWidgets.asStateFlow()
+
+    private fun loadLayout(): Map<String, WidgetPlacement> {
+        val raw = prefs.getString(KEY_LAYOUT, null)
+        val loaded = parseLayout(raw)
+        return if (loaded.isEmpty()) DEFAULT_PLACEMENTS else loaded
+    }
+
+    private fun loadActiveWidgets(): Set<String> {
+        val saved = prefs.getStringSet(KEY_ACTIVE_WIDGETS, null)
+        return saved ?: setOf(WidgetIds.CLOCK, WidgetIds.STATUS, WidgetIds.SPEEDOMETER, WidgetIds.MUSIC, WidgetIds.DOCK)
+    }
+
+    fun setPlacement(id: String, placement: WidgetPlacement) {
+        val current = _layout.value.toMutableMap()
+        current[id] = placement
+        prefs.edit().putString(KEY_LAYOUT, formatLayout(current)).apply()
+        _layout.value = current
+    }
+
+    fun removePlacement(id: String) {
+        val current = _layout.value.toMutableMap()
+        current.remove(id)
+        prefs.edit().putString(KEY_LAYOUT, formatLayout(current)).apply()
+        _layout.value = current
+
+        val active = _activeWidgets.value.toMutableSet()
+        active.remove(id)
+        prefs.edit().putStringSet(KEY_ACTIVE_WIDGETS, active).apply()
+        _activeWidgets.value = active
+    }
+
+    fun addWidget(id: String, initialPlacement: WidgetPlacement? = null) {
+        val active = _activeWidgets.value.toMutableSet()
+        active.add(id)
+        prefs.edit().putStringSet(KEY_ACTIVE_WIDGETS, active).apply()
+        _activeWidgets.value = active
+
+        if (initialPlacement != null || !_layout.value.containsKey(id)) {
+            val p = initialPlacement ?: DEFAULT_PLACEMENTS[id] ?: WidgetPlacement(dx = 50f, dy = 100f, scale = 1.0f)
+            setPlacement(id, p)
+        }
+    }
+
+    fun resetLayout() {
+        prefs.edit().remove(KEY_LAYOUT).remove(KEY_ACTIVE_WIDGETS).apply()
+        _layout.value = DEFAULT_PLACEMENTS
+        _activeWidgets.value = setOf(WidgetIds.CLOCK, WidgetIds.STATUS, WidgetIds.SPEEDOMETER, WidgetIds.MUSIC, WidgetIds.DOCK)
+    }
+
+    private fun parseLayout(raw: String?): Map<String, WidgetPlacement> {
+        if (raw.isNullOrBlank()) return emptyMap()
+        return raw.split(";").mapNotNull { entry ->
+            runCatching {
+                val parts = entry.split(":", limit = 2)
+                if (parts.size != 2) return@mapNotNull null
+                val id = parts[0]
+                val coords = parts[1].split(",")
+                val dx = coords.getOrNull(0)?.toFloatOrNull() ?: 0f
+                val dy = coords.getOrNull(1)?.toFloatOrNull() ?: 0f
+                val scale = coords.getOrNull(2)?.toFloatOrNull() ?: 1.0f
+                id to WidgetPlacement(dx, dy, scale)
+            }.getOrNull()
+        }.toMap()
+    }
+
+    private fun formatLayout(map: Map<String, WidgetPlacement>): String {
+        return map.entries.joinToString(";") { (id, p) ->
+            "$id:${p.dx},${p.dy},${p.scale}"
+        }
+    }
+}
