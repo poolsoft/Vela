@@ -1,4 +1,6 @@
 <resources>
+    <string name="settings_map_horizontal_position">Landscape arrow position: %1$d%%</string>
+    <string name="settings_map_horizontal_position_hint">During landscape navigation, shift the arrow within the clear area between ETA and right-side controls. 50 centers it; larger values move it right.</string>
     <string name="settings_map_screen_position">Screen position</string>
     <string name="settings_map_screen_center">Center</string>
     <string name="settings_map_screen_bottom">Bottom</string>

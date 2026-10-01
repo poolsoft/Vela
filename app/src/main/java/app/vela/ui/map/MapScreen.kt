@@ -295,6 +295,10 @@ fun MapScreen(
     onOpenVoiceSettings: () -> Unit = {},
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    var mapViewportSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    var mapViewportOrigin by remember { mutableStateOf(Offset.Zero) }
+    var navControlsRightEdgePx by remember { mutableStateOf(0) }
+    LaunchedEffect(state.navigating) { if (!state.navigating) navControlsRightEdgePx = 0 }
     val darkTheme = isAppInDarkTheme()
     val amoled = isAppInAmoled()
     val hasMapTiler = USE_MAPTILER && BuildConfig.MAPTILER_KEY.isNotBlank()
@@ -393,7 +397,11 @@ fun MapScreen(
         state.streetView != null || state.streetViewLoading -> 0
         placeSheetUp -> sidePanelWidthPx
         // Nav chrome is a left column in landscape, so the puck must sit clear of it.
-        state.navigating -> if (CarIntegration.isCarMode()) 0 else sidePanelWidthPx
+        state.navigating -> app.vela.core.config.MapCameraFraming.landscapeLeftInset(
+            mapViewportSize.width.toFloat(),
+            if (CarIntegration.isCarMode()) navControlsRightEdgePx else sidePanelWidthPx,
+            with(LocalDensity.current) { (NAV_FAB_COLUMN_DP + 16.dp).toPx() }.toInt(),
+        )
         // The route chooser is a left panel in landscape too (issue #297), so the route it is
         // asking you to choose has to be framed clear of it.
         state.directionsOpen && !state.navigating && !dirMinimized -> sidePanelWidthPx
@@ -401,6 +409,12 @@ fun MapScreen(
             !state.navigating -> sidePanelWidthPx
         else -> 0
     }
+    val horizontalPadding = if (landscapeChrome && state.navigating)
+        app.vela.core.config.MapCameraFraming.horizontalPadding(
+            mapViewportSize.width.toFloat(), cameraLeftInset,
+            with(LocalDensity.current) { (NAV_FAB_COLUMN_DP + 16.dp).toPx() }.toInt(),
+            app.vela.ui.MapScreenPosition.horizontalBias.value,
+        ) else cameraLeftInset to 0
     val context = LocalContext.current
 
     // Keep the display awake during turn-by-turn so a driver glancing at the next
@@ -1100,7 +1114,10 @@ fun MapScreen(
     // cameras wouldn't appear until the next pan). Clears the layer when turned off.
     LaunchedEffect(app.vela.ui.Flock.on.value) { vm.refreshFlockNow() }
     LaunchedEffect(app.vela.ui.SpeedCams.on.value) { vm.refreshSpeedCamsNow() }
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().onGloballyPositioned {
+        mapViewportSize = it.size
+        mapViewportOrigin = it.positionInRoot()
+    }) {
         MapSurface(
             state = state,
             vm = vm,
@@ -1113,7 +1130,9 @@ fun MapScreen(
             speedOverlayArmed = speedOverlayArmed,
             filteredResultIds = filteredResultIds,
             cameraBottomInset = cameraBottomInset,
-            cameraLeftInset = cameraLeftInset,
+            cameraLeftInset = horizontalPadding.first,
+            cameraRightInset = horizontalPadding.second,
+            mapViewportOriginY = mapViewportOrigin.y,
             topCardBottomPx = topCardBottomPx,
             navBannerBottomPx = navBannerBottomPx,
             navOverviewTick = navOverviewTick,
@@ -1948,7 +1967,10 @@ fun MapScreen(
                         .align(Alignment.BottomStart)
                         .navigationBarsPadding()
                         .padding(start = 12.dp, bottom = 12.dp)
-                        .onGloballyPositioned { navBarHeightPx = it.size.height },
+                        .onGloballyPositioned {
+                            navBarHeightPx = it.size.height
+                            navControlsRightEdgePx = (it.positionInRoot().x + it.size.width - mapViewportOrigin.x).roundToInt()
+                        },
                 )
                 if (!handledControls) {
                     Column(
@@ -3601,6 +3623,8 @@ private fun MapSurface(
     filteredResultIds: Set<String>?,
     cameraBottomInset: Int,
     cameraLeftInset: Int,
+    cameraRightInset: Int,
+    mapViewportOriginY: Float,
     topCardBottomPx: Int,
     navBannerBottomPx: Int,
     navOverviewTick: Int,
@@ -3704,6 +3728,7 @@ private fun MapSurface(
         recenterTick = state.recenterTick,
         cameraBottomInsetPx = cameraBottomInset,
         cameraLeftInsetPx = cameraLeftInset,
+        cameraRightInsetPx = cameraRightInset,
         routePolyline = state.activeRoute?.polyline ?: emptyList(),
         // A PAUSED drive draws its line in slate (user 2026-09-21): the map should say the
         // guidance is on hold without reading the bar. Traffic spans keep their colors.
@@ -3747,7 +3772,11 @@ private fun MapSurface(
         holdMarkerFit = state.selected != null || state.streetView != null || state.streetViewLoading,
         // The endpoints card's measured bottom edge: the route fit frames start/end in the
         // strip between the card and the chooser instead of hiding either behind chrome.
-        cameraTopInsetPx = if (state.directionsOpen && !state.navigating) topCardBottomPx else 0,
+        cameraTopInsetPx = when {
+            cameraRightInset > 0 && state.navigating -> (navBannerBottomPx - mapViewportOriginY).roundToInt().coerceAtLeast(0)
+            state.directionsOpen && !state.navigating -> topCardBottomPx
+            else -> 0
+        },
         // Numbered stop pins while the trip UI is active (chooser, editor or the drive itself).
         stopPins = if (state.directionsOpen || state.navigating) state.directionsWaypoints.map { it.location } else emptyList(),
         candidatePin = state.navTapCandidate?.location?.takeIf { state.navigating },

@@ -78,13 +78,14 @@ fun CarLauncherLayout(
     val autoPlay by CarLauncherSettings.otomatikOynat.collectAsState()
     var contentMode by rememberSaveable { mutableStateOf("UNIFIED") }
     var fullMap by rememberSaveable { mutableStateOf(CarLauncherSettings.getStartupScreen() == "map_only") }
-    var startupApplied by rememberSaveable { mutableStateOf(false) }
+    val homeScreenRequest by CarLauncherSettings.homeScreenRequest.collectAsState()
+    LaunchedEffect(homeScreenRequest) {
+        CarLauncherSettings.setDesktopModu(CarLauncherSettings.getStartupScreen() == "desktop")
+        contentMode = "UNIFIED"
+        fullMap = CarLauncherSettings.getStartupScreen() == "map_only"
+    }
 
     LaunchedEffect(Unit) {
-        if (!startupApplied) {
-            CarLauncherSettings.setDesktopModu(CarLauncherSettings.getStartupScreen() == "desktop")
-            startupApplied = true
-        }
         try {
             CarMediaService.baslat(context)
         } catch (error: Exception) {

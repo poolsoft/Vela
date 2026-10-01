@@ -105,6 +105,16 @@ internal fun MapSettingsScreen(onBack: () -> Unit) {
                     onClick = { app.vela.ui.MapScreenPosition.set(context, id) })
             }
             Hint(stringResource(R.string.settings_map_screen_position_hint))
+            Text(stringResource(R.string.settings_map_horizontal_position,
+                (app.vela.ui.MapScreenPosition.horizontalBias.value * 100).toInt()),
+                modifier = Modifier.padding(horizontal = 20.dp))
+            androidx.compose.material3.Slider(
+                value = app.vela.ui.MapScreenPosition.horizontalBias.value,
+                valueRange = 0.25f..0.75f,
+                onValueChange = { app.vela.ui.MapScreenPosition.setHorizontalBias(context, it) },
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+            Hint(stringResource(R.string.settings_map_horizontal_position_hint))
         }
         Spacer(Modifier.height(24.dp))
     }

@@ -31,6 +31,7 @@ object CarIntegration {
     val permissionsSubtitle = app.vela.R.string.car_permissions_sub
     val statusBarVisible: StateFlow<Boolean> get() = CarLauncherSettings.durumCubuguGoster
     val immersive: StateFlow<Boolean> get() = CarLauncherSettings.tamEkranModu
+    val homeScreenRequest: StateFlow<Long> get() = CarLauncherSettings.homeScreenRequest
     fun init(context: Context) = CarLauncherSettings.baslat(context)
     fun onResume(activity: ComponentActivity) =
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(true)
@@ -47,7 +48,10 @@ object CarIntegration {
         HeadUnitManager.getInstance(activity)
     }
     fun onHomeIntent(intent: Intent?) {
-        if (intent?.hasCategory(Intent.CATEGORY_HOME) == true) CarLauncherSettings.setCarModeEtkin(true)
+        if (intent?.hasCategory(Intent.CATEGORY_HOME) == true) {
+            CarLauncherSettings.setCarModeEtkin(true)
+            CarLauncherSettings.requestHomeScreen()
+        }
     }
     fun onKeyDown(activity: ComponentActivity, keyCode: Int): Boolean =
         HardwareMediaKeyRouter.getInstance(activity).route(HardwareMediaKeyRouter.Source.ACTIVITY, keyCode)

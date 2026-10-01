@@ -53,6 +53,15 @@ fun VelaRoot(vm: MapViewModel = hiltViewModel()) {
     var settingsOpenOffline by rememberSaveable { mutableStateOf(false) }
     var settingsOpenCar by rememberSaveable { mutableStateOf(false) }
     var settingsOpenVoice by rememberSaveable { mutableStateOf(false) }
+    val homeScreenRequest by CarIntegration.homeScreenRequest.collectAsState()
+    LaunchedEffect(homeScreenRequest) {
+        if (homeScreenRequest > 0L) {
+            showSettings = false
+            settingsOpenOffline = false
+            settingsOpenCar = false
+            settingsOpenVoice = false
+        }
+    }
     // Location permission launcher for onboarding. The map no longer fires the raw system dialog on
     // its own (see MapScreen); this owns the first ask. A grant starts location immediately (coarse-
     // only works too, via the NETWORK provider); a denial just moves on and leaves search/browse

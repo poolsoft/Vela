@@ -17,6 +17,7 @@ object CarIntegration {
     val permissionsSubtitle = app.vela.R.string.settings_title
     val statusBarVisible: StateFlow<Boolean> = MutableStateFlow(true)
     val immersive: StateFlow<Boolean> = MutableStateFlow(false)
+    val homeScreenRequest: StateFlow<Long> = MutableStateFlow(0L)
     fun init(context: Context) = Unit
     fun onResume(activity: ComponentActivity) = Unit
     fun onPause(activity: ComponentActivity) = Unit

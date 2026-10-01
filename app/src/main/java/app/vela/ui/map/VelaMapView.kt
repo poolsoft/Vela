@@ -563,6 +563,7 @@ fun VelaMapView(
     // Landscape side-panel width (the place/results sheets as a left column): the optical center
     // shifts RIGHT instead of up, so a focused pin lands in the map strip beside the panel.
     cameraLeftInsetPx: Int = 0,
+    cameraRightInsetPx: Int = 0,
     cameraTopInsetPx: Int = 0, // measured top chrome (the endpoints card) - the route fit clears it
     routePolyline: List<LatLng>,
     routeColor: String,
@@ -780,6 +781,7 @@ fun VelaMapView(
     val screenPosition = app.vela.ui.MapScreenPosition.mode.value
     val screenPositionHolder = rememberUpdatedState(screenPosition)
     val framingInsets = rememberUpdatedState(Triple(cameraLeftInsetPx, cameraTopInsetPx, cameraBottomInsetPx))
+    val framingRightInset = rememberUpdatedState(cameraRightInsetPx)
     val navTiltEase = remember { doubleArrayOf(if (isFragileOrEmulator()) 0.0 else 55.0) } // eased so the compass toggle glides, not snaps
     val navPadEase = remember { doubleArrayOf(0.0) } // puck-low top padding as a height fraction, eased on (re)attach
     val wasNavRef = remember { booleanArrayOf(false) } // a drive actually ran - gates the one-shot camera teardown
@@ -2239,7 +2241,7 @@ fun VelaMapView(
                                     .padding(framingInsets.value.first.toDouble(),
                                         app.vela.core.config.MapCameraFraming.topPadding(cam.height, framingInsets.value.second, framingInsets.value.third,
                                             app.vela.core.config.MapCameraFraming.fraction(screenPositionHolder.value, browseDrive[1] > 0.5)),
-                                        0.0, framingInsets.value.third.toDouble())
+                                        framingRightInset.value.toDouble(), framingInsets.value.third.toDouble())
                                     .bearing((browseAtt[0] + 360.0) % 360.0)
                                     .tilt(browseAtt[1].coerceAtLeast(0.0))
                                     .apply { if (!zoomEase.isNaN()) zoom(zoomEase) }
@@ -2648,7 +2650,7 @@ fun VelaMapView(
                                 // column's seam (review 2026-09-12).
                                 .padding(framingInsets.value.first.toDouble(),
                                     app.vela.core.config.MapCameraFraming.topPadding(cam.height, framingInsets.value.second, framingInsets.value.third, navPadEase[0]),
-                                    0.0, framingInsets.value.third.toDouble())
+                                    framingRightInset.value.toDouble(), framingInsets.value.third.toDouble())
                                 .build(),
                         ),
                     )
@@ -3861,7 +3863,7 @@ fun VelaMapView(
             }
         } else if (lastSvPos != null) {
             lastSvPos = null
-            map.setPadding(cameraLeftInsetPx, 0, 0, cameraBottomInsetPx) // hand padding back to the sheet logic
+            map.setPadding(cameraLeftInsetPx, 0, cameraRightInsetPx, cameraBottomInsetPx) // hand padding back to the sheet logic
         }
         // Shift the map's optical center up by the bottom-sheet height so the
         // focused pin sits in the *visible* strip above the place sheet instead of
@@ -3869,7 +3871,7 @@ fun VelaMapView(
         // every camera move below respects it. Reset to 0 when no sheet is up.
         // Bottom (portrait sheet) and left (landscape side panel) fold into ONE key so a change
         // on either axis re-applies padding; appearance on either axis re-frames.
-        val insetKey = cameraBottomInsetPx * 31 + cameraLeftInsetPx
+        val insetKey = ((cameraBottomInsetPx * 31 + cameraLeftInsetPx) * 31 + cameraRightInsetPx) * 31 + cameraTopInsetPx
         if (insetKey != lastInsetPx || screenPosition != lastScreenPosition) {
             lastScreenPosition = screenPosition
             // Only re-frame when the sheet APPEARS or grows (lift the pin above it). When it
@@ -3883,7 +3885,7 @@ fun VelaMapView(
             if (svPose == null && !(navMode && navFollowing)) map.setPadding(cameraLeftInsetPx,
                 app.vela.core.config.MapCameraFraming.topPadding(map.height, cameraTopInsetPx, cameraBottomInsetPx,
                     app.vela.core.config.MapCameraFraming.fraction(screenPosition, driveFollowing && browseDrive[1] > 0.5)).toInt(),
-                0, cameraBottomInsetPx)
+                cameraRightInsetPx, cameraBottomInsetPx)
             // Not while a route is up: the route fit re-frames for the new inset itself, and a
             // nulled target made the NEXT frame fly to the selected place, canceling that fit
             // (the chooser's "Compare routes" swap landed zoomed in on the destination, 2026-09-17).
@@ -3997,7 +3999,7 @@ fun VelaMapView(
                                     .padding(cameraLeftInsetPx.toDouble(),
                                         app.vela.core.config.MapCameraFraming.topPadding(map.height, cameraTopInsetPx, cameraBottomInsetPx,
                                             app.vela.core.config.MapCameraFraming.fraction(screenPosition, !navNorthUp)),
-                                        0.0, cameraBottomInsetPx.toDouble())
+                                        cameraRightInsetPx.toDouble(), cameraBottomInsetPx.toDouble())
                                     .build(),
                             ),
                             550,

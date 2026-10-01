@@ -133,6 +133,13 @@ object CarLauncherSettings {
 
     private val _baslangicEkrani = MutableStateFlow("normal") // normal, map_only, desktop
     val baslangicEkrani: StateFlow<String> = _baslangicEkrani.asStateFlow()
+    private val _homeScreenRequest = MutableStateFlow(0L)
+    val homeScreenRequest: StateFlow<Long> = _homeScreenRequest.asStateFlow()
+
+    fun requestHomeScreen() {
+        setDesktopModu(_baslangicEkrani.value == "desktop")
+        _homeScreenRequest.value++
+    }
 
     private val _floatingButtonModu = MutableStateFlow("always") // always, background_only, never
     val floatingButtonModu: StateFlow<String> = _floatingButtonModu.asStateFlow()
@@ -323,6 +330,7 @@ object CarLauncherSettings {
     fun setBaslangicEkrani(ekran: String) {
         _baslangicEkrani.value = ekran
         if (::prefs.isInitialized) prefs.edit().putString(KEY_STARTUP_SCREEN, ekran).apply()
+        requestHomeScreen()
     }
 
     fun setFloatingButtonModu(mod: String) {

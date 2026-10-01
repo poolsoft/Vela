@@ -326,7 +326,7 @@ private fun CarAppearanceSettingsScreen(
             SettingsGroup(title = "Başlangıç ekranı") {
                 ChoicePillRow(
                     label = "Uygulama açılış ekranı",
-                    detail = "Bir sonraki açılışta kullanılacak ekran",
+                    detail = "Hemen uygulanır; Home tuşu da bu ekranı açar",
                     selectedKey = startupScreen,
                     options = listOf("normal" to "Normal Launcher başlangıcı", "desktop" to "Desktop Ekranı"),
                     onSelect = { CarLauncherSettings.setBaslangicEkrani(it) }
@@ -359,6 +359,14 @@ private fun CarAppearanceSettingsScreen(
                     selectedKey = app.vela.ui.MapScreenPosition.mode.value,
                     options = listOf("center" to "Merkez", "bottom" to "Alt", "auto" to "Otomatik"),
                     onSelect = { app.vela.ui.MapScreenPosition.set(context, it) }
+                )
+                SliderRow(
+                    label = "Yatay ok konumu",
+                    detail = "Yalnızca yatay navigasyonda, ETA ve sağ düğmeler arasındaki güvenli alanda kaydırır. 50: ortası; artırdıkça sağa kayar.",
+                    value = app.vela.ui.MapScreenPosition.horizontalBias.value * 100,
+                    valueRange = 25f..75f,
+                    unit = "%",
+                    onValueChange = { app.vela.ui.MapScreenPosition.setHorizontalBias(context, it / 100) }
                 )
                 GroupDivider()
                 ChoicePillRow(

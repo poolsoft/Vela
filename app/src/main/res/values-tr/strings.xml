@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_map_horizontal_position">Yatay ok konumu: %1$d%%</string>
+    <string name="settings_map_horizontal_position_hint">Yalnızca yatay navigasyonda, ETA ve sağ düğmeler arasındaki güvenli alanda kaydırır. 50 ortasıdır; artırdıkça sağa kayar.</string>
     <string name="settings_map_screen_position">Ekran konumu</string>
     <string name="settings_map_screen_center">Merkez</string>
     <string name="settings_map_screen_bottom">Alt</string>
