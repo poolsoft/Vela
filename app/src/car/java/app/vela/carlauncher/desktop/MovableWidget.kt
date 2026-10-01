@@ -98,7 +98,6 @@ fun MovableWidget(
                 val next = pageEdge(edge)
                 if (next != dragPage) {
                     dragPage = next
-                    dx = if (edge > 0) 24f else (workspaceWidth - widgetWidth * widthScale - 24f).coerceAtLeast(0f)
                     edge = 0
                 }
             }
@@ -139,8 +138,8 @@ fun MovableWidget(
     }
 
     fun moveBy(x: Float, y: Float) {
-        dx += x / density
-        dy += y / density
+        dx = (dx + x / density).coerceIn(0f, (workspaceWidth - widgetWidth * widthScale).coerceAtLeast(0f))
+        dy = (dy + y / density).coerceIn(0f, (workspaceHeight - widgetHeight * heightScale).coerceAtLeast(0f))
         edge = when {
             dx < 12f -> -1
             dx + widgetWidth * widthScale > workspaceWidth - 12f -> 1
@@ -148,7 +147,10 @@ fun MovableWidget(
         }
     }
 
-    Box(modifier = modifier.pointerInput(Unit) {
+    Box(modifier = modifier.offset(
+        dx.coerceIn(0f, (workspaceWidth - widgetWidth * widthScale).coerceAtLeast(0f)).dp,
+        dy.coerceIn(0f, (workspaceHeight - widgetHeight * heightScale).coerceAtLeast(0f)).dp
+    ).pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             if (!editing) {
@@ -171,10 +173,7 @@ fun MovableWidget(
                 }
             }
         }
-    }.offset(
-        dx.coerceIn(0f, (workspaceWidth - widgetWidth * widthScale).coerceAtLeast(0f)).dp,
-        dy.coerceIn(0f, (workspaceHeight - widgetHeight * heightScale).coerceAtLeast(0f)).dp
-    )) {
+    }) {
         Box(
             modifier = Modifier
                 .onSizeChanged {
@@ -182,7 +181,6 @@ fun MovableWidget(
                     widgetHeight = it.height / density
                 }
                 .graphicsLayer {
-                    alpha = placement.opacity
                     scaleX = widthScale
                     scaleY = heightScale
                     transformOrigin = TransformOrigin(0f, 0f)

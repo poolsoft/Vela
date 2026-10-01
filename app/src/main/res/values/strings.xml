@@ -1,4 +1,10 @@
 <resources>
+    <string name="settings_map_screen_position">Screen position</string>
+    <string name="settings_map_screen_center">Center</string>
+    <string name="settings_map_screen_bottom">Bottom</string>
+    <string name="settings_map_screen_auto">Automatic</string>
+    <string name="settings_map_screen_position_hint">Positions the location arrow inside the visible map. Automatic uses bottom with heading up and center with north up.</string>
+
     <string name="app_name" translatable="false">Vela Maps</string>
     <string name="app_name_generic" translatable="false">Maps</string>
 

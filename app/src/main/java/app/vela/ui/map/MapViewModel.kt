@@ -1662,7 +1662,7 @@ class MapViewModel @Inject constructor(
     @Volatile private var openDirectionsOnResult = false
 
     /** True when [q] was an intent and has been acted on; false = run it as a search. */
-    private fun handleQueryIntent(q: String, near: LatLng?): Boolean {
+    private fun handleQueryIntent(q: String, near: LatLng?, startNavigation: Boolean = false): Boolean {
         val lang = app.vela.ui.AppLocale.effective().language
         val intent = app.vela.core.search.QueryIntents.parse(q, lang) ?: return false
         diag.record("search", "intent ${intent::class.simpleName} for \"$q\" ($lang)")
@@ -1673,14 +1673,23 @@ class MapViewModel @Inject constructor(
                 // A BARE place under the shortcut's own name: selectSaved enriches by searching
                 // the address, which dresses Home as the business at that address (the same
                 // trap the contact pick had, issue #342).
-                selectPlace(Place(id = home.id, name = appContext.getString(R.string.shortcut_home), location = home.location, address = home.address)); routeToSelected()
+                selectPlace(Place(id = home.id, name = appContext.getString(R.string.shortcut_home), location = home.location, address = home.address)); if (startNavigation) startNavToSelected() else routeToSelected()
             }
             is app.vela.core.search.QueryIntent.Work -> {
                 val work = _state.value.work ?: run { showStatus(appContext.getString(R.string.intent_work_unset)); return true }
                 _state.update { it.copy(query = q, suggestions = emptyList(), querySuggestions = emptyList(), localSuggestions = emptyList()) }
-                selectPlace(Place(id = work.id, name = appContext.getString(R.string.shortcut_work), location = work.location, address = work.address)); routeToSelected()
+                selectPlace(Place(id = work.id, name = appContext.getString(R.string.shortcut_work), location = work.location, address = work.address)); if (startNavigation) startNavToSelected() else routeToSelected()
             }
             is app.vela.core.search.QueryIntent.NavigateTo -> {
+                val saved = _state.value.saved.filter {
+                    app.vela.core.search.QueryIntents.matchesSavedDestination(intent.query, it.name)
+                }.distinctBy { it.location }
+                if (saved.size == 1) {
+                    _state.update { it.copy(query = q, suggestions = emptyList(), querySuggestions = emptyList(), localSuggestions = emptyList()) }
+                    selectPlace(saved.single().toPlace())
+                    if (startNavigation) startNavToSelected() else routeToSelected()
+                    return true
+                }
                 openDirectionsOnResult = true
                 _state.update { it.copy(query = intent.query) }
                 runSearch(intent.query, near)
@@ -5661,7 +5670,8 @@ class MapViewModel @Inject constructor(
     /** Apply a transcript from either voice tier as the query and run the search. */
     fun applyVoiceQuery(text: String) {
         onQueryChange(text)
-        search() // intents first ("take me home"), else the plain search
+        val near = plausibleBias(_state.value.myLocation) ?: plausibleBias(mapCenter)
+        if (!handleQueryIntent(text, near, startNavigation = true)) search()
     }
 
     /** Make an already-downloaded voice active: persist the pick, reload the synth (the single switch

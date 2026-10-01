@@ -250,17 +250,21 @@ fun CarDesktopWorkspaceView(
             DesktopWallpaperView(modifier = Modifier.fillMaxSize())
 
             // 1. MASAUSTU WIDGETLARI (UmainLauncher MovableWidget Mimarisi)
-            Box(modifier = Modifier.fillMaxSize().pointerInput(currentPage, lastPage, isEditMode, swipeThresholdFraction) {
+            val latestPage by androidx.compose.runtime.rememberUpdatedState(currentPage)
+            val latestLastPage by androidx.compose.runtime.rememberUpdatedState(lastPage)
+            val latestEditing by androidx.compose.runtime.rememberUpdatedState(isEditMode)
+            val latestThreshold by androidx.compose.runtime.rememberUpdatedState(swipeThresholdFraction)
+            Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
                 var dragDistance = 0f
                 detectHorizontalDragGestures(
                     onDragEnd = {
                         val now = SystemClock.elapsedRealtime()
-                        val thresholdPx = workspaceWidth * density * swipeThresholdFraction
-                        if (!isEditMode && now - lastPageChangeAt >= 450L) {
-                            if (dragDistance < -thresholdPx && currentPage < lastPage) {
+                        val thresholdPx = workspaceWidth * density * latestThreshold
+                        if (!latestEditing && now - lastPageChangeAt >= 450L) {
+                            if (dragDistance < -thresholdPx && latestPage < latestLastPage) {
                                 currentPage++
                                 lastPageChangeAt = now
-                            } else if (dragDistance > thresholdPx && currentPage > 0) {
+                            } else if (dragDistance > thresholdPx && latestPage > 0) {
                                 currentPage--
                                 lastPageChangeAt = now
                             }
@@ -302,7 +306,7 @@ fun CarDesktopWorkspaceView(
                             layoutStore.setPlacement(widgetId, newPlacement)
                         }
                     ) {
-                        CompositionLocalProvider(LocalDesktopCardColor provides Color(placement.backgroundColor)) {
+                        CompositionLocalProvider(LocalDesktopCardColor provides Color(placement.backgroundColor).let { it.copy(alpha = it.alpha * placement.opacity) }) {
                         RenderDesktopWidgetContent(
                             widgetId = WidgetIds.type(widgetId),
                             saatMetni = saatMetni,
@@ -964,7 +968,7 @@ private fun DesktopWidgetSettingsDialog(
                         ) { Text(label, color = Color.White) }
                     }
                 }
-                Text("Opaklık: ${(draft.opacity * 100).roundToInt()}%", color = Color.White)
+                Text("Arka plan opaklığı: ${(draft.opacity * 100).roundToInt()}%", color = Color.White)
                 Slider(value = draft.opacity, onValueChange = { draft = draft.copy(opacity = it) }, valueRange = 0.1f..1f)
                 Text("Arka plan rengi", color = Color.White)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

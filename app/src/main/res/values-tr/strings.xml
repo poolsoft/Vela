@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_map_screen_position">Ekran konumu</string>
+    <string name="settings_map_screen_center">Merkez</string>
+    <string name="settings_map_screen_bottom">Alt</string>
+    <string name="settings_map_screen_auto">Otomatik</string>
+    <string name="settings_map_screen_position_hint">Konum okunu haritanın görünen alanına yerleştirir. Otomatik: hareket yönünde alt, kuzey yukarı görünümünde merkez.</string>
+
     <string name="cat_restaurants">Restoranlar</string>
     <string name="cat_coffee">Kahve</string>
     <string name="cat_gas">Benzinlik</string>

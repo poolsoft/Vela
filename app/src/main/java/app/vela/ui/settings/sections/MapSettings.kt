@@ -92,6 +92,20 @@ internal fun MapSettingsScreen(onBack: () -> Unit) {
         Hint(stringResource(R.string.settings_house_numbers_hint))
         }
 
+        Spacer(Modifier.height(16.dp))
+        SettingsGroup {
+            Text(stringResource(R.string.settings_map_screen_position), style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+            listOf(
+                "center" to R.string.settings_map_screen_center,
+                "bottom" to R.string.settings_map_screen_bottom,
+                "auto" to R.string.settings_map_screen_auto,
+            ).forEach { (id, label) ->
+                SelectableRow(label = stringResource(label), selected = app.vela.ui.MapScreenPosition.mode.value == id,
+                    onClick = { app.vela.ui.MapScreenPosition.set(context, id) })
+            }
+            Hint(stringResource(R.string.settings_map_screen_position_hint))
+        }
         Spacer(Modifier.height(24.dp))
     }
 }

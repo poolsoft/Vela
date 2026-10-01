@@ -292,6 +292,7 @@ private fun CarAppearanceSettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val startupScreen by CarLauncherSettings.baslangicEkrani.collectAsState()
     val tamEkran by CarLauncherSettings.tamEkranModu.collectAsState()
     val durumCubugu by CarLauncherSettings.durumCubuguGoster.collectAsState()
     val ekranYonu by CarLauncherSettings.ekranYonu.collectAsState()
@@ -322,6 +323,16 @@ private fun CarAppearanceSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            SettingsGroup(title = "Başlangıç ekranı") {
+                ChoicePillRow(
+                    label = "Uygulama açılış ekranı",
+                    detail = "Bir sonraki açılışta kullanılacak ekran",
+                    selectedKey = startupScreen,
+                    options = listOf("normal" to "Normal Launcher başlangıcı", "desktop" to "Desktop Ekranı"),
+                    onSelect = { CarLauncherSettings.setBaslangicEkrani(it) }
+                )
+            }
+            Spacer(Modifier.height(16.dp))
             SettingsGroup(title = "Ekran ve Sistem Barları") {
                 ToggleRow(
                     label = "Tam Ekran (Immersive) Modu",
@@ -341,6 +352,15 @@ private fun CarAppearanceSettingsScreen(
             Spacer(Modifier.height(16.dp))
 
             SettingsGroup(title = "Ekran Yönü ve Yerleşim") {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                ChoicePillRow(
+                    label = "Ekran konumu",
+                    detail = "Konum okunun görünen harita alanındaki yeri. Otomatik: hareket yönünde alt, kuzey yukarı görünümünde merkez.",
+                    selectedKey = app.vela.ui.MapScreenPosition.mode.value,
+                    options = listOf("center" to "Merkez", "bottom" to "Alt", "auto" to "Otomatik"),
+                    onSelect = { app.vela.ui.MapScreenPosition.set(context, it) }
+                )
+                GroupDivider()
                 ChoicePillRow(
                     label = "Ekran Yönlendirmesi",
                     detail = "Aracın baş ünitesine göre varsayılan ekran oryantasyonu",

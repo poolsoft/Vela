@@ -276,6 +276,7 @@ object QueryIntents {
      * any language, because people mix ("navigate to" in a French phone is common).
      */
     fun parse(text: String, lang: String): QueryIntent? {
+        parseTurkish(text)?.let { return it }
         val t = normalize(text)
         if (t.isBlank()) return null
         val code = lang.lowercase().substringBefore('-').substringBefore('_')
@@ -289,6 +290,30 @@ object QueryIntents {
         if (primary != null && !primary.noSpaces) parseWith(t, primary, fuzzy = true)?.let { return it }
         if (primary !== EN) parseWith(t, EN, fuzzy = true)?.let { return it }
         return null
+    }
+
+    /** Turkish destination commands put the verb after the destination. */
+    private fun parseTurkish(text: String): QueryIntent? {
+        val t = text.trim().lowercase(java.util.Locale.forLanguageTag("tr"))
+            .trimEnd('.', '!', '?').replace('’', '\'')
+            .replace(Regex("\\s+"), " ").removeSuffix(" lütfen").removePrefix("lütfen ")
+        val command = Regex("^(?:beni )?(.+?) (?:götür|gotur|git|rota oluştur|rota olustur|için rota oluştur|icin rota olustur|yol tarifi ver|için navigasyonu başlat)$")
+            .matchEntire(t) ?: return null
+        val destination = command.groupValues[1].trim()
+        return when (destination) {
+            "ev", "eve", "evim", "evime", "evimize" -> QueryIntent.Home
+            "iş", "işe", "is", "ise", "işim", "işime", "ofise" -> QueryIntent.Work
+            else -> QueryIntent.NavigateTo(destination)
+        }
+    }
+
+    /** Exact saved-name matching, including spoken Turkish dative suffixes. */
+    fun matchesSavedDestination(query: String, name: String): Boolean {
+        fun key(s: String) = java.text.Normalizer.normalize(s.lowercase(java.util.Locale.forLanguageTag("tr")), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "").replace('ı', 'i').replace("'", "").replace("’", "").trim()
+        val q = key(query)
+        val n = key(name)
+        return n.isNotEmpty() && (q == n || listOf("e", "a", "ye", "ya").any { q == n + it || q == "$n $it" })
     }
 
     // ---- word-level fuzzy matching --------------------------------------------------------

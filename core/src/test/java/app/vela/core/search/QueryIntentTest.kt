@@ -7,6 +7,19 @@ import org.junit.Test
 /** The shapes people said to the mic in discussion #365, in English and French, plus the ones
  *  that must stay plain searches so a business name never turns into a command. */
 class QueryIntentTest {
+    @Test fun `Turkish voice commands route to shortcuts and named destinations`() {
+        assertEquals(QueryIntent.Home, QueryIntents.parse("Beni eve götür", "tr"))
+        assertEquals(QueryIntent.Work, QueryIntents.parse("Beni İŞE götür lütfen", "tr"))
+        assertEquals(QueryIntent.Home, QueryIntents.parse("Evime rota oluştur", "tr"))
+        assertEquals(QueryIntent.NavigateTo("anneme"), QueryIntents.parse("Beni anneme götür", "tr"))
+        assertEquals(QueryIntent.NavigateTo("ankara'ya"), QueryIntents.parse("Ankara’ya git", "tr"))
+        assertNull(QueryIntents.parse("Ev dekorasyon", "tr"))
+        org.junit.Assert.assertTrue(QueryIntents.matchesSavedDestination("Ankara'ya", "Ankara"))
+        org.junit.Assert.assertTrue(QueryIntents.matchesSavedDestination("anneme", "Annem"))
+        org.junit.Assert.assertTrue(QueryIntents.matchesSavedDestination("IŞIK'a", "Işık"))
+        org.junit.Assert.assertFalse(QueryIntents.matchesSavedDestination("annemler", "Annem"))
+    }
+
     private fun en(s: String) = QueryIntents.parse(s, "en")
     private fun fr(s: String) = QueryIntents.parse(s, "fr")
 

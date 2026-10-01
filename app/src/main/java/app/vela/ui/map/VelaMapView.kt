@@ -525,7 +525,6 @@ private val ambientRedo2 = arrayOfNulls<Runnable>(1) // ... and the late one
 private val lastCameraMoveMs = longArrayOf(0L)
 private const val TWIN_PASS_STILL_MS = 700L
 /** Free-drive look-ahead (speed x 5 m) time constant: slow on purpose, see the free-drive ticker. */
-private const val FREE_LOOKAHEAD_TAU_S = 2.5f
 
 private fun flightCb() = object : org.maplibre.android.maps.MapLibreMap.CancelableCallback {
     override fun onFinish() { if (flightDepth[0] > 0) flightDepth[0]-- }
@@ -778,6 +777,9 @@ fun VelaMapView(
     val navModeHolder = rememberUpdatedState(navMode)
     val navFollowingHolder = rememberUpdatedState(navFollowing)
     val navNorthUpHolder = rememberUpdatedState(navNorthUp)
+    val screenPosition = app.vela.ui.MapScreenPosition.mode.value
+    val screenPositionHolder = rememberUpdatedState(screenPosition)
+    val framingInsets = rememberUpdatedState(Triple(cameraLeftInsetPx, cameraTopInsetPx, cameraBottomInsetPx))
     val navTiltEase = remember { doubleArrayOf(if (isFragileOrEmulator()) 0.0 else 55.0) } // eased so the compass toggle glides, not snaps
     val navPadEase = remember { doubleArrayOf(0.0) } // puck-low top padding as a height fraction, eased on (re)attach
     val wasNavRef = remember { booleanArrayOf(false) } // a drive actually ran - gates the one-shot camera teardown
@@ -965,6 +967,7 @@ fun VelaMapView(
     var appliedStyleKey by remember { mutableStateOf<String?>(null) }
     var lastCameraTarget by remember { mutableStateOf<LatLng?>(null) }
     var lastInsetPx by remember { mutableStateOf(-1) }
+    var lastScreenPosition by remember { mutableStateOf("") }
     var lastFittedRouteKey by remember { mutableStateOf<Int?>(null) }
     var lastFittedTransitKey by remember { mutableStateOf<Int?>(null) }
     // Whole-trip coords for the chooser fit; during transit NAV the fit narrows to the guided
@@ -2114,7 +2117,6 @@ fun VelaMapView(
             // Ease the camera toward the (reckoned) target (skipped while pinching - the fingers win).
             val cam = mapRef
             var camLat = tgtLat; var camLng = tgtLng
-            var lookLat = tgtLat; var lookLng = tgtLng // camera aim point (ahead of the puck while driving)
             var attSettling = false // true while bearing/tilt are still easing (to course-up or north-up)
             if (cam != null && !scaling[0] && !browseFlying[0]) {
                 if (browseCam[0].isNaN()) {
@@ -2155,7 +2157,6 @@ fun VelaMapView(
                 browseCam[0] += (tgtLat - browseCam[0]) * k
                 browseCam[1] += (tgtLng - browseCam[1]) * k
                 camLat = browseCam[0]; camLng = browseCam[1]
-                lookLat = camLat; lookLng = camLng
                 val cp = cam.cameraPosition
                 // DRIVING mode latches on at driving speed (smoothed, so one noisy fix can't
                 // flip it) and only the follow ending releases it - a red light HOLDS the
@@ -2167,10 +2168,7 @@ fun VelaMapView(
                 if (browseDrive[1] > 0.5) {
                     // Heading-up, nav-style: ease the live camera toward the course (updated only
                     // while the course is trustworthy - above walking speed), tilt toward nav's 55,
-                    // and aim the camera a speed-scaled distance AHEAD of the puck so the road
-                    // ahead owns the view. Nav gets that framing from sticky camera padding; a
-                    // projected aim point does the same job with nothing to un-stick when the
-                    // follow drops.
+                    // and use the same visible-area framing preference as navigation.
                     if (browseFix[3] > 2.0 && !browseFix[4].isNaN()) browseDrive[2] = browseFix[4]
                     val crs = if (browseDrive[2].isNaN()) cp.bearing else browseDrive[2]
                     val db = ((crs - cp.bearing + 540.0) % 360.0) - 180.0
@@ -2186,12 +2184,6 @@ fun VelaMapView(
                     val kBrg = (1f - kotlin.math.exp(-dt / brgTau)).toDouble()
                     browseAtt[0] = (cp.bearing + db * kBrg + 360.0) % 360.0
                     browseAtt[1] = cp.tilt + (55.0 - cp.tilt) * k
-                    val kLook = (1f - kotlin.math.exp(-dt / FREE_LOOKAHEAD_TAU_S)).toDouble()
-                    browseDrive[3] += ((browseDrive[0] * 5.0).coerceAtMost(250.0) - browseDrive[3]) * kLook
-                    val lr = Math.toRadians(crs)
-                    lookLat = camLat + browseDrive[3] * kotlin.math.cos(lr) / 111_320.0
-                    lookLng = camLng + browseDrive[3] * kotlin.math.sin(lr) /
-                        (111_320.0 * kotlin.math.cos(Math.toRadians(camLat)).coerceAtLeast(0.1))
                     attSettling = true // camera state is live every frame while driving
                 } else {
                     // NORTH-UP, FLAT (walking/slow browse) - enforced against the LIVE camera every
@@ -2238,12 +2230,16 @@ fun VelaMapView(
                     if (attSettling || !zoomEase.isNaN()) {
                         // Easing attitude (course-up while driving, back to north-up flat
                         // otherwise): drive it alongside the aim point (zoom left unset =
-                        // preserved, so a pinch level survives). While driving the aim point
-                        // rides AHEAD of the puck, which puts the puck low on the screen.
+                        // preserved, so a pinch level survives). Padding places the puck in
+                        // the chosen part of the visible map without shifting its coordinates.
                         cam.moveCamera(
                             CameraUpdateFactory.newCameraPosition(
                                 CameraPosition.Builder()
-                                    .target(MLLatLng(lookLat, lookLng))
+                                    .target(MLLatLng(camLat, camLng))
+                                    .padding(framingInsets.value.first.toDouble(),
+                                        app.vela.core.config.MapCameraFraming.topPadding(cam.height, framingInsets.value.second, framingInsets.value.third,
+                                            app.vela.core.config.MapCameraFraming.fraction(screenPositionHolder.value, browseDrive[1] > 0.5)),
+                                        0.0, framingInsets.value.third.toDouble())
                                     .bearing((browseAtt[0] + 360.0) % 360.0)
                                     .tilt(browseAtt[1].coerceAtLeast(0.0))
                                     .apply { if (!zoomEase.isNaN()) zoom(zoomEase) }
@@ -2630,8 +2626,9 @@ fun VelaMapView(
                         else -> 55.0
                     }
                     navTiltEase[0] += (tiltTgt - navTiltEase[0]) * kBrg
-                    navPadEase[0] += (0.45 - navPadEase[0]) * kPos
-                    if (kotlin.math.abs(0.45 - navPadEase[0]) < 0.002) navPadEase[0] = 0.45 // terminate exactly
+                    val paddingFraction = app.vela.core.config.MapCameraFraming.fraction(screenPositionHolder.value, !navNorthUpHolder.value)
+                    navPadEase[0] += (paddingFraction - navPadEase[0]) * kPos
+                    if (kotlin.math.abs(paddingFraction - navPadEase[0]) < 0.002) navPadEase[0] = paddingFraction
                     cam.moveCamera(
                         CameraUpdateFactory.newCameraPosition(
                             CameraPosition.Builder()
@@ -2649,7 +2646,9 @@ fun VelaMapView(
                                 // padding, so without it here the setPadding call in the inset
                                 // effect was undone on the first frame and the puck sat on the
                                 // column's seam (review 2026-09-12).
-                                .padding(cameraLeftInsetPx.toDouble(), cam.height * navPadEase[0], 0.0, 0.0)
+                                .padding(framingInsets.value.first.toDouble(),
+                                    app.vela.core.config.MapCameraFraming.topPadding(cam.height, framingInsets.value.second, framingInsets.value.third, navPadEase[0]),
+                                    0.0, framingInsets.value.third.toDouble())
                                 .build(),
                         ),
                     )
@@ -3871,7 +3870,8 @@ fun VelaMapView(
         // Bottom (portrait sheet) and left (landscape side panel) fold into ONE key so a change
         // on either axis re-applies padding; appearance on either axis re-frames.
         val insetKey = cameraBottomInsetPx * 31 + cameraLeftInsetPx
-        if (insetKey != lastInsetPx) {
+        if (insetKey != lastInsetPx || screenPosition != lastScreenPosition) {
+            lastScreenPosition = screenPosition
             // Only re-frame when the sheet APPEARS or grows (lift the pin above it). When it
             // shrinks to 0 (sheet closed) we must NOT null lastCameraTarget — doing so let the
             // else-branch below re-center on the now-stale cameraTarget at a zoomed-out level,
@@ -3880,7 +3880,10 @@ fun VelaMapView(
             lastInsetPx = insetKey
             // While Street View owns the camera padding (top inset), don't clobber it here -
             // the SV close path restores the sheet padding itself.
-            if (svPose == null) map.setPadding(cameraLeftInsetPx, 0, 0, cameraBottomInsetPx)
+            if (svPose == null && !(navMode && navFollowing)) map.setPadding(cameraLeftInsetPx,
+                app.vela.core.config.MapCameraFraming.topPadding(map.height, cameraTopInsetPx, cameraBottomInsetPx,
+                    app.vela.core.config.MapCameraFraming.fraction(screenPosition, driveFollowing && browseDrive[1] > 0.5)).toInt(),
+                0, cameraBottomInsetPx)
             // Not while a route is up: the route fit re-frames for the new inset itself, and a
             // nulled target made the NEXT frame fly to the selected place, canceling that fit
             // (the chooser's "Compare routes" swap landed zoomed in on the destination, 2026-09-17).
@@ -3991,7 +3994,10 @@ fun VelaMapView(
                                     .tilt(if (navNorthUp) 0.0 else 55.0)
                                     .bearing(if (navNorthUp) 0.0 else brg.toDouble())
                                     // Same puck-low offset as the engaged follow ticker.
-                                    .padding(0.0, map.height * 0.45, 0.0, 0.0)
+                                    .padding(cameraLeftInsetPx.toDouble(),
+                                        app.vela.core.config.MapCameraFraming.topPadding(map.height, cameraTopInsetPx, cameraBottomInsetPx,
+                                            app.vela.core.config.MapCameraFraming.fraction(screenPosition, !navNorthUp)),
+                                        0.0, cameraBottomInsetPx.toDouble())
                                     .build(),
                             ),
                             550,

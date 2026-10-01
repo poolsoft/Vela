@@ -24,6 +24,7 @@ internal object BackupPreferences {
     )
     private const val SETTINGS = "vela_settings"
     private val portableSettings = mapOf(
+        "map_screen_position" to "String",
         "parking_lat" to "String", "parking_lng" to "String", "parking_at" to "Long",
         "parking_history" to "String", "voice_model" to "String", "asr_engine" to "String",
         "avoid_tolls" to "Boolean", "avoid_highways" to "Boolean", "avoid_ferries" to "Boolean",

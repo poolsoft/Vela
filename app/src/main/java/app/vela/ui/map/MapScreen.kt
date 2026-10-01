@@ -728,8 +728,7 @@ fun MapScreen(
                 ?.trim()?.trimEnd('.', '!', '?', ',', ';', ':')?.trim()
             if (!heard.isNullOrEmpty()) {
                 focusManager.clearFocus()
-                vm.fillQuery(heard)
-                vm.search()
+                vm.applyVoiceQuery(heard)
             }
         }
     }
