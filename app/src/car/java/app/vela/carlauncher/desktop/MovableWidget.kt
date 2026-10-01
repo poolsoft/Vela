@@ -3,6 +3,12 @@ package app.vela.carlauncher.desktop
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -58,6 +64,10 @@ fun MovableWidget(
     showControls: Boolean = true,
     workspaceWidth: Float = Float.MAX_VALUE,
     workspaceHeight: Float = Float.MAX_VALUE,
+    snapToGrid: Boolean = true,
+    onEnterEdit: () -> Unit = {},
+    onDragging: (Boolean) -> Unit = {},
+    onPageEdge: (Int) -> Int = { placement.page },
     onRemove: (() -> Unit)? = null,
     onSettings: (() -> Unit)? = null,
     onCommit: (WidgetPlacement) -> Unit,
@@ -65,6 +75,15 @@ fun MovableWidget(
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current.density
+    val currentPlacement by rememberUpdatedState(placement)
+    val currentSnapToGrid by rememberUpdatedState(snapToGrid)
+    val editing by rememberUpdatedState(showControls)
+    val enterEdit by rememberUpdatedState(onEnterEdit)
+    var dragging by remember { mutableStateOf(false) }
+    var edge by remember { mutableStateOf(0) }
+    var dragPage by remember { mutableStateOf(placement.page) }
+    val pageEdge by rememberUpdatedState(onPageEdge)
+    val draggingCallback by rememberUpdatedState(onDragging)
     var dx by remember { mutableFloatStateOf(placement.dx) }
     var dy by remember { mutableFloatStateOf(placement.dy) }
     var widthScale by remember { mutableFloatStateOf(placement.widthScale) }
@@ -72,7 +91,23 @@ fun MovableWidget(
     var widgetWidth by remember { mutableFloatStateOf(0f) }
     var widgetHeight by remember { mutableFloatStateOf(0f) }
 
+    LaunchedEffect(edge, dragging) {
+        if (dragging && edge != 0) {
+            while (true) {
+                delay(650)
+                val next = pageEdge(edge)
+                if (next != dragPage) {
+                    dragPage = next
+                    dx = if (edge > 0) 24f else (workspaceWidth - widgetWidth * widthScale - 24f).coerceAtLeast(0f)
+                    edge = 0
+                }
+            }
+        }
+    }
+
     LaunchedEffect(placement) {
+        if (dragging) return@LaunchedEffect
+        dragPage = placement.page
         dx = placement.dx
         dy = placement.dy
         widthScale = placement.widthScale
@@ -80,13 +115,14 @@ fun MovableWidget(
     }
 
     fun commitSnapped() {
-        val snappedDx = ((dx / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP)
+        val snappedDx = (if (currentSnapToGrid) (dx / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP else dx)
             .coerceIn(0f, (workspaceWidth - widgetWidth * widthScale).coerceAtLeast(0f))
-        val snappedDy = ((dy / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP)
+        val snappedDy = (if (currentSnapToGrid) (dy / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP else dy)
             .coerceIn(0f, (workspaceHeight - widgetHeight * heightScale).coerceAtLeast(0f))
         dx = snappedDx
         dy = snappedDy
-        onCommit(placement.copy(
+        onCommit(currentPlacement.copy(
+            page = dragPage,
             dx = snappedDx,
             dy = snappedDy,
             scale = minOf(widthScale, heightScale),
@@ -95,7 +131,47 @@ fun MovableWidget(
         ))
     }
 
-    Box(modifier = modifier.offset(
+    fun finishDrag() {
+        commitSnapped()
+        dragging = false
+        edge = 0
+        draggingCallback(false)
+    }
+
+    fun moveBy(x: Float, y: Float) {
+        dx += x / density
+        dy += y / density
+        edge = when {
+            dx < 12f -> -1
+            dx + widgetWidth * widthScale > workspaceWidth - 12f -> 1
+            else -> 0
+        }
+    }
+
+    Box(modifier = modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            if (!editing) {
+                try {
+                    withTimeout(viewConfiguration.longPressTimeoutMillis) {
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val pointer = event.changes.firstOrNull { it.id == down.id }
+                            val held = pointer != null && pointer.pressed &&
+                                (pointer.position - down.position).getDistance() < viewConfiguration.touchSlop
+                        } while (held)
+                    }
+                } catch (_: PointerEventTimeoutCancellationException) {
+                    enterEdit()
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        event.changes.forEach { it.consume() }
+                        val held = event.changes.any { it.pressed }
+                    } while (held)
+                }
+            }
+        }
+    }.offset(
         dx.coerceIn(0f, (workspaceWidth - widgetWidth * widthScale).coerceAtLeast(0f)).dp,
         dy.coerceIn(0f, (workspaceHeight - widgetHeight * heightScale).coerceAtLeast(0f)).dp
     )) {
@@ -106,6 +182,7 @@ fun MovableWidget(
                     widgetHeight = it.height / density
                 }
                 .graphicsLayer {
+                    alpha = placement.opacity
                     scaleX = widthScale
                     scaleY = heightScale
                     transformOrigin = TransformOrigin(0f, 0f)
@@ -121,10 +198,13 @@ fun MovableWidget(
                         .size((widgetWidth * widthScale).dp, (widgetHeight * heightScale).dp)
                         .border(1.dp, Color(0xAA00E5FF), RoundedCornerShape(10.dp))
                         .pointerInput(Unit) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
-                                }
+                            detectDragGestures(
+                                onDragStart = { dragging = true; draggingCallback(true) },
+                                onDragEnd = { finishDrag() },
+                                onDragCancel = { finishDrag() }
+                            ) { change, drag ->
+                                change.consume()
+                                moveBy(drag.x, drag.y)
                             }
                         }
                 )
@@ -138,10 +218,13 @@ fun MovableWidget(
                         .offset((-6).dp, (-6).dp)
                         .zIndex(10f)
                         .pointerInput(Unit) {
-                            detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
+                            detectDragGestures(
+                                onDragStart = { dragging = true; draggingCallback(true) },
+                                onDragEnd = { finishDrag() },
+                                onDragCancel = { finishDrag() }
+                            ) { change, drag ->
                                 change.consume()
-                                dx += drag.x.toDp().value
-                                dy += drag.y.toDp().value
+                                moveBy(drag.x, drag.y)
                             }
                         }
                 )

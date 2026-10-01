@@ -12,12 +12,14 @@ import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -53,9 +55,12 @@ import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.key
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -101,7 +106,9 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private val ClCardBg = Color(0xF0141624)
+private val LocalDesktopCardColor = staticCompositionLocalOf { Color(0xF0141624) }
+private val ClCardBg: Color
+    @Composable get() = LocalDesktopCardColor.current
 private val ClBorder = Color(0x33FFFFFF)
 private val ClPrimary = Color(0xFF00E5FF)
 private val ClSuccess = Color(0xFF30D158)
@@ -132,6 +139,7 @@ fun CarDesktopWorkspaceView(
     val layout by layoutStore.layout.collectAsState()
     val activeWidgets by layoutStore.activeWidgets.collectAsState()
     val pageCount by layoutStore.pageCount.collectAsState()
+    val snapToGrid by CarLauncherSettings.workspaceSnapToGrid.collectAsState()
     val swipeThresholdFraction by CarLauncherSettings.workspaceSwipeThreshold.collectAsState()
     val indicatorSeconds by CarLauncherSettings.workspaceIndicatorSeconds.collectAsState()
     val density = LocalDensity.current.density
@@ -153,6 +161,7 @@ fun CarDesktopWorkspaceView(
     var showWidgetPicker by remember { mutableStateOf(false) }
     var showWallpaperDialog by remember { mutableStateOf(false) }
     var currentPage by remember { mutableStateOf(0) }
+    var draggingWidgetId by remember { mutableStateOf<String?>(null) }
     var selectedWidgetId by remember { mutableStateOf<String?>(null) }
     var showPageIndicator by remember { mutableStateOf(true) }
     var lastPageChangeAt by remember { mutableStateOf(0L) }
@@ -224,7 +233,7 @@ fun CarDesktopWorkspaceView(
         ) {
             val workspaceWidth = maxWidth.value
             val workspaceHeight = maxHeight.value
-            val resolvedLayout = WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight)
+            val resolvedLayout = WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid)
             val lastPage = maxOf(pageCount - 1, resolvedLayout.values.maxOfOrNull { it.page } ?: 0)
             LaunchedEffect(lastPage) { layoutStore.ensurePageCount(lastPage + 1) }
             LaunchedEffect(lastPage, isEditMode) {
@@ -261,21 +270,24 @@ fun CarDesktopWorkspaceView(
                     onHorizontalDrag = { _, amount -> dragDistance += amount }
                 )
             }) {
-                Crossfade(
-                    targetState = currentPage,
-                    animationSpec = tween(durationMillis = 420),
-                    label = "workspacePage",
-                    modifier = Modifier.fillMaxSize()
-                ) { visiblePage ->
-                    Box(Modifier.fillMaxSize()) {
-                    activeWidgets.filter { resolvedLayout[it]?.page == visiblePage }.forEach { widgetId ->
-                    val placement = resolvedLayout[widgetId] ?: return@forEach
+                activeWidgets.forEach { widgetId ->
+                    key(widgetId) {
+                    if (resolvedLayout[widgetId]?.page == currentPage || draggingWidgetId == widgetId) {
+                    val placement = resolvedLayout.getValue(widgetId)
 
                     MovableWidget(
                         placement = placement,
+                        modifier = Modifier.zIndex(if (draggingWidgetId == widgetId) 100f else 0f),
                         resizable = true,
                         dragViaHandle = true,
                         showControls = isEditMode,
+                        snapToGrid = snapToGrid,
+                        onEnterEdit = { isEditMode = true },
+                        onDragging = { draggingWidgetId = if (it) widgetId else null },
+                        onPageEdge = { direction ->
+                            currentPage = (currentPage + direction).coerceIn(0, lastPage)
+                            currentPage
+                        },
                         workspaceWidth = workspaceWidth,
                         workspaceHeight = workspaceHeight,
                         onRemove = {
@@ -290,8 +302,9 @@ fun CarDesktopWorkspaceView(
                             layoutStore.setPlacement(widgetId, newPlacement)
                         }
                     ) {
+                        CompositionLocalProvider(LocalDesktopCardColor provides Color(placement.backgroundColor)) {
                         RenderDesktopWidgetContent(
-                            widgetId = widgetId,
+                            widgetId = WidgetIds.type(widgetId),
                             saatMetni = saatMetni,
                             tarihMetni = tarihMetni,
                             telemetri = telemetri,
@@ -302,6 +315,7 @@ fun CarDesktopWorkspaceView(
                             onMuzikPaneliAc = onMuzikPaneliAc,
                             onLaunchApp = onLaunchApp
                         )
+                        }
                     }
                 }
                     }
@@ -398,8 +412,8 @@ fun CarDesktopWorkspaceView(
             selectedWidgetId?.let { widgetId ->
                 DesktopWidgetSettingsDialog(
                     widgetId = widgetId,
-                    placement = layout[widgetId] ?: resolvedLayout[widgetId] ?: WidgetPlacement(page = currentPage),
-                    pageCount = pageCount,
+                    placement = resolvedLayout[widgetId] ?: layout[widgetId] ?: WidgetPlacement(page = currentPage),
+                    pageCount = lastPage + 1,
                     providerInfo = widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()?.let(hostController::info),
                     onDismiss = { selectedWidgetId = null },
                     onSave = { placement -> layoutStore.setPlacement(widgetId, placement); selectedWidgetId = null },
@@ -454,7 +468,7 @@ private fun RenderDesktopWidgetContent(
         }
         // 2. SISTEM / CIHAZ DURUMU (PIL, RAM, HAFIZA)
         widgetId == WidgetIds.STATUS -> {
-            StatusWidgetView()
+            StatusWidgetView(modifier = Modifier.size(280.dp, 140.dp), backgroundColor = ClCardBg)
         }
         // 3. CANLI HIZ GOSTERGESI
         widgetId == WidgetIds.SPEEDOMETER -> {
@@ -928,16 +942,16 @@ private fun DesktopWidgetSettingsDialog(
         else -> mapOf(
             WidgetIds.CLOCK to "Dijital saat", WidgetIds.MUSIC to "Müzik çalar",
             WidgetIds.SPEEDOMETER to "Hız göstergesi", WidgetIds.STATUS to "Sistem durumu",
-            WidgetIds.DOCK to "Uygulama dock'u", WidgetIds.COMBINED to "Dashboard",
+            WidgetIds.DOCK to "Uygulama dock'u", WidgetIds.COMBINED to "Saat + Hız",
             WidgetIds.WEATHER to "Hava durumu", WidgetIds.COMPASS to "Pusula", WidgetIds.OBD to "OBD2"
-        )[widgetId] ?: widgetId
+        )[WidgetIds.type(widgetId)] ?: widgetId
     }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF1A1D2E),
         title = { Text("$title ayarları", color = Color.White, fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Boyut", color = Color.White, fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(0.75f to "Küçük", 1f to "Normal", 1.35f to "Büyük").forEach { (scale, label) ->
@@ -948,6 +962,16 @@ private fun DesktopWidgetSettingsDialog(
                                 RoundedCornerShape(10.dp)
                             )
                         ) { Text(label, color = Color.White) }
+                    }
+                }
+                Text("Opaklık: ${(draft.opacity * 100).roundToInt()}%", color = Color.White)
+                Slider(value = draft.opacity, onValueChange = { draft = draft.copy(opacity = it) }, valueRange = 0.1f..1f)
+                Text("Arka plan rengi", color = Color.White)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(0xF0141624L, 0xFF000000L, 0xFF263238L, 0xFF16354AL, 0xFF49304FL, 0x00000000L).forEach { color ->
+                        Box(Modifier.size(32.dp).background(Color(color), CircleShape)
+                            .border(if (draft.backgroundColor == color) 3.dp else 1.dp, Color.White, CircleShape)
+                            .clickable { draft = draft.copy(backgroundColor = color) })
                     }
                 }
                 Text("Sayfa", color = Color.White, fontWeight = FontWeight.SemiBold)

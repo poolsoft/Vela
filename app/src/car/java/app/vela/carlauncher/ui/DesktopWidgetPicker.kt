@@ -77,14 +77,14 @@ fun DesktopWidgetPicker(
     }
     val localWidgets = remember {
         listOf(
-            DesktopWidgetChoice(WidgetIds.COMBINED, "Dashboard", "◴", "340 × 120"),
+            DesktopWidgetChoice(WidgetIds.COMBINED, "Saat + Hız", "◴", "340 × 120"),
             DesktopWidgetChoice(WidgetIds.SPEEDOMETER, "Hız göstergesi", "◉", "240 × 160"),
             DesktopWidgetChoice(WidgetIds.CLOCK, "Dijital saat", "22:55", "260 × 100"),
             DesktopWidgetChoice(WidgetIds.MUSIC, "Müzik çalar", "♫", "300 × 160"),
             DesktopWidgetChoice(WidgetIds.WEATHER, "Hava durumu", "☀", "170 × 90"),
             DesktopWidgetChoice(WidgetIds.COMPASS, "Pusula", "◇", "170 × 90"),
             DesktopWidgetChoice(WidgetIds.OBD, "OBD2 verileri", "OBD", "280 × 90"),
-            DesktopWidgetChoice(WidgetIds.STATUS, "Sistem durumu", "▥", "160 × 100"),
+            DesktopWidgetChoice(WidgetIds.STATUS, "Sistem durumu", "▥", "280 × 140"),
             DesktopWidgetChoice(WidgetIds.DOCK, "Uygulama dock'u", "•••", "340 × 76")
         )
     }
@@ -115,7 +115,7 @@ fun DesktopWidgetPicker(
                                 WidgetChoiceCard(
                                     title = widget.title,
                                     subtitle = widget.size,
-                                    disabled = widget.id in activeWidgets,
+                                    disabled = false,
                                     preview = {
                                         Text(widget.symbol, color = Color(0xFF00E5FF), fontSize = 30.sp, fontWeight = FontWeight.Bold)
                                     },
@@ -132,7 +132,7 @@ fun DesktopWidgetPicker(
                                     WidgetChoiceCard(
                                         title = app.ad,
                                         subtitle = "Kısayol",
-                                        disabled = "${WidgetIds.APP_PREFIX}${app.paketAdi}" in activeWidgets,
+                                        disabled = false,
                                         preview = {
                                             if (bitmap != null) Image(bitmap, app.ad, Modifier.size(56.dp))
                                             else Text(app.ad.take(1), color = Color.White, fontSize = 28.sp)

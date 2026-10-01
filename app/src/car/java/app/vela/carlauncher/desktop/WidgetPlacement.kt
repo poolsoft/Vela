@@ -13,10 +13,13 @@ data class WidgetPlacement(
     val scale: Float = 1f,
     val page: Int = 0,
     val widthScale: Float = scale,
-    val heightScale: Float = scale
+    val heightScale: Float = scale,
+    val opacity: Float = 1f,
+    val backgroundColor: Long = 0xF0141624
 )
 
 object WidgetIds {
+    fun type(id: String): String = id.substringBefore("#")
     const val CLOCK = "clock"
     const val MUSIC = "music"
     const val SPEEDOMETER = "speedometer"

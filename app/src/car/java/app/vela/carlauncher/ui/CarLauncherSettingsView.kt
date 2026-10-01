@@ -508,7 +508,7 @@ private fun CarDockPanelSettingsScreen(
                     label = "Yatay Ekran Panel Genişliği",
                     detail = "Yatay modda panelin ekran genişliğine oranı",
                     value = panelGenislik * 100f,
-                    valueRange = 20f..60f,
+                    valueRange = 0f..60f,
                     unit = "%",
                     onValueChange = { CarLauncherSettings.setPanelGenislikYuzdesi(it / 100f) }
                 )
@@ -517,7 +517,7 @@ private fun CarDockPanelSettingsScreen(
                     label = "Dikey Ekran Panel Yüksekliği",
                     detail = "Dikey modda panelin ekran yüksekliğine oranı",
                     value = panelYukseklik * 100f,
-                    valueRange = 20f..60f,
+                    valueRange = 0f..60f,
                     unit = "%",
                     onValueChange = { CarLauncherSettings.setPanelYukseklikYuzdesi(it / 100f) }
                 )
@@ -549,13 +549,8 @@ private fun CarWidgetsSettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val hizGoster by CarLauncherSettings.widgetHizGoster.collectAsState()
-    val pusulaGoster by CarLauncherSettings.widgetPusulaGoster.collectAsState()
-    val muzikGoster by CarLauncherSettings.widgetMuzikGoster.collectAsState()
-    val saatGoster by CarLauncherSettings.widgetSaatGoster.collectAsState()
-    val havaGoster by CarLauncherSettings.widgetHavaDurumuGoster.collectAsState()
-    val sistemGoster by CarLauncherSettings.widgetSistemGoster.collectAsState()
     val desktopDongude by CarLauncherSettings.desktopDongudeEtkin.collectAsState()
+    val snapToGrid by CarLauncherSettings.workspaceSnapToGrid.collectAsState()
     val swipeThreshold by CarLauncherSettings.workspaceSwipeThreshold.collectAsState()
     val indicatorSeconds by CarLauncherSettings.workspaceIndicatorSeconds.collectAsState()
 
@@ -580,53 +575,14 @@ private fun CarWidgetsSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            SettingsGroup(title = "Aktif Widget'lar") {
-                ToggleRow(
-                    label = "Hız Göstergesi (Speedometer)",
-                    hint = "Anlık araç hızını, birimini ve hız limit uyarılarını gösterir",
-                    checked = hizGoster,
-                    onCheckedChange = { CarLauncherSettings.setWidgetHizGoster(it) }
-                )
-                GroupDivider()
-                ToggleRow(
-                    label = "Pusula ve Yön (Compass)",
-                    hint = "Aracın hareket yönünü (N, S, E, W) ve anlık açısını gösterir",
-                    checked = pusulaGoster,
-                    onCheckedChange = { CarLauncherSettings.setWidgetPusulaGoster(it) }
-                )
-                GroupDivider()
-                ToggleRow(
-                    label = "Mini Müzik Çalar",
-                    hint = "Müzik parça bilgisi, albüm kapağı ve temel oynatma kontrolleri",
-                    checked = muzikGoster,
-                    onCheckedChange = { CarLauncherSettings.setWidgetMuzikGoster(it) }
-                )
-                GroupDivider()
-                ToggleRow(
-                    label = "Analog / Dijital Saat",
-                    hint = "Araca özel şık saat ve tarih görünümü",
-                    checked = saatGoster,
-                    onCheckedChange = { CarLauncherSettings.setWidgetSaatGoster(it) }
-                )
-                GroupDivider()
-                ToggleRow(
-                    label = "Hava Durumu Kartı",
-                    hint = "Konumun anlık hava sıcaklığı ve durum ikonunu sunar",
-                    checked = havaGoster,
-                    onCheckedChange = { CarLauncherSettings.setWidgetHavaDurumuGoster(it) }
-                )
-                GroupDivider()
-                ToggleRow(
-                    label = "Sistem Uygulama Kısayolları",
-                    hint = "Favori uygulamaların ve sistem panellerinin hızlı kısayol kartları",
-                    checked = sistemGoster,
-                    onCheckedChange = { CarLauncherSettings.setWidgetSistemGoster(it) }
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-
             SettingsGroup(title = "Masaüstü (Desktop) Modu") {
+                ToggleRow(
+                    label = "Grid'e Yapış ve Çakışmayı Önle",
+                    hint = "Taşınan widget'ları boş hücrelere yerleştirir; kapalıyken serbest yerleşim kullanılır",
+                    checked = snapToGrid,
+                    onCheckedChange = { CarLauncherSettings.setWorkspaceSnapToGrid(it) }
+                )
+                GroupDivider()
                 ToggleRow(
                     label = "Masaüstü Modunu Döngüye Dahil Et",
                     hint = "Dock mod butonuna tıklandığında Harita ile Masaüstü arasında geçiş yapılmasını sağlar",
@@ -638,7 +594,7 @@ private fun CarWidgetsSettingsScreen(
                     label = "Sayfa Geçiş Hassasiyeti",
                     detail = "Yüksek değer, sayfanın yanlışlıkla değişmesini zorlaştırır",
                     value = swipeThreshold * 100f,
-                    valueRange = 20f..60f,
+                    valueRange = 0f..60f,
                     unit = "%",
                     onValueChange = { CarLauncherSettings.setWorkspaceSwipeThreshold(it / 100f) }
                 )

@@ -88,6 +88,7 @@ object LauncherBackup {
             "car_launcher_music_app" to "String", "car_launcher_night_dim_mode" to "Boolean",
             "car_launcher_night_dim_level" to "Float", "car_launcher_desktop_mode" to "Boolean",
             "car_launcher_desktop_in_mode_cycle" to "Boolean", "car_launcher_startup_screen" to "String",
+            "workspace_snap_to_grid" to "Boolean",
             "car_launcher_workspace_swipe_threshold" to "Float", "car_launcher_workspace_indicator_seconds" to "Int",
             "car_launcher_floating_button_mode" to "String", "car_launcher_floating_button_size" to "Int",
             "car_launcher_weather_enabled" to "Boolean", "car_launcher_equalizer_app" to "String",

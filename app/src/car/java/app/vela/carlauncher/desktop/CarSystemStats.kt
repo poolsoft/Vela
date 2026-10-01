@@ -66,7 +66,7 @@ object DeviceStatsReader {
 }
 
 @Composable
-fun StatusWidgetView(modifier: Modifier = Modifier) {
+fun StatusWidgetView(modifier: Modifier = Modifier, backgroundColor: Color = Color(0xF0141624)) {
     val context = LocalContext.current
     val stats by produceState(initialValue = DeviceStatsReader.read(context)) {
         while (true) {
@@ -76,7 +76,7 @@ fun StatusWidgetView(modifier: Modifier = Modifier) {
     }
 
     Surface(
-        color = Color(0xF0141624),
+        color = backgroundColor,
         contentColor = Color.White,
         shape = RoundedCornerShape(18.dp),
         shadowElevation = 6.dp,

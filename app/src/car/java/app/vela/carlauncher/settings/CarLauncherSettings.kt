@@ -58,6 +58,14 @@ object CarLauncherSettings {
     private const val KEY_FLOATING_BUTTON_X = "car_launcher_floating_button_x"
     private const val KEY_FLOATING_BUTTON_Y = "car_launcher_floating_button_y"
 
+    private val _workspaceSnapToGrid = MutableStateFlow(true)
+    val workspaceSnapToGrid: StateFlow<Boolean> = _workspaceSnapToGrid.asStateFlow()
+
+    fun setWorkspaceSnapToGrid(enabled: Boolean) {
+        _workspaceSnapToGrid.value = enabled
+        if (::prefs.isInitialized) prefs.edit().putBoolean("workspace_snap_to_grid", enabled).apply()
+    }
+
     private lateinit var prefs: SharedPreferences
 
     // StateFlow'lar
@@ -186,9 +194,10 @@ object CarLauncherSettings {
             _tercihEdilenMuzikUygulamasi.value = prefs.getString(KEY_PREFERRED_MUSIC_APP, null)
             _geceKarartmaEtkin.value = prefs.getBoolean(KEY_NIGHT_DIM_ENABLED, false)
             _geceKarartmaSeviyesi.value = prefs.getFloat(KEY_NIGHT_DIM_LEVEL, 0.40f)
+            _workspaceSnapToGrid.value = prefs.getBoolean("workspace_snap_to_grid", true)
             _desktopModu.value = prefs.getBoolean(KEY_DESKTOP_MODE, false)
             _desktopDongudeEtkin.value = prefs.getBoolean(KEY_DESKTOP_IN_MODE_CYCLE, true)
-            _workspaceSwipeThreshold.value = prefs.getFloat(KEY_WORKSPACE_SWIPE_THRESHOLD, 0.35f).coerceIn(0.2f, 0.6f)
+            _workspaceSwipeThreshold.value = prefs.getFloat(KEY_WORKSPACE_SWIPE_THRESHOLD, 0.35f).coerceIn(0f, 0.6f)
             _workspaceIndicatorSeconds.value = prefs.getInt(KEY_WORKSPACE_INDICATOR_SECONDS, 2).coerceIn(1, 5)
             _baslangicEkrani.value = prefs.getString(KEY_STARTUP_SCREEN, "normal") ?: "normal"
             _floatingButtonModu.value = prefs.getString(KEY_FLOATING_BUTTON_MODE, "always") ?: "always"
@@ -302,7 +311,7 @@ object CarLauncherSettings {
     }
 
     fun setWorkspaceSwipeThreshold(threshold: Float) {
-        _workspaceSwipeThreshold.value = threshold.coerceIn(0.2f, 0.6f)
+        _workspaceSwipeThreshold.value = threshold.coerceIn(0f, 0.6f)
         if (::prefs.isInitialized) prefs.edit().putFloat(KEY_WORKSPACE_SWIPE_THRESHOLD, _workspaceSwipeThreshold.value).apply()
     }
 

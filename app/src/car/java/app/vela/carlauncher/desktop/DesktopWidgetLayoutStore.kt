@@ -120,7 +120,9 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
         _activeWidgets.value = active
     }
 
-    fun addWidget(id: String, initialPlacement: WidgetPlacement? = null) {
+    fun addWidget(type: String, initialPlacement: WidgetPlacement? = null) {
+        val id = if (type.startsWith(WidgetIds.AW_PREFIX) || type !in _activeWidgets.value) type
+            else "$type#${java.util.UUID.randomUUID()}"
         val active = _activeWidgets.value.toMutableSet()
         active.add(id)
         prefs.edit().putStringSet(KEY_ACTIVE_WIDGETS, active).apply()
@@ -153,14 +155,16 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
                 val page = coords.getOrNull(3)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
                 val widthScale = coords.getOrNull(4)?.toFloatOrNull() ?: scale
                 val heightScale = coords.getOrNull(5)?.toFloatOrNull() ?: scale
-                id to WidgetPlacement(dx, dy, scale, page, widthScale, heightScale)
+                val opacity = coords.getOrNull(6)?.toFloatOrNull()?.coerceIn(0.1f, 1f) ?: 1f
+                val background = coords.getOrNull(7)?.toLongOrNull() ?: 0xF0141624
+                id to WidgetPlacement(dx, dy, scale, page, widthScale, heightScale, opacity, background)
             }.getOrNull()
         }.toMap()
     }
 
     private fun formatLayout(map: Map<String, WidgetPlacement>): String {
         return map.entries.joinToString(";") { (id, p) ->
-            "$id:${p.dx},${p.dy},${p.scale},${p.page},${p.widthScale},${p.heightScale}"
+            "$id:${p.dx},${p.dy},${p.scale},${p.page},${p.widthScale},${p.heightScale},${p.opacity},${p.backgroundColor}"
         }
     }
 }

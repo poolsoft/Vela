@@ -10,7 +10,7 @@ object WorkspaceGrid {
     private fun size(id: String): Pair<Float, Float> = when {
         id.startsWith(WidgetIds.APP_PREFIX) -> 80f to 96f
         id == WidgetIds.CLOCK -> 260f to 100f
-        id == WidgetIds.STATUS -> 160f to 100f
+        id == WidgetIds.STATUS -> 280f to 140f
         id == WidgetIds.SPEEDOMETER -> 240f to 160f
         id == WidgetIds.MUSIC -> 300f to 160f
         id == WidgetIds.COMBINED -> 340f to 120f
@@ -24,7 +24,8 @@ object WorkspaceGrid {
         ids: Set<String>,
         saved: Map<String, WidgetPlacement>,
         width: Float,
-        height: Float
+        height: Float,
+        snapToGrid: Boolean = true
     ): Map<String, WidgetPlacement> {
         if (width <= 0f || height <= 0f) return emptyMap()
         val occupied = mutableMapOf<Int, MutableList<Rect>>()
@@ -35,11 +36,19 @@ object WorkspaceGrid {
                 WidgetIds.DOCK).indexOf(it).let { rank -> if (rank < 0) 100 else rank }
         }.thenBy { it }).forEach { id ->
             val preferred = saved[id] ?: DesktopWidgetLayoutStore.DEFAULT_PLACEMENTS[id] ?: WidgetPlacement()
-            val (baseWidth, baseHeight) = size(id)
+            val (baseWidth, baseHeight) = size(WidgetIds.type(id))
             val widthScale = preferred.widthScale.coerceIn(0.6f, 2.2f).coerceAtMost(width / baseWidth)
             val heightScale = preferred.heightScale.coerceIn(0.6f, 2.2f).coerceAtMost(usableHeight / baseHeight)
             val cardWidth = baseWidth * widthScale
             val cardHeight = baseHeight * heightScale
+            if (!snapToGrid) {
+                result[id] = preferred.copy(
+                    dx = preferred.dx.coerceIn(0f, (width - cardWidth).coerceAtLeast(0f)),
+                    dy = preferred.dy.coerceIn(0f, (usableHeight - cardHeight).coerceAtLeast(0f)),
+                    widthScale = widthScale, heightScale = heightScale
+                )
+                return@forEach
+            }
             val columns = ((width - cardWidth) / STEP).coerceAtLeast(0f).toInt()
             val rows = ((usableHeight - cardHeight) / STEP).coerceAtLeast(0f).toInt()
             val preferredX = (preferred.dx / STEP).roundToInt().coerceIn(0, columns)

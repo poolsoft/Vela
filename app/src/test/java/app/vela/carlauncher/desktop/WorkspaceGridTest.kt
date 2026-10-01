@@ -9,9 +9,9 @@ class WorkspaceGridTest {
     fun narrowScreenKeepsCardsInBoundsAndApart() {
         val ids = setOf(WidgetIds.CLOCK, WidgetIds.STATUS, WidgetIds.SPEEDOMETER,
             WidgetIds.MUSIC, WidgetIds.DOCK)
-        val widths = mapOf(WidgetIds.CLOCK to 260f, WidgetIds.STATUS to 160f,
+        val widths = mapOf(WidgetIds.CLOCK to 260f, WidgetIds.STATUS to 280f,
             WidgetIds.SPEEDOMETER to 240f, WidgetIds.MUSIC to 300f, WidgetIds.DOCK to 340f)
-        val heights = mapOf(WidgetIds.CLOCK to 100f, WidgetIds.STATUS to 100f,
+        val heights = mapOf(WidgetIds.CLOCK to 100f, WidgetIds.STATUS to 140f,
             WidgetIds.SPEEDOMETER to 160f, WidgetIds.MUSIC to 160f, WidgetIds.DOCK to 76f)
         val result = WorkspaceGrid.resolve(ids, DesktopWidgetLayoutStore.DEFAULT_PLACEMENTS, 400f, 760f)
 
@@ -73,4 +73,25 @@ class WorkspaceGridTest {
         assertEquals(1.4f, result.widthScale, 0.001f)
         assertEquals(0.75f, result.heightScale, 0.001f)
     }
+    @Test
+    fun duplicateClocksKeepTheirPagesAndCardDimensions() {
+        val first = WidgetIds.CLOCK
+        val second = "clock#second"
+        val saved = mapOf(first to WidgetPlacement(page = 0), second to WidgetPlacement(page = 2, dx = 32f))
+        val result = WorkspaceGrid.resolve(saved.keys, saved, 400f, 600f)
+        assertEquals(0, result.getValue(first).page)
+        assertEquals(2, result.getValue(second).page)
+        assertEquals("clock", WidgetIds.type(second))
+        assertEquals(1f, result.getValue(second).widthScale, 0.001f)
+    }
+
+    @Test
+    fun freeLayoutKeepsUnsnappedPosition() {
+        val saved = mapOf(WidgetIds.CLOCK to WidgetPlacement(dx = 25f, dy = 33f))
+        val result = WorkspaceGrid.resolve(saved.keys, saved, 400f, 600f, snapToGrid = false)
+            .getValue(WidgetIds.CLOCK)
+        assertEquals(25f, result.dx, 0.001f)
+        assertEquals(33f, result.dy, 0.001f)
+    }
+
 }
