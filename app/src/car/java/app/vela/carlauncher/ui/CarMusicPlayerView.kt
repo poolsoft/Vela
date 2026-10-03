@@ -116,11 +116,6 @@ fun CarMusicPlayerView(
     var isShuffle by remember { mutableStateOf(false) }
     var repeatModu by remember { mutableStateOf(0) } // 0: kapali, 1: tek parca, 2: tum liste
 
-    LaunchedEffect(Unit) {
-        if (parcalar.isEmpty()) {
-            musicRepo.muzikKutuphanesiniTara()
-        }
-    }
 
     Box(
         modifier = modifier
@@ -213,7 +208,7 @@ fun CarMusicPlayerView(
                         .size(48.dp)
                         .clip(CircleShape)
                         .background(Color(0x22FFFFFF))
-                        .clickable { scope.launch { musicRepo.muzikKutuphanesiniTara() } },
+                        .clickable { scope.launch { musicRepo.muzikKutuphanesiniTara(zorla = true) } },
                     contentAlignment = Alignment.Center
                 ) {
                     if (taraniyorMu) {

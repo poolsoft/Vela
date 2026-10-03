@@ -307,6 +307,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     private fun calParca(parca: SesParcasi, otomatikOynat: Boolean, startPosition: Long = 0L) {
         _playbackError.value = null
         anaHandler.removeCallbacks(ilerlemeGorevi)
+        app.vela.diag.ProcessDiagnostics.checkpoint("music player: create")
         baslatMediaPlayer()
         odakGeriGelinceCal = false
         pendingPlay = otomatikOynat
@@ -321,7 +322,9 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         try {
             val uri = if (parca.contentUri.isNotBlank()) Uri.parse(parca.contentUri)
                 else Uri.fromFile(File(parca.dosyaYolu))
+            app.vela.diag.ProcessDiagnostics.checkpoint("music player: setDataSource")
             mediaPlayer?.setDataSource(context, uri)
+            app.vela.diag.ProcessDiagnostics.checkpoint("music player: prepareAsync")
             hazirMi = false
             mediaPlayer?.prepareAsync()
         } catch (e: Exception) {

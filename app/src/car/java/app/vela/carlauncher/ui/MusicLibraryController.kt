@@ -2,9 +2,6 @@ package app.vela.carlauncher.ui
 
 import android.app.AlertDialog
 import android.content.Context
-import android.database.ContentObserver
-import android.os.Handler
-import android.os.Looper
 import android.provider.MediaStore
 import android.text.Editable
 import android.text.TextWatcher
@@ -29,10 +26,8 @@ import app.vela.carlauncher.media.libraryKey
 import app.vela.carlauncher.model.SesParcasi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.io.File
@@ -56,14 +51,6 @@ class MusicLibraryController(private val context: Context, private val root: Vie
     private var playlistId: String? = null
     private var tracks = repository.parcalar.value
     private val dialogs = mutableSetOf<AlertDialog>()
-    private var scanJob: Job? = null
-    private val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
-        override fun onChange(selfChange: Boolean) {
-            scanJob?.cancel()
-            scanJob = scope.launch { delay(400); repository.muzikKutuphanesiniTara() }
-        }
-    }
-
     private val searchWatcher = object : TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
         override fun afterTextChanged(s: Editable?) {}
@@ -116,19 +103,13 @@ class MusicLibraryController(private val context: Context, private val root: Vie
                 if (lastSource != internal) { lastSource = internal; render() }
             }
         }
-        runCatching { context.contentResolver.registerContentObserver(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, observer) }
         render()
         refresh()
     }
 
     fun refresh() {
+        tracks = repository.parcalar.value
         render()
-        val permission = if (android.os.Build.VERSION.SDK_INT >= 33) android.Manifest.permission.READ_MEDIA_AUDIO
-            else android.Manifest.permission.READ_EXTERNAL_STORAGE
-        if (androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            scanJob?.cancel()
-            scanJob = scope.launch { repository.muzikKutuphanesiniTara() }
-        }
     }
 
     fun openPlaylists() {
@@ -403,7 +384,7 @@ class MusicLibraryController(private val context: Context, private val root: Vie
                                     }
                                 }
                                 store.removeTrackFromAll(track.libraryKey())
-                                scope.launch { repository.muzikKutuphanesiniTara() }
+                                repository.removeTrack(track.libraryKey())
                                 Toast.makeText(context, R.string.car_music_track_deleted, Toast.LENGTH_SHORT).show()
                             }.create()
                         show(dialog)
@@ -421,7 +402,6 @@ class MusicLibraryController(private val context: Context, private val root: Vie
     }
     fun release() {
         scope.cancel()
-        runCatching { context.contentResolver.unregisterContentObserver(observer) }
         search.removeTextChangedListener(searchWatcher)
         dialogs.toList().forEach { it.dismiss() }
         recycler.adapter = null

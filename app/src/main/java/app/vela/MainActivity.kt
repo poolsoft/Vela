@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        app.vela.diag.ProcessDiagnostics.activity("resume")
         app.vela.util.FileLogger.i("MainActivity", "onResume - Uygulama on planda")
         // The 12/24-hour clock setting can change while Vela sits in the background (issue #357).
         app.vela.ui.Clock24.refresh(this)
@@ -57,6 +58,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        app.vela.diag.ProcessDiagnostics.activity("pause")
         app.vela.util.FileLogger.i("MainActivity", "onPause - Uygulama arka plana geciyor")
         CarIntegration.onPause(this)
     }
@@ -65,6 +67,7 @@ class MainActivity : ComponentActivity() {
         app.vela.util.FileLogger.i("MainActivity", "onCreate baslatildi. Intent: ${intent?.action}")
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        app.vela.diag.ProcessDiagnostics.activity("create")
         enableEdgeToEdge()
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
@@ -185,6 +188,7 @@ class MainActivity : ComponentActivity() {
             })
             finish()
         } else {
+            app.vela.diag.ProcessDiagnostics.explicitClose()
             finishAndRemoveTask()
         }
     }
@@ -198,18 +202,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        app.vela.diag.ProcessDiagnostics.activity("start", true)
         app.vela.util.FileLogger.i("MainActivity", "onStart")
         app.vela.ui.AppVisibility.foreground.value = true
     }
 
     override fun onStop() {
         super.onStop()
+        app.vela.diag.ProcessDiagnostics.activity("stop", false)
         app.vela.util.FileLogger.i("MainActivity", "onStop")
         app.vela.ui.AppVisibility.foreground.value = false
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        app.vela.diag.ProcessDiagnostics.activity("destroy finishing=$isFinishing configChange=$isChangingConfigurations task=$taskId")
         app.vela.util.FileLogger.i("MainActivity", "onDestroy - Activity kapandi")
     }
 

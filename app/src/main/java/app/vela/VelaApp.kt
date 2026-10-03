@@ -47,6 +47,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
      */
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
+        app.vela.diag.ProcessDiagnostics.checkpoint("memory trim: $level")
         app.vela.ui.MemoryPressure.dispatch(level)
         if (app.vela.ui.MemoryPressure.isSevere(level)) {
             runCatching { coil.Coil.imageLoader(this).memoryCache?.clear() }
@@ -61,6 +62,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
     override fun onCreate() {
         app.vela.util.FileLogger.init(this)
         super.onCreate()
+        app.vela.diag.ProcessDiagnostics.install(this)
         // Device memory class first: the Coil cap and the eager-warm decisions read it.
         app.vela.ui.MemoryPressure.init(this)
         // Push the device class down to :core, which cannot read an :app holder (same seam as

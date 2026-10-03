@@ -47,7 +47,6 @@ class MusicRepository private constructor(private val context: Context) {
     }
 
     private val scanScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
-    private var mediaScanJob: kotlinx.coroutines.Job? = null
     private var sonTaramaZamaniMs = 0L
     private val MIN_TARAMA_ARALIGI_MS = 60_000L // 1 dakika icinde tekrar tam disk taramasi yapma
     private val storageReceiver = object : android.content.BroadcastReceiver() {
@@ -63,11 +62,7 @@ class MusicRepository private constructor(private val context: Context) {
                     player.duraklat()
                 }
             }
-            mediaScanJob?.cancel()
-            mediaScanJob = scanScope.launch {
-                kotlinx.coroutines.delay(1000)
-                muzikKutuphanesiniTara(zorla = true)
-            }
+            FileLogger.i(TAG, "Storage changed; rescan only on user request: $action")
         }
     }
 
@@ -116,6 +111,7 @@ class MusicRepository private constructor(private val context: Context) {
         if (!scanMutex.tryLock()) return@withContext
         _lastError.value = null
         _taraniyorMu.value = true
+        app.vela.diag.ProcessDiagnostics.checkpoint("music scan: user request")
         FileLogger.i(TAG, "Muzik kutuphanesi taramasi baslatildi...")
 
         val bulunanParcalar = mutableListOf<SesParcasi>()
@@ -248,6 +244,7 @@ class MusicRepository private constructor(private val context: Context) {
             if (e is SecurityException) { _parcalar.value = emptyList(); _klasorler.value = emptyList() }
             FileLogger.e(TAG, "Muzik tarama genel hatasi: ${e.message}", e)
         } finally {
+            app.vela.diag.ProcessDiagnostics.checkpoint("music scan: finished")
             sonTaramaZamaniMs = System.currentTimeMillis()
             _taraniyorMu.value = false
             scanMutex.unlock()
@@ -341,6 +338,7 @@ class MusicRepository private constructor(private val context: Context) {
         var duration = 0L
 
         runCatching {
+            app.vela.diag.ProcessDiagnostics.checkpoint("music metadata: ${file.name}")
             retriever.setDataSource(file.absolutePath)
             val metaTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
             val metaArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
@@ -388,6 +386,7 @@ class MusicRepository private constructor(private val context: Context) {
     }
 
     private fun loadCachedIndex() {
+        app.vela.diag.ProcessDiagnostics.checkpoint("music cache: load")
         val indexFile = getIndexFile()
         if (!indexFile.isFile || indexFile.length() == 0L) return
         try {
@@ -445,8 +444,20 @@ class MusicRepository private constructor(private val context: Context) {
         }
     }
 
+    fun removeTrack(key: String) {
+        val tracks = _parcalar.value.filterNot { it.libraryKey() == key }
+        _parcalar.value = tracks
+        _klasorler.value = _klasorler.value.mapNotNull { folder ->
+            val count = tracks.count { it.folderPath == folder.yol }
+            if (count == 0) null else folder.copy(parcaSayisi = count)
+        }
+        scanScope.launch {
+            scanMutex.lock()
+            try { saveCachedIndex(_parcalar.value) } finally { scanMutex.unlock() }
+        }
+    }
+
     private fun saveCachedIndex(tracks: List<SesParcasi>) {
-        if (tracks.isEmpty()) return
         try {
             val array = org.json.JSONArray()
             for (p in tracks) {

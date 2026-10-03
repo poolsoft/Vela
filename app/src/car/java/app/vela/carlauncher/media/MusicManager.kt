@@ -125,7 +125,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
             anaHandler.post { onOturumlarYenilendi(sessions) }
             return
         }
-        controllers = sessions.filter { it.packageName != context.packageName }
+        controllers = sessions.filterNot { LauncherMediaPeers.contains(context, it.packageName) }
         app.vela.util.FileLogger.d(TAG, "Oturumlar guncellendi. Paketler: ${controllers.map { it.packageName }}")
 
         sessionCallbacks.keys.filter { it !in controllers }.forEach { controller ->

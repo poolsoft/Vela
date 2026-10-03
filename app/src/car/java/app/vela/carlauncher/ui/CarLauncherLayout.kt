@@ -58,12 +58,12 @@ fun CarLauncherLayout(
     val scanLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) app.vela.carlauncher.media.MusicRepository.muzikleriTara(context)
+        if (granted) app.vela.carlauncher.media.MusicRepository.muzikleriTara(context, zorla = true)
         else Toast.makeText(context, R.string.car_music_permission, Toast.LENGTH_LONG).show()
     }
     val scanMusic: () -> Unit = {
         if (androidx.core.content.ContextCompat.checkSelfPermission(context, audioPermission) == android.content.pm.PackageManager.PERMISSION_GRANTED)
-            app.vela.carlauncher.media.MusicRepository.muzikleriTara(context)
+            app.vela.carlauncher.media.MusicRepository.muzikleriTara(context, zorla = true)
         else scanLauncher.launch(audioPermission)
     }
     val libraryRepository = remember { app.vela.carlauncher.media.MusicRepository.getInstance(context) }
@@ -95,10 +95,6 @@ fun CarLauncherLayout(
     LaunchedEffect(Unit) {
         if (!app.vela.carlauncher.tools.LauncherStartup.run(context))
             Toast.makeText(context, R.string.car_tools_failed, Toast.LENGTH_LONG).show()
-    }
-    LaunchedEffect(contentMode) { if (contentMode == "MUSIC") scanMusic() }
-    LaunchedEffect(Unit) {
-        app.vela.carlauncher.media.MusicRepository.muzikleriTara(context)
     }
     LaunchedEffect(libraryTracks, autoPlay) {
         if (!playbackRestored && libraryTracks.isNotEmpty())

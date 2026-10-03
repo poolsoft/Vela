@@ -104,7 +104,7 @@ class MediaNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         // Vela'nin kendi bildirimlerini kesinlikle yut (Sonsuz bildirim dongusunu engeller)
-        if (sbn == null || sbn.packageName == packageName) return
+        if (sbn == null || LauncherMediaPeers.contains(this, sbn.packageName)) return
 
         if (isMediaNotification(sbn)) {
             val simdi = System.currentTimeMillis()
@@ -117,7 +117,7 @@ class MediaNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
-        if (sbn == null || sbn.packageName == packageName) return
+        if (sbn == null || LauncherMediaPeers.contains(this, sbn.packageName)) return
         if (isMediaNotification(sbn)) {
             val simdi = System.currentTimeMillis()
             if (simdi - sonYenilemeZamaniMs > YENILEME_ESIK_MS) {
@@ -129,7 +129,7 @@ class MediaNotificationListener : NotificationListenerService() {
     }
 
     private fun isMediaNotification(sbn: StatusBarNotification?): Boolean {
-        if (sbn == null || sbn.packageName == packageName) return false
+        if (sbn == null || LauncherMediaPeers.contains(this, sbn.packageName)) return false
         val notif = sbn.notification ?: return false
         val isTransport = Notification.CATEGORY_TRANSPORT == notif.category
         val hasMediaSession = notif.extras?.containsKey(Notification.EXTRA_MEDIA_SESSION) == true

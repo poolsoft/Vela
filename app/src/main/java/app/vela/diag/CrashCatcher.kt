@@ -58,6 +58,7 @@ object CrashCatcher {
             append("version: ").append(BuildConfig.VERSION_NAME).append(" (").append(BuildConfig.VERSION_CODE).append(")\n")
             append("android: API ").append(Build.VERSION.SDK_INT)
                 .append(" - ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append("\n\n")
+            append("=== process snapshot ===\n").append(ProcessDiagnostics.snapshot()).append("\n\n")
             append("=== stack trace ===\n").append(sw.toString()).append('\n')
             append("=== breadcrumbs (").append(crumbs.size).append(") ===\n")
             crumbs.forEach { e ->
@@ -66,11 +67,19 @@ object CrashCatcher {
                 append('\n')
             }
         }
-        File(dir(context), "crash-${System.currentTimeMillis()}.txt").writeText(text)
+        saveDiagnosticReport(context, "Java exception", text)
+    }
+
+    fun saveDiagnosticReport(context: Context, kind: String, text: String) {
+        val name = "crash-${System.currentTimeMillis()}-${System.nanoTime()}.txt"
+        val report = "Diagnostic type: $kind\n$text"
+        File(dir(context), name).writeText(report)
         runCatching {
             val extLogsDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "logs").apply { mkdirs() }
-            File(extLogsDir, "crash-${System.currentTimeMillis()}.txt").writeText(text)
-            FileLogger.e("CrashCatcher", "CRASH RAPORU KAYDEDILDI:\n$text", ex)
+            File(extLogsDir, name).writeText(report)
+            extLogsDir.listFiles { f -> f.name.startsWith("crash-") }?.sortedByDescending { it.name }
+                ?.drop(5)?.forEach { it.delete() }
+            FileLogger.i("CrashCatcher", "Diagnostic report saved: $kind ($name)")
         }
         prune(context)
     }

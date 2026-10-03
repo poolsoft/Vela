@@ -911,6 +911,7 @@ fun VelaMapView(
         val textureModeEnabled = if (isEmulator()) false else prefs.getBoolean("texture_render", textureDefault)
         val opts = org.maplibre.android.maps.MapLibreMapOptions.createFromAttributes(context)
             .textureMode(textureModeEnabled)
+        app.vela.diag.ProcessDiagnostics.checkpoint("map: create texture=$textureModeEnabled")
         MapView(context, opts).apply {
             onCreate(null)
             isFocusable = false
@@ -3387,6 +3388,7 @@ fun VelaMapView(
                     // engaged fallback keeps carrying the device on future launches).
                     val prefs = context.getSharedPreferences("vela_settings", android.content.Context.MODE_PRIVATE)
                     if (prefs.getBoolean("map_init_inflight", false)) {
+                        app.vela.diag.ProcessDiagnostics.checkpoint("map: first frame")
                         prefs.edit().putBoolean("map_init_inflight", false).putInt("map_init_crashes", 0).apply()
                     }
                     ovlRenderSettled[0] = true
