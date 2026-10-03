@@ -56,6 +56,14 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
     override fun onCreate() {
         super.onCreate()
         bildirimKanaliOlustur()
+        // Meet the foreground deadline before initializing adapters or talking to OEM services.
+        val readyNotification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            Notification.Builder(this, CHANNEL_ID) else Notification.Builder(this)
+        startForeground(NOTIFICATION_ID, readyNotification
+            .setSmallIcon(R.drawable.ic_internal_music)
+            .setContentTitle(getString(R.string.car_media_notification_title))
+            .build())
+        app.vela.util.FileLogger.i("CarMediaService", "onCreate: foreground ready")
         musicManager = MusicManager.getInstance(applicationContext)
 
         mediaSession = MediaSession(this, "VelaCarMedia").apply {
@@ -106,7 +114,9 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        app.vela.util.FileLogger.i("CarMediaService", "onStartCommand: ${intent?.action}, startId=$startId")
         val action = intent?.action
+        if (action != ACTION_CLOSE) bildirimKapatildi = false
         when (action) {
             ACTION_PLAY_PAUSE -> musicManager.oynatDuraklat()
             ACTION_NEXT -> musicManager.sonraki()
@@ -114,7 +124,12 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
             ACTION_CLOSE -> {
                 bildirimKapatildi = true
                 musicManager.duraklat()
+                bildirimHandler.removeCallbacks(bildirimGuncellemeRunnable)
+                bildirimGuncellemeBekliyor = false
+                mediaSession?.isActive = false
                 stopForeground(true)
+                stopSelf()
+                return START_NOT_STICKY
             }
         }
         guncelleBildirim(hemen = true)
@@ -230,7 +245,10 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
         val openAppIntent = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java),
+            Intent(this, MainActivity::class.java).apply {
+                action = Intent.ACTION_MAIN
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            },
             PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -321,6 +339,7 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
     }
 
     override fun onDestroy() {
+        app.vela.util.FileLogger.i("CarMediaService", "onDestroy")
         bildirimHandler.removeCallbacks(bildirimGuncellemeRunnable)
         musicManager.removeListener(this)
         mediaSession?.isActive = false

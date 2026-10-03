@@ -20,6 +20,10 @@
         </intent>
     </queries>
     <application>
+        <!-- All launcher aliases and the media notification reuse the same task. -->
+        <activity android:name=".MainActivity"
+            android:launchMode="singleTask"
+            tools:replace="android:launchMode" />
         <activity-alias
             android:name=".CarHome"
             android:targetActivity=".MainActivity"

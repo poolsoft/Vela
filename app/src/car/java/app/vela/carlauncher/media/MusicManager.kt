@@ -50,7 +50,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
     private val anaHandler = Handler(Looper.getMainLooper())
 
     val internalPlayer: InternalMusicPlayer = InternalMusicPlayer.getInstance(context)
-    val internalAdapter: InternalPlayerAdapter = InternalPlayerAdapter(context, internalPlayer)
+    val internalAdapter: InternalPlayerAdapter = InternalPlayerAdapter(context, internalPlayer) { senkronizeEtMedyaDurumu() }
     val mediaSessionAdapter: AndroidMediaSessionAdapter = AndroidMediaSessionAdapter { senkronizeEtMedyaDurumu() }
     val bluetoothAdapter: UniversalBluetoothAdapter = UniversalBluetoothAdapter(context) { senkronizeEtMedyaDurumu() }
     val xyAutoAdapter: XyAutoMusicAdapter = XyAutoMusicAdapter(context) { senkronizeEtMedyaDurumu() }
@@ -510,6 +510,9 @@ class MusicManager private constructor(private val context: Context) : InternalM
     }
 
     override fun onCalmaDurumuDegisti(caliyor: Boolean) {
+        // A dismissed notification stopped the service; local playback needs it again.
+        if (caliyor) runCatching { CarMediaService.baslat(context) }
+            .onFailure { app.vela.util.FileLogger.w(TAG, "Media service restart failed", it) }
         senkronizeEtMedyaDurumu()
     }
 

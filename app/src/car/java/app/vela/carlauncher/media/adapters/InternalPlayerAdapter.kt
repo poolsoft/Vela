@@ -4,7 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
-import android.util.Log
+import kotlinx.coroutines.launch
 import app.vela.carlauncher.media.InternalMusicPlayer
 
 /**
@@ -14,11 +14,14 @@ import app.vela.carlauncher.media.InternalMusicPlayer
  */
 class InternalPlayerAdapter(
     private val context: Context,
-    private val player: InternalMusicPlayer
+    private val player: InternalMusicPlayer,
+    private val onCoverLoaded: () -> Unit
 ) : BaseMediaAdapter() {
 
     private var sonKapak: Bitmap? = null
     private var sonKapakYolu: String? = null
+    private val coverScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     override fun oynat() {
         player.oynat()
@@ -63,22 +66,35 @@ class InternalPlayerAdapter(
             return sonKapak
         }
 
-        val retriever = MediaMetadataRetriever()
-        sonKapak = try {
-            if (parca.contentUri.isNotBlank()) retriever.setDataSource(context, android.net.Uri.parse(parca.contentUri))
-            else retriever.setDataSource(parca.dosyaYolu)
-            val artBytes = retriever.embeddedPicture
-            if (artBytes != null) {
-                BitmapFactory.decodeByteArray(artBytes, 0, artBytes.size)
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            null
-        }
-        runCatching { retriever.release() }
         sonKapakYolu = key
-        return sonKapak
+        sonKapak = null
+        coverScope.launch {
+            val bitmap = runCatching {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    if (parca.contentUri.isNotBlank()) retriever.setDataSource(context, android.net.Uri.parse(parca.contentUri))
+                    else retriever.setDataSource(parca.dosyaYolu)
+                    retriever.embeddedPicture?.let { bytes ->
+                        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                        options.inSampleSize = 1
+                        while (options.outWidth / options.inSampleSize > 512 || options.outHeight / options.inSampleSize > 512)
+                            options.inSampleSize *= 2
+                        options.inJustDecodeBounds = false
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                    }
+                } finally { runCatching { retriever.release() } }
+            }.getOrNull()
+            mainHandler.post {
+                // An old USB read must not overwrite the next track's cover.
+                val current = player.anlikParca.value
+                if (sonKapakYolu == key && current?.let { it.contentUri.ifBlank { it.dosyaYolu } } == key) {
+                    sonKapak = bitmap
+                    onCoverLoaded()
+                }
+            }
+        }
+        return null
     }
 
     override fun toplamSureMs(): Long {

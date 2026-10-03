@@ -2838,9 +2838,8 @@ fun VelaMapView(
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        mapView.onStart()
-        mapView.onResume()
+    DisposableEffect(lifecycleOwner, mapView) {
+        // addObserver delivers the owner's current state; eager calls duplicate EGL resume.
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> mapView.onStart()

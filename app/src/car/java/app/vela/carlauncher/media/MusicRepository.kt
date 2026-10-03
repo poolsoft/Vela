@@ -71,8 +71,26 @@ class MusicRepository private constructor(private val context: Context) {
         }
     }
 
+    private val scanMutex = kotlinx.coroutines.sync.Mutex()
+    private val _lastError = MutableStateFlow<String?>(null)
+    val lastError: StateFlow<String?> = _lastError.asStateFlow()
+
+    private val _parcalar = MutableStateFlow<List<SesParcasi>>(emptyList())
+    val parcalar: StateFlow<List<SesParcasi>> = _parcalar.asStateFlow()
+
+    private val _klasorler = MutableStateFlow<List<SesKlasoru>>(emptyList())
+    val klasorler: StateFlow<List<SesKlasoru>> = _klasorler.asStateFlow()
+
+    private val _taraniyorMu = MutableStateFlow(false)
+    val taraniyorMu: StateFlow<Boolean> = _taraniyorMu.asStateFlow()
+
+    // Initialize flows first; USB checks and JSON loading must never block the UI.
+    private val cacheLoadJob = scanScope.launch {
+        scanMutex.lock()
+        try { loadCachedIndex() } finally { scanMutex.unlock() }
+    }
+
     init {
-        loadCachedIndex()
         val filter = android.content.IntentFilter().apply {
             addAction(android.content.Intent.ACTION_MEDIA_MOUNTED)
             addAction(android.content.Intent.ACTION_MEDIA_UNMOUNTED)
@@ -88,20 +106,8 @@ class MusicRepository private constructor(private val context: Context) {
         }
     }
 
-    private val scanMutex = kotlinx.coroutines.sync.Mutex()
-    private val _lastError = MutableStateFlow<String?>(null)
-    val lastError: StateFlow<String?> = _lastError.asStateFlow()
-
-    private val _parcalar = MutableStateFlow<List<SesParcasi>>(emptyList())
-    val parcalar: StateFlow<List<SesParcasi>> = _parcalar.asStateFlow()
-
-    private val _klasorler = MutableStateFlow<List<SesKlasoru>>(emptyList())
-    val klasorler: StateFlow<List<SesKlasoru>> = _klasorler.asStateFlow()
-
-    private val _taraniyorMu = MutableStateFlow(false)
-    val taraniyorMu: StateFlow<Boolean> = _taraniyorMu.asStateFlow()
-
     suspend fun muzikKutuphanesiniTara(zorla: Boolean = false) = withContext(Dispatchers.IO) {
+        cacheLoadJob.join()
         val simdi = System.currentTimeMillis()
         if (!zorla && _parcalar.value.isNotEmpty() && (simdi - sonTaramaZamaniMs < MIN_TARAMA_ARALIGI_MS)) {
             FileLogger.d(TAG, "Muzik taramasi atlandi (yakin zamanda tarandi)")
@@ -435,7 +441,7 @@ class MusicRepository private constructor(private val context: Context) {
                 FileLogger.i(TAG, "Önbellekten ${yuklenenParcalar.size} müzik ve ${klasorListesi.size} klasör anında yüklendi.")
             }
         } catch (e: Exception) {
-            FileLogger.w(TAG, "Müzik önbelleği okunamadı: ${e.message}")
+            FileLogger.w(TAG, "Müzik önbelleği okunamadı: ${e.message}", e)
         }
     }
 

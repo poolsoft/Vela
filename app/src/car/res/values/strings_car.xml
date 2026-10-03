@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="car_media_notification_title">Vela Music</string>
 
     <string name="car_launcher_tools">Launcher tools</string>
     <string name="car_tools_saved">Saved</string>

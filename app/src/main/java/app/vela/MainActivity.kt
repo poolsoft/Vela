@@ -172,6 +172,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        app.vela.util.FileLogger.i("MainActivity", "onNewIntent: ${intent.action}, home=${intent.hasCategory(Intent.CATEGORY_HOME)}, task=$taskId")
         handleIntent(intent)
     }
 
