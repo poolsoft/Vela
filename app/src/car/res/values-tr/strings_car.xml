@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="car_exit_close">Uygulamayı kapat</string>
+    <string name="car_exit_restart">Launcher’ı yeniden başlat</string>
+    <string name="car_exit_close_detail">Müzik ve navigasyon durdurulur, uygulama ekranı kapatılır.</string>
+    <string name="car_exit_restart_detail">Vela varsayılan Ana ekran uygulamanız. Müzik ve navigasyon durdurulup launcher ekranı yeniden açılır.</string>
+    <string name="car_exit_cancel">İptal</string>
     <string name="car_media_notification_title">Vela Müzik</string>
 
     <string name="car_launcher_tools">Launcher araçları</string>

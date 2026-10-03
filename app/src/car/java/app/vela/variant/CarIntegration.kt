@@ -37,7 +37,23 @@ object CarIntegration {
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(true)
     fun onPause(activity: ComponentActivity) =
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(false)
+    fun isDefaultHome(context: Context): Boolean {
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        return context.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            ?.activityInfo?.packageName == context.packageName
+    }
+    fun prepareForExit(activity: ComponentActivity) {
+        CarFloatingButtonManager.getInstance(activity).setSuspended(true)
+        val music = app.vela.carlauncher.media.MusicManager.getInstance(activity)
+        music.duraklat()
+        music.internalPlayer.serbestBirak()
+        activity.stopService(Intent(activity, app.vela.carlauncher.media.CarMediaService::class.java))
+        activity.getSystemService(android.app.NotificationManager::class.java)
+            ?.cancel(app.vela.carlauncher.media.CarMediaService.NOTIFICATION_ID)
+    }
+    @Composable fun ExitControl() = app.vela.carlauncher.ui.LauncherExitControl()
     fun onCreated(activity: ComponentActivity) {
+        CarFloatingButtonManager.getInstance(activity).setSuspended(false)
         activity.lifecycleScope.launch {
             CarTelemetryManager.getInstance(activity).telemetriDurumu.collect { tel ->
                 CarFloatingButtonManager.getInstance(activity)

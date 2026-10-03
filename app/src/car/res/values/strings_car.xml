@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="car_exit_close">Close application</string>
+    <string name="car_exit_restart">Restart launcher</string>
+    <string name="car_exit_close_detail">Stops music and navigation and closes the application screen.</string>
+    <string name="car_exit_restart_detail">Vela is your default Home app. Music and navigation will stop and the launcher screen will restart.</string>
+    <string name="car_exit_cancel">Cancel</string>
     <string name="car_media_notification_title">Vela Music</string>
 
     <string name="car_launcher_tools">Launcher tools</string>

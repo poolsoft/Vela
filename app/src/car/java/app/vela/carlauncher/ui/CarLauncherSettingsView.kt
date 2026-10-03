@@ -215,6 +215,7 @@ private fun CarSettingsHubScreen(
                 onClick = { onOpenSection(CarSettingsSection.AUTOLAUNCH) }
             )
 
+            LauncherExitControl()
             Spacer(Modifier.height(16.dp))
         }
     }

@@ -64,6 +64,16 @@ class CarFloatingButtonManager private constructor(private val context: Context)
 
     private var isAdded = false
     private var isAppInForeground = false
+    private var suspended = false
+
+    fun setSuspended(value: Boolean) {
+        suspended = value
+        if (value) {
+            mainHandler.removeCallbacksAndMessages(null)
+            hideCustomOverlayMenu()
+        }
+        updateButtonState()
+    }
 
     // Surukleme ve Dokunma Durumlari
     private var initialX = 0
@@ -108,7 +118,7 @@ class CarFloatingButtonManager private constructor(private val context: Context)
     }
 
     fun updateButtonState() {
-        val shouldShow = CarLauncherSettings.shouldShowFloatingButton(isAppInForeground)
+        val shouldShow = !suspended && CarLauncherSettings.shouldShowFloatingButton(isAppInForeground)
         if (shouldShow) {
             showButton()
         } else {

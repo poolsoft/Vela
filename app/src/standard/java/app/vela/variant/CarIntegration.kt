@@ -22,6 +22,9 @@ object CarIntegration {
     fun onResume(activity: ComponentActivity) = Unit
     fun onPause(activity: ComponentActivity) = Unit
     fun onCreated(activity: ComponentActivity) = Unit
+    fun isDefaultHome(context: Context) = false
+    fun prepareForExit(activity: ComponentActivity) = Unit
+    @Composable fun ExitControl() = Unit
     fun onHomeIntent(intent: Intent?) = Unit
     fun onKeyDown(activity: ComponentActivity, keyCode: Int) = false
     fun onMapState(context: Context, state: MapUiState) = Unit

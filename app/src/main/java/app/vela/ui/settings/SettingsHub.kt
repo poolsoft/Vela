@@ -154,6 +154,7 @@ internal fun SettingsHub(
             return m
         }
         if (app.vela.variant.CarIntegration.available) {
+        app.vela.variant.CarIntegration.ExitControl()
         HubRow(
             icon = Icons.Outlined.Palette,
             title = stringResource(app.vela.variant.CarIntegration.settingsTitle),

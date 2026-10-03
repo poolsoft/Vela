@@ -169,6 +169,26 @@ class MainActivity : ComponentActivity() {
         app.vela.ui.PipMode.active.value = isInPictureInPictureMode
     }
 
+    /** Settings exit is explicit; Home relaunches the selected launcher, a normal app exits. */
+    fun restartOrCloseFromSettings() {
+        val restart = CarIntegration.isDefaultHome(this)
+        app.vela.util.FileLogger.i("MainActivity", "Settings exit: restart=$restart, task=$taskId")
+        vm.stopReplay()
+        vm.stopNav()
+        app.vela.service.NavigationService.stop(this)
+        CarIntegration.prepareForExit(this)
+        if (restart) {
+            startActivity(Intent(this, MainActivity::class.java).apply {
+                action = Intent.ACTION_MAIN
+                addCategory(Intent.CATEGORY_HOME)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            })
+            finish()
+        } else {
+            finishAndRemoveTask()
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
