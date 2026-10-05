@@ -31,32 +31,36 @@ object PmtilesMapBridge {
         HttpRequestUtil.setOkHttpClient(network.newBuilder().addInterceptor { chain ->
             val request = chain.request()
             if (request.url.host != HOST) return@addInterceptor chain.proceed(request)
-            val parts = request.url.pathSegments
-            val uri = String(Base64.getUrlDecoder().decode(parts.first()), Charsets.UTF_8)
-            val stamp = if (uri.startsWith("file:")) File(URI(uri)).let { "${it.length()}:${it.lastModified()}" } else "remote"
-            val key = "$uri|$stamp"
-            val source = synchronized(archives) {
-                archives[key]?.takeUnless { it.expired() } ?: PmtilesTileSource { offset, length ->
-                    readRange(uri, offset, length)
-                }.also { archives[key] = it }
+            try {
+                val parts = request.url.pathSegments
+                val uri = String(Base64.getUrlDecoder().decode(parts.first()), Charsets.UTF_8)
+                val stamp = if (uri.startsWith("file:")) File(URI(uri)).let { "${it.length()}:${it.lastModified()}" } else "remote"
+                val key = "$uri|$stamp"
+                val source = synchronized(archives) {
+                    archives[key]?.takeUnless { it.expired() } ?: PmtilesTileSource { offset, length ->
+                        readRange(uri, offset, length)
+                    }.also { archives[key] = it }
+                }
+                val body: ByteArray?
+                val type: String
+                if (parts.size == 1) {
+                    val json = if (source.header.metaLength > 0) JSONObject(String(source.metadata(), Charsets.UTF_8)) else JSONObject()
+                    json.put("tilejson", "2.2.0").put("scheme", "xyz")
+                        .put("minzoom", source.header.minZoom).put("maxzoom", source.header.maxZoom)
+                        .put("tiles", org.json.JSONArray().put("${request.url.newBuilder().query(null).build()}/{z}/{x}/{y}.pbf"))
+                    body = json.toString().toByteArray(); type = "application/json"
+                } else {
+                    require(parts.size == 4) { "Invalid PMTiles tile URL" }
+                    body = source.tile(parts[1].toInt(), parts[2].toInt(), parts[3].removeSuffix(".pbf").toInt())
+                    type = "application/vnd.mapbox-vector-tile"
+                }
+                Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+                    .code(if (body == null) 404 else 200).message(if (body == null) "Not Found" else "OK")
+                    .header("Cache-Control", "no-cache")
+                    .body((body ?: ByteArray(0)).toResponseBody(type.toMediaType())).build()
+            } catch (error: Exception) {
+                throw IOException("PMTiles resource could not be read", error)
             }
-            val body: ByteArray?
-            val type: String
-            if (parts.size == 1) {
-                val json = if (source.header.metaLength > 0) JSONObject(String(source.metadata(), Charsets.UTF_8)) else JSONObject()
-                json.put("tilejson", "2.2.0").put("scheme", "xyz")
-                    .put("minzoom", source.header.minZoom).put("maxzoom", source.header.maxZoom)
-                    .put("tiles", org.json.JSONArray().put("${request.url}/{z}/{x}/{y}.pbf"))
-                body = json.toString().toByteArray(); type = "application/json"
-            } else {
-                require(parts.size == 4) { "Invalid PMTiles tile URL" }
-                body = source.tile(parts[1].toInt(), parts[2].toInt(), parts[3].removeSuffix(".pbf").toInt())
-                type = "application/vnd.mapbox-vector-tile"
-            }
-            Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
-                .code(if (body == null) 404 else 200).message(if (body == null) "Not Found" else "OK")
-                .header("Cache-Control", "no-cache")
-                .body((body ?: ByteArray(0)).toResponseBody(type.toMediaType())).build()
         }.build())
         installed = true
     }

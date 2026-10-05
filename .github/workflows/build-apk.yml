@@ -172,7 +172,7 @@ jobs:
           for apk in release-apks/*.apk; do
             echo "----------------------------------------------------"
             echo "APK: $apk - Boyut: $(ls -lh "$apk" | awk '{print $5}')"
-            unzip -l "$apk" | grep -E "(libvalhalla-wrapper\.so|libmaplibre\.so)" || true
+            unzip -l "$apk" | grep -E "(libvalhalla-wrapper\.so|libmaplibre\.so|libmapbox-gl\.so)" || true
           done
 
       - name: Upload APK artifact
