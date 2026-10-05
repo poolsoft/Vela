@@ -24,6 +24,11 @@
         </intent>
     </queries>
     <application>
+        <!-- P1: private bound probe; no native map library is loaded yet. -->
+        <service
+            android:name="app.vela.carlauncher.map.MapRendererProbeService"
+            android:process=":map_renderer"
+            android:exported="false" />
         <!-- All launcher aliases and the media notification reuse the same task. -->
         <activity android:name=".MainActivity"
             android:launchMode="singleTask"

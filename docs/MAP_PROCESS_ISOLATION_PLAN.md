@@ -81,7 +81,7 @@ Süreç ölümü ServiceConnection/binder death ile tespit edilir; bind başarı
 | Aşama | Yapılacak iş | Geçiş koşulu | Durum |
 |---|---|---|---|
 | P0 | Yedek, mimari/envanter ve plan | Yedek doğrulandı, kaynak referansları kaydedildi | Tamamlandı |
-| P1 | Hafif renderer Application yolu, boş bound service, log ayrımı | PID farklı; Home/müzik servisi ikinci kez başlamıyor | Yapılmadı |
+| P1 | Hafif renderer Application yolu, boş bound service, log ayrımı | PID farklı; Home/müzik servisi ikinci kez başlamıyor | Kod uygulandı; CI/teyp doğrulaması bekliyor |
 | P2 | IPC hata/death/timeout prototipi; sahte frame | Renderer ölünce launcher/müzik devam ediyor; hata kartı var | Yapılmadı |
 | P3 | MapLibre başlatma ve tek boş render | Harita verisi/ağ olmadan renderer denemesi; her alt adım raporlu | Yapılmadı |
 | P4 | Yerel minimal stil, sonra mevcut stil | Boş stil ve mevcut stil ayrı denemelerde geçiyor | Yapılmadı |
@@ -149,7 +149,17 @@ Android/OEM'in native süreç ölümünde gösterebileceği sistem hata ekranın
 
 Her aşama main'de küçük commit; önce diff/XML/encoding ve ilgili sözleşme testleri, sonra ayrı APK ve teyp denemesi. Gradle bu oturumda veya otomatik yerel doğrulama için çalıştırılmayacak. APK gerektiren denemeler kaynak değişikliğinin main'e push edilmesiyle mevcut Build APK iş akışına bırakılır; CI ve cihaz sonucu görülmeden başarılı sayılmaz. Bu plan yalnızca docs değişikliği olduğundan mevcut APK workflow path filtresi yeni APK üretmez.
 
-**İlk yapılacak aşama: P1.** P1 ve P2 geçmeden gerçek harita yüklemesi yeniden devreye alınmayacak.
+**Şu anki aşama: P1 doğrulaması.** P1 ve P2 geçmeden gerçek harita yüklemesi yeniden devreye alınmayacak.
+
+### P1 uygulama ve teyp denemesi
+
+- Harita alanında Harita sürecini test et düğmesi var; bu düğme yalnızca private :map_renderer servisinde ping/pong çalıştırır. MapScreen veya MapLibre oluşturulmaz. Test bağlantısını kapat düğmesi unbind eder; Settings erişimi sürer. Yatay/dikey küçük alanlarda kart kaydırılabilir.
+- Renderer Application attach aşamasında yedek restore/locale/density yolu atlanır. onCreate yalnızca ayrı log/journal ve CrashCatcher kurar; ağır launcher/music/location/download init koduna ulaşmaz. DiagLog injection Provider olarak ertelenir, renderer shared diag_log.jsonl yüklemez.
+- Ana log vela_app.log, renderer log vela_map_renderer.log. Renderer journal diag/process-session-map_renderer.json, rapor dizini diag/crash-map_renderer. Ana rapor paylaşma ekranı iki dizini de listeler; süreç başına prune yapılır.
+- Beklenen log: renderer VelaApp içinde Lightweight process startup ve MapProbeService içinde empty renderer process; renderer logunda MainActivity/CarMediaService/MusicRepository başlangıcı olmamalı.
+- 1) Açılışta ayarları/müziği kullan. 2) Harita sürecini test et. 3) Bağlantı başarılı kartında iki farklı PID gör. 4) Bağlantıyı kapatıp yeniden test et. 5) Home'a dön, müziği/ayarları tekrar kontrol et. 6) vela_app.log ve vela_map_renderer.log dosyalarını gönder.
+- Salt kaynak/XML/diff kontrolleri yapılır. Oturum/protokol/PID doğrulamasını kapsayan bir JVM regression testi eklendi; Gradle yasak olduğu için bu oturumda çalıştırılmaz. Mevcut merged manifest çıktıları yalnızca provider envanteri için okundu; yeni manifest merge veya APK sonucu sayılmaz.
+- Bu sürümde MapScreen'e geçiş kapalıdır. Kullanıcı bağlantı testini görmeden eski in-process render'a geri dönülmez. Zorlanmış süreç ölümü/timeout/frame testleri P2'de, gerçek motor P3'te yapılacaktır.
 
 ## 11. Teknik kaynaklar
 

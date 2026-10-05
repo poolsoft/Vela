@@ -63,12 +63,17 @@ object ProcessDiagnostics {
         checkpoint("activity: $state")
     }
 
+    fun beginSession(label: String) {
+        explicitlyClosed = false
+        checkpoint(label)
+    }
+
     fun explicitClose() {
         explicitlyClosed = true
         checkpoint("settings: explicit close")
     }
 
-    private fun journal() = AtomicFile(File(context.filesDir, "diag/process-session.json").apply {
+    private fun journal() = AtomicFile(File(context.filesDir, "diag/process-session${app.vela.util.ProcessIdentity.fileSuffix(context)}.json").apply {
         parentFile?.mkdirs()
     })
 
@@ -89,6 +94,7 @@ object ProcessDiagnostics {
         (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).getMemoryInfo(memory)
         return JSONObject().apply {
             put("pid", Process.myPid())
+            put("process", app.vela.util.ProcessIdentity.name(context))
             put("started", started)
             put("recorded", System.currentTimeMillis())
             put("uptimeMs", SystemClock.uptimeMillis())

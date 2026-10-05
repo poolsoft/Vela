@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="car_map_probe_detail">İlk adım: ayrı harita sürecini test edin. Harita motoru ve harita verileri yüklenmeyecek.</string>
+    <string name="car_map_probe_start">Harita sürecini test et</string>
+    <string name="car_map_probe_connecting">Ayrı sürece bağlanılıyor…</string>
+    <string name="car_map_probe_ready">Bağlantı başarılı. Launcher PID: %1$d · Harita süreci PID: %2$d</string>
+    <string name="car_map_probe_failed">Harita süreci testi başarısız. Ayrıntılar loglarda. Yeniden deneyebilirsiniz.</string>
+    <string name="car_map_probe_close">Test bağlantısını kapat</string>
     <string name="car_map_manual_start">Haritayı aç</string>
     <string name="car_map_manual_start_detail">Harita yalnızca siz açtığınızda başlatılır. Launcher özelliklerini ve ayarları şimdi kullanabilirsiniz.</string>
     <string name="car_map_open_settings">Ayarlar</string>

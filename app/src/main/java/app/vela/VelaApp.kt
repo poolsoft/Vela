@@ -19,7 +19,7 @@ import javax.inject.Inject
 
 @HiltAndroidApp
 class VelaApp : Application(), coil.ImageLoaderFactory {
-    @Inject lateinit var diag: DiagLog
+    @Inject lateinit var diag: javax.inject.Provider<DiagLog>
 
     /** Coil with a HARD memory-cache cap. The default budget is ~25% of the app's heap CLASS,
      *  and largeHeap makes that class huge - on a 512 MB large heap Coil happily retains up to
@@ -48,6 +48,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         app.vela.diag.ProcessDiagnostics.checkpoint("memory trim: $level")
+        if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(this)) return
         app.vela.ui.MemoryPressure.dispatch(level)
         if (app.vela.ui.MemoryPressure.isSevere(level)) {
             runCatching { coil.Coil.imageLoader(this).memoryCache?.clear() }
@@ -55,14 +56,24 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
     }
 
     override fun attachBaseContext(base: Context) {
-        app.vela.backup.BackupRestore.recover(base)
-        super.attachBaseContext(AppLocale.wrap(app.vela.ui.AdaptiveDensity.wrap(base)))
+        if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(base)) {
+            super.attachBaseContext(base)
+        } else {
+            app.vela.backup.BackupRestore.recover(base)
+            super.attachBaseContext(AppLocale.wrap(app.vela.ui.AdaptiveDensity.wrap(base)))
+        }
     }
 
     override fun onCreate() {
         app.vela.util.FileLogger.init(this)
         super.onCreate()
         app.vela.diag.ProcessDiagnostics.install(this)
+        if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(this)) {
+            CrashCatcher.install(this) { emptyList() }
+            app.vela.util.FileLogger.i("VelaApp", "Lightweight process startup: no launcher, music, location or downloads")
+            return
+        }
+        val applicationDiag = diag.get()
         // Device memory class first: the Coil cap and the eager-warm decisions read it.
         app.vela.ui.MemoryPressure.init(this)
         // Push the device class down to :core, which cannot read an :app holder (same seam as
@@ -138,6 +149,6 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.ui.WhatsNew.init(this)
         // Persist any fatal crash (stack trace + breadcrumbs) so it survives the
         // restart and can be exported from Settings → Diagnostics next launch.
-        CrashCatcher.install(this) { diag.snapshot() }
+        CrashCatcher.install(this) { applicationDiag.snapshot() }
     }
 }

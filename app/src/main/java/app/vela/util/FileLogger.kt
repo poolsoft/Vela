@@ -33,7 +33,8 @@ object FileLogger {
     private const val MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024L // 2 MB
     private const val LOG_DIR_NAME = "logs"
     private const val LOG_FILE_NAME = "vela_app.log"
-    private const val OLD_LOG_FILE_NAME = "vela_app.log.old"
+    private var processLabel = "unknown"
+    private var oldLogFileName = "vela_app.log.old"
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
     private var logDir: File? = null
@@ -58,7 +59,11 @@ object FileLogger {
                     dir.mkdirs()
                 }
                 logDir = dir
-                logFile = File(dir, LOG_FILE_NAME)
+                processLabel = "${ProcessIdentity.name(context) ?: "unknown"} pid=${android.os.Process.myPid()}"
+                val suffix = ProcessIdentity.fileSuffix(context)
+                val fileName = if (suffix.isEmpty()) LOG_FILE_NAME else "vela${suffix.replace('-', '_')}.log"
+                logFile = File(dir, fileName)
+                oldLogFileName = "$fileName.old"
 
                 val thread = HandlerThread("VelaFileLoggerThread", android.os.Process.THREAD_PRIORITY_BACKGROUND)
                 thread.start()
@@ -70,7 +75,7 @@ object FileLogger {
                 // Baslangic cihazi bilgisi logu
                 val baslangicMesaji = buildString {
                     append("==================================================\n")
-                    append("Vela Baslatildi: ").append(dateFormat.format(Date())).append("\n")
+                    append("Vela Baslatildi: ").append(synchronized(dateFormat) { dateFormat.format(Date()) }).append("\n")
                     append("Cihaz: ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL).append("\n")
                     append("Android Surumu: API ").append(Build.VERSION.SDK_INT).append(" (").append(Build.VERSION.RELEASE).append(")\n")
                     append("Uygulama Dizini: ").append(logFile?.absolutePath).append("\n")
@@ -137,7 +142,7 @@ object FileLogger {
             if (dosya.exists() && dosya.length() > MAX_FILE_SIZE_BYTES) {
                 val dir = logDir
                 if (dir != null) {
-                    val oldFile = File(dir, OLD_LOG_FILE_NAME)
+                    val oldFile = File(dir, oldLogFileName)
                     if (oldFile.exists()) {
                         oldFile.delete()
                     }
@@ -145,8 +150,8 @@ object FileLogger {
                 }
             }
 
-            val zaman = dateFormat.format(Date())
-            val satir = "$zaman [$seviye] [$tag] $mesaj\n"
+            val zaman = synchronized(dateFormat) { dateFormat.format(Date()) }
+            val satir = "$zaman [$seviye] [$tag] [$processLabel] $mesaj\n"
 
             FileWriter(dosya, true).use { writer ->
                 writer.write(satir)
@@ -160,8 +165,8 @@ object FileLogger {
     private fun dosyayaSenkronYaz(seviye: String, tag: String, mesaj: String) {
         val dosya = logFile ?: return
         try {
-            val zaman = dateFormat.format(Date())
-            val satir = "$zaman [$seviye] [$tag] $mesaj\n"
+            val zaman = synchronized(dateFormat) { dateFormat.format(Date()) }
+            val satir = "$zaman [$seviye] [$tag] [$processLabel] $mesaj\n"
             FileWriter(dosya, true).use { writer ->
                 writer.write(satir)
                 writer.flush()

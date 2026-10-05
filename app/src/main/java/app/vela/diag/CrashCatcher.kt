@@ -36,7 +36,7 @@ object CrashCatcher {
             runCatching {
                 val isTextureOrEglCrash = thread.name.contains("TextureViewRenderer") ||
                     ex.stackTrace.any { it.className.contains("EGLImpl") || it.className.contains("TextureViewRenderThread") }
-                if (isTextureOrEglCrash) {
+                if (isTextureOrEglCrash && app.vela.util.ProcessIdentity.isMain(app)) {
                     val prefs = app.getSharedPreferences("vela_settings", Context.MODE_PRIVATE)
                     prefs.edit().putBoolean("texture_render", false).remove("texture_render_auto_ms").putInt("map_init_crashes", 0).apply()
                     FileLogger.e("CrashCatcher", "TextureView/EGL crash detected! Reverted texture_render to false for next launch.")
@@ -47,7 +47,7 @@ object CrashCatcher {
         }
     }
 
-    private fun dir(context: Context) = File(context.filesDir, "diag/crash").apply { mkdirs() }
+    private fun dir(context: Context) = File(context.filesDir, "diag/crash${app.vela.util.ProcessIdentity.fileSuffix(context)}").apply { mkdirs() }
 
     private fun writeReport(context: Context, ex: Throwable, crumbs: List<DiagEvent>) {
         val sw = StringWriter()
@@ -71,13 +71,15 @@ object CrashCatcher {
     }
 
     fun saveDiagnosticReport(context: Context, kind: String, text: String) {
-        val name = "crash-${System.currentTimeMillis()}-${System.nanoTime()}.txt"
+        val suffix = app.vela.util.ProcessIdentity.fileSuffix(context)
+        val name = "crash-${System.currentTimeMillis()}${suffix}-${System.nanoTime()}.txt"
         val report = "Diagnostic type: $kind\n$text"
         File(dir(context), name).writeText(report)
         runCatching {
             val extLogsDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "logs").apply { mkdirs() }
             File(extLogsDir, name).writeText(report)
-            extLogsDir.listFiles { f -> f.name.startsWith("crash-") }?.sortedByDescending { it.name }
+            extLogsDir.listFiles { f -> f.name.startsWith("crash-") &&
+                (if (suffix.isEmpty()) !f.name.contains("-map_renderer-") else f.name.contains("$suffix-")) }?.sortedByDescending { it.name }
                 ?.drop(5)?.forEach { it.delete() }
             FileLogger.i("CrashCatcher", "Diagnostic report saved: $kind ($name)")
         }
@@ -86,13 +88,20 @@ object CrashCatcher {
 
     /** Keep only the few most recent reports so this can't grow unbounded. */
     private fun prune(context: Context, keep: Int = 5) {
-        val files = pending(context)
+        val files = reports(dir(context))
         if (files.size > keep) files.dropLast(keep).forEach { runCatching { it.delete() } }
     }
 
     /** Crash reports on disk, oldest first. */
-    fun pending(context: Context): List<File> =
-        dir(context).listFiles { f -> f.isFile && f.name.startsWith("crash-") }?.sortedBy { it.name } ?: emptyList()
+    private fun reports(directory: File): List<File> =
+        directory.listFiles { f -> f.isFile && f.name.startsWith("crash-") }?.sortedBy { it.name } ?: emptyList()
+
+    fun pending(context: Context): List<File> {
+        val own = reports(dir(context))
+        return if (app.vela.util.ProcessIdentity.isMain(context))
+            (own + reports(File(context.filesDir, "diag/crash-map_renderer"))).sortedBy { it.name }
+        else own
+    }
 
     fun clear(context: Context) {
         pending(context).forEach { runCatching { it.delete() } }

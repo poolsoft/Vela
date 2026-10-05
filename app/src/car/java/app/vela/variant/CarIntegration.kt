@@ -6,9 +6,9 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -102,7 +102,10 @@ object CarIntegration {
     ) {
         // Session-only opt-in: never restore map initialization after a process/Activity restart.
         // Gate the whole MapScreen, not just its visibility, so no hidden EGL surface is created.
-        var mapStarted by remember { mutableStateOf(false) }
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val probe = remember(context) { app.vela.carlauncher.map.MapProcessProbe(context) }
+        val probeState by probe.state.collectAsState()
+        androidx.compose.runtime.DisposableEffect(probe) { onDispose { probe.close() } }
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
         val configuration = androidx.compose.ui.platform.LocalConfiguration.current
         val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT ||
@@ -114,21 +117,31 @@ object CarIntegration {
             isVoiceListening = isVoiceListening,
             voiceAudioLevel = voiceAudioLevel,
             haritaIcerigi = {
-                if (mapStarted) {
-                    content()
-                } else {
+                // P1 deliberately never composes MapScreen, even after a successful ping.
+                run {
                     Surface(modifier = Modifier.fillMaxSize()) {
                         Column(
-                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text(stringResource(app.vela.R.string.car_map_manual_start_detail))
-                            Button(onClick = {
-                                app.vela.diag.ProcessDiagnostics.checkpoint("map: user requested start")
-                                mapStarted = true
-                            }) {
-                                Text(stringResource(app.vela.R.string.car_map_manual_start))
+                            Text(stringResource(app.vela.R.string.car_map_probe_detail))
+                            when (probeState.status) {
+                                app.vela.carlauncher.map.MapProcessProbe.Status.CONNECTING ->
+                                    Text(stringResource(app.vela.R.string.car_map_probe_connecting))
+                                app.vela.carlauncher.map.MapProcessProbe.Status.READY ->
+                                    Text(stringResource(app.vela.R.string.car_map_probe_ready, android.os.Process.myPid(), probeState.remotePid))
+                                app.vela.carlauncher.map.MapProcessProbe.Status.FAILED ->
+                                    Text(stringResource(app.vela.R.string.car_map_probe_failed))
+                                else -> Unit
+                            }
+                            Button(onClick = { probe.start() }, enabled = probeState.status != app.vela.carlauncher.map.MapProcessProbe.Status.CONNECTING) {
+                                Text(stringResource(app.vela.R.string.car_map_probe_start))
+                            }
+                            if (probeState.status == app.vela.carlauncher.map.MapProcessProbe.Status.READY) {
+                                OutlinedButton(onClick = { probe.close() }) {
+                                    Text(stringResource(app.vela.R.string.car_map_probe_close))
+                                }
                             }
                             OutlinedButton(onClick = onOpenSettings) {
                                 Text(stringResource(app.vela.R.string.car_map_open_settings))
