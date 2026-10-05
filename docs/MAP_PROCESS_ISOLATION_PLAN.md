@@ -149,3 +149,11 @@ Son kaynak kontrolünde eklendi: VirtualDisplay metrics değişiminde Presentati
 - [Bound services](https://developer.android.com/develop/background-work/services/bound-services): remote servis ve Messenger sözleşmesi.
 - [SurfaceControlViewHost](https://developer.android.com/reference/android/view/SurfaceControlViewHost): API 30+; API 27 teybin ortak görüntü yolu olamaz.
 - [MapLibre MapSnapshotter](https://maplibre.org/maplibre-native/android/api/-map-libre%20-native%20-android/org.maplibre.android.snapshotter/-map-snapshotter/index.html): mevcut Android Auto yaklaşımının dayandığı public SDK sınıfı; tam etkileşimli MapView eşitliği varsayılmaz.
+
+## GLES/EGL tanısı — sonraki sürüm
+
+- Renderer ilk sahneyi açmadan önce ayrı, 1×1 ES2 pbuffer bağlamını test eder. Ana launcher GPU/JNI testi yapmaz. Gerçek harita bağlamının sürümü ile bu ayrı test bağlamının sürümü aynı kabul edilmez.
+- `files/diag/graphics-map_renderer.json`: PID/zaman, Android'in bildirdiği GLES sürümü, EGL üreticisi/uzantıları, örneklenen ES2/ES3 config sayıları, GL_VERSION/VENDOR/RENDERER ve son probe aşaması. API 26 uyumlu EGL14 kullanılır. Probe default EGLDisplay'i sonlandırmaz; yalnız kendi bağlamı/yüzeyi temizlenir.
+- EGL çağrılarından önce journal flush edilir. Driver native olarak ölürse son aşama diskte kalır. Pbuffer test hatası tek başına harita uyumsuzluğu sayılmaz; gerçek harita denemesi devam eder.
+- Harita hatasının ana süreç raporu renderer journal + GPU raporu + API 30 üzerindeki eşleşen sistem çıkış kaydını içerir. PID, süreç adı ve zaman aralığı eşleştirilir; hatadan sonra yapılan temizleme kill'i önceki hatanın sebebi sayılmaz. API 27'de sistem nedeni alınamadığı açıkça yazılır.
+- Hata paneli MapScreen'in indirme ve navigasyon katmanlarının üzerine, launcher'ın harita alanına taşındı. Yeniden deneme aynı harita ekranını koruyarak yeni renderer yüzeyi açar.

@@ -111,6 +111,7 @@ object ProcessDiagnostics {
             put("version", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
             put("device", "${Build.MANUFACTURER} ${Build.MODEL} API ${Build.VERSION.SDK_INT}")
             put("abis", Build.SUPPORTED_ABIS.joinToString())
+            put("advertisedGles", context.getSystemService(ActivityManager::class.java).deviceConfigurationInfo.glEsVersion)
             put("operation", operation)
             put("activity", lifecycle)
             put("foreground", foreground)
@@ -138,15 +139,29 @@ object ProcessDiagnostics {
         }
     }
 
-    private fun historicalExit(previous: JSONObject): String {
+    private fun historicalExit(previous: JSONObject): String = exitInformation(
+        context, previous.optInt("pid"), previous.optString("process"), previous.optLong("started"), started,
+    )
+
+    /** Filter by PID, process and time; never attribute our later cleanup kill to the original failure. */
+    fun exitInformation(context: Context, pid: Int, processName: String, since: Long, until: Long): String {
         if (Build.VERSION.SDK_INT < 30) return "API < 30: Android does not expose process exit reasons to this app.\n"
+        if (pid <= 0) return "Renderer PID unknown; no exit record can be matched.\n"
         return runCatching {
-            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val exits = manager.getHistoricalProcessExitReasons(context.packageName, previous.optInt("pid"), 8)
-            val exit = exits.firstOrNull { it.timestamp >= previous.optLong("started") && it.timestamp <= started }
-            if (exit == null) "No matching system exit record.\n"
-            else "reason=${exit.reason}, status=${exit.status}, time=${exit.timestamp}, pssKb=${exit.pss}, rssKb=${exit.rss}, description=${exit.description}\n"
+            val manager = context.getSystemService(ActivityManager::class.java)
+            val exit = manager.getHistoricalProcessExitReasons(context.packageName, pid, 8).firstOrNull {
+                it.processName == processName && it.timestamp in since..until
+            }
+            if (exit == null) "No matching system exit record; cause remains unknown.\n"
+            else "process=${exit.processName}, pid=${exit.pid}, reason=${exit.reason} (${exitReasonName(exit.reason)}), status=${exit.status}, time=${exit.timestamp}, pssKb=${exit.pss}, rssKb=${exit.rss}, description=${exit.description}\n"
         }.getOrElse { "System exit information unavailable: $it\n" }
+    }
+
+    private fun exitReasonName(reason: Int): String = when (reason) {
+        1 -> "exit self"; 2 -> "signal"; 3 -> "low memory"; 4 -> "Java crash"
+        5 -> "native crash"; 6 -> "ANR"; 7 -> "initialization failure"
+        8 -> "permission change"; 9 -> "excessive resource use"; 10 -> "user requested"
+        11 -> "user stopped"; 12 -> "dependency died"; 13 -> "other"; else -> "unknown"
     }
 
     private val tick = object : Runnable {

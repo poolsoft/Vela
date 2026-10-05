@@ -131,6 +131,7 @@ object CarIntegration {
         // Gate the whole MapScreen, not just its visibility, so no hidden EGL surface is created.
         val context = androidx.compose.ui.platform.LocalContext.current
         var mapOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
+        val failureHost = remember { app.vela.carlauncher.map.MapRendererFailureHost() }
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
         val configuration = androidx.compose.ui.platform.LocalConfiguration.current
         val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT ||
@@ -144,7 +145,12 @@ object CarIntegration {
             haritaIcerigi = {
                 if (mapOpen) {
                     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
-                        content()
+                        androidx.compose.runtime.CompositionLocalProvider(
+                            app.vela.carlauncher.map.LocalMapRendererFailureHost provides failureHost,
+                        ) { content() }
+                        failureHost.failure?.let {
+                            app.vela.carlauncher.map.MapRendererStatusPanel(it, failureHost.retry)
+                        }
                         androidx.compose.material3.TextButton(
                             onClick = { mapOpen = false },
                             modifier = Modifier.align(Alignment.BottomCenter),

@@ -39,6 +39,7 @@ open class MapRendererService : Service() {
         kotlinx.coroutines.channels.Channel.CONFLATED, onUndeliveredElement = { it.second.close() },
     )
     private var generation = 0
+    private var graphicsCaptured = false
     private val dpad = MapDpadController()
     private val handler = Handler(Looper.getMainLooper()) { msg ->
         val data = msg.data
@@ -115,6 +116,11 @@ open class MapRendererService : Service() {
                 try {
                     val value = withContext(Dispatchers.IO) { MapRendererTransport.read(fd) }
                     if (next != generation || session.isEmpty()) continue
+                    if (!graphicsCaptured) {
+                        stage("graphics-probe")
+                        withContext(Dispatchers.IO) { RendererGraphicsDiagnostics.capture(applicationContext) }
+                        graphicsCaptured = true
+                    }
                     applySettings(value.settings)
                     app.vela.core.config.CalibrationStore.applyRendererTuning(value.tuning, value.mapPalette)
                     app.vela.ui.MapColors.remoteDefault.value = value.mapPalette

@@ -5,15 +5,9 @@ import android.os.*
 import android.view.*
 import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.*
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -49,6 +43,15 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
         onDispose { owner.lifecycle.removeObserver(observer); dpad?.remote = null; client.close() }
     }
     var surfaceGeneration by remember { mutableIntStateOf(0) }
+    val failureHost = LocalMapRendererFailureHost.current
+    val retry = { client.retry(); surfaceGeneration++; Unit }
+    LaunchedEffect(state, failureHost) {
+        failureHost?.failure = state.takeIf { it.failed }
+        failureHost?.retry = retry
+    }
+    DisposableEffect(failureHost, client) {
+        onDispose { failureHost?.failure = null; failureHost?.retry = {} }
+    }
     Box(modifier) {
         key(surfaceGeneration) {
             AndroidView(modifier = Modifier.fillMaxSize(), factory = { ctx ->
@@ -64,20 +67,7 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
                 }
             })
         }
-        if (!state.ready) {
-            Surface(modifier = Modifier.fillMaxSize()) {
-                Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)) {
-                    Text(stringResource(if (state.failed) app.vela.R.string.car_map_renderer_failed else app.vela.R.string.car_map_renderer_loading))
-                    Text(state.stage, style = MaterialTheme.typography.bodySmall)
-                    if (state.failed) {
-                        Button(onClick = { client.retry(); surfaceGeneration++ }) {
-                            Text(stringResource(app.vela.R.string.car_map_renderer_retry))
-                        }
-                    } else CircularProgressIndicator()
-                }
-            }
-        }
+        if (!state.ready && (!state.failed || failureHost == null)) MapRendererStatusPanel(state, retry)
     }
 }
 
@@ -107,6 +97,7 @@ internal class IsolatedMapClient(
     private var active = true
     private var heartbeatAt = 0L
     private var bindAt = 0L
+    private var attemptStartedAt = 0L
     private var openAt = 0L
     private var opened = false
     private var terminalStage = "connecting"
@@ -166,6 +157,7 @@ internal class IsolatedMapClient(
             return
         }
         session = UUID.randomUUID().toString()
+        attemptStartedAt = System.currentTimeMillis()
         val attempt = session
         bindAt = SystemClock.elapsedRealtime(); heartbeatAt = bindAt
         mutableState.value = State()
@@ -236,6 +228,10 @@ internal class IsolatedMapClient(
         putString("key", name); putFloat("x", x.toFloat()); putFloat("y", y.toFloat()); putDouble("delta", x)
     })
     private fun fail(reason: String, error: Exception? = null) {
+        if (mutableState.value.failed) return
+        val failedAt = System.currentTimeMillis()
+        val failedPid = remotePid
+        val startedAt = attemptStartedAt
         FileLogger.w("MapRendererClient", "session=$session failure=$reason", error)
         val details = "session=$session launcherPid=${Process.myPid()} rendererPid=$remotePid stage=$terminalStage reason=$reason\n" +
             app.vela.diag.ProcessDiagnostics.snapshot() + "\n" + (error?.stackTraceToString() ?: "No Java exception received; native cause is unknown.")
@@ -247,8 +243,21 @@ internal class IsolatedMapClient(
                     val count = reader.read(buffer)
                     if (count > 0) String(buffer, 0, count) else "Empty renderer journal"
                 } else "Renderer journal unavailable"
+                val graphics = java.io.File(context.filesDir, "diag/graphics-$processSuffix.json")
+                val gpuSnapshot = if (graphics.isFile) graphics.bufferedReader().use {
+                    val buffer = CharArray(24_576)
+                    val count = it.read(buffer)
+                    if (count > 0) String(buffer, 0, count) else "Empty graphics report"
+                } else "GPU probe did not finish or start; see renderer journal"
+                // Exit records may become visible shortly after Binder death. The timestamp upper
+                // bound stays at failure detection, excluding disconnect()'s later cleanup kill.
+                delay(500)
+                val exit = app.vela.diag.ProcessDiagnostics.exitInformation(context, failedPid,
+                    "${context.packageName}:$processSuffix", startedAt, failedAt)
                 app.vela.diag.CrashCatcher.saveDiagnosticReport(context, "Map renderer failure",
-                    details + "\n=== Renderer journal ===\n" + remoteSnapshot)
+                    details + "\n=== Renderer journal ===\n" + remoteSnapshot +
+                        "\n=== Renderer graphics (check PID/recorded for freshness) ===\n" + gpuSnapshot +
+                        "\n=== System exit information ===\n" + exit)
             }
         }
         mutableState.value = State(failed = true, stage = reason)
