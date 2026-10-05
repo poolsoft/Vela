@@ -409,7 +409,8 @@ class MusicRepository private constructor(private val context: Context) {
                                 dosyaYolu = dosyaYolu,
                                 albumArtUri = null,
                                 eklenmeTarihi = obj.optLong("eklenmeTarihi", f.lastModified() / 1000L),
-                                contentUri = obj.optString("contentUri", Uri.fromFile(f).toString()),
+                                contentUri = obj.optString("contentUri", "").takeIf { it.isNotBlank() }
+                                    ?: Uri.fromFile(f).toString(),
                                 folderPath = obj.optString("folderPath", f.parent ?: "")
                             )
                         )
