@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="car_map_gles_incompatible">Grafik sürücüsü bu harita motorunun istediği ES3 pencere yapılandırmasını sunmuyor. Harita başlatılmadı; launcher özellikleri kullanılabilir.</string>
     <string name="car_map_empty_test">Boş harita motorunu dene</string>
     <string name="car_map_style_test">Çevrimdışı dosyalar olmadan stili dene</string>
 

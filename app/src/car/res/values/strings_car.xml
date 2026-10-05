@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="car_map_gles_incompatible">The graphics driver has no ES3 window configuration required by this map engine. The map was not started; launcher features remain available.</string>
     <string name="car_map_empty_test">Test empty map engine</string>
     <string name="car_map_style_test">Test style without offline archives</string>
 

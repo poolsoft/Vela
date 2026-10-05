@@ -118,7 +118,8 @@ open class MapRendererService : Service() {
                     if (next != generation || session.isEmpty()) continue
                     if (!graphicsCaptured) {
                         stage("graphics-probe")
-                        withContext(Dispatchers.IO) { RendererGraphicsDiagnostics.capture(applicationContext) }
+                        val compatible = withContext(Dispatchers.IO) { RendererGraphicsDiagnostics.capture(applicationContext) }
+                        check(compatible != false) { getString(app.vela.R.string.car_map_gles_incompatible) }
                         graphicsCaptured = true
                     }
                     applySettings(value.settings)
