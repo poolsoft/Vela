@@ -56,6 +56,16 @@ object ProcessDiagnostics {
         requestWrite()
     }
 
+    /** Startup-only barrier: persist the last native-entry stage before entering EGL/JNI. */
+    fun checkpointAndFlush(label: String) {
+        operation = label
+        if (!::worker.isInitialized) return
+        if (Looper.myLooper() == worker.looper) { persist(); return }
+        val done = java.util.concurrent.CountDownLatch(1)
+        worker.post { try { persist() } finally { done.countDown() } }
+        runCatching { done.await(1, java.util.concurrent.TimeUnit.SECONDS) }
+    }
+
     fun activity(state: String, visible: Boolean? = null) {
         lifecycle = state
         if (visible != null) foreground = visible

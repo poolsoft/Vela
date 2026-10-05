@@ -31,6 +31,9 @@ open class MapRendererService : Service() {
     private var display: VirtualDisplay? = null
     private var presentation: MapPresentation? = null
     private var output: Surface? = null
+    private var displayWidth = 0
+    private var displayHeight = 0
+    private var displayDpi = 0
     private var scene by mutableStateOf<MapRenderScene?>(null)
     private val sceneQueue = kotlinx.coroutines.channels.Channel<Pair<Int, ParcelFileDescriptor>>(
         kotlinx.coroutines.channels.Channel.CONFLATED, onUndeliveredElement = { it.second.close() },
@@ -62,11 +65,20 @@ open class MapRendererService : Service() {
                     ) ?: error("virtual display unavailable")
                     presentation = MapPresentation(this, display!!.display).also { it.show() }
                 } else {
-                    display!!.resize(width, height, dpi)
+                    val resized = displayWidth != width || displayHeight != height || displayDpi != dpi
+                    if (resized) {
+                        // Presentation cancels itself when its display metrics change. Replace its
+                        // lifecycle/Compose/MapView tree explicitly instead of retaining a dead window.
+                        presentation?.dismiss()
+                        presentation = null
+                        display!!.resize(width, height, dpi)
+                    }
                     display!!.surface = surface
                     output?.release()
                     output = surface
+                    if (resized) presentation = MapPresentation(this, display!!.display).also { it.show() }
                 }
+                displayWidth = width; displayHeight = height; displayDpi = dpi
             } catch (error: Exception) { fd?.close(); fail("display", error); return@Handler true }
         }
         if (data.getString("session") != session || session.isEmpty()) { fd?.close(); return@Handler true }
@@ -132,7 +144,11 @@ open class MapRendererService : Service() {
         if (appliedSettings == settings) return
         appliedSettings = settings
         val prefs = applicationContext.getSharedPreferences("vela_settings", MODE_PRIVATE)
-        val edit = prefs.edit().clear()
+        val inflight = prefs.getBoolean("map_init_inflight", false)
+        val crashes = prefs.getInt("map_init_crashes", 0)
+        val autoTexture = prefs.getLong("texture_render_auto_ms", 0)
+        val edit = prefs.edit().clear().putBoolean("map_init_inflight", inflight).putInt("map_init_crashes", crashes)
+        if (autoTexture > 0) edit.putLong("texture_render_auto_ms", autoTexture)
         for ((key, item) in settings) {
             val entry = item.jsonObject
             val value = entry.getValue("value")
@@ -170,6 +186,10 @@ open class MapRendererService : Service() {
     }
     private fun fail(stage: String, error: Exception) {
         FileLogger.e("MapRenderer", "session=$session stage=$stage", error)
+        val report = "session=$session stage=$stage\n" + app.vela.diag.ProcessDiagnostics.snapshot() + "\n" + error.stackTraceToString()
+        scope.launch(Dispatchers.IO) {
+            runCatching { app.vela.diag.CrashCatcher.saveDiagnosticReport(this@MapRendererService, "Handled renderer error", report) }
+        }
         send(MapRendererTransport.STAGE, Bundle().apply { putString("stage", "error: $stage") })
     }
     private var lastPuckEvent = 0L
@@ -195,6 +215,7 @@ open class MapRendererService : Service() {
         output?.release(); output = null
         MapRendererEvents.listener = null
         app.vela.diag.ProcessDiagnostics.explicitClose()
+        app.vela.diag.ProcessDiagnostics.checkpointAndFlush("renderer: explicit close")
     }
 
     private inner class MapPresentation(context: Context, display: Display) :
@@ -229,7 +250,15 @@ open class MapRendererService : Service() {
                         // Return synchronously for the map's compass handling; actual action is IPC.
                         MapRenderCallbacks.sending(current.navMode, ::event)
                     }
-                    CompositionLocalProvider(LocalDensity provides Density(current.density, current.fontScale)) {
+                    val hostConfiguration = android.content.res.Configuration(context.resources.configuration).apply {
+                        if (current.hostWidthDp > 0 && current.hostHeightDp > 0) {
+                            screenWidthDp = current.hostWidthDp; screenHeightDp = current.hostHeightDp
+                            orientation = if (screenWidthDp > screenHeightDp) android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                                else android.content.res.Configuration.ORIENTATION_PORTRAIT
+                        }
+                    }
+                    CompositionLocalProvider(LocalDensity provides Density(current.density, current.fontScale),
+                        androidx.compose.ui.platform.LocalConfiguration provides hostConfiguration) {
                         androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
                             current.Draw(mapped, dpad, Modifier.fillMaxSize())
                             if (current.autoSurface) {

@@ -5,6 +5,8 @@ import android.os.*
 import android.view.*
 import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -27,6 +29,7 @@ import java.util.UUID
 fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapDpadController?, modifier: Modifier) {
     val context = LocalContext.current
     val density = LocalDensity.current
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val owner = LocalLifecycleOwner.current
     val latestCallbacks by rememberUpdatedState(callbacks)
     val client = remember(context) { IsolatedMapClient(context) { name, args -> latestCallbacks.dispatch(name, args) } }
@@ -34,7 +37,8 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
     val settings = rendererSettings(context)
     SideEffect { client.update(scene.copy(settings = settings, density = density.density, fontScale = density.fontScale,
         tuning = app.vela.core.config.CalibrationStore.latest.tuning,
-        mapPalette = app.vela.ui.MapColors.current(), pipActive = app.vela.ui.PipMode.active.value)) }
+        mapPalette = app.vela.ui.MapColors.current(), pipActive = app.vela.ui.PipMode.active.value,
+        hostWidthDp = configuration.screenWidthDp, hostHeightDp = configuration.screenHeightDp)) }
     DisposableEffect(client, owner, dpad) {
         dpad?.remote = client::key
         val observer = LifecycleEventObserver { _, event ->
@@ -62,7 +66,7 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
         }
         if (!state.ready) {
             Surface(modifier = Modifier.fillMaxSize()) {
-                Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)) {
                     Text(stringResource(if (state.failed) app.vela.R.string.car_map_renderer_failed else app.vela.R.string.car_map_renderer_loading))
                     Text(state.stage, style = MaterialTheme.typography.bodySmall)
@@ -108,6 +112,7 @@ internal class IsolatedMapClient(
     private var terminalStage = "connecting"
     private var hasStyle = false
     private var hasFrame = false
+    private var disconnectedAt = 0L
     private val monitor = object : Runnable {
         override fun run() {
             if (connection == null) return
@@ -143,13 +148,23 @@ internal class IsolatedMapClient(
         pending.trySend(value)
     }
     fun surface(value: Surface?, w: Int, h: Int, density: Int) {
+        val changed = width != w || height != h || dpi != density
         surface = value; width = w; height = h; dpi = density
+        if (changed && opened && value != null) {
+            hasStyle = false; hasFrame = false; openAt = SystemClock.elapsedRealtime()
+            mutableState.value = State(stage = "resizing")
+        }
         if (value == null) { disconnect(); return }
         if (!active || mutableState.value.failed) return
         if (connection == null) connect() else if (service != null) openSurface()
     }
     private fun connect() {
         if (!active || surface?.isValid != true || width <= 0 || height <= 0) return
+        val grace = 250 - (SystemClock.elapsedRealtime() - disconnectedAt)
+        if (grace > 0) {
+            handler.postDelayed({ if (connection == null && active && !state.value.failed) connect() }, grace)
+            return
+        }
         session = UUID.randomUUID().toString()
         val attempt = session
         bindAt = SystemClock.elapsedRealtime(); heartbeatAt = bindAt
@@ -225,7 +240,16 @@ internal class IsolatedMapClient(
         val details = "session=$session launcherPid=${Process.myPid()} rendererPid=$remotePid stage=$terminalStage reason=$reason\n" +
             app.vela.diag.ProcessDiagnostics.snapshot() + "\n" + (error?.stackTraceToString() ?: "No Java exception received; native cause is unknown.")
         scope.launch(Dispatchers.IO) {
-            runCatching { app.vela.diag.CrashCatcher.saveDiagnosticReport(context, "Map renderer failure", details) }
+            runCatching {
+                val journal = java.io.File(context.filesDir, "diag/process-session-$processSuffix.json")
+                val remoteSnapshot = if (journal.isFile) journal.inputStream().bufferedReader().use { reader ->
+                    val buffer = CharArray(16_384)
+                    val count = reader.read(buffer)
+                    if (count > 0) String(buffer, 0, count) else "Empty renderer journal"
+                } else "Renderer journal unavailable"
+                app.vela.diag.CrashCatcher.saveDiagnosticReport(context, "Map renderer failure",
+                    details + "\n=== Renderer journal ===\n" + remoteSnapshot)
+            }
         }
         mutableState.value = State(failed = true, stage = reason)
         disconnect()
@@ -235,6 +259,7 @@ internal class IsolatedMapClient(
         val old = connection
         val pid = remotePid
         connection = null; service = null; replyTo = null; session = ""; remotePid = 0; opened = false; hasStyle = false; hasFrame = false
+        if (old != null) disconnectedAt = SystemClock.elapsedRealtime()
         old?.let { runCatching { context.unbindService(it) } }
         // Bound-service death/unbind may be queued behind a stuck EGL call. Check UID/name/PID
         // before ending ONLY this app's renderer, never the Home/music process.

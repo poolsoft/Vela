@@ -72,7 +72,9 @@ internal object MapRendererTransport {
 internal object MapRendererEvents {
     var listener: ((String) -> Unit)? = null
     fun report(stage: String) {
-        app.vela.diag.ProcessDiagnostics.checkpoint("renderer: $stage")
+        if (stage in setOf("library", "map-create", "style-loading"))
+            app.vela.diag.ProcessDiagnostics.checkpointAndFlush("renderer: $stage")
+        else app.vela.diag.ProcessDiagnostics.checkpoint("renderer: $stage")
         app.vela.util.FileLogger.i("MapRenderer", stage)
         listener?.invoke(stage)
     }

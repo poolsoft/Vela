@@ -151,7 +151,7 @@ object CarIntegration {
                         ) { Text(stringResource(app.vela.R.string.car_map_renderer_close)) }
                     }
                 } else Surface(modifier = Modifier.fillMaxSize()) {
-                    Column(Modifier.fillMaxSize().padding(16.dp),
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
                         horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(stringResource(app.vela.R.string.car_map_manual_start_detail))

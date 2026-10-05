@@ -60,7 +60,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
 
     override fun getSharedPreferences(name: String, mode: Int): android.content.SharedPreferences {
         val privateName = if (app.vela.variant.CarIntegration.available &&
-            !app.vela.util.ProcessIdentity.isMain(this)) "renderer_$name" else name
+            !app.vela.util.ProcessIdentity.isMain(this)) "renderer_${app.vela.util.ProcessIdentity.fileSuffix(this)}_$name" else name
         return super.getSharedPreferences(privateName, mode)
     }
 

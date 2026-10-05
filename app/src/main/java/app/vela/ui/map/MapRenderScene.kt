@@ -96,6 +96,8 @@ data class MapRenderScene(
     val autoLimitKmh: Float? = null,
     val density: Float = 1f,
     val fontScale: Float = 1f,
+    val hostWidthDp: Int = 0,
+    val hostHeightDp: Int = 0,
 ) {
     @Composable fun Draw(callbacks: MapRenderCallbacks, dpad: MapDpadController, modifier: Modifier) {
         VelaMapView(

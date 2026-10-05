@@ -487,9 +487,9 @@ class CarMapRenderer(
             val area = safeArea()
             isolatedSurface?.update(app.vela.ui.map.MapRenderScene(
                 styleUri = app.vela.ui.map.MapFonts.effective(MapStyle.LIBERTY.uri),
-                myLocation = puck, myBearing = bearing.toFloat(), mySpeed = speedMps.toFloat(),
-                cameraTarget = center ?: puck ?: locationProvider.lastKnown(),
-                cameraTargetZoom = zoom,
+                myLocation = targetPuck ?: puck, myBearing = targetBearing.toFloat(), mySpeed = speedMps.toFloat(),
+                cameraTarget = (if (following) targetPuck ?: puck else center) ?: locationProvider.lastKnown(),
+                cameraTargetZoom = if (following && nav) navZoom() else zoom,
                 routePolyline = (previewRoute ?: navSession.state.value.route?.takeIf { nav })?.polyline ?: emptyList(),
                 routeTrafficSpans = navSession.state.value.route?.let { route ->
                     if (route.distanceMeters <= 0) emptyList() else route.trafficSpans.map {
@@ -499,6 +499,8 @@ class CarMapRenderer(
                 } ?: emptyList(),
                 frameMarkers = false, navMode = nav && !overview, navDriveMode = nav,
                 autoSurface = true, autoSpeedKmh = (speedMps * 3.6).toFloat(), autoLimitKmh = speedLimitKmh?.toFloat(),
+                trafficControls = app.vela.car.CarBridge.controls.value,
+                speedCameras = app.vela.car.CarBridge.speedCameras.value.map { app.vela.core.data.SpeedCamera(it) },
                 navFollowing = following && !overview, driveFollowing = following && !nav && previewRoute == null,
                 darkTheme = isNight(), applyKeylessTheme = true, trafficOn = app.vela.ui.Traffic.on.value,
                 cameraLeftInsetPx = area.left, cameraTopInsetPx = area.top,
