@@ -60,6 +60,7 @@ class CarMapRenderer(
     private val routeEngine: RouteEngine? = null,
 ) : SurfaceCallback {
 
+    private var isolatedSurface = app.vela.variant.CarIntegration.isolatedAutoSurface(carContext)
     private val scope = CoroutineScope(Dispatchers.Main.immediate)
     private var collectJob: Job? = null
 
@@ -145,6 +146,13 @@ class CarMapRenderer(
 
     /** Step the zoom (map-control buttons); pins follow off briefly so the change is visible. */
     fun zoomBy(delta: Double) {
+        if (app.vela.variant.CarIntegration.available) {
+            following = false
+            lastPanMs = android.os.SystemClock.uptimeMillis()
+            requestRender()
+            isolatedSurface?.key("zoom", delta)
+            return
+        }
         zoom = (zoom + delta).coerceIn(2.0, 20.0)
         lastPanMs = android.os.SystemClock.uptimeMillis()
         following = false
@@ -313,6 +321,7 @@ class CarMapRenderer(
         collectJob = null
         tickerJob?.cancel()
         tickerJob = null
+        isolatedSurface?.close(); isolatedSurface = null
         // Session teardown: release the native snapshotter too (onSurfaceDestroyed may not fire on an
         // abnormal projection end). Safe here because stop() is session-scoped, not per-screen.
         runCatching { snapshotter?.cancel() }
@@ -329,6 +338,12 @@ class CarMapRenderer(
         // and every future requestRender would no-op — the map freezes after a screen change.
         rendering = false; dirty = false
         if (width <= 0 || height <= 0) return
+        if (app.vela.variant.CarIntegration.available) {
+            if (isolatedSurface == null) isolatedSurface = app.vela.variant.CarIntegration.isolatedAutoSurface(carContext)
+            isolatedSurface?.surface(surface, width, height, container.dpi)
+            requestRender()
+            return
+        }
         runCatching { MapLibre.getInstance(carContext) }
         center = center ?: puck ?: locationProvider.lastKnown()
         // Reuse the existing snapshotter when the surface size is unchanged. A screen transition
@@ -382,6 +397,7 @@ class CarMapRenderer(
     }
 
     override fun onSurfaceDestroyed(container: SurfaceContainer) {
+        isolatedSurface?.surface(null, 0, 0, 0)
         surface = null
         runCatching { snapshotter?.cancel() }
         snapshotter = null
@@ -401,6 +417,13 @@ class CarMapRenderer(
         ?: visible?.takeIf { !it.isEmpty } ?: Rect(0, 0, width, height)
 
     override fun onScroll(distanceX: Float, distanceY: Float) {
+        if (app.vela.variant.CarIntegration.available) {
+            following = false
+            lastPanMs = android.os.SystemClock.uptimeMillis()
+            requestRender()
+            isolatedSurface?.key("pan", distanceX.toDouble() / width.coerceAtLeast(1), distanceY.toDouble() / height.coerceAtLeast(1))
+            return
+        }
         val snap = lastSnapshot ?: return
         following = false
         lastPanMs = android.os.SystemClock.uptimeMillis()
@@ -414,6 +437,11 @@ class CarMapRenderer(
         if (scaleFactor <= 0f) return
         following = false // else the next nav frame overwrites the pinch zoom with navZoom()
         lastPanMs = android.os.SystemClock.uptimeMillis()
+        if (app.vela.variant.CarIntegration.available) {
+            requestRender()
+            isolatedSurface?.key("zoom", ln(scaleFactor.toDouble()) / ln(2.0))
+            return
+        }
         zoom = (zoom + ln(scaleFactor.toDouble()) / ln(2.0)).coerceIn(2.0, 20.0)
         requestRender()
     }
@@ -454,6 +482,33 @@ class CarMapRenderer(
     }
 
     private fun requestRender() {
+        if (app.vela.variant.CarIntegration.available) {
+            val nav = navigating()
+            val area = safeArea()
+            isolatedSurface?.update(app.vela.ui.map.MapRenderScene(
+                styleUri = app.vela.ui.map.MapFonts.effective(MapStyle.LIBERTY.uri),
+                myLocation = puck, myBearing = bearing.toFloat(), mySpeed = speedMps.toFloat(),
+                cameraTarget = center ?: puck ?: locationProvider.lastKnown(),
+                cameraTargetZoom = zoom,
+                routePolyline = (previewRoute ?: navSession.state.value.route?.takeIf { nav })?.polyline ?: emptyList(),
+                routeTrafficSpans = navSession.state.value.route?.let { route ->
+                    if (route.distanceMeters <= 0) emptyList() else route.trafficSpans.map {
+                        Triple((it.startMeters / route.distanceMeters).toFloat(),
+                            ((it.startMeters + it.lengthMeters) / route.distanceMeters).toFloat(), it.level)
+                    }
+                } ?: emptyList(),
+                frameMarkers = false, navMode = nav && !overview, navDriveMode = nav,
+                autoSurface = true, autoSpeedKmh = (speedMps * 3.6).toFloat(), autoLimitKmh = speedLimitKmh?.toFloat(),
+                navFollowing = following && !overview, driveFollowing = following && !nav && previewRoute == null,
+                darkTheme = isNight(), applyKeylessTheme = true, trafficOn = app.vela.ui.Traffic.on.value,
+                cameraLeftInsetPx = area.left, cameraTopInsetPx = area.top,
+                cameraRightInsetPx = (width - area.right).coerceAtLeast(0),
+                cameraBottomInsetPx = (height - area.bottom).coerceAtLeast(0),
+                navOverviewTick = if (overview) 1 else 0,
+            ))
+            return
+        }
+
         val snap = snapshotter
         val here = center
         if (snap == null || here == null) return

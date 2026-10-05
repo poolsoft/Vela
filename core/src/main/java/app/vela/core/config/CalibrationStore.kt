@@ -212,6 +212,11 @@ class CalibrationStore @Inject constructor(
         var latest: Calibration = Calibration.DEFAULT
             private set
 
+        /** Values already accepted by the owning app process; renderer never fetches config. */
+        fun applyRendererTuning(values: Map<String, Double>, palette: String) {
+            latest = latest.copy(tuning = values, defaultMapPalette = palette)
+        }
+
         private const val REMOTE_URL = "https://raw.githubusercontent.com/PimpinPumpkin/Vela/main/calibration.json"
         private const val SIG_URL = "https://raw.githubusercontent.com/PimpinPumpkin/Vela/main/calibration.json.sig"
         private val ALLOWED_HOSTS = setOf("www.google.com", "google.com")

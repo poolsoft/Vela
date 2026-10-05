@@ -11,6 +11,15 @@ import kotlinx.coroutines.flow.StateFlow
 /** Normal Vela variant: no launcher service, HOME role or OEM hardware hooks. */
 object CarIntegration {
     const val available = false
+    fun isolatedAutoSurface(context: Context): app.vela.ui.map.SurfaceMapController? = null
+    @Composable fun RenderIsolatedMap(
+        scene: app.vela.ui.map.MapRenderScene,
+        callbacks: app.vela.ui.map.MapRenderCallbacks,
+        dpad: app.vela.ui.map.MapDpadController?,
+        modifier: androidx.compose.ui.Modifier,
+    ): Boolean = false
+    fun mapRendererStage(stage: String) = Unit
+
     val settingsTitle = app.vela.R.string.settings_title
     val settingsSubtitle = app.vela.R.string.settings_title
     val permissionsTitle = app.vela.R.string.settings_title

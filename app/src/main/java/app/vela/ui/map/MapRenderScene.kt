@@ -1,0 +1,297 @@
+package app.vela.ui.map
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import app.vela.core.model.LatLng
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.*
+
+/** Value-only renderer boundary. No ViewModel, Context or functions cross processes. */
+@Serializable
+data class MapRenderScene(
+    val styleUri: String = app.vela.core.data.tiles.MapStyle.LIBERTY.uri,
+    val myLocation: LatLng? = null,
+    val myBearing: Float? = null,
+    val myAccuracyM: Float? = null,
+    val mySpeed: Float? = null,
+    val myFixRaw: LatLng? = null,
+    val mySpeedRaw: Float? = null,
+    val replaySpeedup: Float = 1f,
+    val replaying: Boolean = false,
+    val compassHeading: Float? = null,
+    val locationStale: Boolean = false,
+    val cameraTarget: LatLng? = null,
+    val cameraTargetZoom: Double? = null,
+    val recenterTick: Int = 0,
+    val cameraBottomInsetPx: Int = 0,
+    val cameraLeftInsetPx: Int = 0,
+    val cameraRightInsetPx: Int = 0,
+    val cameraTopInsetPx: Int = 0,
+    val routePolyline: List<LatLng> = emptyList(),
+    val routeColor: String = "#0080FF",
+    val routeDashed: Boolean = false,
+    val transitPreview: app.vela.core.model.TransitItinerary? = null,
+    val transitNavLeg: Int? = null,
+    val routeTrafficSpans: List<Triple<Float, Float, Int>> = emptyList(),
+    val alternates: List<Pair<Int, List<LatLng>>> = emptyList(),
+    val altColor: String = "#9AA0A6",
+    val routeBubbles: List<RouteBubble> = emptyList(),
+    val markers: List<MapMarker> = emptyList(),
+    val stopPins: List<LatLng> = emptyList(),
+    val destinationPin: LatLng? = null,
+    val candidatePin: LatLng? = null,
+    val frameMarkers: Boolean = false,
+    val holdMarkerFit: Boolean = false,
+    val navMode: Boolean = false,
+    val navDriveMode: Boolean = false,
+    val navLabelExclude: List<String> = emptyList(),
+    val navUpcomingRoads: List<String> = emptyList(),
+    val navFollowing: Boolean = true,
+    val navNorthUp: Boolean = false,
+    val driveFollowing: Boolean = false,
+    val ambientCoversView: Boolean = false,
+    val darkTheme: Boolean = false,
+    val amoled: Boolean = false,
+    val applyKeylessTheme: Boolean = false,
+    val trafficOn: Boolean = false,
+    val transitOn: Boolean = false,
+    val satelliteOn: Boolean = false,
+    val satDeep: Int = 0,
+    val topographyOn: Boolean = false,
+    val previewTarget: LatLng? = null,
+    val navOverviewTick: Int = 0,
+    val navRecenterTick: Int = 0,
+    val parkingSpot: LatLng? = null,
+    val savedPins: List<SavedPin> = emptyList(),
+    val svPose: DoubleArray? = null,
+    val svTopInsetPx: Int = 0,
+    val ambientPois: List<MapMarker> = emptyList(),
+    val buildingOverlays: List<String> = emptyList(),
+    val addressOverlays: List<String> = emptyList(),
+    val maxspeedOverlays: List<String> = emptyList(),
+    val hiddenOpenPlaceIds: Set<String> = emptySet(),
+    val ambientClosed: List<MapMarker> = emptyList(),
+    val placesPending: Boolean = false,
+    val placesOneSet: Boolean = false,
+    val osmBusinesses: Boolean = false,
+    val navExitCallout: Pair<LatLng, String>? = null,
+    val navTapPlaces: Boolean = false,
+    val placesOverlays: List<String> = emptyList(),
+    val basemapArchive: String? = null,
+    val speedOverlayOn: Boolean = false,
+    val trafficControls: List<app.vela.core.data.TrafficControl> = emptyList(),
+    val flockCameras: List<app.vela.core.data.AlprCamera> = emptyList(),
+    val speedCameras: List<app.vela.core.data.SpeedCamera> = emptyList(),
+    val transitStops: List<app.vela.core.data.transit.Transitous.MapStop> = emptyList(),
+    val navBannerBottomPx: Int = 0,
+    val poisEnabled: Boolean = true,
+    val poiIconScale: Float = 1f,
+    val poiLabelScale: Float = 1f,
+    val settings: JsonObject = JsonObject(emptyMap()),
+    val tuning: Map<String, Double> = emptyMap(),
+    val mapPalette: String = "modern",
+    val pipActive: Boolean = false,
+    val autoSurface: Boolean = false,
+    val autoSpeedKmh: Float = 0f,
+    val autoLimitKmh: Float? = null,
+    val density: Float = 1f,
+    val fontScale: Float = 1f,
+) {
+    @Composable fun Draw(callbacks: MapRenderCallbacks, dpad: MapDpadController, modifier: Modifier) {
+        VelaMapView(
+            styleUri = styleUri,
+            myLocation = myLocation,
+            myBearing = myBearing,
+            myAccuracyM = myAccuracyM,
+            mySpeed = mySpeed,
+            myFixRaw = myFixRaw,
+            mySpeedRaw = mySpeedRaw,
+            replaySpeedup = replaySpeedup,
+            replaying = replaying,
+            compassHeading = compassHeading,
+            locationStale = locationStale,
+            cameraTarget = cameraTarget,
+            cameraTargetZoom = cameraTargetZoom,
+            recenterTick = recenterTick,
+            cameraBottomInsetPx = cameraBottomInsetPx,
+            cameraLeftInsetPx = cameraLeftInsetPx,
+            cameraRightInsetPx = cameraRightInsetPx,
+            cameraTopInsetPx = cameraTopInsetPx,
+            routePolyline = routePolyline,
+            routeColor = routeColor,
+            routeDashed = routeDashed,
+            transitPreview = transitPreview,
+            transitNavLeg = transitNavLeg,
+            routeTrafficSpans = routeTrafficSpans,
+            alternates = alternates,
+            altColor = altColor,
+            onSelectAlternate = callbacks.onSelectAlternate,
+            routeBubbles = routeBubbles,
+            markers = markers,
+            stopPins = stopPins,
+            destinationPin = destinationPin,
+            candidatePin = candidatePin,
+            frameMarkers = frameMarkers,
+            holdMarkerFit = holdMarkerFit,
+            navMode = navMode,
+            navDriveMode = navDriveMode,
+            navLabelExclude = navLabelExclude,
+            navUpcomingRoads = navUpcomingRoads,
+            onNavRoadLatin = callbacks.onNavRoadLatin,
+            navFollowing = navFollowing,
+            navNorthUp = navNorthUp,
+            driveFollowing = driveFollowing,
+            onNavPanned = callbacks.onNavPanned,
+            ambientCoversView = ambientCoversView,
+            onUserPan = callbacks.onUserPan,
+            onMapTap = callbacks.onMapTap,
+            onScaleChanged = callbacks.onScaleChanged,
+            onOverlayState = callbacks.onOverlayState,
+            darkTheme = darkTheme,
+            amoled = amoled,
+            applyKeylessTheme = applyKeylessTheme,
+            trafficOn = trafficOn,
+            transitOn = transitOn,
+            satelliteOn = satelliteOn,
+            satDeep = satDeep,
+            topographyOn = topographyOn,
+            previewTarget = previewTarget,
+            navOverviewTick = navOverviewTick,
+            navRecenterTick = navRecenterTick,
+            onNavZoomOverride = callbacks.onNavZoomOverride,
+            onPuckScreen = callbacks.onPuckScreen,
+            onPoiTap = callbacks.onPoiTap,
+            onMarkerTap = callbacks.onMarkerTap,
+            parkingSpot = parkingSpot,
+            savedPins = savedPins,
+            onSavedPinTap = callbacks.onSavedPinTap,
+            onParkingTap = callbacks.onParkingTap,
+            svPose = svPose,
+            svTopInsetPx = svTopInsetPx,
+            onSvMapTap = callbacks.onSvMapTap,
+            ambientPois = ambientPois,
+            onAmbientTap = callbacks.onAmbientTap,
+            onTransitStopTap = callbacks.onTransitStopTap,
+            buildingOverlays = buildingOverlays,
+            addressOverlays = addressOverlays,
+            maxspeedOverlays = maxspeedOverlays,
+            hiddenOpenPlaceIds = hiddenOpenPlaceIds,
+            ambientClosed = ambientClosed,
+            onOpenPlaceClosed = callbacks.onOpenPlaceClosed,
+            placesPending = placesPending,
+            placesOneSet = placesOneSet,
+            osmBusinesses = osmBusinesses,
+            navExitCallout = navExitCallout,
+            navTapPlaces = navTapPlaces,
+            placesOverlays = placesOverlays,
+            basemapArchive = basemapArchive,
+            onOpenPlaceTap = callbacks.onOpenPlaceTap,
+            onRoadLimitKmh = callbacks.onRoadLimitKmh,
+            speedOverlayOn = speedOverlayOn,
+            trafficControls = trafficControls,
+            flockCameras = flockCameras,
+            speedCameras = speedCameras,
+            transitStops = transitStops,
+            navBannerBottomPx = navBannerBottomPx,
+            onCompassTap = callbacks.onCompassTap,
+            poisEnabled = poisEnabled,
+            poiIconScale = poiIconScale,
+            poiLabelScale = poiLabelScale,
+            onCameraIdle = callbacks.onCameraIdle,
+            onMapLongPress = callbacks.onMapLongPress,
+            onAddressLabelTap = callbacks.onAddressLabelTap,
+            onViewport = callbacks.onViewport,
+            dpadController = dpad,
+            modifier = modifier,
+        )
+    }
+}
+
+class MapRenderCallbacks(
+    val onSelectAlternate: (Int) -> Unit,
+    val onNavRoadLatin: (Map<String, String>) -> Unit,
+    val onNavPanned: () -> Unit,
+    val onUserPan: () -> Unit,
+    val onMapTap: () -> Unit,
+    val onScaleChanged: (metersPerPixel: Double) -> Unit,
+    val onOverlayState: (String) -> Unit,
+    val onNavZoomOverride: (Boolean) -> Unit,
+    val onPuckScreen: (Float, Float) -> Unit,
+    val onPoiTap: (name: String, location: LatLng, poiKind: String?) -> Unit,
+    val onMarkerTap: (index: Int) -> Unit,
+    val onSavedPinTap: (index: Int) -> Unit,
+    val onParkingTap: () -> Unit,
+    val onSvMapTap: (LatLng) -> Unit,
+    val onAmbientTap: (index: Int) -> Unit,
+    val onTransitStopTap: (app.vela.core.data.transit.Transitous.MapStop) -> Unit,
+    val onOpenPlaceClosed: (id: String) -> Unit,
+    val onOpenPlaceTap: (app.vela.core.model.Place) -> Unit,
+    val onRoadLimitKmh: (Double?) -> Unit,
+    val onCompassTap: () -> Boolean,
+    val onCameraIdle: (center: LatLng) -> Unit,
+    val onMapLongPress: (location: LatLng) -> Unit,
+    val onAddressLabelTap: (number: String, location: LatLng, tileStreet: String?) -> Unit,
+    val onViewport: (south: Double, west: Double, north: Double, east: Double, zoom: Double) -> Unit,
+) {
+    fun dispatch(name: String, args: JsonArray) {
+        when (name) {
+            "onSelectAlternate" -> onSelectAlternate(MapRenderJson.json.decodeFromJsonElement<Int>(args[0]))
+            "onNavRoadLatin" -> onNavRoadLatin(MapRenderJson.json.decodeFromJsonElement<Map<String, String>>(args[0]))
+            "onNavPanned" -> onNavPanned()
+            "onUserPan" -> onUserPan()
+            "onMapTap" -> onMapTap()
+            "onScaleChanged" -> onScaleChanged(MapRenderJson.json.decodeFromJsonElement<Double>(args[0]))
+            "onOverlayState" -> onOverlayState(MapRenderJson.json.decodeFromJsonElement<String>(args[0]))
+            "onNavZoomOverride" -> onNavZoomOverride(MapRenderJson.json.decodeFromJsonElement<Boolean>(args[0]))
+            "onPuckScreen" -> onPuckScreen(MapRenderJson.json.decodeFromJsonElement<Float>(args[0]), MapRenderJson.json.decodeFromJsonElement<Float>(args[1]))
+            "onPoiTap" -> onPoiTap(MapRenderJson.json.decodeFromJsonElement<String>(args[0]), MapRenderJson.json.decodeFromJsonElement<LatLng>(args[1]), MapRenderJson.json.decodeFromJsonElement<String?>(args[2]))
+            "onMarkerTap" -> onMarkerTap(MapRenderJson.json.decodeFromJsonElement<Int>(args[0]))
+            "onSavedPinTap" -> onSavedPinTap(MapRenderJson.json.decodeFromJsonElement<Int>(args[0]))
+            "onParkingTap" -> onParkingTap()
+            "onSvMapTap" -> onSvMapTap(MapRenderJson.json.decodeFromJsonElement<LatLng>(args[0]))
+            "onAmbientTap" -> onAmbientTap(MapRenderJson.json.decodeFromJsonElement<Int>(args[0]))
+            "onTransitStopTap" -> onTransitStopTap(MapRenderJson.json.decodeFromJsonElement<app.vela.core.data.transit.Transitous.MapStop>(args[0]))
+            "onOpenPlaceClosed" -> onOpenPlaceClosed(MapRenderJson.json.decodeFromJsonElement<String>(args[0]))
+            "onOpenPlaceTap" -> onOpenPlaceTap(MapRenderJson.json.decodeFromJsonElement<app.vela.core.model.Place>(args[0]))
+            "onRoadLimitKmh" -> onRoadLimitKmh(MapRenderJson.json.decodeFromJsonElement<Double?>(args[0]))
+            "onCompassTap" -> onCompassTap()
+            "onCameraIdle" -> onCameraIdle(MapRenderJson.json.decodeFromJsonElement<LatLng>(args[0]))
+            "onMapLongPress" -> onMapLongPress(MapRenderJson.json.decodeFromJsonElement<LatLng>(args[0]))
+            "onAddressLabelTap" -> onAddressLabelTap(MapRenderJson.json.decodeFromJsonElement<String>(args[0]), MapRenderJson.json.decodeFromJsonElement<LatLng>(args[1]), MapRenderJson.json.decodeFromJsonElement<String?>(args[2]))
+            "onViewport" -> onViewport(MapRenderJson.json.decodeFromJsonElement<Double>(args[0]), MapRenderJson.json.decodeFromJsonElement<Double>(args[1]), MapRenderJson.json.decodeFromJsonElement<Double>(args[2]), MapRenderJson.json.decodeFromJsonElement<Double>(args[3]), MapRenderJson.json.decodeFromJsonElement<Double>(args[4]))
+        }
+    }
+
+    companion object {
+        fun sending(consumeCompass: Boolean = false, send: (String, JsonArray) -> Unit) = MapRenderCallbacks(
+            onSelectAlternate = { a0 -> send("onSelectAlternate", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onNavRoadLatin = { a0 -> send("onNavRoadLatin", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onNavPanned = { send("onNavPanned", JsonArray(listOf())) },
+            onUserPan = { send("onUserPan", JsonArray(listOf())) },
+            onMapTap = { send("onMapTap", JsonArray(listOf())) },
+            onScaleChanged = { a0 -> send("onScaleChanged", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onOverlayState = { a0 -> send("onOverlayState", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onNavZoomOverride = { a0 -> send("onNavZoomOverride", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onPuckScreen = { a0, a1 -> send("onPuckScreen", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0), MapRenderJson.json.encodeToJsonElement(a1)))) },
+            onPoiTap = { a0, a1, a2 -> send("onPoiTap", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0), MapRenderJson.json.encodeToJsonElement(a1), MapRenderJson.json.encodeToJsonElement(a2)))) },
+            onMarkerTap = { a0 -> send("onMarkerTap", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onSavedPinTap = { a0 -> send("onSavedPinTap", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onParkingTap = { send("onParkingTap", JsonArray(listOf())) },
+            onSvMapTap = { a0 -> send("onSvMapTap", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onAmbientTap = { a0 -> send("onAmbientTap", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onTransitStopTap = { a0 -> send("onTransitStopTap", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onOpenPlaceClosed = { a0 -> send("onOpenPlaceClosed", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onOpenPlaceTap = { a0 -> send("onOpenPlaceTap", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onRoadLimitKmh = { a0 -> send("onRoadLimitKmh", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onCompassTap = { send("onCompassTap", JsonArray(listOf())); consumeCompass },
+            onCameraIdle = { a0 -> send("onCameraIdle", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onMapLongPress = { a0 -> send("onMapLongPress", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0)))) },
+            onAddressLabelTap = { a0, a1, a2 -> send("onAddressLabelTap", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0), MapRenderJson.json.encodeToJsonElement(a1), MapRenderJson.json.encodeToJsonElement(a2)))) },
+            onViewport = { a0, a1, a2, a3, a4 -> send("onViewport", JsonArray(listOf(MapRenderJson.json.encodeToJsonElement(a0), MapRenderJson.json.encodeToJsonElement(a1), MapRenderJson.json.encodeToJsonElement(a2), MapRenderJson.json.encodeToJsonElement(a3), MapRenderJson.json.encodeToJsonElement(a4)))) },
+        )
+    }
+}
+
+object MapRenderJson {
+    val json = Json { ignoreUnknownKeys = true; allowSpecialFloatingPointValues = true }
+}

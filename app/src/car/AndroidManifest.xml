@@ -24,7 +24,12 @@
         </intent>
     </queries>
     <application>
-        <!-- P1: private bound probe; no native map library is loaded yet. -->
+        <!-- Native map rendering is always outside the launcher process. -->
+        <service android:name="app.vela.carlauncher.map.MapRendererService"
+            android:process=":map_renderer" android:exported="false" />
+        <service android:name="app.vela.carlauncher.map.MapAutoRendererService"
+            android:process=":map_renderer_auto" android:exported="false" />
+        <!-- Lightweight probe does not initialize the engine. -->
         <service
             android:name="app.vela.carlauncher.map.MapRendererProbeService"
             android:process=":map_renderer"

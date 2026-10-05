@@ -52,9 +52,13 @@ object MapFonts {
     fun effective(base: String): String =
         if (base == MapStyle.LIBERTY.uri) patched.value ?: base else base
 
-    fun init(context: Context) {
+    fun loadCached(context: Context) {
         val f = cacheFile(context)
         if (f.isFile && f.length() > 0) patched.value = "file://${f.absolutePath}"
+    }
+
+    fun init(context: Context) {
+        loadCached(context)
         scope.launch { runCatching { refresh(context) } }
     }
 

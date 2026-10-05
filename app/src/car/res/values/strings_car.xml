@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="car_map_empty_test">Test empty map engine</string>
+    <string name="car_map_style_test">Test style without offline archives</string>
+
+    <string name="car_map_renderer_loading">Loading map in a separate process…</string>
+    <string name="car_map_renderer_failed">The map could not open. Details were saved to the logs.</string>
+    <string name="car_map_renderer_retry">Retry map</string>
+    <string name="car_map_renderer_close">Close map</string>
+
     <string name="car_map_probe_detail">First step: test the separate map process. No map engine or map data will be loaded.</string>
     <string name="car_map_probe_start">Test map process</string>
     <string name="car_map_probe_connecting">Connecting to the separate process…</string>

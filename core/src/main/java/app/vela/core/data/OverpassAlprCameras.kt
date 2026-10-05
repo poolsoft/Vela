@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit
 /** An automated license-plate reader (ALPR / "Flock") camera at [loc]. [operator] is the agency/company
  *  that runs it when tagged (e.g. "Flock Safety"), [direction] the way it points (OSM `direction`, degrees
  *  or a compass string) when known - both may be blank. */
+@kotlinx.serialization.Serializable
 data class AlprCamera(val loc: LatLng, val operator: String = "", val direction: String = "")
 
 /** Minimal Overpass response shape for STREAM parsing (only the fields we read). Keeping this tiny +

@@ -5,6 +5,7 @@ package app.vela.core.model
  * of them — Overture/OSM give the geometry + category, the scraped detail page
  * adds rating/hours/phone. Vela merges whatever it can get.
  */
+@kotlinx.serialization.Serializable
 data class Place(
     val id: String,
     val name: String,
@@ -70,6 +71,7 @@ data class Place(
 )
 
 /** A "People also search for" entry — a related place, enough to show a card and open it. */
+@kotlinx.serialization.Serializable
 data class SimilarPlace(
     val name: String,
     val location: LatLng,
@@ -84,6 +86,7 @@ data class SimilarPlace(
 data class Photo(val url: String, val postedText: String? = null, val category: String? = null)
 
 /** Google's "popular times": a typical-busyness histogram per day of the week. */
+@kotlinx.serialization.Serializable
 data class PopularTimes(val days: List<DayBusyness>)
 
 /** The rich fields the keyless/list search trims out, fetched lazily through the
@@ -129,6 +132,7 @@ data class ImportedList(
     val places: List<Place> = emptyList(),
 )
 
+@kotlinx.serialization.Serializable
 data class Department(
     val name: String,
     val hours: List<String> = emptyList(),
@@ -137,13 +141,16 @@ data class Department(
 )
 
 /** One day: [dayOfWeek] is 1=Mon … 7=Sun; [hours] are the open-hour buckets. */
+@kotlinx.serialization.Serializable
 data class DayBusyness(val dayOfWeek: Int, val hours: List<HourBusyness>)
 
 /** [hour] is 0..23; [occupancy] is the typical busyness 0..100. */
+@kotlinx.serialization.Serializable
 data class HourBusyness(val hour: Int, val occupancy: Int)
 
 /** One section of Google's "About" panel, e.g. title="Service options",
  *  items=["Outdoor seating","Takeout","Dine-in"]. */
+@kotlinx.serialization.Serializable
 data class AboutSection(val title: String, val items: List<String>)
 
 /** A single user review. [rating] is 1..5; [text] is null for rating-only reviews;

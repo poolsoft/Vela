@@ -141,6 +141,9 @@ jobs:
           -PappVersionCode=${{ steps.ver.outputs.code }}
           -PmaptilerKey=${{ secrets.MAPTILER_KEY }}
 
+      - name: Renderer boundary regression tests
+        run: ./gradlew :app:testCarReleaseUnitTest --no-daemon
+
       - name: Prepare APKs
         run: |
           VER="${{ steps.ver.outputs.name }}"

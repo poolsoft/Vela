@@ -141,6 +141,7 @@ private const val ROUTE_BUBBLE_ALT_IMG = "vela-rb-alt"
 /** A route's travel-time bubble on the map (the Google-style chooser experiment): [index] is the
  *  route's position in the chooser list, [at] a point on that route where it runs apart from the
  *  others, [selected] draws it filled in the route color. Tapping one selects that route. */
+@kotlinx.serialization.Serializable
 data class RouteBubble(
     val index: Int,
     val at: LatLng,
@@ -298,6 +299,7 @@ private const val TRAFFIC_TILES =
 
 /** A tappable search-result pin on the map. [prominence] (0 = unknown/low) drives the ambient dot's
  *  size + keep-distance so anchor stores read bigger and show from farther, Google-style. */
+@kotlinx.serialization.Serializable
 data class MapMarker(val name: String, val location: LatLng, val category: String? = null, val prominence: Double = 0.0, val rating: Double? = null, val fuelPrice: String? = null, val houseNumber: String? = null)
 
 // Last marker/ambient lists actually pushed to the GeoJSON sources, so applyData can skip a redundant
@@ -317,6 +319,7 @@ private var lastAppliedSpeedCams: List<app.vela.core.data.SpeedCamera>? = null
 private var lastAppliedTransitStops: List<app.vela.core.data.transit.Transitous.MapStop>? = null
 
 /** One saved place drawn on the browse map (issue #171): its list's icon key + color. */
+@kotlinx.serialization.Serializable
 data class SavedPin(val lat: Double, val lng: Double, val icon: String, val color: Long)
 private var lastTransitBusHidden: Boolean? = null // gate the poi_transit filter flip
 private var origPoiTransitFilter: Expression? = null // basemap filter to restore when coverage goes
@@ -695,6 +698,114 @@ fun VelaMapView(
     dpadController: MapDpadController? = null, // key-driven pan/zoom/select for D-pad-only devices (docs/dpad.md)
     modifier: Modifier = Modifier,
 ) {
+    if (app.vela.variant.CarIntegration.RenderIsolatedMap(
+        scene = MapRenderScene(
+            styleUri = styleUri,
+            myLocation = myLocation,
+            myBearing = myBearing,
+            myAccuracyM = myAccuracyM,
+            mySpeed = mySpeed,
+            myFixRaw = myFixRaw,
+            mySpeedRaw = mySpeedRaw,
+            replaySpeedup = replaySpeedup,
+            replaying = replaying,
+            compassHeading = compassHeading,
+            locationStale = locationStale,
+            cameraTarget = cameraTarget,
+            cameraTargetZoom = cameraTargetZoom,
+            recenterTick = recenterTick,
+            cameraBottomInsetPx = cameraBottomInsetPx,
+            cameraLeftInsetPx = cameraLeftInsetPx,
+            cameraRightInsetPx = cameraRightInsetPx,
+            cameraTopInsetPx = cameraTopInsetPx,
+            routePolyline = routePolyline,
+            routeColor = routeColor,
+            routeDashed = routeDashed,
+            transitPreview = transitPreview,
+            transitNavLeg = transitNavLeg,
+            routeTrafficSpans = routeTrafficSpans,
+            alternates = alternates,
+            altColor = altColor,
+            routeBubbles = routeBubbles,
+            markers = markers,
+            stopPins = stopPins,
+            destinationPin = destinationPin,
+            candidatePin = candidatePin,
+            frameMarkers = frameMarkers,
+            holdMarkerFit = holdMarkerFit,
+            navMode = navMode,
+            navDriveMode = navDriveMode,
+            navLabelExclude = navLabelExclude,
+            navUpcomingRoads = navUpcomingRoads,
+            navFollowing = navFollowing,
+            navNorthUp = navNorthUp,
+            driveFollowing = driveFollowing,
+            ambientCoversView = ambientCoversView,
+            darkTheme = darkTheme,
+            amoled = amoled,
+            applyKeylessTheme = applyKeylessTheme,
+            trafficOn = trafficOn,
+            transitOn = transitOn,
+            satelliteOn = satelliteOn,
+            satDeep = satDeep,
+            topographyOn = topographyOn,
+            previewTarget = previewTarget,
+            navOverviewTick = navOverviewTick,
+            navRecenterTick = navRecenterTick,
+            parkingSpot = parkingSpot,
+            savedPins = savedPins,
+            svPose = svPose,
+            svTopInsetPx = svTopInsetPx,
+            ambientPois = ambientPois,
+            buildingOverlays = buildingOverlays,
+            addressOverlays = addressOverlays,
+            maxspeedOverlays = maxspeedOverlays,
+            hiddenOpenPlaceIds = hiddenOpenPlaceIds,
+            ambientClosed = ambientClosed,
+            placesPending = placesPending,
+            placesOneSet = placesOneSet,
+            osmBusinesses = osmBusinesses,
+            navExitCallout = navExitCallout,
+            navTapPlaces = navTapPlaces,
+            placesOverlays = placesOverlays,
+            basemapArchive = basemapArchive,
+            speedOverlayOn = speedOverlayOn,
+            trafficControls = trafficControls,
+            flockCameras = flockCameras,
+            speedCameras = speedCameras,
+            transitStops = transitStops,
+            navBannerBottomPx = navBannerBottomPx,
+            poisEnabled = poisEnabled,
+            poiIconScale = poiIconScale,
+            poiLabelScale = poiLabelScale,
+        ),
+        callbacks = MapRenderCallbacks(
+            onSelectAlternate = onSelectAlternate,
+            onNavRoadLatin = onNavRoadLatin,
+            onNavPanned = onNavPanned,
+            onUserPan = onUserPan,
+            onMapTap = onMapTap,
+            onScaleChanged = onScaleChanged,
+            onOverlayState = onOverlayState,
+            onNavZoomOverride = onNavZoomOverride,
+            onPuckScreen = onPuckScreen,
+            onPoiTap = onPoiTap,
+            onMarkerTap = onMarkerTap,
+            onSavedPinTap = onSavedPinTap,
+            onParkingTap = onParkingTap,
+            onSvMapTap = onSvMapTap,
+            onAmbientTap = onAmbientTap,
+            onTransitStopTap = onTransitStopTap,
+            onOpenPlaceClosed = onOpenPlaceClosed,
+            onOpenPlaceTap = onOpenPlaceTap,
+            onRoadLimitKmh = onRoadLimitKmh,
+            onCompassTap = onCompassTap,
+            onCameraIdle = onCameraIdle,
+            onMapLongPress = onMapLongPress,
+            onAddressLabelTap = onAddressLabelTap,
+            onViewport = onViewport,
+        ), dpad = dpadController, modifier = modifier,
+    )) return
     val context = LocalContext.current
     val density = LocalDensity.current
     // Push MapLibre's compass below the status bar (it defaults to the top-right corner, which sits
@@ -865,7 +976,10 @@ fun VelaMapView(
             zoomOverride.value(false)
         }
     }
-    remember { MapLibre.getInstance(context) }
+    remember {
+        app.vela.variant.CarIntegration.mapRendererStage("library")
+        MapLibre.getInstance(context)
+    }
     // D-pad-only operation (docs/dpad.md): MapLibre's MapView calls requestFocus() on
     // itself and overrides onKeyDown to handle hardware D-pad keys (DPAD_CENTER = zoom in,
     // arrows = scroll). On a keypad phone it therefore SWALLOWS every D-pad key before
@@ -912,6 +1026,7 @@ fun VelaMapView(
         val opts = org.maplibre.android.maps.MapLibreMapOptions.createFromAttributes(context)
             .textureMode(textureModeEnabled)
         app.vela.diag.ProcessDiagnostics.checkpoint("map: create texture=$textureModeEnabled")
+        app.vela.variant.CarIntegration.mapRendererStage("map-create")
         MapView(context, opts).apply {
             onCreate(null)
             isFocusable = false
@@ -3382,6 +3497,17 @@ fun VelaMapView(
                         }
                     }
                 }
+                var frameReportedForStyle: Style? = null
+                mv.addOnDidFinishRenderingFrameListener { fully, _, _ ->
+                    val currentStyle = map.style
+                    if (fully && currentStyle != null && currentStyle !== frameReportedForStyle) {
+                        frameReportedForStyle = currentStyle
+                        app.vela.variant.CarIntegration.mapRendererStage("frame")
+                    }
+                }
+                mv.addOnDidFailLoadingMapListener { error ->
+                    app.vela.variant.CarIntegration.mapRendererStage("error: $error")
+                }
                 mv.addOnDidBecomeIdleListener {
                     // First finished render = the GL surface survived init: clear the crash
                     // sentinel and decay the counter (texture_render itself is untouched, so an
@@ -3765,7 +3891,9 @@ fun VelaMapView(
             // too, so they re-ran in the load window against the stale reference. Null the ref
             // FIRST so every effect bails until the new style lands in the callback.
             styleRef = null
+            app.vela.variant.CarIntegration.mapRendererStage("style-loading")
             map.setStyle(builder) { style ->
+                app.vela.variant.CarIntegration.mapRendererStage("style-ready")
                 styleRef = style
                 if (basemapArchive != null) {
                     // The local source goes in AFTER the style has loaded and the layers using it

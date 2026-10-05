@@ -15,6 +15,7 @@ import org.maplibre.android.maps.MapView
  * All methods are safe to call before the map is ready — they just no-op.
  */
 class MapDpadController {
+    internal var remote: ((String, Double, Double) -> Unit)? = null
     internal var mapView: MapView? = null
     internal var map: MapLibreMap? = null
 
@@ -33,6 +34,7 @@ class MapDpadController {
 
     /** Pan by a fraction of the view size (e.g. 0.18f of the width per D-pad press). */
     fun panBy(fracX: Float, fracY: Float) {
+        remote?.let { it("pan", fracX.toDouble(), fracY.toDouble()); return }
         val m = map ?: return
         val v = mapView ?: return
         if (v.width <= 0 || v.height <= 0) return
@@ -44,6 +46,7 @@ class MapDpadController {
     }
 
     fun zoomBy(delta: Double) {
+        remote?.let { it("zoom", delta, 0.0); return }
         val m = map ?: return
         markZoom?.invoke(m.cameraPosition.zoom + delta)
         m.easeCamera(CameraUpdateFactory.zoomBy(delta), 200)
@@ -51,6 +54,7 @@ class MapDpadController {
 
     /** A "tap" at the crosshair (view center). Returns true if something was hit. */
     fun selectAtCenter(): Boolean {
+        remote?.let { it("select", 0.0, 0.0); return true }
         val m = map ?: return false
         val v = mapView ?: return false
         if (v.width <= 0 || v.height <= 0) return false
@@ -60,6 +64,7 @@ class MapDpadController {
 
     /** A long-press at the crosshair — drops a pin + reverse-geocodes, like touch. */
     fun longPressAtCenter() {
+        remote?.let { it("long", 0.0, 0.0); return }
         val m = map ?: return
         val v = mapView ?: return
         if (v.width <= 0 || v.height <= 0) return

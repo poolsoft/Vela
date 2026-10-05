@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -40,6 +41,32 @@ import kotlinx.coroutines.flow.StateFlow
 /** Variant-owned seam: the map and activity never import launcher implementation types. */
 object CarIntegration {
     const val available = true
+    private val mapRenderLevel = androidx.compose.runtime.mutableIntStateOf(3)
+    fun isolatedAutoSurface(context: Context): app.vela.ui.map.SurfaceMapController? = app.vela.carlauncher.map.AutoSurfaceMap(context)
+    @Composable fun RenderIsolatedMap(
+        scene: app.vela.ui.map.MapRenderScene,
+        callbacks: app.vela.ui.map.MapRenderCallbacks,
+        dpad: app.vela.ui.map.MapDpadController?,
+        modifier: androidx.compose.ui.Modifier,
+    ): Boolean {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        if (!app.vela.util.ProcessIdentity.isMain(context)) return false
+        val level = mapRenderLevel.intValue
+        val isolatedScene = when (level) {
+            1 -> scene.copy(styleUri = "asset://styles/renderer-empty.json", routePolyline = emptyList(),
+                markers = emptyList(), ambientPois = emptyList(), savedPins = emptyList(), stopPins = emptyList(),
+                routeBubbles = emptyList(), alternates = emptyList(), trafficOn = false, satelliteOn = false,
+                transitOn = false, topographyOn = false, buildingOverlays = emptyList(), addressOverlays = emptyList(),
+                maxspeedOverlays = emptyList(), placesOverlays = emptyList(), basemapArchive = null)
+            2 -> scene.copy(basemapArchive = null, buildingOverlays = emptyList(), addressOverlays = emptyList(),
+                maxspeedOverlays = emptyList(), placesOverlays = emptyList())
+            else -> scene
+        }
+        app.vela.carlauncher.map.IsolatedMap(isolatedScene, callbacks, dpad, modifier)
+        return true
+    }
+    fun mapRendererStage(stage: String) = app.vela.carlauncher.map.MapRendererEvents.report(stage)
+
     val settingsTitle = app.vela.R.string.car_settings_hub
     val settingsSubtitle = app.vela.R.string.car_settings_hub_sub
     val permissionsTitle = app.vela.R.string.car_permissions_title
@@ -103,9 +130,7 @@ object CarIntegration {
         // Session-only opt-in: never restore map initialization after a process/Activity restart.
         // Gate the whole MapScreen, not just its visibility, so no hidden EGL surface is created.
         val context = androidx.compose.ui.platform.LocalContext.current
-        val probe = remember(context) { app.vela.carlauncher.map.MapProcessProbe(context) }
-        val probeState by probe.state.collectAsState()
-        androidx.compose.runtime.DisposableEffect(probe) { onDispose { probe.close() } }
+        var mapOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
         val configuration = androidx.compose.ui.platform.LocalConfiguration.current
         val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT ||
@@ -117,36 +142,27 @@ object CarIntegration {
             isVoiceListening = isVoiceListening,
             voiceAudioLevel = voiceAudioLevel,
             haritaIcerigi = {
-                // P1 deliberately never composes MapScreen, even after a successful ping.
-                run {
-                    Surface(modifier = Modifier.fillMaxSize()) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(stringResource(app.vela.R.string.car_map_probe_detail))
-                            when (probeState.status) {
-                                app.vela.carlauncher.map.MapProcessProbe.Status.CONNECTING ->
-                                    Text(stringResource(app.vela.R.string.car_map_probe_connecting))
-                                app.vela.carlauncher.map.MapProcessProbe.Status.READY ->
-                                    Text(stringResource(app.vela.R.string.car_map_probe_ready, android.os.Process.myPid(), probeState.remotePid))
-                                app.vela.carlauncher.map.MapProcessProbe.Status.FAILED ->
-                                    Text(stringResource(app.vela.R.string.car_map_probe_failed))
-                                else -> Unit
-                            }
-                            Button(onClick = { probe.start() }, enabled = probeState.status != app.vela.carlauncher.map.MapProcessProbe.Status.CONNECTING) {
-                                Text(stringResource(app.vela.R.string.car_map_probe_start))
-                            }
-                            if (probeState.status == app.vela.carlauncher.map.MapProcessProbe.Status.READY) {
-                                OutlinedButton(onClick = { probe.close() }) {
-                                    Text(stringResource(app.vela.R.string.car_map_probe_close))
-                                }
-                            }
-                            OutlinedButton(onClick = onOpenSettings) {
-                                Text(stringResource(app.vela.R.string.car_map_open_settings))
-                            }
+                if (mapOpen) {
+                    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
+                        content()
+                        androidx.compose.material3.TextButton(
+                            onClick = { mapOpen = false },
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        ) { Text(stringResource(app.vela.R.string.car_map_renderer_close)) }
+                    }
+                } else Surface(modifier = Modifier.fillMaxSize()) {
+                    Column(Modifier.fillMaxSize().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                        horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(stringResource(app.vela.R.string.car_map_manual_start_detail))
+                        Button(onClick = { mapRenderLevel.intValue = 3; mapOpen = true }) { Text(stringResource(app.vela.R.string.car_map_manual_start)) }
+                        OutlinedButton(onClick = { mapRenderLevel.intValue = 1; mapOpen = true }) {
+                            Text(stringResource(app.vela.R.string.car_map_empty_test))
                         }
+                        OutlinedButton(onClick = { mapRenderLevel.intValue = 2; mapOpen = true }) {
+                            Text(stringResource(app.vela.R.string.car_map_style_test))
+                        }
+                        OutlinedButton(onClick = onOpenSettings) { Text(stringResource(app.vela.R.string.car_map_open_settings)) }
                     }
                 }
             }

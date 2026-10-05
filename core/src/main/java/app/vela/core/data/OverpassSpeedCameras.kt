@@ -9,6 +9,7 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 /** A fixed speed-enforcement camera at [loc] (OSM `highway=speed_camera`). */
+@kotlinx.serialization.Serializable
 data class SpeedCamera(val loc: LatLng)
 
 @Serializable

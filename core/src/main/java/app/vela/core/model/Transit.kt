@@ -5,6 +5,7 @@ enum class TransitMode { WALK, BUS, TRAM, SUBWAY, TRAIN, FERRY, GENERIC }
 
 /** One colored line you ride on a transit itinerary (Google draws these as
  *  color-filled pills, e.g. a blue "Amtrak Thruway" or a green "Route 42B"). */
+@kotlinx.serialization.Serializable
 data class TransitLine(
     val name: String,
     val mode: TransitMode = TransitMode.GENERIC,
@@ -16,6 +17,7 @@ data class TransitLine(
  *  agency stop code ("Stop ID"), and the time the vehicle calls there. When the
  *  live (real-time) time differs from the timetable, [scheduledText] carries the
  *  original so the UI can show "4:30 → 4:35 (5 min late)" like Google. */
+@kotlinx.serialization.Serializable
 data class TransitStopTime(
     val name: String,
     val code: String? = null,           // agency stop code, e.g. "A10V1752"
@@ -33,6 +35,7 @@ data class TransitStopTime(
  * (with codes + times), the ridden headsign ("towards …"), the number of stops,
  * the delay, and every intermediate stop — all from the same keyless payload.
  */
+@kotlinx.serialization.Serializable
 data class TransitStep(
     val mode: TransitMode,
     val durationText: String? = null, // "53 min" / "7 min"
@@ -62,6 +65,7 @@ data class TransitStep(
  * comes from one keyless WebView fetch — Google embeds both the summary and the
  * per-leg detail in the same `APP_INITIALIZATION_STATE` payload.
  */
+@kotlinx.serialization.Serializable
 data class TransitItinerary(
     val departureEpochSec: Long? = null,
     val arrivalEpochSec: Long? = null,

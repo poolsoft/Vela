@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="car_map_empty_test">Boş harita motorunu dene</string>
+    <string name="car_map_style_test">Çevrimdışı dosyalar olmadan stili dene</string>
+
+    <string name="car_map_renderer_loading">Harita ayrı süreçte açılıyor…</string>
+    <string name="car_map_renderer_failed">Harita açılamadı. Ayrıntılar loga kaydedildi.</string>
+    <string name="car_map_renderer_retry">Haritayı yeniden dene</string>
+    <string name="car_map_renderer_close">Haritayı kapat</string>
+
     <string name="car_map_probe_detail">İlk adım: ayrı harita sürecini test edin. Harita motoru ve harita verileri yüklenmeyecek.</string>
     <string name="car_map_probe_start">Harita sürecini test et</string>
     <string name="car_map_probe_connecting">Ayrı sürece bağlanılıyor…</string>

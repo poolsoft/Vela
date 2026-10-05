@@ -13,6 +13,7 @@ import kotlin.math.sqrt
  * dependency so `:core` stays UI-agnostic — convert to/from
  * `org.maplibre.android.geometry.LatLng` only at the view boundary.
  */
+@kotlinx.serialization.Serializable
 data class LatLng(val lat: Double, val lng: Double)
 
 /** south/west/north/east, in degrees. */

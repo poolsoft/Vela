@@ -48,11 +48,20 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         app.vela.diag.ProcessDiagnostics.checkpoint("memory trim: $level")
-        if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(this)) return
+        if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(this)) {
+            app.vela.ui.MemoryPressure.dispatch(level)
+            return
+        }
         app.vela.ui.MemoryPressure.dispatch(level)
         if (app.vela.ui.MemoryPressure.isSevere(level)) {
             runCatching { coil.Coil.imageLoader(this).memoryCache?.clear() }
         }
+    }
+
+    override fun getSharedPreferences(name: String, mode: Int): android.content.SharedPreferences {
+        val privateName = if (app.vela.variant.CarIntegration.available &&
+            !app.vela.util.ProcessIdentity.isMain(this)) "renderer_$name" else name
+        return super.getSharedPreferences(privateName, mode)
     }
 
     override fun attachBaseContext(base: Context) {
