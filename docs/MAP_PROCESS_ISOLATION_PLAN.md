@@ -128,9 +128,18 @@ Değişiklikler main'e gönderilir; mevcut Build APK iş akışı APK ve JVM reg
 
 Son kabul denemesi: haritasız launcher/Desktop/müzik; boş motor; dosyasız stil; tam harita; favori/rota/dokunma; haritayı kapat/yeniden aç; Home/arka plan/ön plan; yatay/dikey/panel resize; renderer death ve timeout; tek müzik bildirimi; uzun çalışma/bellek; offline yedek yükleme. Başarısızlıkta ana ekran kullanılabiliyorsa renderer logu ve diagnostics raporu gönderilir. Başarısızlık halinde eski in-process harita otomatik açılmaz.
 
-**Mevcut durum:** kaynak entegrasyonu tamamlandı; CI ve gerçek cihaz doğrulaması ayrı takip edilir. Teypte tam özellik eşitliği veya GPU uyumluluğu henüz doğrulanmadı.
+**Mevcut durum:** kaynak entegrasyonu tamamlandı; main APK derlemesi ve JVM regresyon kontrolleri CI’da başarılı. Gerçek cihaz doğrulaması kaldı. Teypte tam özellik eşitliği veya GPU uyumluluğu henüz doğrulanmadı.
 
 Son kaynak kontrolünde eklendi: VirtualDisplay metrics değişiminde Presentation/Compose/MapView yaşam döngüsü yenilenir; eski pencere tutulmaz. Native library/map-create/style-loading girişinden önce journal worker'a sınırlı flush bariyeri konur. Hata raporu renderer journal'ını da ekler. Yeniden denemede eski Binder'ın sonlanması için kısa grace uygulanır. Ana ekranın density/fontScale ve yönü ayrı yüzeyde korunur.
+### Son CI ve deneme paketi — 5 Ekim 2026
+
+- Kaynak commit: `1d4801731110610fe16fed118c2d275b4c7eda03`, main.
+- [Build APK #72](https://github.com/poolsoft/Vela/actions/runs/37347527310): SUCCESS. Core unit tests, release APK, app renderer boundary regression tests, çeviri kontrolü ve yayın adımları başarılı.
+- Sürüm: **0.4.72-canary**, versionCode **2072**. [Yayın](https://github.com/poolsoft/Vela/releases/tag/canary); teyp ABI'si `armeabi-v7a`.
+- Yerel sabit deneme APK'sı: `D:/Projects/CarWorkspace/Vela-backups/2026-10-05-map-process-final-0.4.72/vela-maps-canary-armeabi-v7a.apk`. Boyut 70.919.816 bayt. SHA-256 ve kaynak/CI bilgisi yanındaki `BUILD_VALIDATION.json` dosyasında. Rolling canary değişse bile bu yerel kopya aynı sürümü korur.
+- Üretilmiş APK manifest'i aapt2 ile salt okunur incelendi: private `:map_renderer`, private `:map_renderer_auto`, MainActivity `singleTask` ve yalnız `armeabi-v7a` native ABI doğrulandı. Yerel derleme çalıştırılmadı.
+- Teyp/telefon/emülatör çalıştırma testi yapılmadı. Teyp kullanıcıda erişilebilir olduğunda yukarıdaki son kabul listesi bu paket üzerinde uygulanacak. CI sonucu, EGL sürücüsü veya gerçek dokunma/arka plan davranışının onayı değildir.
+
 ## 11. Teknik kaynaklar
 
 - [DisplayManager / private VirtualDisplay](https://developer.android.com/reference/android/hardware/display/DisplayManager): private OWN_CONTENT_ONLY display, Surface çıkışı, resize/release ve flag izinleri.
