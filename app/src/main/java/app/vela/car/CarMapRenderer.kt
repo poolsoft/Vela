@@ -21,11 +21,11 @@ import app.vela.core.model.Route
 import app.vela.core.model.bearingTo
 import app.vela.core.model.destinationPoint
 import app.vela.core.nav.NavSession
-import org.maplibre.android.MapLibre
-import org.maplibre.android.camera.CameraPosition
-import org.maplibre.android.geometry.LatLng as MLLatLng
-import org.maplibre.android.snapshotter.MapSnapshot
-import org.maplibre.android.snapshotter.MapSnapshotter
+import com.mapbox.mapboxsdk.Mapbox as MapLibre
+import com.mapbox.mapboxsdk.camera.CameraPosition
+import com.mapbox.mapboxsdk.geometry.LatLng as MLLatLng
+import com.mapbox.mapboxsdk.snapshotter.MapSnapshot
+import com.mapbox.mapboxsdk.snapshotter.MapSnapshotter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -344,7 +344,7 @@ class CarMapRenderer(
             requestRender()
             return
         }
-        runCatching { MapLibre.getInstance(carContext) }
+        runCatching { app.vela.offline.PmtilesMapBridge.install(); MapLibre.getInstance(carContext) }
         center = center ?: puck ?: locationProvider.lastKnown()
         // Reuse the existing snapshotter when the surface size is unchanged. A screen transition
         // (Main→Preview→ActiveNav) re-delivers onSurfaceAvailable at the SAME size; recreating the

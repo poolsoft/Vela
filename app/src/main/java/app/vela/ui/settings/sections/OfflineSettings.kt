@@ -60,7 +60,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import app.vela.ui.rememberDpadFocusKeeper // focus handoff for swap-in controls (docs/dpad.md)
 import app.vela.ui.DpadFocusHandoff
 import app.vela.ui.dpadFocusKept
-import org.maplibre.android.offline.OfflineRegion
+import com.mapbox.mapboxsdk.offline.OfflineRegion
 
 /**
  * Offline sub-screen: map-area tile downloads and the routing-region picker. The old page kept this

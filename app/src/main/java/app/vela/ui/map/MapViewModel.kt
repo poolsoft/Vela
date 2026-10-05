@@ -1450,15 +1450,15 @@ class MapViewModel @Inject constructor(
 
     // The map-area tile download is MapLibre's own machinery, so its cancel is region-based, not
     // flag-based: detach the observer (no stray onDone), stop, delete the partial region.
-    @Volatile private var areaRegion: org.maplibre.android.offline.OfflineRegion? = null
+    @Volatile private var areaRegion: com.mapbox.mapboxsdk.offline.OfflineRegion? = null
 
     fun cancelAreaDownload() {
         val r = areaRegion ?: return
         areaRegion = null
         runCatching { r.setObserver(null) }
-        runCatching { r.setDownloadState(org.maplibre.android.offline.OfflineRegion.STATE_INACTIVE) }
+        runCatching { r.setDownloadState(com.mapbox.mapboxsdk.offline.OfflineRegion.STATE_INACTIVE) }
         runCatching {
-            r.delete(object : org.maplibre.android.offline.OfflineRegion.OfflineRegionDeleteCallback {
+            r.delete(object : com.mapbox.mapboxsdk.offline.OfflineRegion.OfflineRegionDeleteCallback {
                 override fun onDelete() {}
                 override fun onError(error: String) {}
             })
@@ -6316,8 +6316,8 @@ class MapViewModel @Inject constructor(
     suspend fun clearMapCache(flash: Boolean = true): Unit = kotlinx.coroutines.withContext(Dispatchers.Main) {
         kotlinx.coroutines.suspendCancellableCoroutine { cont ->
             runCatching {
-                org.maplibre.android.offline.OfflineManager.getInstance(appContext).clearAmbientCache(
-                    object : org.maplibre.android.offline.OfflineManager.FileSourceCallback {
+                com.mapbox.mapboxsdk.offline.OfflineManager.getInstance(appContext).clearAmbientCache(
+                    object : com.mapbox.mapboxsdk.offline.OfflineManager.FileSourceCallback {
                         override fun onSuccess() { if (cont.isActive) cont.resume(Unit) { _, _, _ -> } }
                         override fun onError(message: String) { if (cont.isActive) cont.resume(Unit) { _, _, _ -> } }
                     },
@@ -6336,7 +6336,7 @@ class MapViewModel @Inject constructor(
         val (s, w, n, e, zoom) = listOf(v[0], v[1], v[2], v[3], v[4])
         val minZ = (zoom - 1).coerceIn(0.0, 15.0)
         val maxZ = (zoom + 3).coerceIn(minZ, 16.0)
-        val bounds = org.maplibre.android.geometry.LatLngBounds.from(n, e, s, w)
+        val bounds = com.mapbox.mapboxsdk.geometry.LatLngBounds.from(n, e, s, w)
         // The coordinate name is STORED metadata (it is what tells two saved areas apart in the
         // Settings list) - it is deliberately NOT shown in any banner (user 2026-07-23: the raw
         // coords flashing over the progress card read as a second, junk banner).

@@ -25,6 +25,7 @@ internal object RendererGraphicsDiagnostics {
             put("pid", android.os.Process.myPid())
             put("recorded", System.currentTimeMillis())
             put("advertisedGles", context.getSystemService(ActivityManager::class.java).deviceConfigurationInfo.glEsVersion)
+            put("mapEngine", "MapLibre 10.3.7 / GLES2")
             put("scope", "Separate ES2 test context, not the map engine context")
             put("stage", "egl-display")
         }
@@ -54,18 +55,21 @@ internal object RendererGraphicsDiagnostics {
             }
             report.put("enumeratedConfigs", count[0].coerceAtMost(configs.size))
             report.put("es2Configs", es2).put("es3Configs", es3)
-            // MapLibre 11.8.8 EGLConfigChooser asks for ES3-capable WINDOW configs,
-            // even though its TextureView requests client version 2. Do not infer support
+            // MapLibre 10.3.7 requires ES2 WINDOW configs. Do not infer support
             // from Android's advertised GLES string or our unrelated ES2 pbuffer alone.
             val mapAttributes = intArrayOf(EGL14.EGL_CONFIG_CAVEAT, EGL14.EGL_NONE,
                 EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT, EGL14.EGL_BUFFER_SIZE, 16,
                 EGL14.EGL_RED_SIZE, 5, EGL14.EGL_GREEN_SIZE, 6, EGL14.EGL_BLUE_SIZE, 5,
                 EGL14.EGL_DEPTH_SIZE, 16, EGL14.EGL_STENCIL_SIZE, 8,
-                EGL14.EGL_RENDERABLE_TYPE, 0x40, EGL14.EGL_NONE)
+                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT, EGL14.EGL_NONE)
             if (EGL14.eglChooseConfig(display, mapAttributes, 0, null, 0, 0, count, 0)) {
-                report.put("mapLibreEs3WindowCandidates", count[0])
+                report.put("mapLibreEs2WindowCandidates", count[0])
                 mapConfigAvailable = count[0] > 0
-            } else report.put("mapConfigQueryError", EGL14.eglGetError())
+            } else {
+                val error = EGL14.eglGetError()
+                report.put("mapConfigQueryError", error)
+                if (error == EGL14.EGL_SUCCESS) mapConfigAvailable = false
+            }
             val chosen = arrayOfNulls<android.opengl.EGLConfig>(1)
             val attributes = intArrayOf(EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
                 EGL14.EGL_SURFACE_TYPE, EGL14.EGL_PBUFFER_BIT, EGL14.EGL_RED_SIZE, 8,

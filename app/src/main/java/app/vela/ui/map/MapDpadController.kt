@@ -1,10 +1,10 @@
 package app.vela.ui.map
 
 import android.graphics.PointF
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.geometry.LatLng as MLLatLng
-import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.MapView
+import com.mapbox.mapboxsdk.camera.CameraUpdateFactory
+import com.mapbox.mapboxsdk.geometry.LatLng as MLLatLng
+import com.mapbox.mapboxsdk.maps.MapboxMap as MapLibreMap
+import com.mapbox.mapboxsdk.maps.MapView
 
 /**
  * Key-driven map control for D-pad-only operation (no touchscreen). [VelaMapView] wires

@@ -28,39 +28,39 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.vela.core.model.LatLng
 import app.vela.core.model.distanceTo
 import app.vela.offline.OfflineMaps
-import org.maplibre.android.MapLibre
-import org.maplibre.android.camera.CameraPosition
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.gestures.MoveGestureDetector
-import org.maplibre.android.gestures.ShoveGestureDetector
-import org.maplibre.android.gestures.StandardScaleGestureDetector
-import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.MapView
-import org.maplibre.android.maps.Style
-import org.maplibre.android.style.expressions.Expression
-import org.maplibre.android.style.layers.CircleLayer
-import org.maplibre.android.style.layers.FillLayer
-import org.maplibre.android.style.layers.HillshadeLayer
-import org.maplibre.android.style.layers.LineLayer
-import org.maplibre.android.style.layers.Property
-import org.maplibre.android.style.layers.PropertyFactory
-import org.maplibre.android.style.layers.SymbolLayer
-import org.maplibre.android.style.layers.RasterLayer
-import org.maplibre.android.style.sources.GeoJsonOptions
-import org.maplibre.android.style.sources.GeoJsonSource
-import org.maplibre.android.style.sources.VectorSource
-import org.maplibre.android.style.sources.RasterDemSource
-import org.maplibre.android.style.sources.RasterSource
-import org.maplibre.android.style.sources.TileSet
-import org.maplibre.geojson.Feature
-import org.maplibre.geojson.FeatureCollection
-import org.maplibre.geojson.LineString
-import org.maplibre.geojson.Point
+import com.mapbox.mapboxsdk.Mapbox as MapLibre
+import com.mapbox.mapboxsdk.camera.CameraPosition
+import com.mapbox.mapboxsdk.camera.CameraUpdateFactory
+import com.mapbox.android.gestures.MoveGestureDetector
+import com.mapbox.android.gestures.ShoveGestureDetector
+import com.mapbox.android.gestures.StandardScaleGestureDetector
+import com.mapbox.mapboxsdk.maps.MapboxMap as MapLibreMap
+import com.mapbox.mapboxsdk.maps.MapView
+import com.mapbox.mapboxsdk.maps.Style
+import com.mapbox.mapboxsdk.style.expressions.Expression
+import com.mapbox.mapboxsdk.style.layers.CircleLayer
+import com.mapbox.mapboxsdk.style.layers.FillLayer
+import com.mapbox.mapboxsdk.style.layers.HillshadeLayer
+import com.mapbox.mapboxsdk.style.layers.LineLayer
+import com.mapbox.mapboxsdk.style.layers.Property
+import com.mapbox.mapboxsdk.style.layers.PropertyFactory
+import com.mapbox.mapboxsdk.style.layers.SymbolLayer
+import com.mapbox.mapboxsdk.style.layers.RasterLayer
+import com.mapbox.mapboxsdk.style.sources.GeoJsonOptions
+import com.mapbox.mapboxsdk.style.sources.GeoJsonSource
+import com.mapbox.mapboxsdk.style.sources.VectorSource
+import com.mapbox.mapboxsdk.style.sources.RasterDemSource
+import com.mapbox.mapboxsdk.style.sources.RasterSource
+import com.mapbox.mapboxsdk.style.sources.TileSet
+import com.mapbox.geojson.Feature
+import com.mapbox.geojson.FeatureCollection
+import com.mapbox.geojson.LineString
+import com.mapbox.geojson.Point
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import org.maplibre.android.geometry.LatLng as MLLatLng
-import org.maplibre.android.geometry.LatLngBounds as MLLatLngBounds
+import com.mapbox.mapboxsdk.geometry.LatLng as MLLatLng
+import com.mapbox.mapboxsdk.geometry.LatLngBounds as MLLatLngBounds
 
 private const val ROUTE_SRC = "vela-route-src"
 // A search from a view this tall (meters, north to south) keeps its camera when at least
@@ -529,7 +529,7 @@ private val lastCameraMoveMs = longArrayOf(0L)
 private const val TWIN_PASS_STILL_MS = 700L
 /** Free-drive look-ahead (speed x 5 m) time constant: slow on purpose, see the free-drive ticker. */
 
-private fun flightCb() = object : org.maplibre.android.maps.MapLibreMap.CancelableCallback {
+private fun flightCb() = object : com.mapbox.mapboxsdk.maps.MapboxMap.CancelableCallback {
     override fun onFinish() { if (flightDepth[0] > 0) flightDepth[0]-- }
     override fun onCancel() { if (flightDepth[0] > 0) flightDepth[0]-- }
 }
@@ -978,6 +978,7 @@ fun VelaMapView(
     }
     remember {
         app.vela.variant.CarIntegration.mapRendererStage("library")
+        app.vela.offline.PmtilesMapBridge.install()
         MapLibre.getInstance(context)
     }
     // D-pad-only operation (docs/dpad.md): MapLibre's MapView calls requestFocus() on
@@ -1023,7 +1024,7 @@ fun VelaMapView(
         prefs.edit().putBoolean("map_init_inflight", true).apply()
         val textureDefault = if (isEmulator()) false else fragileGpuDefault()
         val textureModeEnabled = if (isEmulator()) false else prefs.getBoolean("texture_render", textureDefault)
-        val opts = org.maplibre.android.maps.MapLibreMapOptions.createFromAttributes(context)
+        val opts = com.mapbox.mapboxsdk.maps.MapboxMapOptions.createFromAttributes(context)
             .textureMode(textureModeEnabled)
         app.vela.diag.ProcessDiagnostics.checkpoint("map: create texture=$textureModeEnabled")
         app.vela.variant.CarIntegration.mapRendererStage("map-create")
@@ -1046,8 +1047,8 @@ fun VelaMapView(
         val cam = m.cameraPosition
         if (kotlin.math.abs(cam.bearing) > 0.5 || cam.tilt > 0.5) {
             m.animateCamera(
-                org.maplibre.android.camera.CameraUpdateFactory.newCameraPosition(
-                    org.maplibre.android.camera.CameraPosition.Builder(cam).bearing(0.0).tilt(0.0).build(),
+                com.mapbox.mapboxsdk.camera.CameraUpdateFactory.newCameraPosition(
+                    com.mapbox.mapboxsdk.camera.CameraPosition.Builder(cam).bearing(0.0).tilt(0.0).build(),
                 ),
                 600,
             )
@@ -1210,9 +1211,9 @@ fun VelaMapView(
                                         else -> continue
                                     }
                                     val geom = f.geometry() ?: continue
-                                    val lines: List<List<org.maplibre.geojson.Point>> = when (geom) {
-                                        is org.maplibre.geojson.LineString -> listOf(geom.coordinates())
-                                        is org.maplibre.geojson.MultiLineString -> geom.coordinates()
+                                    val lines: List<List<com.mapbox.geojson.Point>> = when (geom) {
+                                        is com.mapbox.geojson.LineString -> listOf(geom.coordinates())
+                                        is com.mapbox.geojson.MultiLineString -> geom.coordinates()
                                         else -> emptyList()
                                     }
                                     // Proper crossings OR a T-junction endpoint on the route (arterials
@@ -1396,7 +1397,7 @@ fun VelaMapView(
     // overlay gate probes, so it never competes with visible work.
     val warmHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     val warmPending = remember { arrayOf<Runnable?>(null) }
-    val warmSnapshotter = remember { arrayOf<org.maplibre.android.snapshotter.MapSnapshotter?>(null) }
+    val warmSnapshotter = remember { arrayOf<com.mapbox.mapboxsdk.snapshotter.MapSnapshotter?>(null) }
     val warmDoneBuckets = remember { HashSet<Long>() }
     val warmCtx = rememberUpdatedState(Pair(buildingOverlays, navMode))
     DisposableEffect(Unit) {
@@ -1455,7 +1456,7 @@ fun VelaMapView(
         buildingOverlays.forEachIndexed { i, uri ->
             runCatching {
                 val srcId = "vela-ovl-src-$i"
-                style.addSource(VectorSource(srcId, uri)) // uri already carries pmtiles://file:// or pmtiles://https://
+                style.addSource(VectorSource(srcId, app.vela.offline.PmtilesMapBridge.sourceUrl(uri))) // uri already carries pmtiles://file:// or pmtiles://https://
                 val layer = FillLayer("vela-ovl-$i", srcId).apply {
                     setSourceLayer("building") // the tippecanoe layer name (build-overlay-region.sh: -l building)
                     setMinZoom(16f) // match the OSM `building` layer: footprints only at close (Google-like ~250ft) zoom, where the density gate can also compare accurately
@@ -1619,7 +1620,7 @@ fun VelaMapView(
         placesOverlays.forEachIndexed { i, uri ->
             runCatching {
                 val srcId = "vela-places-src-$i"
-                style.addSource(VectorSource(srcId, uri))
+                style.addSource(VectorSource(srcId, app.vela.offline.PmtilesMapBridge.sourceUrl(uri)))
                 // "top `n` in the cell, or prominent enough on its own" -> the value, else nothing.
                 // COALESCE the rank to 0 so a tile baked before the property existed passes the
                 // test instead of failing it: `frank` (the per-block icon budget) only appears in
@@ -1892,7 +1893,7 @@ fun VelaMapView(
         maxspeedOverlays.forEachIndexed { i, uri ->
             runCatching {
                 val srcId = "vela-ms-src-$i"
-                style.addSource(VectorSource(srcId, uri))
+                style.addSource(VectorSource(srcId, app.vela.offline.PmtilesMapBridge.sourceUrl(uri)))
                 val layer = LineLayer("vela-ms-$i", srcId).apply {
                     setSourceLayer("maxspeed") // tippecanoe layer name (build-maxspeed-region.sh: -l maxspeed)
                     setMinZoom(11f)
@@ -1931,7 +1932,7 @@ fun VelaMapView(
             val busy = flightDepth[0] > 0 || scaling[0] || shoving[0]
             if (!busy && m != null && fix != null && latestMs.value.isNotEmpty()) {
                 val kmh = runCatching {
-                    val p = m.projection.toScreenLocation(org.maplibre.android.geometry.LatLng(fix.lat, fix.lng))
+                    val p = m.projection.toScreenLocation(com.mapbox.mapboxsdk.geometry.LatLng(fix.lat, fix.lng))
                     val r = 14f
                     val layers = latestMs.value.indices.map { "vela-ms-$it" }.toTypedArray()
                     m.queryRenderedFeatures(android.graphics.RectF(p.x - r, p.y - r, p.x + r, p.y + r), *layers)
@@ -2032,7 +2033,7 @@ fun VelaMapView(
         addressOverlays.forEachIndexed { i, uri ->
             runCatching {
                 val srcId = "vela-addr-src-$i"
-                style.addSource(VectorSource(srcId, uri))
+                style.addSource(VectorSource(srcId, app.vela.offline.PmtilesMapBridge.sourceUrl(uri)))
                 val layer =
                     SymbolLayer("vela-addr-$i", srcId).apply {
                         setSourceLayer("address") // tippecanoe layer name (build-address-region.sh: -l address)
@@ -3446,12 +3447,12 @@ fun VelaMapView(
                             val styleJson = "{\"version\":8,\"sources\":{$sources},\"layers\":[$layers]}"
                             runCatching {
                                 warmSnapshotter[0]?.cancel()
-                                val snap = org.maplibre.android.snapshotter.MapSnapshotter(
+                                val snap = com.mapbox.mapboxsdk.snapshotter.MapSnapshotter(
                                     context,
-                                    org.maplibre.android.snapshotter.MapSnapshotter.Options(768, 768)
+                                    com.mapbox.mapboxsdk.snapshotter.MapSnapshotter.Options(768, 768)
                                         .withStyleJson(styleJson)
                                         .withCameraPosition(
-                                            org.maplibre.android.camera.CameraPosition.Builder()
+                                            com.mapbox.mapboxsdk.camera.CameraPosition.Builder()
                                                 .target(t).zoom(16.2).build(),
                                         ),
                                 )
@@ -3599,7 +3600,7 @@ fun VelaMapView(
                     // found nothing and the toggle was dead in every release APK (caught by
                     // the 2026-07-15 simulated-drive smoke test).
                     fun findCompass(v: android.view.View): android.view.View? {
-                        if (v is org.maplibre.android.maps.widgets.CompassView) return v
+                        if (v is com.mapbox.mapboxsdk.maps.widgets.CompassView) return v
                         if (v is android.view.ViewGroup) {
                             for (i in 0 until v.childCount) findCompass(v.getChildAt(i))?.let { return it }
                         }
@@ -3899,7 +3900,7 @@ fun VelaMapView(
                     // The local source goes in AFTER the style has loaded and the layers using it
                     // are re-attached, the order the places archives use; a source declared in the
                     // JSON or handed to Style.Builder never got past the z0 tile (device 2026-09-14).
-                    runCatching { style.addSource(VectorSource(LOCAL_BASEMAP_SRC, basemapArchive)) }
+                    runCatching { style.addSource(VectorSource(LOCAL_BASEMAP_SRC, app.vela.offline.PmtilesMapBridge.sourceUrl(basemapArchive))) }
                         .onFailure { android.util.Log.w("VelaBasemap", "local source add failed", it) }
                     runCatching {
                         style.layers.forEachIndexed { i, l ->
@@ -4087,7 +4088,7 @@ fun VelaMapView(
                     // rides the same single move.
                     map.moveCamera(
                         CameraUpdateFactory.newCameraPosition(
-                            org.maplibre.android.camera.CameraPosition.Builder()
+                            com.mapbox.mapboxsdk.camera.CameraPosition.Builder()
                                 .target(MLLatLng(previewTarget.lat, previewTarget.lng))
                                 .zoom(16.5)
                                 .tilt(0.0)
@@ -5378,11 +5379,11 @@ private fun addRouteBubbleImage(st: Style, id: String, fill: Int, edge: Int, d: 
     st.addImage(
         id, bmp,
         listOf(
-            org.maplibre.android.maps.ImageStretches(r + d, cx - 7 * d),
-            org.maplibre.android.maps.ImageStretches(cx + 7 * d, w - r - d),
+            com.mapbox.mapboxsdk.maps.ImageStretches(r + d, cx - 7 * d),
+            com.mapbox.mapboxsdk.maps.ImageStretches(cx + 7 * d, w - r - d),
         ),
-        listOf(org.maplibre.android.maps.ImageStretches(r + d, bodyH - r - d)),
-        org.maplibre.android.maps.ImageContent(8 * d, 4 * d, w - 8 * d, bodyH - 4 * d),
+        listOf(com.mapbox.mapboxsdk.maps.ImageStretches(r + d, bodyH - r - d)),
+        com.mapbox.mapboxsdk.maps.ImageContent(8 * d, 4 * d, w - 8 * d, bodyH - 4 * d),
     )
 }
 
@@ -5515,7 +5516,7 @@ private fun crossLabelPoint(line: List<Pair<Double, Double>>, window: List<LatLn
  *  else name:latin (which OpenMapTiles fills from name:en where OSM has one, otherwise a
  *  transliteration). Returned only when it is a genuinely Latin-script string that differs from the
  *  local name, so we never store another non-Latin alias as if it were romanized. */
-private fun latinAliasOf(f: org.maplibre.geojson.Feature, name: String): String? {
+private fun latinAliasOf(f: com.mapbox.geojson.Feature, name: String): String? {
     for (key in arrayOf("name:en", "name:latin")) {
         val v = runCatching { f.getStringProperty(key) }.getOrNull()
         if (v.isNullOrBlank() || v == name) continue
@@ -5678,21 +5679,21 @@ private fun ensureNavRoadLabels(style: Style, on: Boolean, dark: Boolean, densit
     style.addImage(
         NAV_BUBBLE_IMG, navBubbleBitmap(dark, d),
         listOf(
-            org.maplibre.android.maps.ImageStretches(r + d, cx - 7 * d),
-            org.maplibre.android.maps.ImageStretches(cx + 7 * d, w - r - d),
+            com.mapbox.mapboxsdk.maps.ImageStretches(r + d, cx - 7 * d),
+            com.mapbox.mapboxsdk.maps.ImageStretches(cx + 7 * d, w - r - d),
         ),
-        listOf(org.maplibre.android.maps.ImageStretches(r + d, body - r - d)),
-        org.maplibre.android.maps.ImageContent(6 * d, 3 * d, w - 6 * d, body - 3 * d),
+        listOf(com.mapbox.mapboxsdk.maps.ImageStretches(r + d, body - r - d)),
+        com.mapbox.mapboxsdk.maps.ImageContent(6 * d, 3 * d, w - 6 * d, body - 3 * d),
     )
     // The green twin, for the exit you are taking (same geometry, so the same stretch zones).
     style.addImage(
         NAV_EXIT_BUBBLE_IMG, navBubbleBitmap(dark, d, green = true),
         listOf(
-            org.maplibre.android.maps.ImageStretches(r + d, cx - 7 * d),
-            org.maplibre.android.maps.ImageStretches(cx + 7 * d, w - r - d),
+            com.mapbox.mapboxsdk.maps.ImageStretches(r + d, cx - 7 * d),
+            com.mapbox.mapboxsdk.maps.ImageStretches(cx + 7 * d, w - r - d),
         ),
-        listOf(org.maplibre.android.maps.ImageStretches(r + d, body - r - d)),
-        org.maplibre.android.maps.ImageContent(6 * d, 3 * d, w - 6 * d, body - 3 * d),
+        listOf(com.mapbox.mapboxsdk.maps.ImageStretches(r + d, body - r - d)),
+        com.mapbox.mapboxsdk.maps.ImageContent(6 * d, 3 * d, w - 6 * d, body - 3 * d),
     )
     // The exit you are taking gets its own green callout (user 2026-09-17): the exits you drive
     // past keep the basemap's shields, and this one says which is yours. Its own source so it
@@ -7100,7 +7101,7 @@ private var dashDotZoom: Double = -1e9
 
 /** Regenerate the walk/bike dot POINTS for the current zoom: one dot every
  *  [ROUTE_DOT_SPACING_PX] screen pixels' worth of meters along the route. */
-private fun regenRouteDots(map: org.maplibre.android.maps.MapLibreMap, style: Style, poly: List<LatLng>) {
+private fun regenRouteDots(map: com.mapbox.mapboxsdk.maps.MapboxMap, style: Style, poly: List<LatLng>) {
     val src = style.getSourceAs<GeoJsonSource>(ROUTE_DOT_SRC) ?: return
     dashDotPoly = poly
     dashDotZoom = map.cameraPosition.zoom
@@ -7202,7 +7203,7 @@ private fun setMeSource(style: Style, p: LatLng, bearing: Float) {
 
 /** A 64-point geodesic circle polygon of [radiusM] meters around [center] - the accuracy halo's
  *  geometry (drawn in real meters, so it grows and shrinks with the zoom like the world does). */
-private fun accuracyCircle(center: LatLng, radiusM: Double): org.maplibre.geojson.Polygon {
+private fun accuracyCircle(center: LatLng, radiusM: Double): com.mapbox.geojson.Polygon {
     val latR = Math.toRadians(center.lat)
     val dLat = radiusM / 111_320.0
     val dLng = radiusM / (111_320.0 * Math.cos(latR)).coerceAtLeast(1.0)
@@ -7210,7 +7211,7 @@ private fun accuracyCircle(center: LatLng, radiusM: Double): org.maplibre.geojso
         val a = 2.0 * Math.PI * i / 64
         Point.fromLngLat(center.lng + dLng * Math.sin(a), center.lat + dLat * Math.cos(a))
     }
-    return org.maplibre.geojson.Polygon.fromLngLats(listOf(pts))
+    return com.mapbox.geojson.Polygon.fromLngLats(listOf(pts))
 }
 
 /** Compass bearing (deg, 0 = N) from [a] to [b]. */
@@ -7218,7 +7219,7 @@ private fun accuracyCircle(center: LatLng, radiusM: Double): org.maplibre.geojso
  *  it - point-to-SEGMENT distance, because a mid-block address on a straight road can sit half a
  *  block from the nearest VERTEX. Null when no named road is that close (or tiles aren't loaded). */
 private fun nearestStreetName(map: MapLibreMap, lat: Double, lng: Double): String? {
-    val src = map.style?.let { st -> basemapSrc(st)?.let { st.getSourceAs<org.maplibre.android.style.sources.VectorSource>(it) } } ?: return null
+    val src = map.style?.let { st -> basemapSrc(st)?.let { st.getSourceAs<com.mapbox.mapboxsdk.style.sources.VectorSource>(it) } } ?: return null
     val feats = runCatching { src.querySourceFeatures(arrayOf("transportation_name"), null) }.getOrNull() ?: return null
     val mLat = 111_320.0
     val mLng = 111_320.0 * kotlin.math.cos(Math.toRadians(lat))
@@ -7236,8 +7237,8 @@ private fun nearestStreetName(map: MapLibreMap, lat: Double, lng: Double): Strin
     for (f in feats) {
         val name = f.getStringProperty("name")?.takeIf { it.isNotBlank() } ?: continue
         val lines: List<List<Point>> = when (val g = f.geometry()) {
-            is org.maplibre.geojson.LineString -> listOf(g.coordinates())
-            is org.maplibre.geojson.MultiLineString -> g.coordinates()
+            is com.mapbox.geojson.LineString -> listOf(g.coordinates())
+            is com.mapbox.geojson.MultiLineString -> g.coordinates()
             else -> continue
         }
         for (line in lines) {
@@ -7334,7 +7335,7 @@ private fun routeGradient(
 }
 
 private fun applyData(
-    map: org.maplibre.android.maps.MapLibreMap,
+    map: com.mapbox.mapboxsdk.maps.MapboxMap,
     style: Style,
     context: android.content.Context,
     dark: Boolean,

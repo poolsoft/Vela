@@ -1,12 +1,12 @@
 package app.vela.offline
 
 import android.content.Context
-import org.maplibre.android.geometry.LatLngBounds
-import org.maplibre.android.offline.OfflineManager
-import org.maplibre.android.offline.OfflineRegion
-import org.maplibre.android.offline.OfflineRegionError
-import org.maplibre.android.offline.OfflineRegionStatus
-import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
+import com.mapbox.mapboxsdk.geometry.LatLngBounds
+import com.mapbox.mapboxsdk.offline.OfflineManager
+import com.mapbox.mapboxsdk.offline.OfflineRegion
+import com.mapbox.mapboxsdk.offline.OfflineRegionError
+import com.mapbox.mapboxsdk.offline.OfflineRegionStatus
+import com.mapbox.mapboxsdk.offline.OfflineTilePyramidRegionDefinition
 import org.json.JSONObject
 import kotlin.math.max
 
@@ -142,7 +142,7 @@ object OfflineMaps {
     /** The saved area's tile bounds, so callers can re-fetch its offline data (POIs/addresses) for the
      *  same box. Null if the region isn't a tile-pyramid definition. */
     fun boundsOf(region: OfflineRegion): LatLngBounds? =
-        (region.definition as? org.maplibre.android.offline.OfflineTilePyramidRegionDefinition)?.bounds
+        (region.definition as? com.mapbox.mapboxsdk.offline.OfflineTilePyramidRegionDefinition)?.bounds
 
     private const val KEY_NAME = "name"
 }

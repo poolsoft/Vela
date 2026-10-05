@@ -23,9 +23,9 @@ kotlinxSerialization = "1.7.3"
 coil = "2.7.0"
 splashscreen = "1.0.1"
 okhttp = "4.12.0"
-# MapLibre Native Android. Latest on Maven Central is 13.x; we pin 11.8.0,
-# the most widely documented line, for API stability. Bump deliberately.
-maplibre = "11.8.8"
+# MapLibre v10 keeps the GLES2 renderer needed by older car head units.
+# PMTiles sources are served by PmtilesMapBridge through the SDK HTTP client.
+maplibre = "10.3.7"
 junit = "4.13.2"
 espresso = "3.6.1"
 androidxJunit = "1.2.1"

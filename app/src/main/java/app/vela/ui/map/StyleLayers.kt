@@ -1,9 +1,9 @@
 package app.vela.ui.map
 
-import org.maplibre.android.maps.Style
-import org.maplibre.android.snapshotter.MapSnapshotter
-import org.maplibre.android.style.layers.Layer
-import org.maplibre.android.style.sources.Source
+import com.mapbox.mapboxsdk.maps.Style
+import com.mapbox.mapboxsdk.snapshotter.MapSnapshotter
+import com.mapbox.mapboxsdk.style.layers.Layer
+import com.mapbox.mapboxsdk.style.sources.Source
 
 /**
  * The part of a loaded MapLibre style the palette functions need: a layer by id, a source by id,

@@ -45,9 +45,14 @@ object PmtilesReader {
     fun header(file: File): Header? = runCatching {
         RandomAccessFile(file, "r").use { f ->
             val head = ByteArray(HEADER_LEN)
-            if (f.read(head) < HEADER_LEN) return null
-            if (String(head, 0, 7) != "PMTiles" || head[7].toInt() != 3) return null
-            Header(
+            f.readFully(head)
+            header(head)
+        }
+    }.getOrNull()
+
+    internal fun header(head: ByteArray): Header? {
+        if (head.size < HEADER_LEN || String(head, 0, 7) != "PMTiles" || head[7].toInt() != 3) return null
+        return Header(
                 rootOffset = le64(head, 8),
                 rootLength = le64(head, 16),
                 metaOffset = le64(head, 24),
@@ -59,8 +64,7 @@ object PmtilesReader {
                 minZoom = head[100].toInt() and 0xFF,
                 maxZoom = head[101].toInt() and 0xFF,
             )
-        }
-    }.getOrNull()
+    }
 
     /** True when the archive holds the tile, false when it demonstrably does not, null when the
      *  file could not be read the way this reader expects. */
@@ -194,7 +198,7 @@ object PmtilesReader {
         }
     }.getOrNull()
 
-    private fun find(entries: List<Entry>, want: Long): Entry? {
+    internal fun find(entries: List<Entry>, want: Long): Entry? {
         var lo = 0
         var hi = entries.size - 1
         var best: Entry? = null
@@ -215,6 +219,10 @@ object PmtilesReader {
         val raw = ByteArray(length.toInt())
         f.seek(offset)
         f.readFully(raw)
+        return decodeDirectory(raw, compression)
+    }
+
+    internal fun decodeDirectory(raw: ByteArray, compression: Int): List<Entry>? {
         val bytes = when (compression) {
             COMPRESSION_NONE -> raw
             COMPRESSION_GZIP -> GZIPInputStream(raw.inputStream()).use { it.readBytes() }
@@ -222,7 +230,7 @@ object PmtilesReader {
         }
         val r = Varints(bytes)
         val n = r.next().toInt()
-        if (n <= 0 || n > 4_000_000) return null
+        if (n <= 0 || n > 4_000_000 || n > (bytes.size - r.position()) / 4) return null
         val ids = LongArray(n)
         var last = 0L
         for (i in 0 until n) { last += r.next(); ids[i] = last }

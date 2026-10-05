@@ -16,7 +16,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [ main, canary ]
+    branches: [ main, canary, codex/maplibre-10.3.7 ]
     paths:
       - 'app/**'
       - 'core/**'
@@ -183,7 +183,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish Canary build (rolling release)
-        if: steps.ver.outputs.channel == 'canary'
+        if: steps.ver.outputs.channel == 'canary' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
