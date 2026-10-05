@@ -232,9 +232,13 @@ internal class IsolatedMapClient(
         val failedAt = System.currentTimeMillis()
         val failedPid = remotePid
         val startedAt = attemptStartedAt
+        // ActivityManager timestamps death asynchronously, sometimes just AFTER Binder's
+        // callback. Allow a bounded registration lag only when Binder already reported death.
+        val exitUntil = failedAt + if (reason.startsWith("renderer process ended:") ||
+            reason.startsWith("renderer binding died:")) 5_000L else 0L
         FileLogger.w("MapRendererClient", "session=$session failure=$reason", error)
         val details = "session=$session launcherPid=${Process.myPid()} rendererPid=$remotePid stage=$terminalStage reason=$reason\n" +
-            app.vela.diag.ProcessDiagnostics.snapshot() + "\n" + (error?.stackTraceToString() ?: "No Java exception received; native cause is unknown.")
+            "failedAt=$failedAt exitUntil=$exitUntil\n" + app.vela.diag.ProcessDiagnostics.snapshot() + "\n" + (error?.stackTraceToString() ?: "No Java exception received; native cause is unknown.")
         scope.launch(Dispatchers.IO) {
             runCatching {
                 val journal = java.io.File(context.filesDir, "diag/process-session-$processSuffix.json")
@@ -249,11 +253,11 @@ internal class IsolatedMapClient(
                     val count = it.read(buffer)
                     if (count > 0) String(buffer, 0, count) else "Empty graphics report"
                 } else "GPU probe did not finish or start; see renderer journal"
-                // Exit records may become visible shortly after Binder death. The timestamp upper
-                // bound stays at failure detection, excluding disconnect()'s later cleanup kill.
+                // Registration can lag Binder death; timeout/send failures still use failedAt
+                // strictly so our later recovery kill is not mistaken for the original cause.
                 delay(500)
                 val exit = app.vela.diag.ProcessDiagnostics.exitInformation(context, failedPid,
-                    "${context.packageName}:$processSuffix", startedAt, failedAt)
+                    "${context.packageName}:$processSuffix", startedAt, exitUntil)
                 app.vela.diag.CrashCatcher.saveDiagnosticReport(context, "Map renderer failure",
                     details + "\n=== Renderer journal ===\n" + remoteSnapshot +
                         "\n=== Renderer graphics (check PID/recorded for freshness) ===\n" + gpuSnapshot +

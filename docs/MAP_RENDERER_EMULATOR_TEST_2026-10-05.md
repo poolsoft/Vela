@@ -22,3 +22,12 @@ Kullanıcı onayıyla eski, farklı imzalı Vela temiz kaldırıldı. Kurulum ba
 - Emülatör konumunda mevcut hız 68 mph idi; gerçek sürüş testi yapılmadı.
 - Bu test gerçek SIGSEGV/EGL arızası değildir; kontrollü renderer sonlandırmasıdır. API 27 ARM teyp sürücüsü ve Android Auto doğrulanmadı.
 - Müzik taraması, navigasyon rotası, dikey dönüş ve tüm workspace özellikleri bu testin kapsamına alınmadı.
+## 0.4.74 emülatör sonucu ve v10/v13 değerlendirmesi
+
+CI #74 (37355244902), kaynak 2a3b0c3c: APK + core/app regresyon testleri başarılı. x86 0.4.74 (2074) veriler korunarak kuruldu. Grafik raporu: GLES 3.1, NVIDIA Quadro K620 host translator; ES2 config=3, ES3 config=3, motor ES3 window adayı=3. Ana PID 10378, renderer 10620. Renderer kontrollü SIGKILL sonrasında üstteki hata paneli ve Retry düğmesi görünür kaldı; düğmeye basınca renderer 10775 ile style/frame ve harita görüntüsü geri geldi. Native teyp çökmesi yeniden üretilmedi.
+
+Sistem kaydı eşleşmesi için testte bir zaman yarışı bulundu: Binder ölüm bildirimi, Android exit-info timestamp'inden 12 ms önce geldi. Yalnız Binder süreç ölümü/binding ölümü bildirimlerinde kayıt üst sınırına 5 saniye eklenir; timeout/send hatalarında sonraki kurtarma kill'inin asıl hata diye raporlanmaması için sınır değişmez. Rapor failedAt ve exitUntil zamanlarını içerir.
+
+Resmi sürüm kaynakları karşılaştırıldı: v10.3.1 EGLConfigChooser ES2 renderable/conformant config ister. v13.6.1 OpenGL EGLConfigChooser ES3 ister; yeni backend seçimi ES2 desteği anlamına gelmez. ES2-only teyp için v10.3.1 uyumluluk adayıdır, kesin çözüm sayılmaz. v10 `com.mapbox.mapboxsdk`, mevcut sürüm `org.maplibre.android` kullanır; paket/API ve overlay/stil uyarlamaları ayrıca değerlendirilmelidir. Bu değişiklikte SDK düşürülmedi.
+
+Kaynaklar: https://github.com/maplibre/maplibre-native/blob/android-v10.3.1/platform/android/MapboxGLAndroidSDK/src/main/java/com/mapbox/mapboxsdk/maps/renderer/egl/EGLConfigChooser.java ve https://github.com/maplibre/maplibre-native/blob/android-v13.6.1/platform/android/MapLibreAndroid/src/sharedRenderer/opengl/java/org/maplibre/android/maps/renderer/egl/EGLConfigChooser.java.
