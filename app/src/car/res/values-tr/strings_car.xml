@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="car_map_manual_start">Haritayı aç</string>
+    <string name="car_map_manual_start_detail">Harita yalnızca siz açtığınızda başlatılır. Launcher özelliklerini ve ayarları şimdi kullanabilirsiniz.</string>
+    <string name="car_map_open_settings">Ayarlar</string>
     <string name="car_exit_close">Uygulamayı kapat</string>
     <string name="car_exit_restart">Launcher’ı yeniden başlat</string>
     <string name="car_exit_close_detail">Müzik ve navigasyon durdurulur, uygulama ekranı kapatılır.</string>

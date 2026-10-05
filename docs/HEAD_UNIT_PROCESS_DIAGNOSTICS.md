@@ -25,6 +25,13 @@ Vela'nın kullanılmayan MEDIA_BUTTON servis intent filtresi kaldırıldı; dire
 
 Vela artık keşfedilen .carlauncher.media.CarMediaService servislerini dış kaynak seçiminde ve medya bildirimi yenilemesinde dışlar. Böylece diğer launcher'ın yansıtılmış oturumunu takip etmez ve Smart Focus onu duraklatmaya çalışmaz. Diğer iki uygulamanın kodu değiştirilmedi; onların Vela'yı takip etmesi ayrıca kendi projelerinde ele alınabilir. OEM Bluetooth/radyo yayınları cihaz protokolüdür; başka isimle değiştirilmedi. Üç uygulamanın arka plan servislerini çalıştırması düşük bellekli teypte yükü artırabilir; birlikte kurulu olmak tek başına çökme kanıtı değildir.
 
+## Haritasız açılış
+Car varyantı her yeni Activity açılışında harita motorunu başlatmadan açılır. Harita alanındaki Haritayı aç düğmesi MapScreen'i ilk kez oluşturur; Ayarlar düğmesi haritayı açmadan ayarlara ulaşır. Desktop modunda gizli harita da bu kapının arkasındadır. Home ile mevcut Activity'ye dönüş haritayı tekrar oluşturmaz. Activity/süreç yeniden oluşturulursa harita yeniden elle açılmalıdır; bu tercih kalıcı veya saved-state olarak saklanmaz. Standard varyantın davranışı değişmez.
+
+Bu adım EGL hatasını onarmaz; launcher ve harita başlangıcını birbirinden ayırarak teybin diğer işlevlerini denemeye izin verir. Çevrimdışı harita dosyası olmaması, MapView'in EGL başlatmasını engellemiyordu. Son 0.4.67 raporu exception değil, son işlemi map: create texture=false olan beklenmedik süreç sonlanma kaydıdır.
+
+Doğrulama: temiz açılışta map: create kaydı oluşmamalı; Ayarlar ve müzik açılabilmeli. Haritayı aç komutundan sonra map: create kaydı beklenir. Harita açılışı uygulamayı sonlandırırsa sonraki açılış yine haritasız olmalıdır. Bu cihaz denemeleri henüz yapılmadı.
+
 ## Daha ayrıntılı rapor
 - Java exception raporuna sürüm/PID, son işlem, Activity durumu, Java/native heap, kullanılabilir bellek ve ana iş parçacığı yanıt süresi eklenir.
 - Dahili diag/process-session.json yaklaşık 5 saniyede bir atomik yazılır; işlem değişiklikleri kısa gecikmeyle birleştirilir.

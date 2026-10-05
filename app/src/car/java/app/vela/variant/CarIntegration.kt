@@ -6,6 +6,21 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import app.vela.carlauncher.hardware.HardwareMediaKeyRouter
 import app.vela.carlauncher.hardware.HeadUnitManager
@@ -85,6 +100,9 @@ object CarIntegration {
         voiceAudioLevel: Float = 0f,
         content: @Composable () -> Unit
     ) {
+        // Session-only opt-in: never restore map initialization after a process/Activity restart.
+        // Gate the whole MapScreen, not just its visibility, so no hidden EGL surface is created.
+        var mapStarted by remember { mutableStateOf(false) }
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
         val configuration = androidx.compose.ui.platform.LocalConfiguration.current
         val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT ||
@@ -95,7 +113,30 @@ object CarIntegration {
             onAsistanTiklandi = onVoiceClick,
             isVoiceListening = isVoiceListening,
             voiceAudioLevel = voiceAudioLevel,
-            haritaIcerigi = content
+            haritaIcerigi = {
+                if (mapStarted) {
+                    content()
+                } else {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(stringResource(app.vela.R.string.car_map_manual_start_detail))
+                            Button(onClick = {
+                                app.vela.diag.ProcessDiagnostics.checkpoint("map: user requested start")
+                                mapStarted = true
+                            }) {
+                                Text(stringResource(app.vela.R.string.car_map_manual_start))
+                            }
+                            OutlinedButton(onClick = onOpenSettings) {
+                                Text(stringResource(app.vela.R.string.car_map_open_settings))
+                            }
+                        }
+                    }
+                }
+            }
         )
     }
     @Composable fun Settings(onBack: () -> Unit, onPermissions: () -> Unit, onBackup: () -> Unit) {
