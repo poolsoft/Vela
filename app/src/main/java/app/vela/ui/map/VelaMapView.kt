@@ -3488,7 +3488,7 @@ fun VelaMapView(
                 if (fpsProbeOn) {
                     var frames = 0
                     var since = android.os.SystemClock.elapsedRealtime()
-                    mv.addOnDidFinishRenderingFrameListener { _, _, _ ->
+                    mv.addOnDidFinishRenderingFrameListener { _ ->
                         frames++
                         val now = android.os.SystemClock.elapsedRealtime()
                         if (now - since >= 1000) {
@@ -3499,7 +3499,7 @@ fun VelaMapView(
                     }
                 }
                 var frameReportedForStyle: Style? = null
-                mv.addOnDidFinishRenderingFrameListener { fully, _, _ ->
+                mv.addOnDidFinishRenderingFrameListener { fully ->
                     val currentStyle = map.style
                     if (fully && currentStyle != null && currentStyle !== frameReportedForStyle) {
                         frameReportedForStyle = currentStyle
