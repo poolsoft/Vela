@@ -142,7 +142,6 @@ fun LauncherToolsSettings() {
         }
 
         Text(stringResource(R.string.car_backup_scope), style = MaterialTheme.typography.bodySmall)
-        app.vela.diag.DiagnosticBundleSaveButton()
 
         TextButton(onClick = { choosingApp = true }) {
             Text(
