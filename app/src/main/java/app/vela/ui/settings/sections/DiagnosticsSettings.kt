@@ -69,6 +69,7 @@ internal fun DiagnosticsSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onC
         Spacer(Modifier.height(4.dp))
         LaunchedEffect(Unit) { vm.refreshDiagnostics() }
         PageIntro(stringResource(R.string.settings_diagnostics_hint))
+        app.vela.diag.DiagnosticBundleSaveButton()
         var showDiagConsent by remember { mutableStateOf(false) }
         SettingsGroup {
         ToggleRow(

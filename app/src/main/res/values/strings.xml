@@ -1105,4 +1105,9 @@
     <string name="car_backup_count_items">%1$d items</string>
     <string name="car_backup_success">Backup completed successfully.</string>
     <string name="car_backup_restore_success">Selected items restored successfully.</string>
+    <string name="settings_diag_save">Save diagnostic bundle to USB / file</string>
+    <string name="settings_diag_saving">Saving diagnostic bundle…</string>
+    <string name="settings_diag_save_success">Diagnostic bundle saved.</string>
+    <string name="settings_diag_save_failed">Could not save the diagnostic bundle.</string>
+    <string name="settings_diag_save_hint">Choose USB storage or a folder in the save screen. Includes existing logs, process reports and graphics diagnostics even when session diagnostics are off. Logs may contain paths or place names. Nothing is uploaded.</string>
 </resources>

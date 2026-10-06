@@ -1012,4 +1012,9 @@
     <string name="settings_voice_asr_installed">Çevrimdışı ses tanıma modeli hazır (Whisper %1$d MB)</string>
     <string name="settings_voice_asr_not_installed">İnternetsiz eller serbest ses tanıma için model gereklidir.</string>
     <string name="settings_voice_asr_download">Ses tanıma modelini indir (%1$d MB)</string>
+    <string name="settings_diag_save">Tanı paketini USB’ye / dosyaya kaydet</string>
+    <string name="settings_diag_saving">Tanı paketi kaydediliyor…</string>
+    <string name="settings_diag_save_success">Tanı paketi kaydedildi.</string>
+    <string name="settings_diag_save_failed">Tanı paketi kaydedilemedi.</string>
+    <string name="settings_diag_save_hint">Kayıt ekranında USB belleği veya bir klasörü seçin. Oturum tanısı kapalıyken de mevcut loglar, süreç raporları ve grafik tanısı kaydedilir. Loglarda dosya yolları veya yer adları bulunabilir. İnternete gönderilmez.</string>
 </resources>
