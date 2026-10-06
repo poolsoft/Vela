@@ -101,6 +101,9 @@ jobs:
           else
             echo "name=0.4.${{ github.run_number }}-canary" >> "$GITHUB_OUTPUT"
           fi
+          if [ "${{ inputs.diagnostic }}" = "true" ]; then
+            echo "name=0.4.${{ github.run_number }}-diagnostic" >> "$GITHUB_OUTPUT"
+          fi
           echo "code=$(( 2000 + ${{ github.run_number }} ))" >> "$GITHUB_OUTPUT"
 
       - name: Fetch TTS runtime AAR
@@ -140,9 +143,10 @@ jobs:
           -PappVersionName=${{ steps.ver.outputs.name }}
           -PappVersionCode=${{ steps.ver.outputs.code }}
           -PmaptilerKey=${{ secrets.MAPTILER_KEY }}
+          -PdiagnosticApk=${{ inputs.diagnostic || false }}
 
       - name: Renderer boundary regression tests
-        run: ./gradlew :app:testCarReleaseUnitTest --no-daemon
+        run: ./gradlew :app:testCarReleaseUnitTest --no-daemon -PdiagnosticApk=${{ inputs.diagnostic || false }}
 
       - name: Prepare APKs
         run: |
@@ -153,7 +157,9 @@ jobs:
             [ -f "$apk" ] || continue
             bname=$(basename "$apk" .apk)
             arch=$(echo "$bname" | sed -e 's/app-car-//' -e 's/-release//')
-            if [ "$CH" = "canary" ]; then
+            if [ "${{ inputs.diagnostic }}" = "true" ]; then
+              prefix="vela-maps-diagnostic"
+            elif [ "$CH" = "canary" ]; then
               prefix="vela-maps-canary"
             else
               prefix="vela-maps-v${VER}"
@@ -166,6 +172,15 @@ jobs:
           done
           echo "Hazirlanan APK dosyalari:"
           ls -lh release-apks/
+
+      - name: Verify diagnostic APK flag
+        if: inputs.diagnostic == true
+        run: |
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
+          test -n "$AAPT"
+          for apk in release-apks/*.apk; do
+            "$AAPT" dump badging "$apk" | grep -q '^application-debuggable'
+          done
 
       - name: Inspect APK sizes and native libraries
         run: |
@@ -183,7 +198,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish Canary build (rolling release)
-        if: steps.ver.outputs.channel == 'canary' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary')
+        if: inputs.diagnostic != true && steps.ver.outputs.channel == 'canary' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -203,7 +218,7 @@ jobs:
             release-apks/*.apk
 
       - name: Publish Stable Release
-        if: steps.ver.outputs.channel == 'stable'
+        if: inputs.diagnostic != true && steps.ver.outputs.channel == 'stable'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

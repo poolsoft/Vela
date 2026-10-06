@@ -192,12 +192,14 @@ android {
 
     buildTypes {
         release {
+            isDebuggable = providers.gradleProperty("diagnosticApk").orNull == "true"
             // Always ship release: R8 here is what keeps map scroll/nav smooth
             // (debug builds visibly lag).
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             val envSigning = signingConfigs.getByName("releaseFromEnv")
+            check(!isDebuggable || envSigning.storeFile?.exists() == true) { "Diagnostic APK requires the release signing key" }
             signingConfig = if (envSigning.storeFile?.exists() == true) {
                 envSigning
             } else {
