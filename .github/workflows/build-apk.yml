@@ -203,6 +203,20 @@ jobs:
           path: release-apks/*.apk
           if-no-files-found: error
 
+      - name: Publish diagnostic APKs
+        if: env.DIAGNOSTIC_APK == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIAGNOSTIC_VERSION: ${{ steps.ver.outputs.name }}
+        run: |
+          TAG="diagnostic-${{ github.run_number }}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "Vela $DIAGNOSTIC_VERSION (Tani)" \
+              --notes "Release imzali, debugger acik tani APK. Muzik servisi, parca hazirlama ve dahili kapak okuma kapali. Logcat uygulamanin erisim yetkisiyle logs klasorune kaydedilir."
+          fi
+          gh release upload "$TAG" release-apks/*.apk --clobber
+
       - name: Publish Canary build (rolling release)
         if: env.DIAGNOSTIC_APK != 'true' && steps.ver.outputs.channel == 'canary' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary')
         env:
