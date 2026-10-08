@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -73,7 +74,7 @@ fun CarLauncherLayout(
     val telemetry = remember { CarTelemetryManager.getInstance(context) }
     val apps = remember { CarAppManager.getInstance(context) }
     val media by mediaManager.medyaDurumu.collectAsState()
-    val telemetryState by telemetry.telemetriDurumu.collectAsState()
+    val telemetryState by telemetry.telemetriDurumu.collectAsStateWithLifecycle()
     val desktop by CarLauncherSettings.desktopModu.collectAsState()
     val autoPlay by CarLauncherSettings.otomatikOynat.collectAsState()
     var contentMode by rememberSaveable { mutableStateOf("UNIFIED") }

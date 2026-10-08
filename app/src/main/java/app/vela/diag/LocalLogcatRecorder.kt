@@ -11,6 +11,7 @@ internal object LocalLogcatRecorder {
     @Synchronized fun start(context: Context) {
         if (started) return
         started = true
+        val session = ++generation
         val app = context.applicationContext
         Thread({
             var process: Process? = null
@@ -40,15 +41,30 @@ internal object LocalLogcatRecorder {
                     // before its recorder could write the final messages. No global buffer clearing.
                     process = ProcessBuilder("/system/bin/logcat", "-b", "all", "-v", "threadtime", "-T", "400")
                         .redirectErrorStream(true).start()
+                    synchronized(this) {
+                        if (generation == session) capture = process else process?.destroy()
+                    }
                     process!!.inputStream.bufferedReader().use { reader ->
                         while (true) { val value = reader.readLine() ?: break; line(value) }
                     }
                     line("Logcat stopped: exit=${process!!.waitFor()}")
                 } finally { output.close() }
             } catch (error: Exception) {
-                FileLogger.w("LocalLogcatRecorder", "Logcat capture unavailable: ${error.message}", error)
-            } finally { process?.destroy() }
+                if (synchronized(this) { generation == session })
+                    FileLogger.w("LocalLogcatRecorder", "Logcat capture unavailable: ${error.message}", error)
+            } finally {
+                process?.destroy()
+                synchronized(this) { if (generation == session) { started = false; capture = null } }
+            }
         }, "VelaLogcatRecorder").apply { isDaemon = true }.start()
     }
+    @Synchronized fun stop() {
+        generation++
+        started = false
+        capture?.destroy()
+        capture = null
+    }
+    private var capture: Process? = null
+    private var generation = 0
     private var started = false
 }

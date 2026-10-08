@@ -393,11 +393,15 @@ class MusicRepository private constructor(private val context: Context) {
             return
         }
         try {
+            val started = android.os.SystemClock.elapsedRealtime()
+            app.vela.diag.ProcessDiagnostics.checkpoint("music cache: read ${indexFile.length()} bytes")
             val jsonStr = indexFile.readText(Charsets.UTF_8)
             val array = org.json.JSONArray(jsonStr)
+            app.vela.diag.ProcessDiagnostics.checkpoint("music cache: parsed ${array.length()} entries")
             val yuklenenParcalar = mutableListOf<SesParcasi>()
             val knownFiles = HashSet<String>()
             for (i in 0 until array.length()) {
+                if (i % 128 == 0) app.vela.diag.ProcessDiagnostics.checkpoint("music cache: checking entry $i/${array.length()}")
                 val obj = array.getJSONObject(i)
                 val dosyaYolu = obj.optString("dosyaYolu", "")
                 if (dosyaYolu.isNotBlank()) {
@@ -422,6 +426,7 @@ class MusicRepository private constructor(private val context: Context) {
                 }
             }
 
+            app.vela.diag.ProcessDiagnostics.checkpoint("music cache: files checked in ${android.os.SystemClock.elapsedRealtime() - started} ms")
             if (yuklenenParcalar.isNotEmpty()) {
                 val klasorMap = mutableMapOf<String, MutableList<SesParcasi>>()
                 for (p in yuklenenParcalar) {
@@ -445,9 +450,10 @@ class MusicRepository private constructor(private val context: Context) {
                 FileLogger.i(TAG, "Önbellekten ${yuklenenParcalar.size} müzik ve ${klasorListesi.size} klasör anında yüklendi.")
             }
         } catch (e: Exception) {
+            app.vela.diag.ProcessDiagnostics.checkpoint("music cache: failed ${e.javaClass.simpleName}")
             FileLogger.w(TAG, "Müzik önbelleği okunamadı: ${e.message}", e)
         }
-        app.vela.diag.ProcessDiagnostics.checkpoint("music cache: complete")
+        app.vela.diag.ProcessDiagnostics.checkpoint("music cache: complete; tracks=${_parcalar.value.size}")
     }
 
     fun removeTrack(key: String) {

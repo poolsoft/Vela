@@ -77,7 +77,8 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.util.FileLogger.init(this)
         super.onCreate()
         app.vela.diag.ProcessDiagnostics.install(this)
-        if (BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) app.vela.diag.LocalLogcatRecorder.start(this)
+        if (BuildConfig.DIAGNOSTIC_MUSIC_DISABLED && !app.vela.variant.CarIntegration.available)
+            app.vela.diag.LocalLogcatRecorder.start(this)
         if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(this)) {
             CrashCatcher.install(this) { emptyList() }
             app.vela.util.FileLogger.i("VelaApp", "Lightweight process startup: no launcher, music, location or downloads")

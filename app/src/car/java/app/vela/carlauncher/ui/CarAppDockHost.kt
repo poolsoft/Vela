@@ -168,7 +168,13 @@ class CarAppDockHost(
         }
     }
 
+    private var appliedMedia: MedyaParcasi? = null
+    private var appliedModeIcon: Int? = null
+
     fun updateMedia(medya: MedyaParcasi) {
+        val previous = appliedMedia
+        if (previous != null && previous.baslik == medya.baslik && previous.caliyorMu == medya.caliyorMu) return
+        appliedMedia = medya
         miniMusicTitle?.text = if (medya.baslik.isNotBlank()) medya.baslik else "Müzik"
         miniMusicPlay?.setImageResource(
             if (medya.caliyorMu) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
@@ -181,6 +187,9 @@ class CarAppDockHost(
             isFullScreenMap -> R.drawable.ic_desktop_mode
             else -> R.drawable.ic_layout_full
         }
-        btnDesktopMode?.setImageResource(iconRes)
+        if (appliedModeIcon != iconRes) {
+            appliedModeIcon = iconRes
+            btnDesktopMode?.setImageResource(iconRes)
+        }
     }
 }

@@ -27,6 +27,9 @@ object ProcessDiagnostics {
     @Volatile private var heartbeat = SystemClock.uptimeMillis()
     private val heartbeatPending = java.util.concurrent.atomic.AtomicBoolean(false)
     private var stallReported = false
+    private var lastStallReport = -60_000L
+    private var lastPersist = 0L
+    private val recentStages = java.util.ArrayDeque<String>()
     private var writePending = false
 
     @Synchronized fun install(app: Context) {
@@ -51,7 +54,15 @@ object ProcessDiagnostics {
         }
     }
 
+    private fun recordStage(label: String) {
+        synchronized(recentStages) {
+            if (recentStages.size >= 32) recentStages.removeFirst()
+            recentStages.addLast("${System.currentTimeMillis()} [${Thread.currentThread().name}] $label")
+        }
+    }
+
     fun checkpoint(label: String) {
+        recordStage(label)
         if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) app.vela.util.FileLogger.d("ProcessDiagnostics", label)
         operation = label
         requestWrite()
@@ -59,6 +70,7 @@ object ProcessDiagnostics {
 
     /** Startup-only barrier: persist the last native-entry stage before entering EGL/JNI. */
     fun checkpointAndFlush(label: String) {
+        recordStage(label)
         if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) app.vela.util.FileLogger.d("ProcessDiagnostics", label)
         operation = label
         if (!::worker.isInitialized) return
@@ -115,6 +127,7 @@ object ProcessDiagnostics {
             put("abis", Build.SUPPORTED_ABIS.joinToString())
             put("advertisedGles", context.getSystemService(ActivityManager::class.java).deviceConfigurationInfo.glEsVersion)
             put("operation", operation)
+            put("recentStages", synchronized(recentStages) { org.json.JSONArray(recentStages.toList()) })
             put("activity", lifecycle)
             put("foreground", foreground)
             put("explicitClose", explicitlyClosed)
@@ -169,7 +182,10 @@ object ProcessDiagnostics {
     private val tick = object : Runnable {
         override fun run() {
             val age = SystemClock.uptimeMillis() - heartbeat
-            if (foreground && age >= 15_000 && !Debug.isDebuggerConnected() && !stallReported) {
+            val now = SystemClock.uptimeMillis()
+            val threshold = if (BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) 3_000 else 15_000
+            if (foreground && age >= threshold && !Debug.isDebuggerConnected() && !stallReported && now - lastStallReport >= 60_000) {
+                lastStallReport = now
                 stallReported = true
                 runCatching {
                     CrashCatcher.saveDiagnosticReport(context, "Main thread stall", buildString {
@@ -184,14 +200,14 @@ object ProcessDiagnostics {
                     })
                 }
             }
-            if (!foreground || age < 15_000) stallReported = false
+            if (!foreground || age < threshold) stallReported = false
             // One outstanding heartbeat avoids filling a stalled main-thread queue.
             if (heartbeatPending.compareAndSet(false, true)) main.post {
                 heartbeat = SystemClock.uptimeMillis()
                 heartbeatPending.set(false)
             }
-            persist()
-            worker.postDelayed(this, 5_000)
+            if (now - lastPersist >= 5_000) { persist(); lastPersist = now }
+            worker.postDelayed(this, if (BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) 1_000 else 5_000)
         }
     }
 }

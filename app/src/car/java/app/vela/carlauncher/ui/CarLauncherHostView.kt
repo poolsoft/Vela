@@ -88,6 +88,18 @@ fun CarLauncherHostView(
     val latestMap by rememberUpdatedState(haritaIcerigi)
     val latestAssistant by rememberUpdatedState(onAsistanTiklandi)
 
+    var dockReady by remember { mutableStateOf(!app.vela.ui.MemoryPressure.lowRam) }
+    var panelReady by remember { mutableStateOf(!app.vela.ui.MemoryPressure.lowRam) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (!dockReady) {
+            kotlinx.coroutines.delay(500)
+            dockReady = true
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: dock stage ready")
+            kotlinx.coroutines.delay(1_000)
+            panelReady = true
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: panel stage ready")
+        }
+    }
     val parentComposition = rememberCompositionContext()
     AndroidView(
         modifier = modifier.fillMaxSize(),
@@ -127,7 +139,7 @@ fun CarLauncherHostView(
             val portrait = measuredPortrait
             val vertical = !portrait && dockKonumu != "bottom"
 
-            if (binding.dockHost?.isVertical != vertical) {
+            if (dockReady && binding.dockHost?.isVertical != vertical) {
                 binding.dockHost?.release()
                 dock.removeAllViews()
                 binding.dockHost = CarAppDockHost(
@@ -148,7 +160,7 @@ fun CarLauncherHostView(
             binding.dockHost?.setVoiceListening(isVoiceListening, voiceAudioLevel)
 
             val effectiveMode = if (desktop) "DESKTOP" else contentMode
-            if (binding.contentMode != effectiveMode) {
+            if (panelReady && binding.contentMode != effectiveMode) {
                 binding.releasePanel()
                 binding.contentMode = effectiveMode
                 when (effectiveMode) {

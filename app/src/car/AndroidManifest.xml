@@ -23,7 +23,14 @@
             <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
         </intent>
     </queries>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <application>
+        <service android:name="app.vela.carlauncher.diag.DiagnosticService"
+            android:process=":diagnostics" android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local diagnostic recording during user-initiated launcher testing" />
+        </service>
         <!-- Native map rendering is always outside the launcher process. -->
         <service android:name="app.vela.carlauncher.map.MapRendererService"
             android:process=":map_renderer" android:exported="false" />

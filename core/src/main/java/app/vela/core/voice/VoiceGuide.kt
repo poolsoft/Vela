@@ -251,7 +251,8 @@ class VoiceGuide @Inject constructor(
             useNeural = true
             ready = true // the neural synth loads + queues internally
             working = neural != null
-            neural?.warmUp()
+            // Selecting the saved engine must not load a native model at launcher startup.
+            // Route creation / explicit voice selection warm it; speak() also loads lazily.
             drainPendingLatest()
             return
         }

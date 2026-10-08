@@ -7,6 +7,9 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.TextView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.findViewTreeLifecycleOwner
 import app.vela.R
 import app.vela.carlauncher.hardware.CarHardwareManager
 import app.vela.carlauncher.model.HizTelemetrisi
@@ -48,11 +51,40 @@ class CarUnifiedPanelHost(
 
     private val musicControls: View? = rootView.findViewById(R.id.music_controls)
 
+    private var appliedMedia: MedyaParcasi? = null
+    private var lifecycle: Lifecycle? = null
+    private var active = false
+    private val observer = LifecycleEventObserver { _, _ -> syncLifecycle() }
+    private val attachment = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(view: View) {
+            lifecycle = view.findViewTreeLifecycleOwner()?.lifecycle
+            lifecycle?.addObserver(observer)
+            syncLifecycle()
+        }
+        override fun onViewDetachedFromWindow(view: View) {
+            lifecycle?.removeObserver(observer)
+            lifecycle = null
+            setActive(false)
+        }
+    }
+
+    private fun syncLifecycle() = setActive(rootView.isAttachedToWindow &&
+        (lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) != false))
+
+    private fun setActive(value: Boolean) {
+        if (active == value) return
+        active = value
+        rootView.removeCallbacks(clockTick)
+        if (value) rootView.post(clockTick)
+        visualizer?.setPlaying(value && (appliedMedia?.caliyorMu == true))
+    }
+
     private val clockTick = object : Runnable {
         override fun run() {
-            clockView?.text = android.text.format.DateFormat.format(
+            val value = android.text.format.DateFormat.format(
                 if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm",
                 java.util.Date())
+            if (clockView?.text?.toString() != value.toString()) clockView?.text = value
             rootView.postDelayed(this, 1000)
         }
     }
@@ -60,11 +92,16 @@ class CarUnifiedPanelHost(
     init {
         visualizer?.setVisualizerContext(true)
         setupViews()
-        rootView.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ -> resizeContents(r - l, b - t) }
-        rootView.post(clockTick)
+        rootView.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
+            if (r - l != or - ol || b - t != ob - ot) resizeContents(r - l, b - t)
+        }
+        rootView.addOnAttachStateChangeListener(attachment)
     }
 
     fun release() {
+        lifecycle?.removeObserver(observer)
+        rootView.removeOnAttachStateChangeListener(attachment)
+        setActive(false)
         rootView.removeCallbacks(clockTick)
         visualizer?.setPlaying(false)
     }
@@ -166,6 +203,9 @@ class CarUnifiedPanelHost(
     }
 
     fun updateMedia(m: MedyaParcasi) {
+        val previous = appliedMedia
+        if (previous != null && previous.baslik == m.baslik && previous.sanatci == m.sanatci && previous.caliyorMu == m.caliyorMu) return
+        appliedMedia = m
         trackTitle?.text = if (m.baslik.isNotBlank() && m.baslik != "Müzik Çalınmıyor") {
             m.baslik
         } else {
@@ -182,6 +222,6 @@ class CarUnifiedPanelHost(
             if (m.caliyorMu) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         )
 
-        visualizer?.setPlaying(m.caliyorMu)
+        visualizer?.setPlaying(active && m.caliyorMu)
     }
 }

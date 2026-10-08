@@ -146,15 +146,21 @@ class PiperSynth @Inject constructor(
                     noiseScale = 0.45f, noiseScaleW = 0.55f,
                 )
                 val cfg = OfflineTtsConfig(model = OfflineTtsModelConfig(vits = vits, numThreads = 2, debug = false))
+                app.vela.diag.ProcessDiagnostics.checkpointAndFlush("piper: native load ${r.voiceId}, attempt ${attempt + 1}")
                 val engine = OfflineTts(assetManager = null, config = cfg)
+                app.vela.diag.ProcessDiagnostics.checkpoint("piper: native load returned ${r.voiceId}")
                 numSpeakers = engine.numSpeakers()
+                app.vela.diag.ProcessDiagnostics.checkpointAndFlush("piper: first generation ${r.voiceId}")
                 runCatching { engine.generate(text = " ", sid = 0, speed = SPEED) }
+                    .onFailure { app.vela.util.FileLogger.w(TAG, "Piper first generation failed", it) }
+                app.vela.diag.ProcessDiagnostics.checkpoint("piper: ready ${r.voiceId}")
                 tts = engine
                 loadedVoiceId = r.voiceId
                 Log.i(TAG, "loaded ${r.voiceId}: sampleRate=${engine.sampleRate()} speakers=$numSpeakers")
                 return engine
             } catch (t: Throwable) {
-                Log.e(TAG, "model load failed (attempt ${attempt + 1}): ${t.message}", t)
+                app.vela.diag.ProcessDiagnostics.checkpoint("piper: load failed ${r.voiceId}, attempt ${attempt + 1}")
+                app.vela.util.FileLogger.e(TAG, "model load failed (attempt ${attempt + 1}): ${t.message}", t)
                 if (attempt == 0) runCatching { Thread.sleep(200) } // let a just-written model settle, then retry
             }
         }

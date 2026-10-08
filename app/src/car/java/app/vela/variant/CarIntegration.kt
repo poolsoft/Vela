@@ -85,6 +85,7 @@ object CarIntegration {
             ?.activityInfo?.packageName == context.packageName
     }
     fun prepareForExit(activity: ComponentActivity) {
+        app.vela.carlauncher.diag.DiagnosticService.stop(activity)
         CarFloatingButtonManager.getInstance(activity).setSuspended(true)
         val music = app.vela.carlauncher.media.MusicManager.getInstance(activity)
         music.duraklat()
@@ -95,6 +96,7 @@ object CarIntegration {
     }
     @Composable fun ExitControl() = app.vela.carlauncher.ui.LauncherExitControl()
     fun onCreated(activity: ComponentActivity) {
+        app.vela.carlauncher.diag.DiagnosticService.start(activity)
         activity.lifecycleScope.launch {
             CarLauncherSettings.ekranYonu.collect { orientation ->
                 activity.requestedOrientation = when (orientation) {
