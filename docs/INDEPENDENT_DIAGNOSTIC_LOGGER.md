@@ -25,4 +25,14 @@ Android'in Binder ölüm bildirimi: https://developer.android.com/reference/andr
 
 ## Doğrulama
 
-Derleme ve OsmAndAuto x86 emülatöründe bağımsız süreç / kontrollü sonlandırma testinin sonucu tamamlandığında aşağıya kaydedilir. Emülatör testi teypteki gerçek kapanma nedenini kanıtlamaz.
+8 Ekim 2026: [diagnostic-97 APK'ları](https://github.com/poolsoft/Vela/releases/tag/diagnostic-97), sürüm `0.4.97-diagnostic / 2097`, üretim imzasıyla ve debuggable olarak oluşturuldu. [GitHub derlemesi ve kontrolleri](https://github.com/poolsoft/Vela/actions/runs/37807599264) başarılı. Yalnız `codex/maplibre-10.3.7` dalı güncellendi; main korunuyor.
+
+- Yerel çekirdek testleri: 680 test, hata yok, 6 atlama. Sonradan eklenen `VoiceGuideStartupTest` de geçti; kayıtlı neural motorun ilk seçiminde ve tekrar seçiminde warmUp/konuşma çalışmadığını doğrular.
+- Araç varyantı: 57 test, hata yok, 4 atlama.
+- OsmAndAuto_LowRam_API30_x86 / emulator-5556 üzerine x86 APK mevcut veriler korunarak kuruldu. Diğer emülatör kullanılmadı. OsmAndAuto başlangıçta askıya alınmıştı; yeniden başlatılmadan devam ettirildi.
+- Ana PID 9639 ve tanı PID 9698 ayrıydı. Ana süreç SIGSTOP ile 22 saniye durduruldu: tanı süreci çalıştı ve günlüğün 18.322 ms eskidiğini dosyaya kaydetti. Sonra SIGCONT ile devam ettirildi.
+- Ana süreç kontrollü SIGKILL ile öldürüldü: tanı PID 9698 hayatta kaldı, Binder ölümü raporu yazıldı. Android API 30 çıkış kaydı aynı PID için `reason=2 (signal), status=9` verdi. Bu testte neden zaten uygulanan SIGKILL idi; teyp hatasıyla karıştırılmamalı.
+- Launcher tekrar açıldı: yeni ana PID 10031, aynı tanı PID 9698'e bağlandı. Ayarlardaki Close application ile kapatıldığında tanı servisi/bildirimi durdu; tekrar açılışta logger yeniden çalıştı. Normal kapatma için yanlış Binder ölümü raporu oluşmadı.
+- Kopyalanan raporların hiçbiri boş değildi. Müzik önbelleğindeki 17 kayıt yüklendi; bir tarama başlatılmadı. Bu testte harita süreci açılmadı. Emülatörde Piper modeli kurulu olmadığı için gerçek native model yükleme testi yapılmadı.
+
+Başlangıç yedeği ve test kanıtları: `D:/Projects/CarWorkspace/Vela-backups/2026-10-08-independent-diagnostics/`. APK, git bundle, süreç günlüğü, ölüm/takılma raporları ve ekran görüntüsü burada tutuluyor. Emülatör testi teypteki gerçek kapanma nedenini kanıtlamaz.
