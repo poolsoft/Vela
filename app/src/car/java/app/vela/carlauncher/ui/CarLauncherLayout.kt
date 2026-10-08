@@ -87,18 +87,31 @@ fun CarLauncherLayout(
 
     LaunchedEffect(Unit) {
         try {
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: media service start begin")
             CarMediaService.baslat(context)
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: media service start complete")
         } catch (error: Exception) {
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: media service start failed")
+            app.vela.util.FileLogger.e("CarLauncherLayout", "Media service unavailable", error)
             android.util.Log.w("CarLauncherLayout", "Media service unavailable", error)
         }
     }
     LaunchedEffect(Unit) {
-        if (!app.vela.carlauncher.tools.LauncherStartup.run(context))
+        app.vela.diag.ProcessDiagnostics.checkpoint("launcher: startup tools begin")
+        if (!app.vela.carlauncher.tools.LauncherStartup.run(context)) {
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: startup tools failed")
+            app.vela.util.FileLogger.e("CarLauncherLayout", "Startup tool launch failed")
             Toast.makeText(context, R.string.car_tools_failed, Toast.LENGTH_LONG).show()
+        } else {
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: startup tools complete")
+        }
     }
     LaunchedEffect(libraryTracks, autoPlay) {
-        if (!playbackRestored && libraryTracks.isNotEmpty())
+        if (!playbackRestored && libraryTracks.isNotEmpty()) {
+            app.vela.diag.ProcessDiagnostics.checkpoint("music playback: restore begin")
             playbackRestored = mediaManager.getMusicManager().restoreSavedPlayback(libraryTracks, autoPlay)
+            app.vela.diag.ProcessDiagnostics.checkpoint("music playback: restore complete")
+        }
     }
 
     fun showPanel(mode: String) {

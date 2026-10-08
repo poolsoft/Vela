@@ -246,6 +246,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
     }
 
     fun restoreSavedPlayback(library: List<SesParcasi>, autoPlay: Boolean): Boolean {
+        if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) return true
         // Restore metadata without racing a phone which connects after launcher startup.
         val restored = internalPlayer.restoreSavedPlayback(library, false)
         if (!startupScheduled) {

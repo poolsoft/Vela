@@ -104,6 +104,7 @@ object CarIntegration {
         }
         CarFloatingButtonManager.getInstance(activity).updateButtonState()
         HeadUnitManager.getInstance(activity)
+        app.vela.diag.ProcessDiagnostics.checkpoint("launcher: hardware ready")
     }
     fun onHomeIntent(intent: Intent?) {
         if (intent?.hasCategory(Intent.CATEGORY_HOME) == true) {

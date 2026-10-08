@@ -305,6 +305,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     private fun calParca(parca: SesParcasi, otomatikOynat: Boolean, startPosition: Long = 0L) {
+        if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) return
         _playbackError.value = null
         anaHandler.removeCallbacks(ilerlemeGorevi)
         app.vela.diag.ProcessDiagnostics.checkpoint("music player: create")

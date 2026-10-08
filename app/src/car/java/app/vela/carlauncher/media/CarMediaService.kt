@@ -40,6 +40,7 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
         const val ACTION_CLOSE = "app.vela.carlauncher.media.action.CLOSE"
 
         fun baslat(context: Context) {
+            if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) return
             val intent = Intent(context, CarMediaService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -55,6 +56,8 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
 
     override fun onCreate() {
         super.onCreate()
+        if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) { stopSelf(); return }
+        app.vela.diag.ProcessDiagnostics.checkpoint("media service: create begin")
         bildirimKanaliOlustur()
         // Meet the foreground deadline before initializing adapters or talking to OEM services.
         val readyNotification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
@@ -64,7 +67,9 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
             .setContentTitle(getString(R.string.car_media_notification_title))
             .build())
         app.vela.util.FileLogger.i("CarMediaService", "onCreate: foreground ready")
+        app.vela.diag.ProcessDiagnostics.checkpoint("media service: foreground ready")
         musicManager = MusicManager.getInstance(applicationContext)
+        app.vela.diag.ProcessDiagnostics.checkpoint("media service: music manager ready")
 
         mediaSession = MediaSession(this, "VelaCarMedia").apply {
             setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
@@ -111,10 +116,13 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
         sessionToken = mediaSession?.sessionToken
         musicManager.addListener(this)
         guncelleBildirim(hemen = true)
+        app.vela.diag.ProcessDiagnostics.checkpoint("media service: created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) { stopSelf(); return START_NOT_STICKY }
         app.vela.util.FileLogger.i("CarMediaService", "onStartCommand: ${intent?.action}, startId=$startId")
+        app.vela.diag.ProcessDiagnostics.checkpoint("media service: start command")
         val action = intent?.action
         if (action != ACTION_CLOSE) bildirimKapatildi = false
         when (action) {
@@ -340,8 +348,9 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
 
     override fun onDestroy() {
         app.vela.util.FileLogger.i("CarMediaService", "onDestroy")
+        app.vela.diag.ProcessDiagnostics.checkpoint("media service: destroy")
         bildirimHandler.removeCallbacks(bildirimGuncellemeRunnable)
-        musicManager.removeListener(this)
+        if (::musicManager.isInitialized) musicManager.removeListener(this)
         mediaSession?.isActive = false
         mediaSession?.release()
         mediaSession = null

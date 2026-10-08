@@ -388,7 +388,10 @@ class MusicRepository private constructor(private val context: Context) {
     private fun loadCachedIndex() {
         app.vela.diag.ProcessDiagnostics.checkpoint("music cache: load")
         val indexFile = getIndexFile()
-        if (!indexFile.isFile || indexFile.length() == 0L) return
+        if (!indexFile.isFile || indexFile.length() == 0L) {
+            app.vela.diag.ProcessDiagnostics.checkpoint("music cache: empty")
+            return
+        }
         try {
             val jsonStr = indexFile.readText(Charsets.UTF_8)
             val array = org.json.JSONArray(jsonStr)
@@ -443,6 +446,7 @@ class MusicRepository private constructor(private val context: Context) {
         } catch (e: Exception) {
             FileLogger.w(TAG, "Müzik önbelleği okunamadı: ${e.message}", e)
         }
+        app.vela.diag.ProcessDiagnostics.checkpoint("music cache: complete")
     }
 
     fun removeTrack(key: String) {

@@ -15,6 +15,10 @@ on:
         description: 'Ayni kodda olsa bile yeniden derle'
         type: boolean
         default: false
+      diagnostic:
+        description: 'Debuggable diagnostic APK uret'
+        type: boolean
+        default: false
   push:
     branches: [ main, canary, codex/maplibre-10.3.7 ]
     paths:
@@ -32,6 +36,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      DIAGNOSTIC_APK: ${{ inputs.diagnostic == true || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/maplibre-10.3.7') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

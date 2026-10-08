@@ -60,6 +60,7 @@ class InternalPlayerAdapter(
     }
 
     override fun albumKapagi(): Bitmap? {
+        if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) return null
         val parca = player.anlikParca.value ?: return null
         val key = parca.contentUri.ifBlank { parca.dosyaYolu }
         if (key == sonKapakYolu) {
