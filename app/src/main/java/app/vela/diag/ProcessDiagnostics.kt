@@ -52,12 +52,14 @@ object ProcessDiagnostics {
     }
 
     fun checkpoint(label: String) {
+        if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) app.vela.util.FileLogger.d("ProcessDiagnostics", label)
         operation = label
         requestWrite()
     }
 
     /** Startup-only barrier: persist the last native-entry stage before entering EGL/JNI. */
     fun checkpointAndFlush(label: String) {
+        if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) app.vela.util.FileLogger.d("ProcessDiagnostics", label)
         operation = label
         if (!::worker.isInitialized) return
         if (Looper.myLooper() == worker.looper) { persist(); return }
