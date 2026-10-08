@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
         // The 12/24-hour clock setting can change while Vela sits in the background (issue #357).
         app.vela.ui.Clock24.refresh(this)
         CarIntegration.onResume(this)
+        applySystemBarPreferences()
     }
 
     override fun onPause() {
@@ -74,6 +75,7 @@ class MainActivity : ComponentActivity() {
         }
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
         window.statusBarColor = android.graphics.Color.TRANSPARENT
+        applySystemBarPreferences()
         // A language change re-creates this Activity so the whole UI re-reads localized resources.
         AppLocale.onLocaleChanged = { recreate() }
         // Picture-in-picture mini map while navigating (user 2026-07-24, the Google Maps
@@ -108,20 +110,8 @@ class MainActivity : ComponentActivity() {
             // the map is white, so the icons must go DARK; edge-to-edge alone left them light
             // (white-on-white, unreadable). Flip the appearance whenever the app theme changes.
             androidx.compose.runtime.LaunchedEffect(dark, durumCubugu, tamEkran) {
-                val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-                controller.isAppearanceLightStatusBars = !dark
-                controller.isAppearanceLightNavigationBars = !dark
-                controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                if (tamEkran) {
-                    controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-                } else {
-                    controller.show(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
-                    if (durumCubugu) {
-                        controller.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-                    } else {
-                        controller.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-                    }
-                }
+                darkSystemBarIcons = !dark
+                applySystemBarPreferences()
             }
             androidx.compose.runtime.CompositionLocalProvider(
                 androidx.compose.ui.platform.LocalConfiguration provides
@@ -132,6 +122,31 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private var darkSystemBarIcons = false
+
+    // One owner for both the XML launcher and Compose screens, including Home returns.
+    private fun applySystemBarPreferences() {
+        val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+        controller.isAppearanceLightStatusBars = darkSystemBarIcons
+        controller.isAppearanceLightNavigationBars = darkSystemBarIcons
+        controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (CarIntegration.immersive.value) {
+            controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.show(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+            if (CarIntegration.statusBarVisible.value) {
+                controller.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+            } else {
+                controller.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+            }
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applySystemBarPreferences()
     }
 
     /** A portrait-ish mini map, Google's PiP proportions. */

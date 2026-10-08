@@ -7,6 +7,8 @@ import org.junit.Test
 
 class MusicFileIdentityTest {
     @Test fun storageAliasAndMediaStorePathIdentifyTheSameFile() {
+        // java.io.File on Windows does not resolve directory symlinks; Android uses Unix paths.
+        assumeTrue("Android/Unix canonical paths", java.io.File.separatorChar == '/')
         val root = Files.createTempDirectory("vela-music-alias").toFile()
         try {
             val storage = root.resolve("storage").apply { mkdir() }

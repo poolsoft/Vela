@@ -95,6 +95,15 @@ object CarIntegration {
     }
     @Composable fun ExitControl() = app.vela.carlauncher.ui.LauncherExitControl()
     fun onCreated(activity: ComponentActivity) {
+        activity.lifecycleScope.launch {
+            CarLauncherSettings.ekranYonu.collect { orientation ->
+                activity.requestedOrientation = when (orientation) {
+                    "portrait" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    "sensor" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+                    else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                }
+            }
+        }
         CarFloatingButtonManager.getInstance(activity).setSuspended(false)
         activity.lifecycleScope.launch {
             CarTelemetryManager.getInstance(activity).telemetriDurumu.collect { tel ->

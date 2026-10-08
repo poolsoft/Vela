@@ -344,7 +344,7 @@ private fun CarAppearanceSettingsScreen(
                 GroupDivider()
                 ToggleRow(
                     label = "Durum Çubuğunu (Status Bar) Göster",
-                    hint = "Ekranın en üstünde saat ve sistem bildirim simgelerini görünür kılar",
+                    hint = "Immersive kapalıyken saat ve sistem bildirim simgelerini görünür kılar",
                     checked = durumCubugu,
                     onCheckedChange = { CarLauncherSettings.setDurumCubuguGoster(it) }
                 )
