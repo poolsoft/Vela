@@ -170,7 +170,7 @@ class MusicRepository private constructor(private val context: Context) {
                             cursor.getLong(albumIdCol)
                         ).toString()
 
-                        if (tarananDosyaYollari.add(path)) {
+                        if (tarananDosyaYollari.add(musicFileIdentity(File(path)))) {
                             bulunanParcalar.add(
                                 SesParcasi(
                                     id = id,
@@ -323,7 +323,7 @@ class MusicRepository private constructor(private val context: Context) {
                 }
             } else if (file.isFile && file.length() > 50 * 1024) { // En az 50 KB
                 val ext = file.extension.lowercase()
-                if (ext in DESTEKLENEN_UZANTILAR && bilinenYollar.add(file.absolutePath)) {
+                if (ext in DESTEKLENEN_UZANTILAR && bilinenYollar.add(musicFileIdentity(file))) {
                     val parca = dosyadanParcaUret(file, retriever, bulunanParcalar.size.toLong() + 100000L)
                     bulunanParcalar.add(parca)
                 }
@@ -396,12 +396,13 @@ class MusicRepository private constructor(private val context: Context) {
             val jsonStr = indexFile.readText(Charsets.UTF_8)
             val array = org.json.JSONArray(jsonStr)
             val yuklenenParcalar = mutableListOf<SesParcasi>()
+            val knownFiles = HashSet<String>()
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
                 val dosyaYolu = obj.optString("dosyaYolu", "")
                 if (dosyaYolu.isNotBlank()) {
                     val f = File(dosyaYolu)
-                    if (f.exists() && f.length() > 0) {
+                    if (f.exists() && f.length() > 0 && knownFiles.add(musicFileIdentity(f))) {
                         yuklenenParcalar.add(
                             SesParcasi(
                                 id = obj.optLong("id", i.toLong()),
