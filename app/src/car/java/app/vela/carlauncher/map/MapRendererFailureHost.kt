@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 
 /** Scoped to the launcher map slot, above MapScreen's downloads and navigation panels. */
 internal class MapRendererFailureHost {
+    var state by mutableStateOf(IsolatedMapClient.State())
     var failure by mutableStateOf<IsolatedMapClient.State?>(null)
     var retry: () -> Unit = {}
 }

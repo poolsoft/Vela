@@ -978,8 +978,8 @@ fun VelaMapView(
     }
     remember {
         app.vela.variant.CarIntegration.mapRendererStage("library")
-        app.vela.offline.PmtilesMapBridge.install()
         MapLibre.getInstance(context)
+        app.vela.offline.PmtilesMapBridge.install()
     }
     // D-pad-only operation (docs/dpad.md): MapLibre's MapView calls requestFocus() on
     // itself and overrides onKeyDown to handle hardware D-pad keys (DPAD_CENTER = zoom in,

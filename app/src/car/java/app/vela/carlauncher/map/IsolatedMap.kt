@@ -46,6 +46,7 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
     val failureHost = LocalMapRendererFailureHost.current
     val retry = { client.retry(); surfaceGeneration++; Unit }
     LaunchedEffect(state, failureHost) {
+        failureHost?.state = state
         failureHost?.failure = state.takeIf { it.failed }
         failureHost?.retry = retry
     }

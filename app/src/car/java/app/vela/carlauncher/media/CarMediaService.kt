@@ -31,6 +31,11 @@ import app.vela.carlauncher.model.MedyaParcasi
 class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
 
     companion object {
+        // Never persisted: only the explicit diagnostic service test may opt in.
+        internal var diagnosticTestAllowed = false
+        internal val diagnosticReady = kotlinx.coroutines.flow.MutableStateFlow(false)
+        private val disabled get() = app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED && !diagnosticTestAllowed
+
         const val CHANNEL_ID = "vela_car_music_channel"
         const val NOTIFICATION_ID = 888
 
@@ -40,7 +45,7 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
         const val ACTION_CLOSE = "app.vela.carlauncher.media.action.CLOSE"
 
         fun baslat(context: Context) {
-            if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) return
+            if (disabled) return
             val intent = Intent(context, CarMediaService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -56,7 +61,7 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
 
     override fun onCreate() {
         super.onCreate()
-        if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) { stopSelf(); return }
+        if (disabled) { stopSelf(); return }
         app.vela.diag.ProcessDiagnostics.checkpoint("media service: create begin")
         bildirimKanaliOlustur()
         // Meet the foreground deadline before initializing adapters or talking to OEM services.
@@ -117,10 +122,11 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
         musicManager.addListener(this)
         guncelleBildirim(hemen = true)
         app.vela.diag.ProcessDiagnostics.checkpoint("media service: created")
+        diagnosticReady.value = true
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) { stopSelf(); return START_NOT_STICKY }
+        if (disabled) { stopSelf(); return START_NOT_STICKY }
         app.vela.util.FileLogger.i("CarMediaService", "onStartCommand: ${intent?.action}, startId=$startId")
         app.vela.diag.ProcessDiagnostics.checkpoint("media service: start command")
         val action = intent?.action
@@ -141,7 +147,7 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
             }
         }
         guncelleBildirim(hemen = true)
-        return START_STICKY
+        return if (diagnosticTestAllowed) START_NOT_STICKY else START_STICKY
     }
 
     override fun onGetRoot(clientPackageName: String, clientUid: Int, rootHints: Bundle?): BrowserRoot {
@@ -347,6 +353,7 @@ class CarMediaService : MediaBrowserService(), MusicManager.MusicUIListener {
     }
 
     override fun onDestroy() {
+        diagnosticReady.value = false
         app.vela.util.FileLogger.i("CarMediaService", "onDestroy")
         app.vela.diag.ProcessDiagnostics.checkpoint("media service: destroy")
         bildirimHandler.removeCallbacks(bildirimGuncellemeRunnable)

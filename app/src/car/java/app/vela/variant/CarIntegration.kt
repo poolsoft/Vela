@@ -142,6 +142,16 @@ object CarIntegration {
         // Session-only opt-in: never restore map initialization after a process/Activity restart.
         // Gate the whole MapScreen, not just its visibility, so no hidden EGL surface is created.
         val context = androidx.compose.ui.platform.LocalContext.current
+        var testsOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
+        if (testsOpen) {
+            app.vela.carlauncher.diag.DiagnosticTestScreen(
+                onClose = { testsOpen = false },
+                onSettings = onOpenSettings,
+                setMapLevel = { mapRenderLevel.intValue = it },
+                mapContent = content,
+            )
+            return
+        }
         var mapOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
         val failureHost = remember { app.vela.carlauncher.map.MapRendererFailureHost() }
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
@@ -173,6 +183,7 @@ object CarIntegration {
                         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
                         horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(stringResource(app.vela.R.string.car_map_manual_start_detail))
+                        OutlinedButton(onClick = { testsOpen = true }) { Text("Adım adım tanı testleri") }
                         Button(onClick = { mapRenderLevel.intValue = 3; mapOpen = true }) { Text(stringResource(app.vela.R.string.car_map_manual_start)) }
                         OutlinedButton(onClick = { mapRenderLevel.intValue = 1; mapOpen = true }) {
                             Text(stringResource(app.vela.R.string.car_map_empty_test))
