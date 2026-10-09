@@ -143,6 +143,8 @@ object CarIntegration {
         // Gate the whole MapScreen, not just its visibility, so no hidden EGL surface is created.
         val context = androidx.compose.ui.platform.LocalContext.current
         var testsOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
+        val homeRequest by CarLauncherSettings.homeScreenRequest.collectAsState()
+        androidx.compose.runtime.LaunchedEffect(homeRequest) { testsOpen = false }
         if (testsOpen) {
             app.vela.carlauncher.diag.DiagnosticTestScreen(
                 onClose = { testsOpen = false },

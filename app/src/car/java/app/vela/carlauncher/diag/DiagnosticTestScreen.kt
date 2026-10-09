@@ -26,13 +26,19 @@ import app.vela.diag.ProcessDiagnostics
 import app.vela.util.FileLogger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+// A cancelled JNI operation may take time to return. Never overlap it with a new screen's test.
+private val testLock = Mutex()
+
 /** All probes are explicit, cancellable and independent; nothing resumes on app startup. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DiagnosticTestScreen(
     onClose: () -> Unit,
@@ -48,9 +54,12 @@ internal fun DiagnosticTestScreen(
     var running by remember { mutableStateOf<String?>(null) }
     var job by remember { mutableStateOf<Job?>(null) }
     var audio by remember { mutableStateOf<Uri?>(null) }
+    var inputMessage by remember { mutableStateOf<String?>(if (testLock.isLocked) "Önceki testin durması bekleniyor." else null) }
     var mapAttempt by remember { mutableStateOf<String?>(null) }
     val host = remember { MapRendererFailureHost() }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { audio = it }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+        if (it != null) { audio = it; inputMessage = null }
+    }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         FileLogger.i("DiagnosticTests", "Audio scan permission granted=$granted")
     }
@@ -105,7 +114,7 @@ internal fun DiagnosticTestScreen(
             withContext(Dispatchers.IO) {
                 val reader = MediaMetadataRetriever()
                 try {
-                    ProcessDiagnostics.checkpointAndFlush("test cover: setDataSource")
+                    ProcessDiagnostics.checkpointAndFlush("test cover: setDataSource uri=$uri")
                     reader.setDataSource(context, uri)
                     val title = reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
                     ProcessDiagnostics.checkpointAndFlush("test cover: embeddedPicture")
@@ -162,7 +171,11 @@ internal fun DiagnosticTestScreen(
     fun start(ids: List<String>) {
         if (!loaded || job?.isActive == true) return
         job = scope.launch {
-            runDiagnosticSequence(ids) { id ->
+            if (!testLock.tryLock()) {
+                inputMessage = "Önceki test henüz bitmedi; durmasını bekle."
+                return@launch
+            }
+            try { runDiagnosticSequence(ids) { id ->
                 running = id
                 try {
                     // Persist BEFORE touching native code, not after the operation returns.
@@ -186,7 +199,7 @@ internal fun DiagnosticTestScreen(
                     }
                     false
                 } finally { running = null }
-            }
+            } } finally { testLock.unlock() }
         }
     }
     fun close() { job?.cancel(); onClose() }
@@ -196,16 +209,30 @@ internal fun DiagnosticTestScreen(
             Text("Adım adım tanı", style = MaterialTheme.typography.titleLarge)
             Text("Her adım ayrı çalışır. Hata olursa sıra durur; yeniden açılışta devam etmez. Sonuç: files/logs/diagnostic-tests.json",
                 style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = ::close) { Text("Kapat") }
                 TextButton(onClick = { job?.cancel() }, enabled = running != null) { Text("Durdur") }
                 TextButton(onClick = onSettings, enabled = running == null) { Text("Ayarlar") }
                 TextButton(onClick = { start(tests.keys.toList()) }, enabled = loaded && running == null) { Text("Sırayla çalıştır") }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { picker.launch(arrayOf("audio/*")) }, enabled = running == null) { Text("Ses dosyası seç") }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    runCatching { picker.launch(arrayOf("audio/*")) }.onFailure {
+                        inputMessage = "Dosya seçici açılamadı; taramadan sonra kütüphanedeki ilk dosyayı seçebilirsin."
+                        FileLogger.e("DiagnosticTests", "Audio picker unavailable", it)
+                    }
+                }, enabled = running == null) { Text("Ses dosyası seç") }
+                OutlinedButton(onClick = {
+                    val track = MusicRepository.getInstance(context).parcalar.value.firstOrNull()
+                    if (track == null) inputMessage = "Kütüphane boş; önce 2. testi çalıştır."
+                    else {
+                        audio = if (track.contentUri.isNotBlank()) Uri.parse(track.contentUri) else Uri.fromFile(File(track.dosyaYolu))
+                        inputMessage = "Kütüphaneden seçildi: ${track.dosyaYolu}"
+                    }
+                }, enabled = running == null) { Text("Kütüphanedeki ilk dosyayı seç") }
                 OutlinedButton(onClick = { permission.launch(audioPermission) }, enabled = running == null) { Text("Tarama izni") }
             }
+            inputMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             Text(audio?.lastPathSegment ?: "Müzik için dosya seç. 3–5 temel Android oynatıcı/kapak testidir; 6 gerçek Vela servisidir. Oynatma testi sesli çalışır; çalma listen değişmez.",
                 style = MaterialTheme.typography.bodySmall)
             if (mapAttempt != null) {
@@ -230,7 +257,7 @@ internal fun DiagnosticTestScreen(
 }
 
 private suspend fun testAudio(context: Context, uri: Uri, play: Boolean): String {
-    ProcessDiagnostics.checkpointAndFlush("test audio: create")
+    ProcessDiagnostics.checkpointAndFlush("test audio: create uri=$uri")
     val player = MediaPlayer()
     val audioManager = context.getSystemService(android.media.AudioManager::class.java)
     val focusListener = android.media.AudioManager.OnAudioFocusChangeListener { }
@@ -282,14 +309,14 @@ private suspend fun testAudio(context: Context, uri: Uri, play: Boolean): String
 private class TestReport(context: Context) {
     private val file = AtomicFile(File(context.getExternalFilesDir(null) ?: context.filesDir, "logs/diagnostic-tests.json"))
     private val run = UUID.randomUUID().toString()
-    suspend fun read(): Map<String, String> = withContext(Dispatchers.IO) {
+    suspend fun read(): Map<String, String> = testLock.withLock { withContext(Dispatchers.IO) {
         runCatching {
             val values = JSONObject(String(file.readFully(), Charsets.UTF_8)).getJSONObject("results")
             values.keys().asSequence().associateWith {
                 values.getString(it).let { result -> if (result == "ÇALIŞIYOR") "YARIM KALDI: önceki oturum bu adımda bitti" else result }
             }
         }.getOrDefault(emptyMap())
-    }
+    } }
     suspend fun write(id: String, status: String, results: Map<String, String>) = withContext(Dispatchers.IO) {
         val value = JSONObject().put("run", run).put("pid", android.os.Process.myPid())
             .put("time", System.currentTimeMillis()).put("test", id).put("status", status)

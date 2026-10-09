@@ -11,6 +11,7 @@ Yeniden açılışta otomatik devam edilmez; süreç öldüyse son adım **YARIM
 - Tanı APK'sını kur; normal başlangıçta müzik ve harita izolasyonu korunur.
 - **Tarama izni** ile Android'in müzik/dosya erişim iznini ver.
 - **Ses dosyası seç** ile tercihen teybin USB belleğinden bir MP3 seç.
+- Sistem dosya seçicisi yoksa tarama sonrası **Kütüphanedeki ilk dosyayı seç** kullanılabilir.
 - Test 4 sesli çalışır. Mevcut Vela çalışma/çalma listesi değiştirilmez.
 - Test 9 için harita dosyalarını önceden ekle; dosya yokken bu adım çevrimdışı harita doğrulaması sayılmaz.
 
@@ -44,6 +45,9 @@ da çalışır. ZIP gerekmez; aynı logs klasörünü alabilirsin.
 JSON'daki eski **ÇALIŞIYOR** kaydı, sonraki ekran açılışında **YARIM KALDI** olarak
 gösterilir. Bu tek başına çökme nedenini kanıtlamaz; süreç kaydı/logcat ile birlikte
 incelenir. Android'in uygulamaya göstermediği sistem kayıtlarına yeni yetki sağlamaz.
+Home tuşu tanıyı kapatıp seçili başlangıç ekranına döner. Yerel bir işlem iptale hemen
+yanıt vermezse, işlem bitene kadar başka test başlatılmaz. Dar ekranda düğmeler alt
+satıra geçer. Seçilen ses dosyasının URI'si de işlem öncesi günlüğe yazılır.
 
 ## Bu değişiklikte düzeltilen harita başlangıcı
 
