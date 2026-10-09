@@ -172,7 +172,7 @@ internal fun DiagnosticTestScreen(
                     save(id, "BAŞARILI: $detail")
                     true
                 } catch (timeout: TimeoutCancellationException) {
-                    save(id, "HATA: Süre aşıldı; son aşama için logu kontrol et")
+                    runCatching { save(id, "HATA: Süre aşıldı; son aşama için logu kontrol et") }
                     false
                 } catch (cancelled: CancellationException) {
                     withContext(NonCancellable) { runCatching { save(id, "DURDURULDU") } }
@@ -236,6 +236,9 @@ private suspend fun testAudio(context: Context, uri: Uri, play: Boolean): String
     val focusListener = android.media.AudioManager.OnAudioFocusChangeListener { }
     var focusGranted = false
     try {
+        player.setAudioAttributes(android.media.AudioAttributes.Builder()
+            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build())
         ProcessDiagnostics.checkpointAndFlush("test audio: setDataSource")
         withContext(Dispatchers.IO) { player.setDataSource(context, uri) }
         withTimeout(30_000) {
@@ -266,10 +269,11 @@ private suspend fun testAudio(context: Context, uri: Uri, play: Boolean): String
         return "MediaPlayer oynatma konumu ilerledi (sesi ayrıca dinleyerek doğrula)"
     } finally {
         ProcessDiagnostics.checkpointAndFlush("test audio: release")
-        player.release()
-        if (focusGranted) {
-            @Suppress("DEPRECATION")
-            audioManager.abandonAudioFocus(focusListener)
+        try { player.release() } finally {
+            if (focusGranted) {
+                @Suppress("DEPRECATION")
+                audioManager.abandonAudioFocus(focusListener)
+            }
         }
     }
 }
