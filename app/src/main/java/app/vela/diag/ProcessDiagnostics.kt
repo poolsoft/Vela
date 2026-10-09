@@ -63,7 +63,7 @@ object ProcessDiagnostics {
 
     fun checkpoint(label: String) {
         recordStage(label)
-        if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) app.vela.util.FileLogger.d("ProcessDiagnostics", label)
+        if (app.vela.BuildConfig.DIAGNOSTIC_BUILD) app.vela.util.FileLogger.d("ProcessDiagnostics", label)
         operation = label
         requestWrite()
     }
@@ -71,7 +71,7 @@ object ProcessDiagnostics {
     /** Startup-only barrier: persist the last native-entry stage before entering EGL/JNI. */
     fun checkpointAndFlush(label: String) {
         recordStage(label)
-        if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) app.vela.util.FileLogger.d("ProcessDiagnostics", label)
+        if (app.vela.BuildConfig.DIAGNOSTIC_BUILD) app.vela.util.FileLogger.d("ProcessDiagnostics", label)
         operation = label
         if (!::worker.isInitialized) return
         if (Looper.myLooper() == worker.looper) { persist(); return }
@@ -183,7 +183,7 @@ object ProcessDiagnostics {
         override fun run() {
             val age = SystemClock.uptimeMillis() - heartbeat
             val now = SystemClock.uptimeMillis()
-            val threshold = if (BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) 3_000 else 15_000
+            val threshold = if (BuildConfig.DIAGNOSTIC_BUILD) 3_000 else 15_000
             if (foreground && age >= threshold && !Debug.isDebuggerConnected() && !stallReported && now - lastStallReport >= 60_000) {
                 lastStallReport = now
                 stallReported = true
@@ -207,7 +207,7 @@ object ProcessDiagnostics {
                 heartbeatPending.set(false)
             }
             if (now - lastPersist >= 5_000) { persist(); lastPersist = now }
-            worker.postDelayed(this, if (BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) 1_000 else 5_000)
+            worker.postDelayed(this, if (BuildConfig.DIAGNOSTIC_BUILD) 1_000 else 5_000)
         }
     }
 }

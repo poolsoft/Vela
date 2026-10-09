@@ -1,6 +1,7 @@
 package app.vela.diag
 
 import android.content.Context
+import app.vela.BuildConfig
 import app.vela.util.FileLogger
 import app.vela.util.ProcessIdentity
 import java.io.File
@@ -36,7 +37,7 @@ internal object LocalLogcatRecorder {
                 try {
                     line("Vela logcat: pid=${android.os.Process.myPid()}, uid=${android.os.Process.myUid()}, time=${System.currentTimeMillis()}")
                     line("Scope: app-accessible logcat only; not proof of full system/crash-buffer access. Permission errors and logcat output follow.")
-                    line("Diagnostic music isolation: service, saved playback preparation and internal cover extraction disabled.")
+                    line("Voice safety: nativeVoiceEnabled=${BuildConfig.NATIVE_VOICE_ENABLED}; musicDisabled=${BuildConfig.DIAGNOSTIC_MUSIC_DISABLED}")
                     // Read retained entries as well as new ones: a previous process may have died
                     // before its recorder could write the final messages. No global buffer clearing.
                     process = ProcessBuilder("/system/bin/logcat", "-b", "all", "-v", "threadtime", "-T", "400")

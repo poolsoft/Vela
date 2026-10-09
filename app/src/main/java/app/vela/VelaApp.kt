@@ -20,6 +20,7 @@ import javax.inject.Inject
 @HiltAndroidApp
 class VelaApp : Application(), coil.ImageLoaderFactory {
     @Inject lateinit var diag: javax.inject.Provider<DiagLog>
+    @Inject lateinit var voiceGuide: javax.inject.Provider<app.vela.core.voice.VoiceGuide>
 
     /** Coil with a HARD memory-cache cap. The default budget is ~25% of the app's heap CLASS,
      *  and largeHeap makes that class huge - on a 512 MB large heap Coil happily retains up to
@@ -77,12 +78,20 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.util.FileLogger.init(this)
         super.onCreate()
         app.vela.diag.ProcessDiagnostics.install(this)
-        if (BuildConfig.DIAGNOSTIC_MUSIC_DISABLED && !app.vela.variant.CarIntegration.available)
+        if (BuildConfig.DIAGNOSTIC_BUILD && !app.vela.variant.CarIntegration.available)
             app.vela.diag.LocalLogcatRecorder.start(this)
         if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(this)) {
             CrashCatcher.install(this) { emptyList() }
             app.vela.util.FileLogger.i("VelaApp", "Lightweight process startup: no launcher, music, location or downloads")
             return
+        }
+        // The same lazy system-only policy covers the phone UI and drives started by Android Auto.
+        voiceGuide.get().apply {
+            useSystemEngineLazily("com.google.android.tts")
+            onFailure = { error ->
+                app.vela.util.FileLogger.e("VoiceGuide", "System TTS failed", error)
+                app.vela.diag.ProcessDiagnostics.checkpoint("tts: failure ${error.javaClass.simpleName}")
+            }
         }
         val applicationDiag = diag.get()
         // Device memory class first: the Coil cap and the eager-warm decisions read it.

@@ -34,7 +34,10 @@ android {
         // Play's library record alone or also the signing certificate. Never a shipped path.
         applicationId = (project.findProperty("appId") as String?)?.takeIf { it.isNotBlank() } ?: "app.vela"
         minSdk = 26
-        buildConfigField("boolean", "DIAGNOSTIC_MUSIC_DISABLED", (providers.gradleProperty("diagnosticApk").orNull == "true").toString())
+        buildConfigField("boolean", "DIAGNOSTIC_BUILD", (providers.gradleProperty("diagnosticApk").orNull == "true").toString())
+        buildConfigField("boolean", "DIAGNOSTIC_MUSIC_DISABLED", "false")
+        // Temporary head-unit safety: no in-process sherpa-onnx ASR, Piper or wake-word JNI.
+        buildConfigField("boolean", "NATIVE_VOICE_ENABLED", "false")
         targetSdk = 35
         // Overridable from CI: -PappVersionCode / -PappVersionName (ci.yml derives
         // them from the run number → 0.3.<run> / 2000+run). Defaults are local/dev only.

@@ -55,7 +55,7 @@ class VelaCarAppService : CarAppService() {
         // The neural voice is wired into VoiceGuide by the phone's view model; a drive started from
         // the car with the phone UI closed had no synth attached and fell back to the system TTS
         // (user 2026-09-21: "the voice that speaks is not vela voice"). Attach it here too.
-        if (voiceGuide.neural == null && app.vela.core.voice.VelaPiper.isReady(this)) voiceGuide.neural = piperSynth
+        if (app.vela.BuildConfig.NATIVE_VOICE_ENABLED && voiceGuide.neural == null && app.vela.core.voice.VelaPiper.isReady(this)) voiceGuide.neural = piperSynth
         // The downloaded place packs are opened by the phone's view model at start; a car session
         // with the phone UI never opened has to open them itself for offline car search.
         Thread { runCatching { poiPacks.registerPacks() } }.start()

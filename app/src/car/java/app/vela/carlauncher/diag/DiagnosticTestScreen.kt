@@ -136,19 +136,18 @@ internal fun DiagnosticTestScreen(
             }
         }
         "service" -> {
-            check(app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) { "Servis izolasyon testi tanı APK'sı gerektirir" }
-            check(!CarMediaService.diagnosticReady.value) { "Müzik servisi zaten açık" }
+            val alreadyRunning = CarMediaService.diagnosticReady.value
             CarMediaService.diagnosticTestAllowed = true
             try {
                 ProcessDiagnostics.checkpointAndFlush("test service: start")
-                CarMediaService.baslat(context)
+                if (!alreadyRunning) CarMediaService.baslat(context)
                 withTimeout(15_000) { CarMediaService.diagnosticReady.first { it } }
                 delay(5_000)
                 check(CarMediaService.diagnosticReady.value) { "Servis gözlem sırasında kapandı" }
                 "Vela servisi, MediaSession ve bildirim 5 saniye çalıştı"
             } finally {
                 CarMediaService.diagnosticTestAllowed = false
-                context.stopService(Intent(context, CarMediaService::class.java))
+                if (!alreadyRunning) context.stopService(Intent(context, CarMediaService::class.java))
             }
         }
         else -> {

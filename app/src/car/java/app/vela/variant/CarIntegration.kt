@@ -154,7 +154,7 @@ object CarIntegration {
             )
             return
         }
-        var mapOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
+        var mapOpen by remember { androidx.compose.runtime.mutableStateOf(true) }
         val failureHost = remember { app.vela.carlauncher.map.MapRendererFailureHost() }
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
         val configuration = androidx.compose.ui.platform.LocalConfiguration.current

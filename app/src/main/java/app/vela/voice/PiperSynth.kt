@@ -96,7 +96,7 @@ class PiperSynth @Inject constructor(
         // No `tts != null` short-circuit: ensureLoaded must be able to REBUILD when the selected voice
         // changed. It's idempotent per-voice (returns the current engine when the right voice is up), so
         // a warm-up on the already-loaded voice is a cheap no-op.
-        if (loadFailed || !VelaPiper.isReady(context)) return
+        if (!app.vela.BuildConfig.NATIVE_VOICE_ENABLED || loadFailed || !VelaPiper.isReady(context)) return
         // BACKGROUND priority while warming (see AsrRecognizer.warmUp: the load competed with the
         // map's render thread at launch). The worker is also the thread that speaks, so a prompt
         // queued behind a slow background load raises it back ([speak] calls [boostWarm]).
@@ -119,6 +119,7 @@ class PiperSynth @Inject constructor(
     }
 
     private fun ensureLoaded(): OfflineTts? {
+        if (!app.vela.BuildConfig.NATIVE_VOICE_ENABLED) return null
         val r = VelaPiper.resolved(context) ?: return null // nothing usable installed
         val cur = tts
         if (cur != null && loadedVoiceId == r.voiceId && !loadFailed) return cur // right voice already up

@@ -849,7 +849,10 @@ fun MapScreen(
                         putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, app.vela.ui.AppLocale.effective().toLanguageTag())
                         putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, voicePrompt)
                     }
-                    runCatching { voiceLauncher.launch(intent) }
+                    runCatching { voiceLauncher.launch(intent) }.onFailure {
+                        app.vela.util.FileLogger.e("VoiceSearch", "System recognition launch failed", it)
+                        showAsrOffer = true
+                    }
                 }
                 else -> {
                     showAsrOffer = true
@@ -892,7 +895,10 @@ fun MapScreen(
                         putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, app.vela.ui.AppLocale.effective().toLanguageTag())
                         putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, voicePrompt)
                     }
-                    runCatching { voiceLauncher.launch(intent) }
+                    runCatching { voiceLauncher.launch(intent) }.onFailure {
+                        app.vela.util.FileLogger.e("VoiceSearch", "System recognition launch failed", it)
+                        showAsrOffer = true
+                    }
                 }
                 app.vela.ui.VoiceSearch.Mode.LOCAL -> {
                     if (state.asrInstalledIds.isNotEmpty()) {
@@ -926,13 +932,13 @@ fun MapScreen(
     if (showAsrOffer) {
         app.vela.ui.VelaDialog(
             onDismissRequest = { showAsrOffer = false },
-            title = stringResource(R.string.map_asr_offer_title),
-            confirmText = stringResource(R.string.settings_voice_search_download, app.vela.voice.AsrEngine.DEFAULT.sizeMb),
-            onConfirm = { showAsrOffer = false; vm.downloadAsrModel() },
+            title = "Sesli komut sağlayıcısı bulunamadı",
+            confirmText = "Tamam",
+            onConfirm = { showAsrOffer = false },
             dismissText = stringResource(R.string.root_not_now),
             onDismiss = { showAsrOffer = false },
             dismissLowEmphasis = true,
-            text = { Text(stringResource(R.string.map_asr_offer_body)) },
+            text = { Text("Yerel konuşma motorları geçici olarak kapalı. Sisteminizde sesli komut sağlayıcısı kurulu olmalı. Google TTS, konuşma tanıma uygulaması değildir.") },
         )
     }
     // Reflect whether the on-device model is present, so the mic + Settings update without a relaunch.

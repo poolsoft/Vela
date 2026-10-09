@@ -32,6 +32,7 @@ import app.vela.ui.settings.GroupDivider
 import app.vela.ui.settings.PageIntro
 import app.vela.ui.settings.SelectableRow
 import app.vela.ui.settings.SettingsGroup
+import app.vela.ui.settings.Hint
 import app.vela.ui.settings.SettingsScaffold
 import app.vela.ui.settings.SubHead
 import app.vela.ui.settings.ToggleRow
@@ -93,6 +94,10 @@ internal fun SearchSettingsScreen(vm: MapViewModel, onBack: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         VoiceCommandList()
 
+        if (!app.vela.BuildConfig.NATIVE_VOICE_ENABLED) {
+            Hint("Yerel konuşma modelleri geçici olarak kapalı. Sesli komut için aşağıdaki sistem sağlayıcısı kullanılır. Ses testleri Ses veya Tanı ayarlarında bulunur.")
+        }
+        if (app.vela.BuildConfig.NATIVE_VOICE_ENABLED) {
         // On-device voice search (tier-1): a PER-ENGINE picker (upstream 5d2a6636 + 137beea9).
         // Whisper (multilingual, smallest, the default) plus opt-in SenseVoice / Moonshine.
         // Download one or more, pick which the mic uses ("Use"), remove to free space. D-pad
@@ -195,6 +200,7 @@ internal fun SearchSettingsScreen(vm: MapViewModel, onBack: () -> Unit) {
             }
             LaunchedEffect(thisDownloading, installed, active) { keeper.retarget() }
             Spacer(Modifier.height(4.dp))
+        }
         }
         }
         // The engine picker only matters when there's actually a choice (the model AND a voice app,

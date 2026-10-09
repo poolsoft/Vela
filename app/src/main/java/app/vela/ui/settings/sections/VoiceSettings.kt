@@ -53,7 +53,14 @@ import kotlinx.coroutines.withContext
 internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibrary: Boolean = false) {
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var showVoiceTests by remember { mutableStateOf(false) }
+    if (showVoiceTests) {
+        VoiceDiagnosticsScreen(vm, onBack = { showVoiceTests = false })
+        return
+    }
     SettingsScaffold(stringResource(R.string.settings_voice), onBack) { topRow ->
+        FilledTonalButton(modifier = topRow, onClick = { showVoiceTests = true }) { Text("Sesli komut ve TTS testleri") }
+        Hint("Google TTS ilk konuşmada açılır. Yerel ses motorları ve Hey Vela geçici olarak kapalıdır.")
         Spacer(Modifier.height(4.dp))
         // The master switch: persisted, and the in-nav speaker button toggles the SAME state.
         SettingsGroup {
@@ -62,7 +69,7 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
             checked = !state.voiceMuted,
             onCheckedChange = { vm.setSpokenDirections(it) },
             // The top focusable control: Back routes its DOWN here, UP from here goes back to Back.
-            switchModifier = topRow,
+            switchModifier = Modifier,
         )
         // Nested under the master switch, like the speed-camera warning under its layer: it has
         // nothing to say while nothing is being spoken. It stays in the settings search index all
@@ -110,7 +117,7 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
         run {
             val velaId = vm.defaultVoiceId()
             val vela = vm.voiceCatalog().firstOrNull { it.id == velaId }
-            if (vela != null && velaId !in state.installedVoiceIds && state.voiceDownloadingId == null) {
+            if (app.vela.BuildConfig.NATIVE_VOICE_ENABLED && vela != null && velaId !in state.installedVoiceIds && state.voiceDownloadingId == null) {
                 androidx.compose.material3.Button(
                     onClick = { vm.downloadVoice(velaId) },
                     modifier = Modifier.fillMaxWidth().dpadHighlight(androidx.compose.foundation.shape.RoundedCornerShape(24.dp)),
@@ -171,12 +178,14 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
 
         // Voice library - browse, download, switch between and remove Vela's neural voices (Piper).
         // Auto-expanded when nothing is installed so the download path is obvious.
+        if (app.vela.BuildConfig.NATIVE_VOICE_ENABLED) {
         var voiceLibExpanded by remember { mutableStateOf(openLibrary || state.installedVoiceIds.isEmpty()) }
         CollapsibleSectionTitle(
             stringResource(R.string.settings_voice_library),
             voiceLibExpanded,
         ) { voiceLibExpanded = !voiceLibExpanded }
         if (voiceLibExpanded) VoiceLibrary(vm, state)
+        }
 
         if (engineList?.isNotEmpty() == true) {
             // Speed + the niche bits (playground, the multi-speaker variant picker) - most people never

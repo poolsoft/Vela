@@ -6,6 +6,38 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VoiceGuideStartupTest {
+    @Test fun googleSelectionDoesNotStartSpeechOrLoadNeuralVoice() {
+        val synth = RecordingSynth()
+        val guide = VoiceGuide(ContextWrapper(null)).apply { neural = synth }
+
+        guide.useSystemEngineLazily("com.google.android.tts")
+        guide.useSystemEngineLazily("com.google.android.tts")
+
+        assertEquals(0, synth.loads)
+        assertEquals(0, synth.utterances)
+        assertEquals("idle", guide.speechStatus)
+        assertTrue(guide.working == null)
+    }
+
+    @Test fun unavailableSystemServiceReportsFailureWithoutFallingBackToNeuralVoice() {
+        val synth = RecordingSynth()
+        val guide = VoiceGuide(ContextWrapper(null)).apply { neural = synth }
+        var failures = 0
+        guide.onFailure = { failures++ }
+        guide.useSystemEngineLazily("com.google.android.tts")
+
+        // The JVM context has no PackageManager/TTS service. A catchable platform failure must
+        // become a failed voice operation, never an exception escaping into the launcher.
+        guide.init("vela.piper")
+        guide.speak("test", ignoreMute = true)
+
+        assertEquals(1, failures)
+        assertTrue(guide.working == false)
+        assertTrue(guide.speechStatus.startsWith("error:"))
+        assertEquals(0, synth.loads)
+        assertEquals(0, synth.utterances)
+    }
+
     @Test fun savedNeuralEngineDoesNotLoadModelBeforeItIsNeeded() {
         val synth = RecordingSynth()
         val guide = VoiceGuide(ContextWrapper(null)).apply { neural = synth }

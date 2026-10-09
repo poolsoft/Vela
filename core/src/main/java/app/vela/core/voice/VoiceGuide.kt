@@ -30,6 +30,35 @@ class VoiceGuide @Inject constructor(
 ) : TextToSpeech.OnInitListener {
 
     private var tts: TextToSpeech? = null
+    private var requiredSystemEngine: String? = null
+    private var deferredEngine: String? = null
+    private var speechRequest = 0L
+    var onFailure: ((Throwable) -> Unit)? = null
+    @Volatile var speechStatus: String = "idle"
+        private set
+
+    /** Bind the external TTS service only on the first speech request. Never fall back to JNI. */
+    fun useSystemEngineLazily(packageName: String) {
+        if (requiredSystemEngine == packageName) return
+        requiredSystemEngine = packageName
+        deferredEngine = packageName
+        useNeural = false
+    }
+
+    private fun failed(error: Throwable) {
+        speechStatus = "error: ${error.javaClass.simpleName}: ${error.message}"
+        working = false
+        ready = false
+        systemInitFailed = true
+        pending.clear()
+        runCatching { releaseAllFocus() }
+        android.util.Log.e("VoiceGuide", "TTS unavailable", error)
+        runCatching { onFailure?.invoke(error) }
+    }
+
+    private inline fun safely(action: () -> Unit) {
+        try { action() } catch (error: Exception) { failed(error) }
+    }
 
     /** Speech-rate multiplier (1.0 = normal, >1 = faster), settable live from Settings. Applied to the
      *  Android TextToSpeech engine; the neural voice reads its own `voice_speed` pref per utterance. */
@@ -42,7 +71,7 @@ class VoiceGuide @Inject constructor(
     }
     fun setRate(rate: Float) {
         speechRate = rate.coerceIn(0.5f, 2.0f)
-        tts?.setSpeechRate(speechRate)
+        safely { tts?.setSpeechRate(speechRate) }
     }
     private var ready = false
     private var currentEngine: String? = null
@@ -177,8 +206,8 @@ class VoiceGuide @Inject constructor(
         // listener at all, so Vela kept announcing turns over ringing and active calls. The
         // next scheduled prompt re-fires naturally once the call releases focus.
         if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-            tts?.stop()
-            neural?.stop()
+            safely { tts?.stop() }
+            safely { neural?.stop() }
             focusHandler.removeCallbacks(abandonFocusRunnable)
             synchronized(focusLock) {
                 activeUtterances = 0
@@ -212,7 +241,7 @@ class VoiceGuide @Inject constructor(
      *  2026-09-19, "pause music a little early"). A fresh grant means nothing of ours is
      *  speaking, so nothing waits on an interrupt behind the delay. */
     private fun afterFocusLead(fresh: Boolean, go: () -> Unit) {
-        if (fresh) focusHandler.postDelayed(go, FOCUS_LEAD_MS) else go()
+        if (fresh) focusHandler.postDelayed({ safely(go) }, FOCUS_LEAD_MS) else safely(go)
     }
 
     private fun releaseFocus() {
@@ -240,7 +269,19 @@ class VoiceGuide @Inject constructor(
     /** Initialize, or **re-initialize** if [enginePackage] differs from the engine
      *  currently loaded — so picking a different engine in Settings actually takes
      *  effect (the old idempotent guard ignored later picks). */
-    fun init(enginePackage: String? = null) {
+    fun init(enginePackage: String? = null) = safely {
+        deferredEngine = null
+        initEngine(requiredSystemEngine ?: enginePackage)
+    }
+
+    private fun initEngine(enginePackage: String?) {
+        if (requiredSystemEngine != null) {
+            check(context.packageManager.queryIntentServices(
+                Intent("android.intent.action.TTS_SERVICE").setPackage(enginePackage), 0,
+            ).isNotEmpty()) {
+                "Google TTS kurulu değil veya kullanılamıyor"
+            }
+        }
         // One of Vela's own in-process neural voices (vela.piper) — no Android TextToSpeech
         // involved. The right synth is wired into [neural] by MapViewModel first. Do NOT shut the
         // system `tts` down here — it stays as the fallback for languages the neural voice can't
@@ -258,9 +299,10 @@ class VoiceGuide @Inject constructor(
         }
         useNeural = false
         neural?.stop()
-        if (tts != null && enginePackage == currentEngine) return
+        if (tts != null && enginePackage == currentEngine && !systemInitFailed) return
         if (tts != null) shutdown()
         currentEngine = enginePackage
+        systemInitFailed = false
         working = null
         ready = false
         systemReady = false
@@ -275,28 +317,33 @@ class VoiceGuide @Inject constructor(
 
     private fun attachTtsListener() {
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) = releaseFocus()
+            override fun onStart(utteranceId: String?) { if (!speechStatus.startsWith("error:")) speechStatus = "speaking" }
+            override fun onDone(utteranceId: String?) { if (!speechStatus.startsWith("error:")) speechStatus = "done"; releaseFocus() }
             // QUEUE_FLUSH fires onStop (not onDone) for the flushed utterance — without this
             // override every interrupt stranded a refcount and focus never released.
-            override fun onStop(utteranceId: String?, interrupted: Boolean) = releaseFocus()
+            override fun onStop(utteranceId: String?, interrupted: Boolean) { if (!speechStatus.startsWith("error:")) speechStatus = "stopped"; releaseFocus() }
             @Deprecated("deprecated") override fun onError(utteranceId: String?) {
-                working = false // the engine accepted text but couldn't synthesize it
-                releaseFocus()
+                failed(IllegalStateException("TTS synthesis failed"))
             }
         })
     }
 
     /** Speak a sample so the user can confirm the engine actually makes sound (the
      *  only true test on their hardware — we can't hear it for them). */
-    fun test() = speak(app.vela.core.i18n.NavStringsRegistry.current().voiceTest(), interrupt = true, ignoreMute = true)
+    fun test() {
+        if (systemInitFailed) init(requiredSystemEngine ?: currentEngine)
+        speak(app.vela.core.i18n.NavStringsRegistry.current().voiceTest(), interrupt = true, ignoreMute = true)
+    }
 
-    override fun onInit(status: Int) {
+    override fun onInit(status: Int) = safely { handleInit(status) }
+
+    private fun handleInit(status: Int) {
         val t = tts
         if (status != TextToSpeech.SUCCESS || t == null) {
             systemReady = false
             systemInitFailed = true
             if (!useNeural) working = false // the PRIMARY engine failed to start
+            failed(IllegalStateException("TTS initialization failed: $status"))
             pending.clear() // nothing can speak the backlog — drop it instead of replaying it on a later init
             if (useNeural) langUnavailable?.invoke(targetLang()) // fallback engine dead → "download a <lang> voice"
             return
@@ -372,6 +419,7 @@ class VoiceGuide @Inject constructor(
             installedEnginesCache = list
             list
         }
+        requiredSystemEngine?.let { required -> return installed.filter { it.packageName == required } }
         val vela = if (VelaPiper.isReady(context)) listOf(VoiceEngine(VelaPiper.ENGINE_ID, VelaPiper.LABEL)) else emptyList()
         return vela + installed
     }
@@ -399,8 +447,22 @@ class VoiceGuide @Inject constructor(
     @Volatile private var openerToken = 0
     private val OPENER_MAX_WAIT_MS = 2500L // cap the nav-start opener's wait for its romanized road name
 
-    fun speak(text: String, interrupt: Boolean = false, ignoreMute: Boolean = false) {
+    fun speak(text: String, interrupt: Boolean = false, ignoreMute: Boolean = false) = safely {
+        speakSafely(text, interrupt, ignoreMute)
+    }
+
+    private fun speakSafely(text: String, interrupt: Boolean, ignoreMute: Boolean) {
         if (muted && !ignoreMute) return
+        deferredEngine?.let { init(it) }
+        if (systemInitFailed && !useNeural) return
+        speechStatus = "pending"
+        val request = ++speechRequest
+        focusHandler.postDelayed({
+            if (request == speechRequest && (speechStatus == "pending" || speechStatus == "speaking")) {
+                failed(java.util.concurrent.TimeoutException("TTS did not complete within 30 seconds"))
+                safely { tts?.stop() }
+            }
+        }, 30_000)
         runCatching { onSpoken?.invoke(text) }
         runCatching { onPromptAlert?.invoke() }
         if (!ready) {
@@ -470,6 +532,7 @@ class VoiceGuide @Inject constructor(
             val avail = runCatching { engine.setLanguage(Locale(t)) }.getOrDefault(TextToSpeech.LANG_NOT_SUPPORTED)
             if (avail < TextToSpeech.LANG_AVAILABLE) {
                 working = false
+                speechStatus = "error: TTS dili desteklenmiyor: $t"
                 langUnavailable?.invoke(t) // "download a <language> voice" — don't mangle it through the wrong one
                 return
             }
@@ -497,8 +560,7 @@ class VoiceGuide @Inject constructor(
             // The utterance was never enqueued, so NONE of the onDone/onStop/onError callbacks that
             // release focus will ever fire for it — roll back the acquire here or music stays ducked
             // forever (audit 2026-07-06). Also surface the dead engine like the onError path does.
-            releaseFocus()
-            working = false
+            failed(IllegalStateException("TTS speak returned ERROR"))
         }
     }
 
@@ -508,7 +570,7 @@ class VoiceGuide @Inject constructor(
         if (tts != null) return
         systemReady = false
         lastSystemLang = null
-        tts = TextToSpeech(context, this)
+        tts = requiredSystemEngine?.let { TextToSpeech(context, this, it) } ?: TextToSpeech(context, this)
         attachTtsListener()
     }
 
@@ -520,9 +582,11 @@ class VoiceGuide @Inject constructor(
         app.vela.core.i18n.NavStringsRegistry.current().expandForSpeech(text)
 
     fun stop() {
+        speechStatus = "stopped"
+        speechRequest++
         openerToken++ // cancel any deferred nav-start opener still waiting for its road name
-        tts?.stop()
-        neural?.stop()
+        safely { tts?.stop() }
+        safely { neural?.stop() }
         // Drop any queued-but-unspoken prompts: once guidance stops (nav end / mute), a backlog is
         // stale and must not survive to be flushed later when a voice attaches (issue: stale burst).
         pending.clear()
@@ -530,7 +594,7 @@ class VoiceGuide @Inject constructor(
     }
 
     fun shutdown() {
-        tts?.shutdown()
+        safely { tts?.shutdown() }
         tts = null
         ready = false
         systemReady = false

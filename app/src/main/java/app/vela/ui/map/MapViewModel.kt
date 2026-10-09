@@ -568,16 +568,10 @@ class MapViewModel @Inject constructor(
         // Relocate any pre-browser flat Piper install (filesDir/piper/*.onnx) into the per-voice subdir
         // layout the voice browser expects — synchronous, rename-only (no re-download), crash-safe.
         VelaPiper.migrateFlatLayoutIfNeeded(appContext)
-        // Restore the saved voice; default to the downloaded Piper voice.
-        val savedRaw = appContext.getSharedPreferences("vela_settings", Context.MODE_PRIVATE)
-            .getString("voice_engine", null)
-        val savedEngine = when {
-            // A stale neural id from a removed voice (vela.kokoro / vela.matcha) → our Piper voice.
-            savedRaw == null || savedRaw.startsWith("vela.") ->
-                if (VelaPiper.isReady(appContext)) VelaPiper.ENGINE_ID else null
-            else -> savedRaw // a system TTS engine the user picked
-        }
-        neuralSynthFor(savedEngine)?.let { voice.neural = it }
+        // Native voice engines stay dormant on the affected head unit. Google TTS binds only
+        // when an explicit test or a navigation prompt actually needs speech.
+        val savedEngine = "com.google.android.tts"
+        voice.useSystemEngineLazily(savedEngine)
         // When guidance can't speak the app/system language (the neural voice is a different
         // language AND no system TTS voice exists for it) — e.g. the user set the app language to
         // Russian but only has the English voice — VoiceGuide stays silent (never mangles it) and
@@ -590,7 +584,7 @@ class MapViewModel @Inject constructor(
                 // nudge to the voice library. One it CAN'T (Japanese: no Piper/espeak voice) → the
                 // library is a dead end, so point at the phone's own voice settings to add a system
                 // voice, which is where ja guidance is spoken from.
-                val hasVela = app.vela.core.voice.PiperCatalog.hasVoiceFor(lang)
+                val hasVela = app.vela.BuildConfig.NATIVE_VOICE_ENABLED && app.vela.core.voice.PiperCatalog.hasVoiceFor(lang)
                 val msg = appContext.getString(
                     if (hasVela) R.string.mapvm_voice_lang_missing else R.string.mapvm_voice_lang_system,
                     endonym,
@@ -600,12 +594,8 @@ class MapViewModel @Inject constructor(
                 }
             }
         }
-        voice.init(savedEngine) // null → default system TTS; also warms the engine list for Settings
-        if (savedEngine != null) {
-            val label = velaLabel(savedEngine)
-                ?: voice.availableEngines().firstOrNull { it.packageName == savedEngine }?.label ?: savedEngine
-            _state.update { it.copy(selectedEngine = VoiceEngine(savedEngine, label)) }
-        }
+        // No TTS service or native voice model starts during launcher initialization.
+        _state.update { it.copy(selectedEngine = VoiceEngine(savedEngine, "Google Text-to-Speech")) }
         // The neural voice loads when the route chooser opens (warmVoiceForRoute), not at launch: it
         // holds its model for the whole session, and a drive always passes through the chooser a few
         // seconds before the first spoken prompt.
@@ -638,7 +628,6 @@ class MapViewModel @Inject constructor(
         if (voiceWakeController.isEnabled()) {
             voiceWakeController.startListening()
         }
-        asrRecognizer.clearAllQuarantines()
         refreshAsr()
         refreshNotices() // any cached notices, shown immediately
         // Fleet default map color set (a user's own Settings pick always wins - see MapColors).
@@ -5394,11 +5383,15 @@ class MapViewModel @Inject constructor(
 
     /** The in-process synth backing a Vela neural engine id (else null for a system TTS engine). */
     private fun neuralSynthFor(engineId: String?): PiperSynth? =
-        if (engineId == VelaPiper.ENGINE_ID) piperSynth else null
+        if (app.vela.BuildConfig.NATIVE_VOICE_ENABLED && engineId == VelaPiper.ENGINE_ID) piperSynth else null
     private fun velaLabel(engineId: String): String? =
         if (engineId == VelaPiper.ENGINE_ID) VelaPiper.LABEL else null
 
     fun setVoiceEngine(e: VoiceEngine) {
+        if (!app.vela.BuildConfig.NATIVE_VOICE_ENABLED && e.packageName != "com.google.android.tts") {
+            flashStatus("Yerel ses motorları geçici olarak kapalı; Google TTS kullanılıyor.")
+            return
+        }
         neuralSynthFor(e.packageName)?.let { voice.neural = it; it.warmUp() } // point VoiceGuide at the right synth
         voice.init(e.packageName) // re-init now so the pick applies + a test plays through it
         settingsPrefs.edit().putString("voice_engine", e.packageName).apply() // survive restart
@@ -5534,7 +5527,8 @@ class MapViewModel @Inject constructor(
     fun refreshAsr() {
         _state.update {
             it.copy(
-                asrInstalledIds = app.vela.voice.AsrEngine.installed(appContext).map { e -> e.id }.toSet(),
+                asrInstalledIds = if (app.vela.BuildConfig.NATIVE_VOICE_ENABLED)
+                    app.vela.voice.AsrEngine.installed(appContext).map { e -> e.id }.toSet() else emptySet(),
                 asrActiveId = app.vela.voice.AsrEngine.active(appContext).id,
             )
         }
@@ -5637,7 +5631,7 @@ class MapViewModel @Inject constructor(
     /** Enable or disable hands-free wake word detection ("Hey Vela" / custom keyword). */
     fun setWakeWordEnabled(enabled: Boolean) {
         voiceWakeController.setEnabled(enabled)
-        _state.update { it.copy(wakeWordEnabled = enabled) }
+        _state.update { it.copy(wakeWordEnabled = voiceWakeController.isEnabled()) }
     }
 
     /** Enable or disable silent mode (shows pulsing border on car dock mic instead of fullscreen dialog). */
@@ -5681,6 +5675,10 @@ class MapViewModel @Inject constructor(
      *  on its own right after a download reads as a bug (user 2026-07-10). The Test button remains
      *  the on-demand way to hear the active voice. */
     fun selectVoice(id: String, audition: Boolean = true) {
+        if (!app.vela.BuildConfig.NATIVE_VOICE_ENABLED) {
+            flashStatus("Yerel sesler geçici olarak kapalı; Google TTS kullanılıyor.")
+            return
+        }
         if (!VelaPiper.isVoiceReady(appContext, id)) return
         VelaPiper.setSelectedVoiceId(appContext, id)
         piperSynth.reloadVoice() // THE build of the new voice (race-free; runs first on the worker)
@@ -5746,6 +5744,9 @@ class MapViewModel @Inject constructor(
 
     /** null = still initializing, true = a voice is ready, false = no usable voice. */
     fun voiceWorking(): Boolean? = voice.working
+    fun voiceTestStatus(): String = voice.speechStatus
+    fun voiceTestFinished(): Boolean = voice.speechStatus == "done" || voice.speechStatus.startsWith("error:")
+    fun stopVoiceTest() = voice.stop()
 
     /** Open-source engines a phone with none can install in one tap (off F-Droid). */
     fun installableEngines(): List<VoiceInstaller.Engine> =

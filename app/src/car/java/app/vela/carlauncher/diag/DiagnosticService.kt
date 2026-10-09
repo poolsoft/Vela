@@ -31,7 +31,7 @@ class DiagnosticService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        if (!BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) { stopSelf(); return }
+        if (!BuildConfig.DIAGNOSTIC_BUILD) { stopSelf(); return }
         val notifications = getSystemService(NotificationManager::class.java)
         notifications.createNotificationChannel(NotificationChannel(CHANNEL, "Vela tanı kaydı", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -154,7 +154,7 @@ class DiagnosticService : Service() {
         }
 
         fun start(context: Context) {
-            if (!BuildConfig.DIAGNOSTIC_MUSIC_DISABLED || bound) return
+            if (!BuildConfig.DIAGNOSTIC_BUILD || bound) return
             val app = context.applicationContext
             appContext = app
             val intent = Intent(app, DiagnosticService::class.java)
