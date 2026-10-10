@@ -182,9 +182,12 @@ object CarLauncherSettings {
     fun baslat(context: Context, force: Boolean = false) {
         if (force || !::prefs.isInitialized) {
             prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            _maplessMode.value = prefs.getBoolean("car_launcher_mapless_mode", false)
+            _maplessScreen.value = prefs.getString("car_launcher_mapless_screen", "speedometer")
+                ?.takeIf { it in setOf("speedometer", "dashboard") } ?: "speedometer"
             _carModeEtkin.value = prefs.getBoolean(KEY_CAR_MODE_ENABLED, true)
             _tamEkranModu.value = prefs.getBoolean(KEY_IMMERSIVE_MODE, true)
-            _durumCubuguGoster.value = prefs.getBoolean(KEY_STATUS_BAR, true)
+            _durumCubuguGoster.value = !_tamEkranModu.value && prefs.getBoolean(KEY_STATUS_BAR, true)
             _dockKonumu.value = prefs.getString(KEY_DOCK_POSITION, "right") ?: "right"
             _dockBoyutu.value = prefs.getInt(KEY_DOCK_SIZE, 50)
             _panelKonumu.value = prefs.getString(KEY_PANEL_POSITION, "right") ?: "right"
@@ -222,6 +225,21 @@ object CarLauncherSettings {
         }
     }
 
+    private val _maplessMode = MutableStateFlow(false)
+    val maplessMode: StateFlow<Boolean> = _maplessMode.asStateFlow()
+    private val _maplessScreen = MutableStateFlow("speedometer")
+    val maplessScreen: StateFlow<String> = _maplessScreen.asStateFlow()
+
+    fun setMaplessMode(enabled: Boolean) {
+        _maplessMode.value = enabled
+        if (::prefs.isInitialized) prefs.edit().putBoolean("car_launcher_mapless_mode", enabled).apply()
+    }
+    fun setMaplessScreen(screen: String) {
+        require(screen in setOf("speedometer", "dashboard"))
+        _maplessScreen.value = screen
+        if (::prefs.isInitialized) prefs.edit().putString("car_launcher_mapless_screen", screen).apply()
+    }
+
     fun setCarModeEtkin(etkin: Boolean) {
         _carModeEtkin.value = etkin
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_CAR_MODE_ENABLED, etkin).apply()
@@ -229,12 +247,18 @@ object CarLauncherSettings {
 
     fun setTamEkranModu(tamEkran: Boolean) {
         _tamEkranModu.value = tamEkran
-        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_IMMERSIVE_MODE, tamEkran).apply()
+        if (tamEkran) _durumCubuguGoster.value = false
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_IMMERSIVE_MODE, tamEkran).apply {
+            putBoolean(KEY_STATUS_BAR, _durumCubuguGoster.value)
+        }.apply()
     }
 
     fun setDurumCubuguGoster(goster: Boolean) {
         _durumCubuguGoster.value = goster
-        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_STATUS_BAR, goster).apply()
+        if (goster) _tamEkranModu.value = false
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_STATUS_BAR, goster).apply {
+            if (goster) putBoolean(KEY_IMMERSIVE_MODE, false)
+        }.apply()
     }
 
     fun setDockKonumu(konum: String) {

@@ -139,13 +139,15 @@ object CarIntegration {
         voiceAudioLevel: Float = 0f,
         content: @Composable () -> Unit
     ) {
-        // Session-only opt-in: never restore map initialization after a process/Activity restart.
+        // Mapless mode replaces the whole map composition, so no renderer or EGL surface starts.
+        val mapless by CarLauncherSettings.maplessMode.collectAsState()
+        // Session-only manual map close remains available for diagnosis.
         // Gate the whole MapScreen, not just its visibility, so no hidden EGL surface is created.
         val context = androidx.compose.ui.platform.LocalContext.current
         var testsOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
         val homeRequest by CarLauncherSettings.homeScreenRequest.collectAsState()
         androidx.compose.runtime.LaunchedEffect(homeRequest) { testsOpen = false }
-        if (testsOpen) {
+        if (testsOpen && !mapless) {
             app.vela.carlauncher.diag.DiagnosticTestScreen(
                 onClose = { testsOpen = false },
                 onSettings = onOpenSettings,
@@ -167,7 +169,9 @@ object CarIntegration {
             isVoiceListening = isVoiceListening,
             voiceAudioLevel = voiceAudioLevel,
             haritaIcerigi = {
-                if (mapOpen) {
+                if (mapless) {
+                    app.vela.carlauncher.ui.CarMaplessContent(onOpenSettings)
+                } else if (mapOpen) {
                     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
                         androidx.compose.runtime.CompositionLocalProvider(
                             app.vela.carlauncher.map.LocalMapRendererFailureHost provides failureHost,

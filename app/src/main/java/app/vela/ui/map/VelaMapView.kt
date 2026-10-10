@@ -3499,8 +3499,13 @@ fun VelaMapView(
                     }
                 }
                 var frameReportedForStyle: Style? = null
+                var partialReportedForStyle: Style? = null
                 mv.addOnDidFinishRenderingFrameListener { fully ->
                     val currentStyle = map.style
+                    if (!fully && currentStyle != null && currentStyle !== partialReportedForStyle) {
+                        partialReportedForStyle = currentStyle
+                        app.vela.variant.CarIntegration.mapRendererStage("frame-partial")
+                    }
                     if (fully && currentStyle != null && currentStyle !== frameReportedForStyle) {
                         frameReportedForStyle = currentStyle
                         app.vela.variant.CarIntegration.mapRendererStage("frame")

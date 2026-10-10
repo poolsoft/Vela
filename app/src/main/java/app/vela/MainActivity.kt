@@ -1,5 +1,8 @@
 package app.vela
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.systemBars
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -118,7 +121,13 @@ class MainActivity : ComponentActivity() {
                     (liveConfig.value ?: androidx.compose.ui.platform.LocalConfiguration.current),
             ) {
                 VelaTheme(darkTheme = dark) {
-                    VelaRoot(vm = vm)
+                    if (CarIntegration.available) {
+                        androidx.compose.foundation.layout.Box(
+                            androidx.compose.ui.Modifier.fillMaxSize().windowInsetsPadding(
+                                androidx.compose.foundation.layout.WindowInsets.systemBars
+                            )
+                        ) { VelaRoot(vm = vm) }
+                    } else VelaRoot(vm = vm)
                 }
             }
         }
@@ -128,25 +137,15 @@ class MainActivity : ComponentActivity() {
 
     // One owner for both the XML launcher and Compose screens, including Home returns.
     private fun applySystemBarPreferences() {
-        val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-        controller.isAppearanceLightStatusBars = darkSystemBarIcons
-        controller.isAppearanceLightNavigationBars = darkSystemBarIcons
-        controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        if (CarIntegration.immersive.value) {
-            controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-        } else {
-            controller.show(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
-            if (CarIntegration.statusBarVisible.value) {
-                controller.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-            } else {
-                controller.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-            }
-        }
+        app.vela.ui.applyVelaSystemBars(window, darkSystemBarIcons)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) applySystemBarPreferences()
+        if (hasFocus) {
+            applySystemBarPreferences()
+            window.decorView.post { applySystemBarPreferences() }
+        }
     }
 
     /** A portrait-ish mini map, Google's PiP proportions. */
@@ -196,16 +195,29 @@ class MainActivity : ComponentActivity() {
         app.vela.service.NavigationService.stop(this)
         CarIntegration.prepareForExit(this)
         if (restart) {
-            startActivity(Intent(this, MainActivity::class.java).apply {
-                action = Intent.ACTION_MAIN
-                addCategory(Intent.CATEGORY_HOME)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-            })
-            finish()
+            handOffRestart()
         } else {
             app.vela.diag.ProcessDiagnostics.explicitClose()
             finishAndRemoveTask()
         }
+    }
+
+    /** A restore needs a new process: attachBaseContext installs files before readers exist. */
+    fun restartAfterRestore() {
+        vm.stopReplay()
+        vm.stopNav()
+        app.vela.service.NavigationService.stop(this)
+        CarIntegration.prepareForExit(this)
+        handOffRestart()
+    }
+
+    private fun handOffRestart() {
+        app.vela.diag.ProcessDiagnostics.explicitClose()
+        app.vela.diag.ProcessDiagnostics.checkpointAndFlush("settings: restart hand-off")
+        startActivity(Intent(this, app.vela.util.AppRestartActivity::class.java).apply {
+            putExtra("oldPid", android.os.Process.myPid())
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        })
     }
 
     override fun onNewIntent(intent: Intent) {

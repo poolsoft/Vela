@@ -5330,7 +5330,7 @@ private fun ListsSheet(
     // D-pad-first initial focus (hard rule, docs/dpad.md): a raw Dialog must place focus
     // itself - land it on the New-list button so the menu opens usable with no wasted press.
     val listsAutoFocus = app.vela.ui.rememberDpadAutoFocus()
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    app.vela.ui.VelaWindowDialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.padding(vertical = 16.dp).widthIn(max = 420.dp)) {
                 Row(
@@ -5427,7 +5427,7 @@ private fun ParkingHistorySheet(
     onDismiss: () -> Unit,
 ) {
     val dark = isAppInDarkTheme()
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    app.vela.ui.VelaWindowDialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.padding(vertical = 16.dp).widthIn(max = 420.dp)) {
                 Row(
@@ -5549,7 +5549,7 @@ private fun ListEditorDialog(
     var color by remember { mutableStateOf(initial?.color ?: LIST_COLORS.first()) }
     var emojiOpen by remember { mutableStateOf(false) }
     var emojiText by remember { mutableStateOf("") }
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    app.vela.ui.VelaWindowDialog(onDismissRequest = onDismiss) {
         // Cap the dialog to most of the screen: with the emoji grid + free-type field open the
         // content grows past a short screen, which pushed the color row and Save button off the
         // bottom with no way to reach them (issue #193). The title and the action buttons stay

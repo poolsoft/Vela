@@ -32,7 +32,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewSidebar
 import androidx.compose.material.icons.filled.Widgets
-import androidx.compose.material3.AlertDialog
+import app.vela.ui.VelaWindowAlertDialog as AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -293,6 +293,8 @@ private fun CarAppearanceSettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val mapless by CarLauncherSettings.maplessMode.collectAsState()
+    val maplessScreen by CarLauncherSettings.maplessScreen.collectAsState()
     val startupScreen by CarLauncherSettings.baslangicEkrani.collectAsState()
     val tamEkran by CarLauncherSettings.tamEkranModu.collectAsState()
     val durumCubugu by CarLauncherSettings.durumCubuguGoster.collectAsState()
@@ -324,6 +326,25 @@ private fun CarAppearanceSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            SettingsGroup(title = "Haritasız mod") {
+                ToggleRow(
+                    label = "Harita yerine gösterge ekranı",
+                    hint = "Hemen uygulanır. Harita motoru başlatılmaz; müzik ve GPS göstergeleri çalışır.",
+                    checked = mapless,
+                    onCheckedChange = { CarLauncherSettings.setMaplessMode(it) }
+                )
+                if (mapless) {
+                    GroupDivider()
+                    ChoicePillRow(
+                        label = "Harita alanında gösterilecek ekran",
+                        detail = "Seçim sonraki açılışta da korunur",
+                        selectedKey = maplessScreen,
+                        options = listOf("speedometer" to "Hız göstergesi (Speedo)", "dashboard" to "Dashboard"),
+                        onSelect = { CarLauncherSettings.setMaplessScreen(it) }
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
             SettingsGroup(title = "Başlangıç ekranı") {
                 ChoicePillRow(
                     label = "Uygulama açılış ekranı",
@@ -344,7 +365,7 @@ private fun CarAppearanceSettingsScreen(
                 GroupDivider()
                 ToggleRow(
                     label = "Durum Çubuğunu (Status Bar) Göster",
-                    hint = "Immersive kapalıyken saat ve sistem bildirim simgelerini görünür kılar",
+                    hint = "Saat ve bildirim simgelerini gösterir; açıldığında tam ekran modunu kapatır",
                     checked = durumCubugu,
                     onCheckedChange = { CarLauncherSettings.setDurumCubuguGoster(it) }
                 )

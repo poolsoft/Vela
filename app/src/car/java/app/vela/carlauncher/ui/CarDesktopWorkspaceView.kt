@@ -52,7 +52,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Widgets
-import androidx.compose.material3.AlertDialog
+import app.vela.ui.VelaWindowAlertDialog as AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider

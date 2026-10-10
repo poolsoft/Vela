@@ -49,7 +49,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         app.vela.diag.ProcessDiagnostics.checkpoint("memory trim: $level")
-        if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(this)) {
+        if (!app.vela.util.ProcessIdentity.isMain(this)) {
             app.vela.ui.MemoryPressure.dispatch(level)
             return
         }
@@ -66,7 +66,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
     }
 
     override fun attachBaseContext(base: Context) {
-        if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(base)) {
+        if (!app.vela.util.ProcessIdentity.isMain(base)) {
             super.attachBaseContext(base)
         } else {
             app.vela.backup.BackupRestore.recover(base)
@@ -80,7 +80,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.diag.ProcessDiagnostics.install(this)
         if (BuildConfig.DIAGNOSTIC_BUILD && !app.vela.variant.CarIntegration.available)
             app.vela.diag.LocalLogcatRecorder.start(this)
-        if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(this)) {
+        if (!app.vela.util.ProcessIdentity.isMain(this)) {
             CrashCatcher.install(this) { emptyList() }
             app.vela.util.FileLogger.i("VelaApp", "Lightweight process startup: no launcher, music, location or downloads")
             return

@@ -28,6 +28,11 @@ object PmtilesMapBridge {
 
     @Synchronized fun install() {
         if (installed) return
+        // Native HTTP requests are otherwise suspended before reaching OkHttp when offline.
+        // Our reserved HTTP host reads disk; keep that dispatcher enabled even without Wi-Fi.
+        // Real remote URLs still fail normally through OkHttp's bounded call timeout.
+        com.mapbox.mapboxsdk.Mapbox.setConnected(true)
+        app.vela.util.FileLogger.i("PmtilesBridge", "Local HTTP dispatcher enabled independently of network connectivity")
         HttpRequestUtil.setOkHttpClient(network.newBuilder().addInterceptor { chain ->
             val request = chain.request()
             if (request.url.host != HOST) return@addInterceptor chain.proceed(request)
@@ -39,7 +44,10 @@ object PmtilesMapBridge {
                 val source = synchronized(archives) {
                     archives[key]?.takeUnless { it.expired() } ?: PmtilesTileSource { offset, length ->
                         readRange(uri, offset, length)
-                    }.also { archives[key] = it }
+                    }.also {
+                        archives[key] = it
+                        app.vela.util.FileLogger.i("PmtilesBridge", "Archive opened: $uri bytes=$stamp zoom=${it.header.minZoom}..${it.header.maxZoom}")
+                    }
                 }
                 val body: ByteArray?
                 val type: String
@@ -59,6 +67,7 @@ object PmtilesMapBridge {
                     .header("Cache-Control", "no-cache")
                     .body((body ?: ByteArray(0)).toResponseBody(type.toMediaType())).build()
             } catch (error: Exception) {
+                app.vela.util.FileLogger.e("PmtilesBridge", "Local resource failed: ${request.url}", error)
                 throw IOException("PMTiles resource could not be read", error)
             }
         }.build())

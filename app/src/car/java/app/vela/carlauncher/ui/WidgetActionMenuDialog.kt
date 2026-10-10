@@ -40,7 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import app.vela.ui.VelaWindowDialog as Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.vela.carlauncher.widgets.BaseWidget
 import app.vela.carlauncher.widgets.WidgetManager

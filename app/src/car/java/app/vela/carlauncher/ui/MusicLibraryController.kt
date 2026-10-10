@@ -399,6 +399,7 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         dialogs.add(dialog)
         dialog.setOnDismissListener { dialogs.remove(dialog) }
         dialog.show()
+        dialog.window?.let { app.vela.ui.applyVelaSystemBars(it) }
     }
     fun release() {
         scope.cancel()
