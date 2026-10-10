@@ -6622,7 +6622,9 @@ class MapViewModel @Inject constructor(
             // An archive without the glyph pack (an interrupted first download) heals itself the
             // next time there is a connection: labels need the pack, and without it the tiles
             // with labels never complete offline.
-            if (uri != null && !fonts) {
+            // Offline-only: keep the missing pack for a later connection instead of stalling the
+            // head unit on a download the user did not ask for.
+            if (uri != null && !fonts && app.vela.ui.OfflineMode.networkAllowed) {
                 viewModelScope.launch(Dispatchers.IO) { app.vela.offline.GlyphPackStore.ensureInstalled(appContext, http) }
             }
         }
