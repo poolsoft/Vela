@@ -149,9 +149,10 @@ internal class IsolatedMapClient(
         }
         val changed = width != w || height != h || dpi != density
         surface = value; width = w; height = h; dpi = density
-        if (changed && opened && value != null) {
-            hasFrame = false; openAt = SystemClock.elapsedRealtime()
-            mutableState.value = State(stage = "resizing")
+        if (changed && opened) {
+            // A resize keeps the existing map/style; only the first frame needs startup UI.
+            openAt = SystemClock.elapsedRealtime()
+            FileLogger.i("MapRendererClient", "session=$session resize=${w}x${h} retainingReady=${mutableState.value.ready}")
         }
         if (!active || mutableState.value.failed) return
         if (connection == null) connect() else if (service != null) openSurface()
