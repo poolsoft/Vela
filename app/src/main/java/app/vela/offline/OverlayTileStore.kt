@@ -61,6 +61,7 @@ class OverlayTileStore @Inject constructor(
 
     /** Fetch the catalog of available overlays from [manifestUrl] (same shape as the routing manifest). */
     suspend fun manifest(manifestUrl: String): List<RoutingRegion> = withContext(Dispatchers.IO) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext emptyList()
         runCatching {
             val json = http.newCall(Request.Builder().url(manifestUrl).build()).execute()
                 .use { r -> if (!r.isSuccessful) error("HTTP ${r.code}"); r.body!!.string() }
@@ -78,6 +79,7 @@ class OverlayTileStore @Inject constructor(
 
     /** Download [region]'s `.pmtiles` into `overlays/<id>.pmtiles` (atomic via a .tmp) + register it. 0..100. */
     suspend fun download(region: RoutingRegion, onProgress: (Int) -> Unit): Boolean = withContext(Dispatchers.IO) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext false
         downloadMutex.withLock {
         // A duplicate request queued behind the first is a no-op, not a re-download.
         if (region.id in readIndex() && fileFor(region.id).exists()) { onProgress(100); return@withLock true }

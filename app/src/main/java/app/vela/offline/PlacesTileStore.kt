@@ -277,6 +277,8 @@ abstract class PmtilesRegionStore(
         // A missing or unreachable manifest is remembered for a while: this runs on every camera
         // idle, and without the memo each pan retried the fetch.
         if (SystemClock.elapsedRealtime() - lastMissMs < MISS_MEMO_MS) return emptyList()
+        // Offline-only: serve the memo if a catalog was already fetched this process, else nothing.
+        if (!app.vela.ui.OfflineMode.networkAllowed) return cached.orEmpty()
         val fetched = withContext(Dispatchers.IO) {
             val urls = if (folderName == "basemap") {
                 OfflineServerConfig.getBasemapManifestUrls(context)
@@ -329,6 +331,7 @@ abstract class PmtilesRegionStore(
      *  is renamed over the old one only when complete and verified, so a failed or canceled update
      *  leaves the region as it was (the Update button used to delete first, 2026-09-22). */
     suspend fun download(region: Region, replace: Boolean = false, onProgress: (Int) -> Unit): Boolean = withContext(Dispatchers.IO) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext false
         downloadMutex.withLock {
             if (!replace && fileFor(region.id).exists()) { onProgress(100); return@withLock true }
             root.mkdirs()

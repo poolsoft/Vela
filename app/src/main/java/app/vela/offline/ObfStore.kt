@@ -58,6 +58,7 @@ class ObfStore @Inject constructor(
      *  false mid-stream aborts quietly (the cancel button's hook, same contract as
      *  the old graph download). */
     suspend fun download(region: RoutingRegion, active: () -> Boolean = { true }, onProgress: (Int) -> Unit): Boolean = withContext(Dispatchers.IO) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext false
         root.mkdirs()
         val dest = File(root, "${region.id}.obf")
         val tmp = File(root, "${region.id}.obf.tmp")

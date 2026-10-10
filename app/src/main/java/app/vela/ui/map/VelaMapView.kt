@@ -6484,7 +6484,11 @@ internal fun fragileGpuDefault(): Boolean =
                 android.os.Build.SOC_MANUFACTURER.contains("unisoc", ignoreCase = true)
             )
 
-internal fun isFragileOrEmulator(): Boolean = isEmulator() || fragileGpuDefault()
+// `MemoryPressure.lowEnd` extends the old fragileGpuDefault() (SDK >= 34) heuristic down to the
+// API 27 GLES2 head unit: measured GLES version + low RAM + heap class pick the lean profile there
+// (plan F5, 2026-10-10). The `texture_render` default still uses fragileGpuDefault() alone.
+internal fun isFragileOrEmulator(): Boolean =
+    isEmulator() || fragileGpuDefault() || app.vela.ui.MemoryPressure.lowEnd
 
 /** Google-style 3D building geometry, shared by all four palettes. Extrusions start a zoom level
  *  AFTER the flat footprints (z17 vs 16): at ~500ft Manhattan towers leaned over and BURIED the

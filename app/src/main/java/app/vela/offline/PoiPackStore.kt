@@ -47,6 +47,7 @@ class PoiPackStore @Inject constructor(
 
     /** Fetch the pack catalog. Supports multi-source manifests (Poolsoft fork, Upstream, Custom). */
     suspend fun manifest(manifestUrl: String = app.vela.BuildConfig.POI_PACK_MANIFEST_URL): List<RoutingRegion> = withContext(Dispatchers.IO) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext emptyList()
         val urls = OfflineServerConfig.getPoiManifestUrls(context)
         val allRegions = ArrayList<RoutingRegion>()
         for (url in urls) {
@@ -104,6 +105,7 @@ class PoiPackStore @Inject constructor(
 
     /** Download + unzip [region]'s pack to `poipacks/<id>.db` and register it. 0..100 progress. */
     suspend fun download(region: RoutingRegion, active: () -> Boolean = { true }, onProgress: (Int) -> Unit): Boolean = withContext(Dispatchers.IO) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext false
         packsRoot.mkdirs()
         val dest = File(packsRoot, "${region.id}.db")
         val tmp = File(packsRoot, "${region.id}.db.tmp")
@@ -156,6 +158,7 @@ class PoiPackStore @Inject constructor(
      * against the manifest's per-table row counts, so a bad patch can't leave a half-updated pack.
      */
     suspend fun applyDelta(region: RoutingRegion, onProgress: (Int) -> Unit): Boolean = withContext(Dispatchers.IO) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext false
         val deltaUrl = region.deltaUrl ?: return@withContext false
         val dest = File(packsRoot, "${region.id}.db")
         if (!dest.exists() || region.counts.isEmpty()) return@withContext false

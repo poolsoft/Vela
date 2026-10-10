@@ -132,7 +132,11 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
             // fall back to their boxes, which is what they always were.
             app.vela.offline.RegionPolys.ensureLoaded(this@VelaApp)
             app.vela.data.FlockCameras.ensureLoaded(this@VelaApp)
-            app.vela.data.FlockCameras.refresh(this@VelaApp, app.vela.BuildConfig.FLOCK_MANIFEST_URL)
+            // Offline-only: the bundled camera file is all we need, and this refresh is a plain
+            // network call the head unit cannot afford at launch.
+            if (app.vela.ui.OfflineMode.networkAllowed) {
+                app.vela.data.FlockCameras.refresh(this@VelaApp, app.vela.BuildConfig.FLOCK_MANIFEST_URL)
+            }
         }
         app.vela.ui.SimLocation.init(this)
         app.vela.ui.UiScale.init(this)
@@ -145,6 +149,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.ui.HideAdult.init(this)
         app.vela.ui.HideExternalLinks.init(this)
         app.vela.ui.GoogleFree.init(this) // "Use Vela without Google": mirrors into the :core NoGoogle flag
+        app.vela.ui.OfflineMode.init(this) // "Sadece cevrimdisi calis": every remote path checks this
         app.vela.ui.Buildings3d.init(this)
         app.vela.ui.RouteTrail.init(this)
         app.vela.ui.RoadLabel.init(this)
@@ -165,6 +170,15 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.ui.ContactsSearch.init(this) // contacts-in-search toggle (issue #243)
         app.vela.diag.NavTrace.init(this) // opt-in nav smoothness trace (issue #251)
         app.vela.ui.map.MapFonts.init(this) // Roboto basemap glyphs (cached patched style + async refresh)
+        // The head-unit media service builds the internal player on ITS main thread, and the first
+        // getSharedPreferences() there parsed the XML synchronously (measured 3404 ms stall on the
+        // teyp, 2026-10-10). Read the four files it touches here, on an IO thread, so launch never
+        // pays that cost and the service restart is cheap.
+        CoroutineScope(Dispatchers.IO).launch {
+            for (name in listOf("vela_internal_player_prefs", "vela_music_focus", "vela_music_playlists", "vela_car_launcher_prefs")) {
+                runCatching { getSharedPreferences(name, MODE_PRIVATE).all.size }
+            }
+        }
         Onboarding.init(this)
         app.vela.ui.WhatsNew.init(this)
         // Persist any fatal crash (stack trace + breadcrumbs) so it survives the

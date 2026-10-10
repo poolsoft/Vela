@@ -51,6 +51,8 @@ class RegionCatalog @Inject constructor(
     private val http: OkHttpClient,
 ) {
     suspend fun manifest(manifestUrl: String = app.vela.BuildConfig.OBF_MANIFEST_URL): List<RoutingRegion> = withContext(Dispatchers.IO) {
+        // Offline-only: the catalog is a network fetch; installed regions are read from disk.
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext emptyList()
         val urls = OfflineServerConfig.getObfManifestUrls(context)
         val allRegions = ArrayList<RoutingRegion>()
         for (url in urls) {

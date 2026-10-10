@@ -73,7 +73,9 @@ class MusicManager private constructor(private val context: Context) : InternalM
         EXTERNAL
     }
 
-    private val focusPrefs = context.getSharedPreferences("vela_music_focus", Context.MODE_PRIVATE)
+    // Lazy: the same 3.4 s first-parse cost as InternalMusicPlayer applies to this file, and the
+    // ctor runs on the media service's main thread. VelaApp pre-warms it on an IO thread.
+    private val focusPrefs by lazy { context.getSharedPreferences("vela_music_focus", Context.MODE_PRIVATE) }
     private var manualSelection = false
     private var publishing = false
     private var controllers = emptyList<MediaController>()
@@ -83,8 +85,8 @@ class MusicManager private constructor(private val context: Context) : InternalM
     private var userCommandVersion = 0
     private var startupScheduled = false
     private var userPaused = false
-    private val startupSource = focusPrefs.getString("last_source", "internal") ?: "internal"
-    private val startupWasPlaying = focusPrefs.getBoolean("was_playing", false)
+    private val startupSource by lazy { focusPrefs.getString("last_source", "internal") ?: "internal" }
+    private val startupWasPlaying by lazy { focusPrefs.getBoolean("was_playing", false) }
     private val _sourceStatus = MutableStateFlow<String?>(null)
     val sourceStatus = _sourceStatus.asStateFlow()
     private var selectedAdapter: BaseMediaAdapter = internalAdapter

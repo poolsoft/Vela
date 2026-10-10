@@ -75,6 +75,8 @@ import com.mapbox.mapboxsdk.offline.OfflineRegion
 internal fun OfflineSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onCloseSettings: () -> Unit, onOpenVoice: () -> Unit = {}) {
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // Persistent offline-only switch: every remote path checks this, downloads go passive.
+    val offlineOnly by app.vela.ui.OfflineMode.on
     var confirmRegion by remember { mutableStateOf<app.vela.offline.RoutingRegion?>(null) }
     confirmRegion?.let { region ->
         val packRegion = state.poiPackRegions.firstOrNull { it.id == region.id }
@@ -91,6 +93,14 @@ internal fun OfflineSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onClose
     SettingsScaffold(stringResource(R.string.settings_offline), onBack) { topRow ->
         Spacer(Modifier.height(4.dp))
         PageIntro(stringResource(R.string.settings_offline_hint))
+        SettingsGroup {
+            ToggleRow(
+                label = "Sadece cevrimdisi calis",
+                checked = offlineOnly,
+                onCheckedChange = { app.vela.ui.OfflineMode.set(context, it) },
+                hint = "Acikken hicbir ag istegi yapilmaz: bolge guncellemesi, yer arama ve guncelleme kontrolu kapanir; indirme dugmeleri pasif olur.",
+            )
+        }
         var regions by remember { mutableStateOf<List<OfflineRegion>>(emptyList()) }
         LaunchedEffect(Unit) { OfflineMaps.list(context) { regions = it } }
         // -1 = not loaded yet; used only to decide the "saved areas predate offline addresses" nudge below.
@@ -107,9 +117,10 @@ internal fun OfflineSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onClose
                 vm.downloadViewport()
                 onCloseSettings() // back to the map so the user sees the download progress
             },
-            enabled = vm.hasViewport() && app.vela.variant.CarIntegration.mapStorageAvailable(),
+            enabled = vm.hasViewport() && app.vela.variant.CarIntegration.mapStorageAvailable() && !offlineOnly,
         ) { Text(stringResource(R.string.settings_offline_download_viewport)) }
         Hint(stringResource(R.string.settings_offline_download_viewport_hint))
+        if (offlineOnly) Hint("Sadece cevrimdisi mod acik: indirme kapali. Yuklemek icin ayari kapat.")
         GroupDivider()
         ToggleRow(
             label = stringResource(R.string.settings_offline_places_with_downloads),
@@ -152,6 +163,7 @@ internal fun OfflineSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onClose
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     FilledTonalButton(
+                        enabled = !offlineOnly,
                         onClick = {
                             vm.refreshOfflineDataForSavedAreas()
                             onCloseSettings() // back to the map to watch the per-area progress

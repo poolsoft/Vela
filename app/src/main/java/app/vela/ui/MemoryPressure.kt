@@ -46,14 +46,44 @@ object MemoryPressure {
     @Volatile var heapClassMb: Int = 0
         private set
 
+    /** Reported GLES version parsed from `deviceConfigurationInfo.glEsVersion` (`0x20000` = ES 2.0),
+     *  or 0 when the platform does not report one. */
+    @Volatile var glEsVersion: Int = 0
+        private set
+
+    /** Weak-device profile (plan F5, 2026-10-10): low RAM, a tiny heap class, or a GLES 1.x/2.x
+     *  GPU. When set, the map starts with 3D buildings, shadows, high fps and the heavy layers
+     *  off. [init] logs the reasons as `why=` so the teyp's selection is visible without a
+     *  debugger; the old `fragileGpuDefault()` heuristic only covered SDK >= 34. */
+    @Volatile var lowEnd: Boolean = false
+        private set
+
     fun init(context: Context) {
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
         heapClassMb = am?.memoryClass ?: 0
         val forced = forcedLowRam()
-        lowRam = forced ?: ((am?.isLowRamDevice == true) || (heapClassMb in 1..127))
+        val systemLowRam = am?.isLowRamDevice == true
+        val smallHeap = heapClassMb in 1..127
+        glEsVersion = runCatching {
+            (am?.deviceConfigurationInfo?.glEsVersion ?: "").trim().removePrefix("0x").toInt(16)
+        }.getOrDefault(0)
+        // GLES 1.x/2.x only (the teyp reports 0x20000): our GLES3 pipeline cannot run there.
+        val weakGpu = glEsVersion in 1..0x2FFFF
+        lowRam = forced ?: (systemLowRam || smallHeap)
+        lowEnd = forced ?: (systemLowRam || smallHeap || weakGpu)
         val totalMb = am?.let { m -> ActivityManager.MemoryInfo().also { m.getMemoryInfo(it) }.totalMem / (1024 * 1024) } ?: 0L
         modest = lowRam || totalMb in 1..4_300L
-        android.util.Log.i("MemoryPressure", "init lowRam=$lowRam heapClassMb=$heapClassMb forced=${forced?.toString() ?: "no"}")
+        val why = buildString {
+            if (forced != null) append("forced,")
+            if (systemLowRam) append("systemLowRam,")
+            if (smallHeap) append("heap,")
+            if (weakGpu) append("gles,")
+        }.trimEnd(',')
+        android.util.Log.i(
+            "MemoryPressure",
+            "init lowRam=$lowRam lowEnd=$lowEnd heapClassMb=$heapClassMb gles=0x${glEsVersion.toString(16)} " +
+                "forced=${forced?.toString() ?: "no"} why=${why.ifEmpty { "none" }}",
+        )
     }
 
     /**

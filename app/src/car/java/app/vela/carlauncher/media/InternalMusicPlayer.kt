@@ -57,7 +57,12 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    // Parsed on first use, NOT at construction: the media service's main thread paid 3404 ms for
+    // the first getSharedPreferences() on the teyp (2026-10-10). VelaApp pre-warms these files on
+    // an IO thread, so this lazy read is cheap when the service is rebuilt.
+    private val prefs: SharedPreferences by lazy {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
     private val anaHandler = Handler(Looper.getMainLooper())
 
     private var mediaPlayer: MediaPlayer? = null

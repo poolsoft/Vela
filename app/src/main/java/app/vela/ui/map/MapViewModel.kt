@@ -1351,6 +1351,7 @@ class MapViewModel @Inject constructor(
     private fun maybeCheckForUpdate() {
         val prefs = appContext.getSharedPreferences("vela_settings", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("self_update_check", true)) return
+        if (!app.vela.ui.OfflineMode.networkAllowed) return // offline-only: no GitHub release lookup
         val now = System.currentTimeMillis()
         if (now - prefs.getLong("last_update_check_ms", 0L) < 20 * 60 * 60_000L) return
         prefs.edit().putLong("last_update_check_ms", now).apply()
@@ -1934,7 +1935,7 @@ class MapViewModel @Inject constructor(
      *  Google-side fetch for a place (listing, reviews, photos, details, boards) checks this first,
      *  so an offline tap shows what is on the phone and never a spinner waiting on a host that
      *  cannot answer (user 2026-09-14). */
-    private fun offlineNow(): Boolean = _state.value.offline || !isOnline()
+    private fun offlineNow(): Boolean = _state.value.offline || app.vela.ui.OfflineMode.on.value || !isOnline()
 
     /** Offline, or the user turned Google off (Settings > Privacy): the Google-only fetches take
      *  the same "nothing to ask" path either way. NOT [offlineNow] itself: that one also decides

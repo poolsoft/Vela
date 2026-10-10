@@ -40,6 +40,7 @@ class MaxspeedOverlayStore @Inject constructor(
     /** Fetch + cache the overlay catalog (once per process). Empty on any failure. */
     suspend fun manifest(manifestUrl: String): List<Region> {
         cached?.let { return it }
+        if (!app.vela.ui.OfflineMode.networkAllowed) return emptyList()
         val fetched = withContext(Dispatchers.IO) {
             runCatching {
                 val json = http.newCall(Request.Builder().url(manifestUrl).build()).execute()

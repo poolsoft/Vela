@@ -99,7 +99,7 @@ object MapFonts {
     }.getOrDefault(false)
 
     private fun refresh(context: Context) {
-        if (!hasValidatedNetwork(context)) return
+        if (!app.vela.ui.OfflineMode.networkAllowed || !hasValidatedNetwork(context)) return
         val f = cacheFile(context)
         val http = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)

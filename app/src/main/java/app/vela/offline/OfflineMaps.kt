@@ -52,6 +52,10 @@ object OfflineMaps {
         onProgress: (Int) -> Unit = {},
         onDone: (DoneReason) -> Unit,
     ) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) {
+            app.vela.util.FileLogger.i("OfflineMaps", "area download refused: offline-only")
+            return onDone(DoneReason.FAILED)
+        }
         val manager = manager(context) ?: return onDone(DoneReason.FAILED)
         manager.setOfflineMapboxTileCountLimit(TILE_LIMIT)
         val definition = OfflineTilePyramidRegionDefinition(
