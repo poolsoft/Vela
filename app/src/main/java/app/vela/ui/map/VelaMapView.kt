@@ -3871,7 +3871,7 @@ fun VelaMapView(
         // style with its tile source pointed at the local archive (or back at OpenFreeMap).
         val styleKey = "$styleUri|dark=$darkTheme|amoled=$amoled|pal=${app.vela.ui.MapColors.current()}|sat=$satelliteOn|puck=${app.vela.ui.PuckStyle.key()}|hn=${app.vela.ui.HouseNumbers.level.value}|base=${basemapArchive ?: ""}"
         if (appliedStyleKey != styleKey) {
-            app.vela.util.FileLogger.i("MapStyle", "Reload: previous=$appliedStyleKey next=$styleKey")
+            app.vela.util.FileLogger.i("MapStyle", "Reload: source=${MapFonts.sourceOf(styleUri)} previous=$appliedStyleKey next=$styleKey")
             appliedStyleKey = styleKey
             // An installed offline basemap wins over every style source: the remote Liberty URL
             // cannot load with no signal, and the swap needs the JSON in hand anyway. The MapFonts
@@ -3896,8 +3896,13 @@ fun VelaMapView(
                 // handling; a vanished/empty file falls back to the plain URL.
                 val f = java.io.File(styleUri.removePrefix("file://"))
                 val json = runCatching { f.readText() }.getOrNull()
-                if (json.isNullOrBlank()) Style.Builder().fromUri(app.vela.core.data.tiles.MapStyle.LIBERTY.uri)
-                else Style.Builder().fromJson(withLocalBasemap(context, json, basemapArchive))
+                if (json.isNullOrBlank()) {
+                    // Empty or vanished patch: the bundled asset is the fallback, never the remote
+                    // URL - offline it does not resolve and the load hangs past the render deadline.
+                    val bundled = runCatching { context.assets.open("styles/liberty-roboto.json").bufferedReader().use { it.readText() } }.getOrDefault("")
+                    if (bundled.isNotBlank()) Style.Builder().fromJson(withLocalBasemap(context, bundled, basemapArchive))
+                    else Style.Builder().fromUri(app.vela.core.data.tiles.MapStyle.LIBERTY.uri)
+                } else Style.Builder().fromJson(withLocalBasemap(context, json, basemapArchive))
             } else {
                 Style.Builder().fromUri(styleUri)
             }

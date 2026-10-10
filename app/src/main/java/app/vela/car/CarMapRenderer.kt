@@ -356,25 +356,23 @@ class CarMapRenderer(
             return
         }
         runCatching { s?.cancel() }
-        // Same style resolution as the phone map: MapFonts' Roboto-patched Liberty when its
-        // cache is ready (read + handed over as JSON - the snapshotter has no file:// branch
-        // of its own), else the plain URL. Without this the car screen kept Noto after the
-        // phone flipped to Roboto.
+        // Always from disk: the cached Roboto patch, else the bundled Liberty asset - handed over
+        // as JSON text, because the snapshotter has no file:// branch of its own. withStyle(remote)
+        // neither loads nor fails fast without a signal (teyp, 2026-10-10).
         val effectiveStyle = app.vela.ui.map.MapFonts.effective(MapStyle.LIBERTY.uri)
-        val patchedJson = if (effectiveStyle.startsWith("file://")) {
-            runCatching { java.io.File(effectiveStyle.removePrefix("file://")).readText() }
-                .getOrNull()?.takeIf { it.isNotBlank() }
-        } else null
-        // The layer ids of the style being loaded, for the palette's blanket passes: the patched
-        // JSON when there is one, else the bundled Liberty asset (the same layer ids as the live
-        // style; it is the phone's offline fallback for the same reason).
+        val styleJson = runCatching {
+            if (effectiveStyle.startsWith("file://")) java.io.File(effectiveStyle.removePrefix("file://")).readText() else null
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: runCatching { carContext.assets.open("styles/liberty-roboto.json").bufferedReader().use { it.readText() } }.getOrNull()
+        app.vela.util.FileLogger.i("MapStyle", "car style-source=${app.vela.ui.map.MapFonts.sourceOf(effectiveStyle)}")
+        // The layer ids of the style being loaded, for the palette's blanket passes.
         styleLayerIds = runCatching {
-            val json = patchedJson ?: carContext.assets.open("styles/liberty-roboto.json").bufferedReader().use { it.readText() }
+            val json = styleJson ?: return@runCatching emptyList<String>()
             val layers = org.json.JSONObject(json).getJSONArray("layers")
             (0 until layers.length()).map { layers.getJSONObject(it).getString("id") }
         }.getOrDefault(emptyList())
         val opts = MapSnapshotter.Options(width, height)
-            .let { if (patchedJson != null) it.withStyleJson(patchedJson) else it.withStyle(MapStyle.LIBERTY.uri) }
+            .let { if (styleJson != null) it.withStyleJson(styleJson) else it.withStyle(MapStyle.LIBERTY.uri) }
             .withPixelRatio(1.0f)
             .withLogo(false)
         themed = false

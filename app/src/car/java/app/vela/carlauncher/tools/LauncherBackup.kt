@@ -539,6 +539,34 @@ object LauncherBackup {
         editor.commit()
     }
 
+    /**
+     * Geri yukleme sonrasi cagrilir: dosyalar diske yazildi ama uygulama ici kayitlar (OfflinePacks,
+     * adres/POI indeksleri) ilk okundugu halde kalir, teyp yeniden baslatilana kadar yerler ve rota
+     * sonuclari bos gorunur. Burada yeniden kaydedip diskte ne oldugunu ozetler.
+     */
+    fun refreshAfterRestore(context: Context): String {
+        // PoiPackStore is a Hilt class; the registration itself is core, so hand the installed
+        // pack files straight to OfflinePacks (same call PoiPackStore.registerPacks makes).
+        runCatching {
+            val packs = File(context.filesDir, "poipacks").listFiles { f -> f.extension == "db" }
+                ?.map { it.absolutePath }.orEmpty()
+            app.vela.core.data.OfflinePacks.reload(packs)
+        }.onFailure { app.vela.util.FileLogger.w("LauncherBackup", "poi pack re-register failed", it) }
+        val lines = scanDeviceCategories(context)
+            .filter { it.category.isFileCategory }
+            .map { "${categoryLabel(it.category)}: ${it.fileCount} dosya, ${formatFileSize(it.totalBytes)}" }
+        val glyphs = if (app.vela.offline.GlyphPackStore.installed(context)) "var" else "yok"
+        return ("glif paketi: " + glyphs + "\n" + lines.joinToString("\n")).trim()
+    }
+
+    private fun categoryLabel(category: BackupCategory): String = when (category) {
+        BackupCategory.MAPS -> "Haritalar"
+        BackupCategory.PLACES -> "Yerler / POI"
+        BackupCategory.ROUTES -> "Geziler"
+        BackupCategory.ROUTING_DATA -> "Rota motoru"
+        else -> category.id
+    }
+
     // Geriye donuk tek dosya API (Gerekirse)
     fun export(context: Context): String {
         val groups = JSONObject()

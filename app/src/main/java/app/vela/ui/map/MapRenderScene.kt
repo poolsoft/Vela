@@ -9,7 +9,7 @@ import kotlinx.serialization.json.*
 /** Value-only renderer boundary. No ViewModel, Context or functions cross processes. */
 @Serializable
 data class MapRenderScene(
-    val styleUri: String = app.vela.core.data.tiles.MapStyle.LIBERTY.uri,
+    val styleUri: String = app.vela.ui.map.MapFonts.BUNDLED_ASSET,
     val myLocation: LatLng? = null,
     val myBearing: Float? = null,
     val myAccuracyM: Float? = null,

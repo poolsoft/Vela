@@ -41,6 +41,10 @@ import java.util.concurrent.TimeUnit
  *    outlives any file path, and its download caching Noto glyph URLs is the
  *    offline fallback. Offline label coverage for the patched style rides the
  *    ambient cache (browsing an area warms the ranges it uses).
+ *
+ * Offline-first (2026-10-10): the map never loads the remote URL as its style - the head unit
+ * cannot resolve `tiles.openfreemap.org` and then misses the 60 s render deadline. The cached
+ * patch, else [BUNDLED_ASSET], is always the style; [refresh] only ever moves the patch forward.
  */
 object MapFonts {
     private val patched = mutableStateOf<String?>(null)
@@ -48,9 +52,24 @@ object MapFonts {
     private const val STALE_EVICT_MS = 7L * 24 * 3600 * 1000
     private const val CACHE_NAME = "liberty-roboto.json"
 
-    /** The style the map should load: the patched Liberty when ready, else [base] untouched. */
+    /** The bundled Liberty JSON (Roboto stacks) - the map's style when no live patch is cached. */
+    const val BUNDLED_ASSET = "asset://styles/liberty-roboto.json"
+
+    /**
+     * The style the map should load. Offline-first: the LIVE Liberty URL is never the map's
+     * style - on the head unit it cannot resolve (`Unable to resolve host
+     * "tiles.openfreemap.org"`) and the map then misses its 60 s render deadline. Order is the
+     * cached patch, else [BUNDLED_ASSET]; [refresh] only ever moves the first one forward.
+     */
     fun effective(base: String): String =
-        if (base == MapStyle.LIBERTY.uri) patched.value ?: base else base
+        if (base == MapStyle.LIBERTY.uri) patched.value ?: BUNDLED_ASSET else base
+
+    /** Where the style being loaded came from, for the load log. */
+    fun sourceOf(uri: String): String = when {
+        uri.startsWith("file://") -> "patch"
+        uri.startsWith("asset://") -> "asset"
+        else -> "remote"
+    }
 
     fun loadCached(context: Context) {
         val f = cacheFile(context)
@@ -70,7 +89,17 @@ object MapFonts {
         f.delete()
     }
 
+    /** A validated network, not merely a connected one: an offline head unit must not spend the
+     *  launch on TCP probes that time out, nor lose the cached patch to a probe that "failed". */
+    private fun hasValidatedNetwork(context: Context): Boolean = runCatching {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return@runCatching false
+        caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }.getOrDefault(false)
+
     private fun refresh(context: Context) {
+        if (!hasValidatedNetwork(context)) return
         val f = cacheFile(context)
         val http = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
