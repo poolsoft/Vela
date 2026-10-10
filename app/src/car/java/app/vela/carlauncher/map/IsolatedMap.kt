@@ -107,10 +107,11 @@ internal class IsolatedMapClient(
     private var disconnectedAt = 0L
     private val monitor = object : Runnable {
         override fun run() {
-            if (connection == null) return
+            if (connection == null || !active || surface == null) return
             val now = SystemClock.elapsedRealtime()
             when {
-                service == null && now - bindAt > 5_000 -> fail("bind timeout")
+                // A cold secondary process can take several seconds on low-end head units.
+                service == null && now - bindAt > 20_000 -> fail("bind timeout")
                 service != null && now - heartbeatAt > 15_000 -> fail("renderer not responding: $terminalStage")
                 opened && !mutableState.value.ready && now - openAt > 60_000 -> fail("render timeout: $terminalStage")
                 else -> { send(MapRendererTransport.HEARTBEAT); handler.postDelayed(this, 5_000) }
@@ -140,13 +141,18 @@ internal class IsolatedMapClient(
         pending.trySend(value)
     }
     fun surface(value: Surface?, w: Int, h: Int, density: Int) {
+        if (value == null) {
+            surface = null
+            handler.removeCallbacks(monitor)
+            send(MapRendererTransport.SUSPEND)
+            return
+        }
         val changed = width != w || height != h || dpi != density
         surface = value; width = w; height = h; dpi = density
         if (changed && opened && value != null) {
-            hasStyle = false; hasFrame = false; openAt = SystemClock.elapsedRealtime()
+            hasFrame = false; openAt = SystemClock.elapsedRealtime()
             mutableState.value = State(stage = "resizing")
         }
-        if (value == null) { disconnect(); return }
         if (!active || mutableState.value.failed) return
         if (connection == null) connect() else if (service != null) openSurface()
     }
@@ -216,6 +222,9 @@ internal class IsolatedMapClient(
         send(MapRendererTransport.OPEN, Bundle().apply {
             putParcelable("surface", target); putInt("width", width); putInt("height", height); putInt("dpi", dpi)
         })
+        handler.removeCallbacks(monitor)
+        heartbeatAt = SystemClock.elapsedRealtime()
+        handler.postDelayed(monitor, 5_000)
         scene?.let { pending.trySend(it) }
     }
     private fun send(what: Int, data: Bundle = Bundle()) {
@@ -284,7 +293,16 @@ internal class IsolatedMapClient(
         }
     }
     fun retry() { disconnect(); mutableState.value = State(); surface = null }
-    fun pause() { active = false; disconnect() }
-    fun resume() { active = true; if (!state.value.failed && connection == null) connect() }
+    fun pause() {
+        active = false
+        handler.removeCallbacks(monitor)
+        send(MapRendererTransport.SUSPEND)
+    }
+    fun resume() {
+        active = true
+        if (state.value.failed) return
+        if (!state.value.ready) openAt = SystemClock.elapsedRealtime()
+        if (connection == null) connect() else openSurface()
+    }
     fun close() { active = false; disconnect(); pending.close(); scope.cancel() }
 }

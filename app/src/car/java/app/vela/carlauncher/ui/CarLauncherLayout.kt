@@ -76,6 +76,7 @@ fun CarLauncherLayout(
     val media by mediaManager.medyaDurumu.collectAsState()
     val telemetryState by telemetry.telemetriDurumu.collectAsStateWithLifecycle()
     val desktop by CarLauncherSettings.desktopModu.collectAsState()
+    val mapless by CarLauncherSettings.maplessMode.collectAsState()
     val autoPlay by CarLauncherSettings.otomatikOynat.collectAsState()
     var contentMode by rememberSaveable { mutableStateOf("UNIFIED") }
     var fullMap by rememberSaveable { mutableStateOf(CarLauncherSettings.getStartupScreen() == "map_only") }
@@ -145,7 +146,7 @@ fun CarLauncherLayout(
             telemetri = telemetryState,
             medya = media,
             contentMode = contentMode,
-            fullScreenMap = fullMap,
+            fullScreenMap = fullMap && !mapless,
             isVoiceListening = isVoiceListening,
             voiceAudioLevel = voiceAudioLevel,
             onPanelChange = ::showPanel,

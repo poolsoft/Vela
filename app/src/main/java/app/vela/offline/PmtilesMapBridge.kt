@@ -36,6 +36,7 @@ object PmtilesMapBridge {
         HttpRequestUtil.setOkHttpClient(network.newBuilder().addInterceptor { chain ->
             val request = chain.request()
             if (request.url.host != HOST) return@addInterceptor chain.proceed(request)
+            val started = System.nanoTime()
             try {
                 val parts = request.url.pathSegments
                 val uri = String(Base64.getUrlDecoder().decode(parts.first()), Charsets.UTF_8)
@@ -62,9 +63,12 @@ object PmtilesMapBridge {
                     body = source.tile(parts[1].toInt(), parts[2].toInt(), parts[3].removeSuffix(".pbf").toInt())
                     type = "application/vnd.mapbox-vector-tile"
                 }
+                val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
+                if (elapsedMs >= 250) app.vela.util.FileLogger.w("PmtilesBridge",
+                    "Slow local resource: ${elapsedMs}ms bytes=${body?.size ?: 0} path=${request.url.encodedPath}")
                 Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
                     .code(if (body == null) 404 else 200).message(if (body == null) "Not Found" else "OK")
-                    .header("Cache-Control", "no-cache")
+                    .header("Cache-Control", "max-age=300")
                     .body((body ?: ByteArray(0)).toResponseBody(type.toMediaType())).build()
             } catch (error: Exception) {
                 app.vela.util.FileLogger.e("PmtilesBridge", "Local resource failed: ${request.url}", error)
@@ -120,16 +124,19 @@ internal class PmtilesTileSource(private val range: (Long, Int) -> ByteArray) {
     fun expired() = System.nanoTime() - created > TimeUnit.MINUTES.toNanos(5)
     fun metadata() = inflate(read(header.metaOffset, header.metaLength), header.internalCompression)
 
-    @Synchronized fun tile(z: Int, x: Int, y: Int): ByteArray? {
+    fun tile(z: Int, x: Int, y: Int): ByteArray? {
         require(z in 0..30 && x >= 0 && y >= 0 && x.toLong() < 1L.shl(z) && y.toLong() < 1L.shl(z))
         if (z !in header.minZoom..header.maxZoom) return null
         val wanted = PmtilesReader.tileId(z, x, y)
         var offset = header.rootOffset; var length = header.rootLength
         repeat(4) {
             val key = offset to length
-            val directory = directories[key] ?: (PmtilesReader.decodeDirectory(
-                inflate(read(offset, length), header.internalCompression), 1) ?: throw IOException("Invalid PMTiles directory")
-                ).also { directories[key] = it }
+            // Serialize only directory cache misses; independent tile reads/decompression run in parallel.
+            val directory = synchronized(directories) {
+                directories[key] ?: (PmtilesReader.decodeDirectory(
+                    inflate(read(offset, length), header.internalCompression), 1) ?: throw IOException("Invalid PMTiles directory")
+                    ).also { directories[key] = it }
+            }
             val entry = PmtilesReader.find(directory, wanted) ?: return null
             if (entry.runLength > 0) return inflate(read(header.tileDataOffset + entry.offset, entry.length), header.tileCompression)
             offset = header.leafOffset + entry.offset; length = entry.length

@@ -97,6 +97,9 @@ internal fun OfflineSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onClose
         var offlineAddrCount by remember { mutableStateOf(-1) }
         LaunchedEffect(Unit) { vm.offlineAddressCount { offlineAddrCount = it } }
         SettingsGroup(title = stringResource(R.string.settings_offline_map_area)) {
+        if (!app.vela.variant.CarIntegration.mapStorageAvailable()) {
+            Hint("Haritasız oturumda SDK harita deposu kapalıdır. PMTiles dosyaları ve dosya yedekleme kullanılabilir. Haritayı etkinleştirmek için ayarı değiştirip uygulamayı yeniden başlatın.")
+        }
         FilledTonalButton(
             // The top focusable control: Back routes its DOWN here, UP from here goes back to Back.
             modifier = topRow.padding(start = 16.dp, top = 4.dp).dpadHighlight(androidx.compose.foundation.shape.CircleShape),
@@ -104,7 +107,7 @@ internal fun OfflineSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onClose
                 vm.downloadViewport()
                 onCloseSettings() // back to the map so the user sees the download progress
             },
-            enabled = vm.hasViewport(),
+            enabled = vm.hasViewport() && app.vela.variant.CarIntegration.mapStorageAvailable(),
         ) { Text(stringResource(R.string.settings_offline_download_viewport)) }
         Hint(stringResource(R.string.settings_offline_download_viewport_hint))
         GroupDivider()

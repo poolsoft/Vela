@@ -182,7 +182,13 @@ object CarLauncherSettings {
     fun baslat(context: Context, force: Boolean = false) {
         if (force || !::prefs.isInitialized) {
             prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            _maplessMode.value = prefs.getBoolean("car_launcher_mapless_mode", false)
+            _maplessPreference.value = prefs.getBoolean("car_launcher_mapless_mode", false)
+            if (!sessionInitialized || _maplessPreference.value) {
+                _maplessMode.value = _maplessPreference.value
+                sessionInitialized = true
+            }
+            _maplessMainScreen.value = prefs.getString("car_launcher_mapless_main", "music")
+                ?.takeIf { it in setOf("music", "speedometer", "dashboard") } ?: "music"
             _maplessScreen.value = prefs.getString("car_launcher_mapless_screen", "speedometer")
                 ?.takeIf { it in setOf("speedometer", "dashboard") } ?: "speedometer"
             _carModeEtkin.value = prefs.getBoolean(KEY_CAR_MODE_ENABLED, true)
@@ -225,14 +231,30 @@ object CarLauncherSettings {
         }
     }
 
+    private var sessionInitialized = false
+    private val _maplessPreference = MutableStateFlow(false)
+    val maplessPreference = _maplessPreference.asStateFlow()
+    private val _maplessMainScreen = MutableStateFlow("music")
+    val maplessMainScreen = _maplessMainScreen.asStateFlow()
+    fun setMaplessMainScreen(screen: String) {
+        require(screen in setOf("music", "speedometer", "dashboard"))
+        _maplessMainScreen.value = screen
+        if (::prefs.isInitialized) prefs.edit().putString("car_launcher_mapless_main", screen).apply()
+    }
+    fun disableFailedMap(reason: String) {
+        app.vela.util.FileLogger.w("MapStartup", "Map disabled for this and future sessions: $reason")
+        setMaplessMode(true)
+    }
     private val _maplessMode = MutableStateFlow(false)
     val maplessMode: StateFlow<Boolean> = _maplessMode.asStateFlow()
     private val _maplessScreen = MutableStateFlow("speedometer")
     val maplessScreen: StateFlow<String> = _maplessScreen.asStateFlow()
 
     fun setMaplessMode(enabled: Boolean) {
-        _maplessMode.value = enabled
-        if (::prefs.isInitialized) prefs.edit().putBoolean("car_launcher_mapless_mode", enabled).apply()
+        _maplessPreference.value = enabled
+        // Disabling is immediate; enabling the renderer is deferred until a fresh app process.
+        if (enabled) _maplessMode.value = true
+        if (::prefs.isInitialized) prefs.edit().putBoolean("car_launcher_mapless_mode", enabled).commit()
     }
     fun setMaplessScreen(screen: String) {
         require(screen in setOf("speedometer", "dashboard"))

@@ -32,6 +32,15 @@ object OfflineMaps {
      *  heads-up banner on every tick, which stacked a second banner over the progress card, user
      *  2026-07-23), the created [OfflineRegion] is handed out through [onCreated] so the caller can
      *  CANCEL (STATE_INACTIVE + delete), and [onDone] fires exactly once with the outcome. */
+    private fun manager(context: Context): OfflineManager? {
+        // PMTiles/file backup remains available without loading the SDK in a mapless session.
+        if (!app.vela.variant.CarIntegration.mapStorageAvailable()) return null
+        return runCatching {
+            com.mapbox.mapboxsdk.Mapbox.getInstance(context.applicationContext)
+            OfflineManager.getInstance(context.applicationContext)
+        }.onFailure { app.vela.util.FileLogger.e("OfflineMaps", "SDK offline storage unavailable", it) }.getOrNull()
+    }
+
     fun download(
         context: Context,
         styleUrl: String,
@@ -43,7 +52,7 @@ object OfflineMaps {
         onProgress: (Int) -> Unit = {},
         onDone: (DoneReason) -> Unit,
     ) {
-        val manager = OfflineManager.getInstance(context)
+        val manager = manager(context) ?: return onDone(DoneReason.FAILED)
         manager.setOfflineMapboxTileCountLimit(TILE_LIMIT)
         val definition = OfflineTilePyramidRegionDefinition(
             styleUrl,
@@ -97,12 +106,24 @@ object OfflineMaps {
     }
 
     fun list(context: Context, onResult: (List<OfflineRegion>) -> Unit) {
-        OfflineManager.getInstance(context).listOfflineRegions(
+        (manager(context) ?: return onResult(emptyList())).listOfflineRegions(
             object : OfflineManager.ListOfflineRegionsCallback {
                 override fun onList(regions: Array<OfflineRegion>?) = onResult(regions?.toList().orEmpty())
                 override fun onError(error: String) = onResult(emptyList())
             },
         )
+    }
+
+    fun clearCache(context: Context, onDone: () -> Unit) {
+        runCatching {
+            (manager(context) ?: return onDone()).clearAmbientCache(object : OfflineManager.FileSourceCallback {
+                override fun onSuccess() = onDone()
+                override fun onError(message: String) = onDone()
+            })
+        }.onFailure {
+            app.vela.util.FileLogger.e("OfflineMaps", "Cache clear failed", it)
+            onDone()
+        }
     }
 
     fun delete(region: OfflineRegion, onDone: () -> Unit) {
@@ -119,7 +140,7 @@ object OfflineMaps {
      *  delete-everything path; always completes (an error is reported as done). */
     fun packDatabase(context: Context, onDone: () -> Unit = {}) {
         runCatching {
-            OfflineManager.getInstance(context).packDatabase(object : OfflineManager.FileSourceCallback {
+            (manager(context) ?: return onDone()).packDatabase(object : OfflineManager.FileSourceCallback {
                 override fun onSuccess() = onDone()
                 override fun onError(message: String) = onDone()
             })

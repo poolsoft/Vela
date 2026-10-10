@@ -6316,14 +6316,9 @@ class MapViewModel @Inject constructor(
      *  after, so the cleared bytes leave the file (issue #601). */
     suspend fun clearMapCache(flash: Boolean = true): Unit = kotlinx.coroutines.withContext(Dispatchers.Main) {
         kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-            runCatching {
-                com.mapbox.mapboxsdk.offline.OfflineManager.getInstance(appContext).clearAmbientCache(
-                    object : com.mapbox.mapboxsdk.offline.OfflineManager.FileSourceCallback {
-                        override fun onSuccess() { if (cont.isActive) cont.resume(Unit) { _, _, _ -> } }
-                        override fun onError(message: String) { if (cont.isActive) cont.resume(Unit) { _, _, _ -> } }
-                    },
-                )
-            }.onFailure { if (cont.isActive) cont.resume(Unit) { _, _, _ -> } }
+            app.vela.offline.OfflineMaps.clearCache(appContext) {
+                if (cont.isActive) cont.resume(Unit) { _, _, _ -> }
+            }
         }
         kotlinx.coroutines.suspendCancellableCoroutine { cont ->
             app.vela.offline.OfflineMaps.packDatabase(appContext) { if (cont.isActive) cont.resume(Unit) { _, _, _ -> } }
@@ -6599,15 +6594,16 @@ class MapViewModel @Inject constructor(
         val corners = viewport?.let { v -> listOf(LatLng(v[0], v[1]), LatLng(v[0], v[3]), LatLng(v[2], v[1]), LatLng(v[2], v[3])) }.orEmpty()
         // Offline the archive in use is kept while any of the view is still inside it: there is
         // nothing to stream in its place (issue #552, fourth round).
-        val file = basemapStore.installedFor(center, mountedNow, corners, keepMounted = _state.value.offline)
+        val preferLocal = app.vela.variant.CarIntegration.available
+        val file = basemapStore.installedFor(center, mountedNow, corners, keepMounted = _state.value.offline || preferLocal)
         // A SHALLOW archive (baked a zoom level short because the full bake would pass GitHub's
         // 2 GiB asset limit) draws as a blurred version of the same map once you are past its
         // depth, so a download made the map worse than streaming (issue #552). Online, the streamed
         // tiles win; offline it is still far better than an empty screen.
         val shallow = file != null &&
             (basemapStore.maxZoomOf(file) ?: app.vela.offline.BasemapTileStore.FULL_MAP_ZOOM) < app.vela.offline.BasemapTileStore.FULL_MAP_ZOOM
-        val usable = file?.takeUnless { shallow && !_state.value.offline }
-        if (shallow) android.util.Log.i("VelaBasemap", "installed basemap is shallow (max zoom < ${app.vela.offline.BasemapTileStore.FULL_MAP_ZOOM}); using it only offline")
+        val usable = file?.takeUnless { shallow && !_state.value.offline && !preferLocal }
+        if (shallow) android.util.Log.i("VelaBasemap", "Shallow installed basemap: offline=${_state.value.offline}, preferLocal=$preferLocal")
         val uri = usable?.let { "pmtiles://file://${it.absolutePath}" }
         if (uri != _state.value.basemapArchive) {
             // Swapping the source re-points every basemap layer, which re-tiles and re-lays out the

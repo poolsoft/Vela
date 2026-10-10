@@ -387,7 +387,7 @@ class CarLayoutManager(
 
         // Overlay expands the content over an unchanged map; swap keeps both visible.
         if (isWidgetPanelOpen && isContentFullScreen && !isDesktopMode &&
-            carSettings.panelGenislemeDavranisi.value == "overlay") {
+            carSettings.panelGenislemeDavranisi.value == "overlay" && !carSettings.maplessMode.value) {
             val left = if (dockPos == "left") R.id.app_dock else ConstraintSet.PARENT_ID
             val right = if (dockPos == "right") R.id.app_dock else ConstraintSet.PARENT_ID
             val bottom = if (dockPos == "bottom") R.id.app_dock else ConstraintSet.PARENT_ID

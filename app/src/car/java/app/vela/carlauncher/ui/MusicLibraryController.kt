@@ -144,14 +144,14 @@ class MusicLibraryController(private val context: Context, private val root: Vie
 
     private fun folderOf(track: SesParcasi): String = track.folderPath.ifBlank { File(track.dosyaYolu).parent.orEmpty() }
     private fun sortedTracks(items: List<SesParcasi>): List<SesParcasi> = when (sortOrder) {
-        "artist" -> items.sortedBy { it.sanatci.lowercase(java.util.Locale.ROOT) }
-        "album" -> items.sortedBy { it.album.lowercase(java.util.Locale.ROOT) }
+        "artist" -> items.map { it.sanatci.lowercase(java.util.Locale.ROOT) to it }.sortedBy { it.first }.map { it.second }
+        "album" -> items.map { it.album.lowercase(java.util.Locale.ROOT) to it }.sortedBy { it.first }.map { it.second }
         "added" -> items.sortedByDescending { it.eklenmeTarihi }
         "plays" -> {
             val counts = store.history.value.toMap()
             items.sortedByDescending { counts[it.libraryKey()] ?: 0 }
         }
-        else -> items.sortedBy { it.baslik.lowercase(java.util.Locale.ROOT) }
+        else -> items.map { it.baslik.lowercase(java.util.Locale.ROOT) to it }.sortedBy { it.first }.map { it.second }
     }
     private fun sourceTracks(): List<SesParcasi> = when (tab) {
         Tab.QUEUE -> manager.internalPlayer.kuyruk.value

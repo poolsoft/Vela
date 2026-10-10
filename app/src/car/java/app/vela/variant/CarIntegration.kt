@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** Variant-owned seam: the map and activity never import launcher implementation types. */
 object CarIntegration {
+    fun mapStorageAvailable(): Boolean = !CarLauncherSettings.maplessMode.value
     const val available = true
     private val mapRenderLevel = androidx.compose.runtime.mutableIntStateOf(3)
     fun isolatedAutoSurface(context: Context): app.vela.ui.map.SurfaceMapController? = app.vela.carlauncher.map.AutoSurfaceMap(context)
@@ -147,7 +148,7 @@ object CarIntegration {
         var testsOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
         val homeRequest by CarLauncherSettings.homeScreenRequest.collectAsState()
         androidx.compose.runtime.LaunchedEffect(homeRequest) { testsOpen = false }
-        if (testsOpen && !mapless) {
+        if (testsOpen) {
             app.vela.carlauncher.diag.DiagnosticTestScreen(
                 onClose = { testsOpen = false },
                 onSettings = onOpenSettings,
@@ -163,24 +164,27 @@ object CarIntegration {
         val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT ||
             (configuration.screenWidthDp < configuration.screenHeightDp)
         CarLauncherLayout(
-            passthrough = !enabled || isPortrait,
+            passthrough = !enabled || (isPortrait && !mapless),
             onOpenSettings = onOpenSettings,
             onAsistanTiklandi = onVoiceClick,
             isVoiceListening = isVoiceListening,
             voiceAudioLevel = voiceAudioLevel,
             haritaIcerigi = {
                 if (mapless) {
-                    app.vela.carlauncher.ui.CarMaplessContent(onOpenSettings)
+                    app.vela.carlauncher.ui.CarMaplessContent(onOpenSettings, onDiagnostics = { testsOpen = true })
                 } else if (mapOpen) {
                     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
                         androidx.compose.runtime.CompositionLocalProvider(
                             app.vela.carlauncher.map.LocalMapRendererFailureHost provides failureHost,
                         ) { content() }
-                        failureHost.failure?.let {
-                            app.vela.carlauncher.map.MapRendererStatusPanel(it, failureHost.retry)
+                        androidx.compose.runtime.LaunchedEffect(failureHost.failure) {
+                            failureHost.failure?.let {
+                                CarLauncherSettings.disableFailedMap(it.stage)
+                                android.widget.Toast.makeText(context, "Harita açılamadı. Müzik ve gösterge ekranına geçildi.", android.widget.Toast.LENGTH_LONG).show()
+                            }
                         }
                         androidx.compose.material3.TextButton(
-                            onClick = { mapOpen = false },
+                            onClick = { CarLauncherSettings.setMaplessMode(true) },
                             modifier = Modifier.align(Alignment.BottomCenter),
                         ) { Text(stringResource(app.vela.R.string.car_map_renderer_close)) }
                     }

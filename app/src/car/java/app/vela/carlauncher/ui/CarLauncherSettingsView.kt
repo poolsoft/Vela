@@ -293,7 +293,9 @@ private fun CarAppearanceSettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val mapless by CarLauncherSettings.maplessMode.collectAsState()
+    val mapless by CarLauncherSettings.maplessPreference.collectAsState()
+    val maplessActive by CarLauncherSettings.maplessMode.collectAsState()
+    val maplessMain by CarLauncherSettings.maplessMainScreen.collectAsState()
     val maplessScreen by CarLauncherSettings.maplessScreen.collectAsState()
     val startupScreen by CarLauncherSettings.baslangicEkrani.collectAsState()
     val tamEkran by CarLauncherSettings.tamEkranModu.collectAsState()
@@ -328,15 +330,23 @@ private fun CarAppearanceSettingsScreen(
         ) {
             SettingsGroup(title = "Haritasız mod") {
                 ToggleRow(
-                    label = "Harita yerine gösterge ekranı",
-                    hint = "Hemen uygulanır. Harita motoru başlatılmaz; müzik ve GPS göstergeleri çalışır.",
+                    label = "Haritasız çalış",
+                    hint = "Haritasız mod haritayı hemen kapatır. Haritaya dönmek için seçeneği kapatıp uygulamayı yeniden başlatın.",
                     checked = mapless,
                     onCheckedChange = { CarLauncherSettings.setMaplessMode(it) }
                 )
-                if (mapless) {
+                if (mapless || maplessActive) {
                     GroupDivider()
                     ChoicePillRow(
-                        label = "Harita alanında gösterilecek ekran",
+                        label = "Büyük panel",
+                        detail = "Harita kapalıyken açılacak ana ekran",
+                        selectedKey = maplessMain,
+                        options = listOf("music" to "Müzik player", "speedometer" to "Speedo", "dashboard" to "Dashboard"),
+                        onSelect = { CarLauncherSettings.setMaplessMainScreen(it) }
+                    )
+                    GroupDivider()
+                    ChoicePillRow(
+                        label = "Küçük panel",
                         detail = "Seçim sonraki açılışta da korunur",
                         selectedKey = maplessScreen,
                         options = listOf("speedometer" to "Hız göstergesi (Speedo)", "dashboard" to "Dashboard"),

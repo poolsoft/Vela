@@ -79,7 +79,7 @@ object LauncherBackup {
     val schema: Map<String, Map<String, String>> = mapOf(
         "vela_car_launcher_prefs" to mapOf(
             "car_launcher_enabled" to "Boolean", "car_launcher_immersive_mode" to "Boolean",
-            "car_launcher_mapless_mode" to "Boolean", "car_launcher_mapless_screen" to "String",
+            "car_launcher_mapless_main" to "String", "car_launcher_mapless_mode" to "Boolean", "car_launcher_mapless_screen" to "String",
             "car_launcher_status_bar" to "Boolean", "car_launcher_dock_position" to "String",
             "car_launcher_dock_size" to "Int", "widget_panel_position" to "String",
             "car_launcher_expansion_behavior" to "String", "widget_panel_width_percent" to "Float",

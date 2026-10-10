@@ -71,6 +71,8 @@ fun CarLauncherHostView(
     val dimEnabled by CarLauncherSettings.geceKarartmaEtkin.collectAsState()
     val dimLevel by CarLauncherSettings.geceKarartmaSeviyesi.collectAsState()
     val desktop by CarLauncherSettings.desktopModu.collectAsState()
+    val mapless by CarLauncherSettings.maplessMode.collectAsState()
+    val maplessMain by CarLauncherSettings.maplessMainScreen.collectAsState()
     val visualizerType by CarLauncherSettings.gorsellestiriciTipi.collectAsState()
     val largeVisualizer by CarLauncherSettings.largeVisualizer.collectAsState()
     val visualizerFps by CarLauncherSettings.visualizerFps.collectAsState()
@@ -159,7 +161,9 @@ fun CarLauncherHostView(
             binding.dockHost?.updateModeButton(desktop, fullScreenMap)
             binding.dockHost?.setVoiceListening(isVoiceListening, voiceAudioLevel)
 
-            val effectiveMode = if (desktop) "DESKTOP" else contentMode
+            val effectiveMode = if (desktop) "DESKTOP" else if (mapless && contentMode == "UNIFIED") {
+                when (maplessMain) { "dashboard" -> "DASHBOARD"; "speedometer" -> "NEON_DASHBOARD"; else -> "MUSIC" }
+            } else contentMode
             if (panelReady && binding.contentMode != effectiveMode) {
                 binding.releasePanel()
                 binding.contentMode = effectiveMode
@@ -233,18 +237,18 @@ fun CarLauncherHostView(
             binding.dashboardHost?.updateTelemetri(telemetri)
             binding.unifiedHost?.updateMedia(medya)
             binding.unifiedHost?.updateVisualizerType(visualizerType, visualizerFps)
-            map.setInterceptTouch(contentMode != "UNIFIED" && !fullScreenMap) { latestPanel("UNIFIED") }
+            map.setInterceptTouch(!mapless && contentMode != "UNIFIED" && !fullScreenMap) { latestPanel("UNIFIED") }
 
             root.findViewById<View>(R.id.night_dim_overlay).apply {
                 visibility = if (dimEnabled) View.VISIBLE else View.GONE
                 alpha = dimLevel
             }
-            binding.fullScreenMap = fullScreenMap
+            binding.fullScreenMap = fullScreenMap && !mapless
             manager.setDesktopModeState(desktop)
-            manager.setContentFullScreen(contentMode != "UNIFIED")
+            manager.setContentFullScreen(mapless || contentMode != "UNIFIED")
             val inputs = listOf(
                 dockKonumu, dockBoyutu, panelKonumu, panelWidth, panelHeight, expansion,
-                desktop, fullScreenMap, contentMode, tamEkran,
+                desktop, fullScreenMap && !mapless, contentMode, mapless, maplessMain, tamEkran,
                 measuredPortrait, configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp
             )
             if (binding.layoutInputs != inputs) {

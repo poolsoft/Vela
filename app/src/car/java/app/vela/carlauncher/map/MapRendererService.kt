@@ -1,6 +1,6 @@
 package app.vela.carlauncher.map
 
-import android.app.Presentation
+import android.app.Dialog
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -68,18 +68,17 @@ open class MapRendererService : Service() {
                 } else {
                     val resized = displayWidth != width || displayHeight != height || displayDpi != dpi
                     if (resized) {
-                        // Presentation cancels itself when its display metrics change. Replace its
-                        // lifecycle/Compose/MapView tree explicitly instead of retaining a dead window.
-                        presentation?.dismiss()
-                        presentation = null
+                        // Keep the same window/MapView/style. Presentation on API 27 cancels
+                        // itself on a metrics change; our display-bound Dialog can relayout.
                         display!!.resize(width, height, dpi)
                     }
                     display!!.surface = surface
                     output?.release()
                     output = surface
-                    if (resized) presentation = MapPresentation(this, display!!.display).also { it.show() }
+                    if (resized) presentation?.window?.decorView?.requestLayout()
                 }
                 displayWidth = width; displayHeight = height; displayDpi = dpi
+                presentation?.setRenderingActive(true)
             } catch (error: Exception) { fd?.close(); fail("display", error); return@Handler true }
         }
         if (data.getString("session") != session || session.isEmpty()) { fd?.close(); return@Handler true }
@@ -97,6 +96,12 @@ open class MapRendererService : Service() {
                 "zoom" -> dpad.zoomBy(data.getDouble("delta"))
                 "select" -> dpad.selectAtCenter()
                 "long" -> dpad.longPressAtCenter()
+            }
+            MapRendererTransport.SUSPEND -> {
+                presentation?.setRenderingActive(false)
+                display?.surface = null
+                output?.release(); output = null
+                FileLogger.i("MapRenderer", "session=$session suspended; retaining map and style")
             }
             MapRendererTransport.HEARTBEAT -> stage("heartbeat")
             MapRendererTransport.CLOSE -> shutdown()
@@ -117,9 +122,16 @@ open class MapRendererService : Service() {
                     val value = withContext(Dispatchers.IO) { MapRendererTransport.read(fd) }
                     if (next != generation || session.isEmpty()) continue
                     if (!graphicsCaptured) {
-                        stage("graphics-probe")
-                        val compatible = withContext(Dispatchers.IO) { RendererGraphicsDiagnostics.capture(applicationContext) }
-                        check(compatible != false) { getString(app.vela.R.string.car_map_gles_incompatible) }
+                        // The native ES2 pbuffer probe can itself hang on old drivers. It belongs
+                        // to the explicit diagnostic test, never to ordinary map startup.
+                        val advertised = getSystemService(android.app.ActivityManager::class.java)
+                            .deviceConfigurationInfo.glEsVersion
+                        FileLogger.i("MapRenderer", "Starting MapLibre GLES2; advertised=$advertised; no synthetic GL context")
+                        if (value.styleUri == "asset://styles/renderer-empty.json") {
+                            stage("graphics-probe")
+                            val compatible = withContext(Dispatchers.IO) { RendererGraphicsDiagnostics.capture(applicationContext) }
+                            check(compatible != false) { getString(app.vela.R.string.car_map_gles_incompatible) }
+                        }
                         graphicsCaptured = true
                     }
                     applySettings(value.settings)
@@ -226,7 +238,9 @@ open class MapRendererService : Service() {
     }
 
     private inner class MapPresentation(context: Context, display: Display) :
-        Presentation(context, display), LifecycleOwner, SavedStateRegistryOwner {
+        Dialog(context.createDisplayContext(display).let {
+            if (Build.VERSION.SDK_INT >= 30) it.createWindowContext(WindowManager.LayoutParams.TYPE_PRIVATE_PRESENTATION, null) else it
+        }, android.R.style.Theme_Material_NoActionBar), LifecycleOwner, SavedStateRegistryOwner {
         private val life = LifecycleRegistry(this)
         private val saved = SavedStateRegistryController.create(this)
         override val lifecycle: Lifecycle get() = life
@@ -236,6 +250,10 @@ open class MapRendererService : Service() {
             saved.performAttach(); saved.performRestore(null)
             super.onCreate(bundle)
             window?.apply {
+                // Public presentation window type for our own private display, without the
+                // API-27 display-metrics listener which destroys the map on every panel resize.
+                setType(WindowManager.LayoutParams.TYPE_PRIVATE_PRESENTATION)
+                attributes = attributes.apply { token = Binder(); gravity = Gravity.FILL }
                 setBackgroundDrawableResource(android.R.color.transparent)
                 addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
                 setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN)
@@ -286,8 +304,13 @@ open class MapRendererService : Service() {
                 }
             }
         }
+        fun setRenderingActive(active: Boolean) {
+            if (life.currentState == Lifecycle.State.DESTROYED) return
+            life.currentState = if (active) Lifecycle.State.RESUMED else Lifecycle.State.CREATED
+        }
         override fun onStart() {
             super.onStart()
+            window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
             life.handleLifecycleEvent(Lifecycle.Event.ON_START)
             life.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
         }

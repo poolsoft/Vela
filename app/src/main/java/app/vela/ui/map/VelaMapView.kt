@@ -3500,7 +3500,16 @@ fun VelaMapView(
                 }
                 var frameReportedForStyle: Style? = null
                 var partialReportedForStyle: Style? = null
+                var reportedWidth = -1
+                var reportedHeight = -1
                 mv.addOnDidFinishRenderingFrameListener { fully ->
+                    // Report the first frame at a new size even when the retained style is unchanged.
+                    if (mv.width != reportedWidth || mv.height != reportedHeight) {
+                        reportedWidth = mv.width
+                        reportedHeight = mv.height
+                        frameReportedForStyle = null
+                        partialReportedForStyle = null
+                    }
                     val currentStyle = map.style
                     if (!fully && currentStyle != null && currentStyle !== partialReportedForStyle) {
                         partialReportedForStyle = currentStyle
@@ -3862,6 +3871,7 @@ fun VelaMapView(
         // style with its tile source pointed at the local archive (or back at OpenFreeMap).
         val styleKey = "$styleUri|dark=$darkTheme|amoled=$amoled|pal=${app.vela.ui.MapColors.current()}|sat=$satelliteOn|puck=${app.vela.ui.PuckStyle.key()}|hn=${app.vela.ui.HouseNumbers.level.value}|base=${basemapArchive ?: ""}"
         if (appliedStyleKey != styleKey) {
+            app.vela.util.FileLogger.i("MapStyle", "Reload: previous=$appliedStyleKey next=$styleKey")
             appliedStyleKey = styleKey
             // An installed offline basemap wins over every style source: the remote Liberty URL
             // cannot load with no signal, and the swap needs the JSON in hand anyway. The MapFonts

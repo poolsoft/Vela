@@ -20,6 +20,7 @@ internal object MapRendererTransport {
     const val EVENT = 15
     const val KEY = 16
     const val HEARTBEAT = 17
+    const val SUSPEND = 18
     const val MAX_BYTES = 16 * 1024 * 1024
 
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)

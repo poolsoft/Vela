@@ -36,6 +36,11 @@ Thumbs.db
 *.log
 *.bak
 *.tmp
+.logs/
+ci-artifacts/
+ci-scripts/
+docs/
+scripts/
 
 # Large regenerable on-device perf-test graph (ghprobe) — not committed
 ghprobe/src/androidTest/assets/seam-graph.zip
@@ -46,7 +51,9 @@ core/libs/*.jar
 
 # Local tool scratch
 .freebuff/
+Nami/
 
 # Test artifacts / screenshots
 *.png
 window_dump*.xml
+.logs/logcat-diagnostics.log.old

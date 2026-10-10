@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** Normal Vela variant: no launcher service, HOME role or OEM hardware hooks. */
 object CarIntegration {
+    fun mapStorageAvailable(): Boolean = true
     const val available = false
     fun isolatedAutoSurface(context: Context): app.vela.ui.map.SurfaceMapController? = null
     @Composable fun RenderIsolatedMap(

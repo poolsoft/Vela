@@ -37,7 +37,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      DIAGNOSTIC_APK: ${{ inputs.diagnostic == true || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/maplibre-10.3.7') }}
+      DIAGNOSTIC_APK: ${{ inputs.diagnostic == true || github.ref == 'refs/heads/codex/maplibre-10.3.7' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -110,7 +110,8 @@ jobs:
           if [ "${{ env.DIAGNOSTIC_APK }}" = "true" ]; then
             echo "name=0.4.${{ github.run_number }}-diagnostic" >> "$GITHUB_OUTPUT"
           fi
-          echo "code=$(( 2000 + ${{ github.run_number }} ))" >> "$GITHUB_OUTPUT"
+          # Local head-unit diagnostics reached 2101; keep CI upgrades above those APKs.
+          echo "code=$(( 2100 + ${{ github.run_number }} ))" >> "$GITHUB_OUTPUT"
 
       - name: Fetch TTS runtime AAR
         run: |
@@ -208,12 +209,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DIAGNOSTIC_VERSION: ${{ steps.ver.outputs.name }}
+          DIAGNOSTIC_CODE: ${{ steps.ver.outputs.code }}
         run: |
           TAG="diagnostic-${{ github.run_number }}"
+          printf 'versionName: %s\nversionCode: %s\n\nRelease imzali, debugger acik tani APK. Harita hatasinda muzik/gosterge duzenine gecis, yerel harita onceligi ve renderer oturumunu koruma duzeltmeleri dahildir. Sesli komut ve TTS acilista otomatik baslatilmaz. Logcat uygulamanin erisim yetkisiyle logs klasorune kaydedilir.\n' "$DIAGNOSTIC_VERSION" "$DIAGNOSTIC_CODE" > "$RUNNER_TEMP/diagnostic-notes.md"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --latest=false \
               --title "Vela $DIAGNOSTIC_VERSION (Tani)" \
-              --notes "Release imzali, debugger acik tani APK. Muzik servisi, parca hazirlama ve dahili kapak okuma kapali. Logcat uygulamanin erisim yetkisiyle logs klasorune kaydedilir."
+              --notes-file "$RUNNER_TEMP/diagnostic-notes.md"
           fi
           gh release upload "$TAG" release-apks/*.apk --clobber
 
