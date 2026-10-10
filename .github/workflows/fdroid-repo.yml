@@ -10,31 +10,17 @@ name: F-Droid repo
 # repo key (secrets FDROID_KEYSTORE_BASE64 / FDROID_KEYSTORE_PASS); the APKs
 # keep the normal Vela app signature.
 
-on:
-  # NOT `edited`: marking a release Latest or tweaking its notes is a metadata change that
-  # doesn't alter the APK, and it fired a SECOND run alongside `released` on a manual promote -
-  # two runs then raced the github-pages environment and invalidated each other's artifact
-  # (BlobNotFound, 2026-07-16). `published` (new release) and `released` (prerelease -> full,
-  # i.e. the promote itself) cover every case that needs a rebuild.
-  release:
-    types: [published, released]
-  # Releases created by CI's own GITHUB_TOKEN don't fire release events for other
-  # workflows (GitHub's anti-recursion rule), so nightly publishes never triggered
-  # this on their own - the index went stale until someone dispatched it by hand.
-  # workflow_run is the sanctioned workaround: rebuild whenever CI or the weekly
-  # promote finishes on main.
-  workflow_run:
-    workflows: ["CI", "Promote weekly stable"]
-    types: [completed]
-  # The project website (site/) ships in the SAME Pages artifact as the F-Droid
-  # repo and the map fonts - Pages replaces the whole site on every deploy, so a
-  # separate website workflow would wipe /repo and /fonts. A site-only push (CI
-  # skips those via paths-ignore) therefore redeploys from here.
-  push:
-    branches: [main]
-    paths:
-      - 'site/**'
-  workflow_dispatch:
+ on:
+#   release:
+#     types: [published, released]
+#   workflow_run:
+#     workflows: ["CI", "Promote weekly stable"]
+#     types: [completed]
+#   push:
+#     branches: [main]
+#     paths:
+#       - 'site/**'
+#   workflow_dispatch:
 
 permissions:
   contents: read
