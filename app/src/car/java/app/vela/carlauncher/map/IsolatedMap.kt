@@ -184,7 +184,8 @@ internal class IsolatedMapClient(
                             terminalStage = stage
                             if (stage == "style-loading") { hasStyle = false; hasFrame = false }
                             if (stage == "style-ready") hasStyle = true
-                            if (stage == "frame") hasFrame = true
+                            // Offline/missing tiles can keep fully-rendered false even while the map draws.
+                            if (stage == "frame" || stage == "frame-partial") hasFrame = true
                             mutableState.value = State(hasStyle && hasFrame, stage = stage)
                             FileLogger.i("MapRendererClient", "session=$session pid=$remotePid stage=$stage")
                         }
