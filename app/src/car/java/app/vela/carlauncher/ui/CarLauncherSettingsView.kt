@@ -68,6 +68,7 @@ import app.vela.carlauncher.apps.CarAppManager
 import app.vela.carlauncher.hardware.CarHardwareManager
 import app.vela.carlauncher.media.MediaNotificationListener
 import app.vela.carlauncher.settings.CarLauncherSettings
+import app.vela.carlauncher.tools.LauncherToolsSettings
 import app.vela.ui.AppLocale
 import app.vela.ui.settings.GroupDivider
 import app.vela.ui.settings.SettingsGroup
@@ -88,7 +89,8 @@ private enum class CarSettingsSection {
     DOCK_PANEL,
     WIDGETS,
     MUSIC,
-    AUTOLAUNCH
+    AUTOLAUNCH,
+    TOOLS
 }
 
 @Composable
@@ -132,6 +134,10 @@ fun CarLauncherSettingsView(
             modifier = modifier
         )
         CarSettingsSection.AUTOLAUNCH -> CarAutolaunchSettingsScreen(
+            onBack = { section = CarSettingsSection.HUB },
+            modifier = modifier
+        )
+        CarSettingsSection.TOOLS -> CarToolsSettingsScreen(
             onBack = { section = CarSettingsSection.HUB },
             modifier = modifier
         )
@@ -215,6 +221,12 @@ private fun CarSettingsHubScreen(
                 onClick = { onOpenSection(CarSettingsSection.AUTOLAUNCH) }
             )
 
+            HubCategoryRow(
+                icon = Icons.Default.Backup,
+                title = "Araçlar ve Yedekleme",
+                description = "Seçmeli yedekleme/geri yükleme, başlangıç uygulaması, duvar kâğıdı ve metin ölçeği",
+                onClick = { onOpenSection(CarSettingsSection.TOOLS) }
+            )
             LauncherExitControl()
             Spacer(Modifier.height(16.dp))
         }
@@ -868,6 +880,39 @@ private fun CarAutolaunchSettingsScreen(
 // ═════════════════════════════════════════════════════════════════════════════
 // 7. GÖRSELLEŞTİRİCİ SEÇİM DİYALOĞU VE BİLEŞENİ
 // ═════════════════════════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CarToolsSettingsScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Araçlar ve Yedekleme") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                    }
+                }
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+        modifier = modifier.fillMaxSize()
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            LauncherToolsSettings()
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
 
 @Composable
 private fun VisualizerSelectorRow(
