@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import kotlinx.coroutines.*
 
 data class MusicPlaylist(val id: String, val name: String, val trackKeys: List<String>)
 
@@ -25,12 +26,26 @@ class MusicPlaylistStore private constructor(context: Context) {
             instance ?: MusicPlaylistStore(context.applicationContext).also { instance = it }
         }
     }
-    private val prefs = context.getSharedPreferences("vela_music_playlists", Context.MODE_PRIVATE)
-    private val state = MutableStateFlow(load())
+    private val prefs by lazy { context.getSharedPreferences("vela_music_playlists", Context.MODE_PRIVATE) }
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val storage = Dispatchers.IO.limitedParallelism(1)
+    private val loaded = CompletableDeferred<Unit>()
+    private val state = MutableStateFlow<List<MusicPlaylist>>(emptyList())
     val playlists = state.asStateFlow()
 
-    private val historyState = MutableStateFlow(readHistory())
+    private val historyState = MutableStateFlow<List<Pair<String, Int>>>(emptyList())
     val history = historyState.asStateFlow()
+    init {
+        scope.launch {
+            val saved = withContext(storage) { load() to readHistory() }
+            state.value = saved.first
+            historyState.value = saved.second
+            loaded.complete(Unit)
+        }
+    }
+    private fun mutate(action: () -> Unit) {
+        scope.launch { loaded.await(); action() }
+    }
 
     private fun readHistory(): List<Pair<String, Int>> = runCatching {
         val array = JSONArray(prefs.getString("history", "[]"))
@@ -40,14 +55,14 @@ class MusicPlaylistStore private constructor(context: Context) {
         }.distinctBy { it.first }
     }.getOrDefault(emptyList())
 
-    fun recordPlay(track: SesParcasi) {
+    fun recordPlay(track: SesParcasi) = mutate {
         val key = track.libraryKey()
         val count = historyState.value.firstOrNull { it.first == key }?.second ?: 0
         val items = (listOf(key to (count.toLong() + 1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()) +
             historyState.value.filterNot { it.first == key }).take(200)
-        prefs.edit().putString("history", JSONArray().apply {
+        scope.launch(storage) { prefs.edit().putString("history", JSONArray().apply {
             items.forEach { (path, plays) -> put(JSONObject().put("key", path).put("count", plays)) }
-        }.toString()).apply()
+        }.toString()).apply() }
         historyState.value = items
     }
 
@@ -58,7 +73,13 @@ class MusicPlaylistStore private constructor(context: Context) {
         MusicPlaylist(RECENTLY_ADDED, "", emptyList())
     ) + state.value.filterNot { it.id == FAVORITES }
 
-    fun reload() { state.value = load(); historyState.value = readHistory() }
+    fun reload() {
+        scope.launch {
+            loaded.await()
+            val saved = withContext(storage) { load() to readHistory() }
+            state.value = saved.first; historyState.value = saved.second
+        }
+    }
 
     private fun load(): List<MusicPlaylist> = try {
         val document = JSONObject(prefs.getString("library", null) ?: "{\"version\":1,\"playlists\":[]}")
@@ -78,45 +99,47 @@ class MusicPlaylistStore private constructor(context: Context) {
     }
 
     private fun save(items: List<MusicPlaylist>) {
-        val array = JSONArray()
-        items.forEach { item -> array.put(JSONObject().apply {
-            put("id", item.id); put("name", item.name); put("tracks", JSONArray(item.trackKeys))
-        }) }
-        prefs.edit().putString("library", JSONObject().put("version", 1).put("playlists", array).toString()).apply()
         state.value = items
+        scope.launch(storage) {
+            val array = JSONArray()
+            items.forEach { item -> array.put(JSONObject().apply {
+                put("id", item.id); put("name", item.name); put("tracks", JSONArray(item.trackKeys))
+            }) }
+            prefs.edit().putString("library", JSONObject().put("version", 1).put("playlists", array).toString()).apply()
+        }
     }
 
     fun create(name: String): MusicPlaylist {
         require(name.isNotBlank())
         val item = MusicPlaylist(UUID.randomUUID().toString(), name.trim(), emptyList())
-        save(state.value + item)
+        mutate { save(state.value + item) }
         return item
     }
 
-    fun rename(id: String, name: String) {
-        if (name.isBlank() || id == FAVORITES) return
+    fun rename(id: String, name: String) = mutate {
+        if (name.isBlank() || id == FAVORITES) return@mutate
         save(state.value.map { if (it.id == id) it.copy(name = name.trim()) else it })
     }
 
-    fun delete(id: String) {
+    fun delete(id: String) = mutate {
         if (id != FAVORITES) save(state.value.filterNot { it.id == id })
     }
 
-    fun setTracks(id: String, keys: List<String>) {
+    fun setTracks(id: String, keys: List<String>) = mutate {
         if (id == FAVORITES && state.value.none { it.id == FAVORITES })
             save(state.value + MusicPlaylist(FAVORITES, "", emptyList()))
         save(state.value.map { if (it.id == id) it.copy(trackKeys = keys.distinct()) else it })
     }
 
-    fun addTrack(id: String, track: SesParcasi) {
+    fun addTrack(id: String, track: SesParcasi) = mutate {
         state.value.firstOrNull { it.id == id }?.let { setTracks(id, it.trackKeys + track.libraryKey()) }
     }
 
-    fun removeTrack(id: String, key: String) {
+    fun removeTrack(id: String, key: String) = mutate {
         state.value.firstOrNull { it.id == id }?.let { setTracks(id, it.trackKeys - key) }
     }
 
-    fun removeTrackFromAll(key: String) {
+    fun removeTrackFromAll(key: String) = mutate {
         save(state.value.map { it.copy(trackKeys = it.trackKeys - key) })
     }
 
@@ -127,7 +150,7 @@ class MusicPlaylistStore private constructor(context: Context) {
         return favKeys.any { MusicTrackIdentity.matchesReference(it, track) }
     }
 
-    fun toggleFavorite(track: SesParcasi) {
+    fun toggleFavorite(track: SesParcasi) = mutate {
         val favorites = state.value.firstOrNull { it.id == FAVORITES }
             ?: MusicPlaylist(FAVORITES, "", emptyList()).also { save(state.value + it) }
         val currentKey = track.libraryKey()

@@ -113,6 +113,8 @@ fun CarLauncherHostView(
             panel.clipToOutline = true
             map.clipToOutline = true
             val mapCompose = ComposeView(ctx).apply {
+                // Panel reparenting must not dispose the renderer's client and kill its service.
+                setViewCompositionStrategy(androidx.compose.ui.platform.ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
                 setParentCompositionContext(parentComposition)
                 setContent {
                     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp))) { latestMap() }

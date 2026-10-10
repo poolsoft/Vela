@@ -3649,7 +3649,9 @@ private fun MapSurface(
     // MapTiler (when a key is built in) gives the Google-like look + its own
     // light/dark styles; otherwise fall back to the keyless OpenFreeMap basemap
     // with our own dark/light recolor.
-    val mapStyleUri = if (hasMapTiler) {
+    val mapStyleUri = if (app.vela.ui.OfflineMode.on.value) {
+        MapFonts.effective(app.vela.core.data.tiles.MapStyle.LIBERTY.uri)
+    } else if (hasMapTiler) {
         val variant = if (darkTheme) "streets-v2-dark" else "streets-v2"
         "https://api.maptiler.com/maps/$variant/style.json?key=${BuildConfig.MAPTILER_KEY}"
     } else {

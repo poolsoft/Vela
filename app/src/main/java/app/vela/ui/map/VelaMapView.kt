@@ -3869,7 +3869,7 @@ fun VelaMapView(
         // (issue #344), so a size/color change reloads to re-register it.
         // The offline basemap rides the key: entering or leaving an installed region reloads the
         // style with its tile source pointed at the local archive (or back at OpenFreeMap).
-        val styleKey = "$styleUri|dark=$darkTheme|amoled=$amoled|pal=${app.vela.ui.MapColors.current()}|sat=$satelliteOn|puck=${app.vela.ui.PuckStyle.key()}|hn=${app.vela.ui.HouseNumbers.level.value}|base=${basemapArchive ?: ""}"
+        val styleKey = "$styleUri|dark=$darkTheme|amoled=$amoled|pal=${app.vela.ui.MapColors.current()}|sat=$satelliteOn|puck=${app.vela.ui.PuckStyle.key()}|hn=${app.vela.ui.HouseNumbers.level.value}|base=${basemapArchive ?: ""}|offline=${app.vela.ui.OfflineMode.on.value}"
         if (appliedStyleKey != styleKey) {
             app.vela.util.FileLogger.i("MapStyle", "Reload: source=${MapFonts.sourceOf(styleUri)} previous=$appliedStyleKey next=$styleKey")
             appliedStyleKey = styleKey
@@ -6256,19 +6256,27 @@ private fun namesAgree(a: String, b: String): Boolean = app.vela.core.util.Place
  *  URI of a planetiler bake in the same OpenMapTiles schema OpenFreeMap serves), so an installed
  *  region draws from disk. Same layers, same look; only the source changes. Null = unchanged. */
 private fun withLocalBasemap(context: android.content.Context, json: String, archive: String?): String {
-    if (archive == null) return json
+    val offlineOnly = app.vela.ui.OfflineMode.on.value
+    if (archive == null && !offlineOnly) return json
     return runCatching {
         val root = org.json.JSONObject(json)
         // Drop the online source and point every layer at a NEW id the builder adds programmatically.
         // Re-using the id "openmaptiles" for the local archive loaded nothing past the z0 tile while
         // the identical URI under a fresh id loaded everything (device, 2026-09-14); the old id is
         // referenced by the road-name dictionary and the hillshade guard, which stay online-only.
-        root.getJSONObject("sources").remove("openmaptiles")
+        val sources = root.getJSONObject("sources")
+        sources.remove("openmaptiles")
+        // The decorative low-zoom raster is online-only even when the vector map is local.
+        val removedSources = app.vela.offline.removeRemoteStyleSources(root)
         val layers = root.getJSONArray("layers")
         var moved = 0
         localBasemapLayerIds.clear()
-        for (i in 0 until layers.length()) {
+        for (i in layers.length() - 1 downTo 0) {
             val l = layers.getJSONObject(i)
+            if (l.optString("source") in removedSources || (archive == null && l.optString("source") == "openmaptiles")) {
+                layers.remove(i)
+                continue
+            }
             if (l.optString("source") == "openmaptiles") { l.put("source", LOCAL_BASEMAP_SRC); localBasemapLayerIds += l.getString("id"); moved++ }
             // The glyph pack on disk carries the live style's stack names (Noto Sans Regular / Italic /
             // Bold, Roboto composited over them); the bundled Liberty asset asks for Roboto stacks.
@@ -6284,9 +6292,15 @@ private fun withLocalBasemap(context: android.content.Context, json: String, arc
         // blank, 2026-09-14). The glyph pack and the sprite live in files/ (asset:// hung the same
         // way), so both are served from disk here whenever the pack is installed.
         val glyphs = app.vela.offline.GlyphPackStore.glyphUrl(context)
-        if (glyphs != null) root.put("glyphs", glyphs)
-        app.vela.offline.GlyphPackStore.spriteUrl(context)?.let { root.put("sprite", it) }
-        android.util.Log.i("VelaBasemap", "style tile source -> ${archive.substringAfterLast('/')} ($moved layers re-pointed)")
+        root.put("glyphs", glyphs ?: app.vela.offline.GlyphPackStore.localGlyphUrl(context))
+        if (glyphs == null) app.vela.util.FileLogger.w("OfflineMapResources",
+            "Incomplete glyph pack; labels may be missing: ${app.vela.offline.GlyphPackStore.missingRequiredFiles(context)}")
+        val sprite = app.vela.offline.GlyphPackStore.spriteUrl(context)
+        if (sprite != null) root.put("sprite", sprite) else {
+            root.remove("sprite")
+            app.vela.util.FileLogger.w("OfflineMapResources", "Incomplete local sprite; map icons may be missing")
+        }
+        app.vela.util.FileLogger.i("OfflineMapResources", "archive=$archive movedLayers=$moved removedOnlineSources=$removedSources glyphs=${root.optString("glyphs")} sprite=$sprite")
         root.toString()
     }.getOrElse { android.util.Log.w("VelaBasemap", "style rewrite failed", it); json }
 }

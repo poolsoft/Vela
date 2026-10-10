@@ -112,7 +112,7 @@ internal class IsolatedMapClient(
             when {
                 // A cold secondary process can take several seconds on low-end head units.
                 service == null && now - bindAt > 20_000 -> fail("bind timeout")
-                service != null && now - heartbeatAt > 15_000 -> fail("renderer not responding: $terminalStage")
+                service != null && now - heartbeatAt > (if (mutableState.value.ready) 15_000 else 60_000) -> fail("renderer not responding: $terminalStage")
                 opened && !mutableState.value.ready && now - openAt > 60_000 -> fail("render timeout: $terminalStage")
                 else -> { send(MapRendererTransport.HEARTBEAT); handler.postDelayed(this, 5_000) }
             }

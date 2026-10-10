@@ -58,6 +58,7 @@ open class MapRendererService : Service() {
                 val height = data.getInt("height").coerceIn(1, 4096)
                 val dpi = data.getInt("dpi").coerceIn(72, 640)
                 stage("display")
+                FileLogger.i("MapRenderer", "session=$session surface=${width}x$height dpi=$dpi retained=${display != null}")
                 if (display == null) {
                     output = surface
                     display = getSystemService(DisplayManager::class.java).createVirtualDisplay(
@@ -75,7 +76,7 @@ open class MapRendererService : Service() {
                     display!!.surface = surface
                     output?.release()
                     output = surface
-                    if (resized) presentation?.window?.decorView?.requestLayout()
+                    if (resized) presentation?.window?.setLayout(width, height)
                 }
                 displayWidth = width; displayHeight = height; displayDpi = dpi
                 presentation?.setRenderingActive(true)
@@ -182,6 +183,7 @@ open class MapRendererService : Service() {
         }
         edit.apply()
         app.vela.ui.AppLocale.init(applicationContext)
+        app.vela.ui.OfflineMode.init(applicationContext)
         app.vela.ui.Buildings3d.init(applicationContext)
         app.vela.ui.GoogleFree.init(applicationContext)
         app.vela.ui.HouseNumbers.init(applicationContext)
@@ -260,7 +262,7 @@ open class MapRendererService : Service() {
             }
             life.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
             // Presentation/Service ContextImpl would otherwise bypass Application's prefs override.
-            val renderContext = object : android.content.ContextWrapper(context) {
+            val renderContext = object : android.content.ContextWrapper(this.context) {
                 override fun getSharedPreferences(name: String, mode: Int) =
                     applicationContext.getSharedPreferences(name, mode)
             }

@@ -35,7 +35,12 @@ object PmtilesMapBridge {
         app.vela.util.FileLogger.i("PmtilesBridge", "Local HTTP dispatcher enabled independently of network connectivity")
         HttpRequestUtil.setOkHttpClient(network.newBuilder().addInterceptor { chain ->
             val request = chain.request()
-            if (request.url.host != HOST) return@addInterceptor chain.proceed(request)
+            if (request.url.host != HOST) {
+                if (app.vela.ui.OfflineMode.networkAllowed) return@addInterceptor chain.proceed(request)
+                app.vela.util.FileLogger.w("OfflineMapResources", "Remote resource blocked: ${request.url}")
+                return@addInterceptor Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
+                    .code(404).message("Offline-only mode").body(ByteArray(0).toResponseBody()).build()
+            }
             val started = System.nanoTime()
             try {
                 val parts = request.url.pathSegments
@@ -94,6 +99,7 @@ object PmtilesMapBridge {
             }
         }
         val end = offset + length - 1
+        check(app.vela.ui.OfflineMode.networkAllowed) { "Remote PMTiles disabled in offline-only mode" }
         val request = Request.Builder().url(uri).header("Range", "bytes=$offset-$end")
             .header("Accept-Encoding", "identity").build()
         return network.newCall(request).execute().use { response ->

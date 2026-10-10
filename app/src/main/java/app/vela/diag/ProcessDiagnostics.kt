@@ -184,7 +184,8 @@ object ProcessDiagnostics {
             val age = SystemClock.uptimeMillis() - heartbeat
             val now = SystemClock.uptimeMillis()
             val threshold = if (BuildConfig.DIAGNOSTIC_BUILD) 3_000 else 15_000
-            if (foreground && age >= threshold && !Debug.isDebuggerConnected() && !stallReported && now - lastStallReport >= 60_000) {
+            if (foreground && age >= threshold && !Debug.isDebuggerConnected() &&
+                now - lastStallReport >= (if (stallReported) 15_000 else 60_000)) {
                 lastStallReport = now
                 stallReported = true
                 runCatching {

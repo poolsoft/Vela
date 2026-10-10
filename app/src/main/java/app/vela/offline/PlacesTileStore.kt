@@ -107,7 +107,7 @@ class BasemapTileStore @Inject constructor(
         var unreadable = false
         for ((_, f) in covering) {
             when (coverage(f, tx, ty)) {
-                true -> if (ringCovered(f, tx, ty) && cornersCovered(f, view)) return f
+                true -> if (keepMounted || (ringCovered(f, tx, ty) && cornersCovered(f, view))) return f
                 null -> unreadable = true
                 false -> Unit
             }

@@ -507,20 +507,14 @@ class MusicRepository private constructor(private val context: Context) {
      * Port-Agnostic parca arama.
      * USB portu degisse dahi playlistlerdeki veya kaydedilmis sarki referanslarini bulur.
      */
-    fun findTrackPortAgnostic(savedPathOrRef: String?): SesParcasi? {
-        if (savedPathOrRef.isNullOrBlank()) return null
-        val currentTracks = _parcalar.value
-        // 1. Dogrudan eslesme (libraryKey veya dosyaYolu)
-        currentTracks.firstOrNull { it.libraryKey() == savedPathOrRef || it.dosyaYolu == savedPathOrRef }?.let { return it }
-        // 2. MusicTrackIdentity ile bagil yol ve dosya adi eslesmesi
-        currentTracks.firstOrNull { MusicTrackIdentity.matchesReference(savedPathOrRef, it) }?.let { return it }
-        // 3. Fallback: Sadece bagil yol (relativePath) eslesmesi
-        val targetRel = MusicTrackIdentity.extractRelativePath(savedPathOrRef)
-        if (targetRel.isNotEmpty()) {
-            currentTracks.firstOrNull {
-                MusicTrackIdentity.extractRelativePath(it.dosyaYolu).equals(targetRel, ignoreCase = true)
-            }?.let { return it }
+    private var indexedTracks: List<SesParcasi>? = null
+    private var trackIndex = MusicTrackIndex(emptyList())
+    @Synchronized fun findTrackPortAgnostic(savedPathOrRef: String?): SesParcasi? {
+        val current = _parcalar.value
+        if (indexedTracks !== current) {
+            trackIndex = MusicTrackIndex(current)
+            indexedTracks = current
         }
-        return null
+        return trackIndex.find(savedPathOrRef)
     }
 }

@@ -16,6 +16,7 @@ import app.vela.carlauncher.model.SesParcasi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.*
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -39,6 +40,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
                 instance ?: MusicManager(context.applicationContext).also { instance = it }
             }
         }
+        fun refreshIfCreated() { instance?.senkronizeEtMedyaDurumu() }
     }
 
     interface MusicUIListener {
@@ -76,6 +78,30 @@ class MusicManager private constructor(private val context: Context) : InternalM
     // Lazy: the same 3.4 s first-parse cost as InternalMusicPlayer applies to this file, and the
     // ctor runs on the media service's main thread. VelaApp pre-warms it on an IO thread.
     private val focusPrefs by lazy { context.getSharedPreferences("vela_music_focus", Context.MODE_PRIVATE) }
+    private val focusScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val focusWriteDispatcher = Dispatchers.IO.limitedParallelism(1)
+    private var focusState: Map<String, Any?> = emptyMap()
+    private val focusLoaded = focusScope.async(Dispatchers.IO) { focusPrefs.all }
+    private val focusPreferenceListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, _ ->
+        focusScope.launch {
+            val updated = withContext(Dispatchers.IO) { prefs.all }
+            focusState = updated
+            senkronizeEtMedyaDurumu()
+        }
+    }
+    private fun saveFocus(vararg values: Pair<String, Any>) {
+        focusState = focusState + values
+        focusScope.launch(focusWriteDispatcher) {
+            val editor = focusPrefs.edit()
+            values.forEach { (key, value) ->
+                when (value) {
+                    is Boolean -> editor.putBoolean(key, value)
+                    is String -> editor.putString(key, value)
+                }
+            }
+            editor.apply()
+        }
+    }
     private var manualSelection = false
     private var publishing = false
     private var controllers = emptyList<MediaController>()
@@ -85,8 +111,6 @@ class MusicManager private constructor(private val context: Context) : InternalM
     private var userCommandVersion = 0
     private var startupScheduled = false
     private var userPaused = false
-    private val startupSource by lazy { focusPrefs.getString("last_source", "internal") ?: "internal" }
-    private val startupWasPlaying by lazy { focusPrefs.getBoolean("was_playing", false) }
     private val _sourceStatus = MutableStateFlow<String?>(null)
     val sourceStatus = _sourceStatus.asStateFlow()
     private var selectedAdapter: BaseMediaAdapter = internalAdapter
@@ -112,6 +136,11 @@ class MusicManager private constructor(private val context: Context) : InternalM
     init {
         internalPlayer.setListener(this)
         senkronizeEtMedyaDurumu()
+        focusScope.launch {
+            focusState = focusLoaded.await() + focusState
+            focusPrefs.registerOnSharedPreferenceChangeListener(focusPreferenceListener)
+            senkronizeEtMedyaDurumu()
+        }
     }
 
     fun addListener(l: MusicUIListener) {
@@ -233,7 +262,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
 
     fun allowAutomaticSourceTracking() {
         userCommandVersion++
-        focusPrefs.edit().putBoolean("auto_follow", true).apply()
+        saveFocus("auto_follow" to true)
         manualSelection = false
         pinnedSessionPackage = null
         onOturumlarYenilendi(controllers)
@@ -247,22 +276,23 @@ class MusicManager private constructor(private val context: Context) : InternalM
         senkronizeEtMedyaDurumu()
     }
 
-    fun restoreSavedPlayback(library: List<SesParcasi>, autoPlay: Boolean): Boolean {
+    suspend fun restoreSavedPlayback(library: List<SesParcasi>, autoPlay: Boolean): Boolean {
         if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) return true
         // Restore metadata without racing a phone which connects after launcher startup.
         val restored = internalPlayer.restoreSavedPlayback(library, false)
+        val savedFocus = focusLoaded.await()
         if (!startupScheduled) {
             startupScheduled = true
             val version = userCommandVersion
-            if (autoPlay && startupWasPlaying && version == 0) {
+            if (autoPlay && savedFocus["was_playing"] == true && version == 0) {
                 anaHandler.postDelayed({
                     if (version == userCommandVersion && app.vela.carlauncher.settings.CarLauncherSettings.otomatikOynat.value &&
                         adapters.none { it.caliyorMu() }) {
-                        val profile = focusPrefs.getString("startup_source", "last") ?: "last"
-                        val key = if (profile == "last") startupSource else profile
+                        val profile = savedFocus["startup_source"] as? String ?: "last"
+                        val key = if (profile == "last") savedFocus["last_source"] as? String ?: "internal" else profile
                         selectSource(key, play = true, fromUser = false)
                     }
-                }, focusPrefs.getInt("bt_wait_seconds", 8).coerceIn(3, 15) * 1000L)
+                }, (savedFocus["bt_wait_seconds"] as? Int ?: 8).coerceIn(3, 15) * 1000L)
             }
         }
         return restored
@@ -320,7 +350,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         }
         publishing = true
         try { requestSmartFocus(source) } finally { publishing = false }
-        focusPrefs.edit().putString("last_source", key).apply()
+        saveFocus("last_source" to key)
         if (play && !playbackAdapter().caliyorMu()) {
             playbackAdapter().oynat()
             val version = userCommandVersion
@@ -381,7 +411,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         userPaused = true
         internalPlayer.duraklat() // Also cancels a pending focus-resume from a former local source.
         if (selectedAdapter !== internalAdapter) playbackAdapter().duraklat()
-        focusPrefs.edit().putBoolean("was_playing", false).apply()
+        saveFocus("was_playing" to false)
         senkronizeEtMedyaDurumu()
     }
     fun oynatDuraklat() { if (playbackAdapter().caliyorMu()) duraklat() else oynat() }
@@ -439,7 +469,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         if (publishing) return
         publishing = true
         try {
-        if (!manualSelection && focusPrefs.getBoolean("auto_follow", true)) {
+        if (!manualSelection && focusState["auto_follow"] != false) {
             // A connection/metadata event alone is never a takeover request.
             val playing = adapters.firstOrNull { it.caliyorMu() }
             if (playing != null && !selectedAdapter.caliyorMu()) {
@@ -461,8 +491,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
 
         _medyaDurumu.value = yeniMedya
         if (userCommandVersion > 0 || yeniMedya.caliyorMu) {
-            focusPrefs.edit().putString("last_source", sourceKey(selectedAdapter))
-                .putBoolean("was_playing", yeniMedya.caliyorMu && !userPaused).apply()
+            saveFocus("last_source" to sourceKey(selectedAdapter), "was_playing" to (yeniMedya.caliyorMu && !userPaused))
         }
         listeners.forEach { listener ->
             listener.onParcaDegisti(yeniMedya)

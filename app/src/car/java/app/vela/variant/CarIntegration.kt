@@ -76,8 +76,10 @@ object CarIntegration {
     val immersive: StateFlow<Boolean> get() = CarLauncherSettings.tamEkranModu
     val homeScreenRequest: StateFlow<Long> get() = CarLauncherSettings.homeScreenRequest
     fun init(context: Context) = CarLauncherSettings.baslat(context)
-    fun onResume(activity: ComponentActivity) =
+    fun onResume(activity: ComponentActivity) {
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(true)
+        app.vela.carlauncher.media.MusicManager.refreshIfCreated()
+    }
     fun onPause(activity: ComponentActivity) =
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(false)
     fun isDefaultHome(context: Context): Boolean {
