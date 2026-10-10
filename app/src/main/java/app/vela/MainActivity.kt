@@ -239,6 +239,7 @@ class MainActivity : ComponentActivity() {
         app.vela.diag.ProcessDiagnostics.activity("stop", false)
         app.vela.util.FileLogger.i("MainActivity", "onStop")
         app.vela.ui.AppVisibility.foreground.value = false
+        CarIntegration.onStop(this)
     }
 
     override fun onDestroy() {

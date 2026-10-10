@@ -80,7 +80,8 @@ object CarIntegration {
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(true)
         app.vela.carlauncher.media.MusicManager.refreshIfCreated()
     }
-    fun onPause(activity: ComponentActivity) =
+    fun onPause(activity: ComponentActivity) = Unit
+    fun onStop(activity: ComponentActivity) =
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(false)
     fun isDefaultHome(context: Context): Boolean {
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
@@ -110,6 +111,11 @@ object CarIntegration {
             }
         }
         CarFloatingButtonManager.getInstance(activity).setSuspended(false)
+        activity.lifecycleScope.launch {
+            CarLauncherSettings.floatingButtonModu.collect {
+                CarFloatingButtonManager.getInstance(activity).updateButtonState()
+            }
+        }
         activity.lifecycleScope.launch {
             CarTelemetryManager.getInstance(activity).telemetriDurumu.collect { tel ->
                 CarFloatingButtonManager.getInstance(activity)

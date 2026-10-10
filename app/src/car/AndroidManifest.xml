@@ -44,18 +44,21 @@
         <!-- All launcher aliases and the media notification reuse the same task. -->
         <activity android:name=".MainActivity"
             android:launchMode="singleTask"
-            tools:replace="android:launchMode" />
-        <activity-alias
-            android:name=".CarHome"
-            android:targetActivity=".MainActivity"
-            android:label="@string/car_settings_hub"
-            android:exported="true">
+            tools:replace="android:launchMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </activity-alias>
+        </activity>
+        <activity android:name="app.vela.carlauncher.ui.CarLauncherEntryActivity"
+            android:exported="false" android:theme="@android:style/Theme.NoDisplay" />
+        <activity-alias android:name=".Launcher"
+            android:targetActivity="app.vela.carlauncher.ui.CarLauncherEntryActivity"
+            tools:replace="android:targetActivity" />
+        <activity-alias android:name=".LauncherMaps"
+            android:targetActivity="app.vela.carlauncher.ui.CarLauncherEntryActivity"
+            tools:replace="android:targetActivity" />
         <service
             android:name="app.vela.carlauncher.media.MediaNotificationListener"
             android:label="@string/app_name"

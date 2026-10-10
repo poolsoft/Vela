@@ -85,10 +85,8 @@ class OfflinePoiStore @Inject constructor(
         val yol = db.path ?: return false
         return ftsTabloCache.getOrPut(yol) {
             runCatching {
-                db.rawQuery(
-                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='poi_fts' LIMIT 1",
-                    null,
-                ).use { it.moveToFirst() }
+                // An imported FTS5 table may exist even when this Android SQLite has no FTS5 module.
+                db.rawQuery("SELECT rowid FROM poi_fts LIMIT 0", null).use { it.moveToFirst(); true }
             }.getOrDefault(false)
         }
     }
@@ -119,7 +117,7 @@ class OfflinePoiStore @Inject constructor(
 
     fun count(): Int = helper.readableDatabase
         .rawQuery("SELECT COUNT(*) FROM poi", null)
-        .use { if (it.moveToFirst()) it.getInt(0) else 0 }
+        .use { if (it.moveToFirst()) it.getInt(0) else 0 } + OfflinePacks.count("poi")
 
     /** Every POI within [radiusM] of [loc], nearest first: the businesses AT a typed address. A
      *  pack POI often has no `addr:*` of its own (most US chains do not in OSM), so an address
@@ -476,7 +474,8 @@ class OfflinePoiStore @Inject constructor(
                         ftsSorgula(db, katman3Query, 100, near, term, qWords, adayHavuzu)
                     }
                 }
-            } else {
+            }
+            if (!hasFtsTablosu(db) || adayHavuzu.size < limit || kategoriBul(term).isNotEmpty()) {
                 // FTS5 Bulunmayan Klasik DB Motoru (Vela sunucusundan indirilen mevcut .poipack dosyalari)
                 akilliSqlSorgula(db, term, words, near, qWords, adayHavuzu)
             }

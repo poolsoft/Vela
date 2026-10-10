@@ -63,7 +63,7 @@ class CarFloatingButtonManager private constructor(private val context: Context)
     private var menuParams: WindowManager.LayoutParams? = null
 
     private var isAdded = false
-    private var isAppInForeground = false
+    private var isAppInForeground = true
     private var suspended = false
 
     fun setSuspended(value: Boolean) {
@@ -154,6 +154,7 @@ class CarFloatingButtonManager private constructor(private val context: Context)
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
             ).apply {
+                title = "VelaFloatingSpeed"
                 gravity = Gravity.TOP or Gravity.START
             }
             this.params = p

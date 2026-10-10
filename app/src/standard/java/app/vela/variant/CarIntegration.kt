@@ -31,6 +31,7 @@ object CarIntegration {
     fun init(context: Context) = Unit
     fun onResume(activity: ComponentActivity) = Unit
     fun onPause(activity: ComponentActivity) = Unit
+    fun onStop(activity: ComponentActivity) = Unit
     fun onCreated(activity: ComponentActivity) = Unit
     fun isDefaultHome(context: Context) = false
     fun prepareForExit(activity: ComponentActivity) = Unit

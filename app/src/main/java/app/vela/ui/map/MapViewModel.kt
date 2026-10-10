@@ -2066,17 +2066,10 @@ class MapViewModel @Inject constructor(
             // No connection → skip the Google scrape entirely (it would just hang to the socket timeout,
             // the "search does nothing offline" report) and search the on-device OSM index straight away.
             // Empty index = no area downloaded yet, so point the user at the download (issue #3).
-            if (!isOnline()) {
+            if (offlineNow()) {
                 val (offline, haveArea) = withContext(Dispatchers.IO) {
-                    val rawPois = runCatching { offlinePoiStore.search(q, near) }.getOrDefault(emptyList())
-                    // A pack POI usually carries no address of its own (OSM tags few), so the rows
-                    // read as bare names; fill the shown ones from the address index, the same
-                    // lookup the sheet runs on select (user 2026-09-19, "does not show the POI
-                    // address"). Bounded to what the list shows first.
-                    val pois = rawPois.mapIndexed { i, p ->
-                        if (i >= OFFLINE_ADDR_FILL || !p.address.isNullOrBlank()) p // fill only the first rows, the ones on screen
-                        else p.copy(address = runCatching { addressStore.reverseGeocode(p.location) }.getOrNull() ?: p.address)
-                    }
+                    // Show local results without reverse-geocoding every row; selection fills the address.
+                    val pois = runCatching { offlinePoiStore.search(q, near) }.getOrDefault(emptyList())
                     val isAddress = app.vela.core.data.OfflineAddressStore.looksLikeAddress(q)
                     val addrs = runCatching { addressStore.geocode(q, near) }.getOrDefault(emptyList())
                     val atAddr = if (isAddress) {
@@ -7660,7 +7653,6 @@ class MapViewModel @Inject constructor(
         const val DR_MAX_M = 3_000.0      // hard cap on blind travel - longer than any common tunnel, short enough to bound a wrong guess
         const val SPEED_LIMIT_FORGET_M = 300.0 // drive this far past the last KNOWN limit with only
                                                // untagged snaps → clear the badge (don't show a stale limit)
-        const val OFFLINE_ADDR_FILL = 20      // offline search rows whose blank address is filled from the index
         const val OFFLINE_AT_ADDR_M = 40.0    // a POI this close to a typed address is "at" it
         const val RESUME_MAX_AGE_MS = 60 * 60 * 1000L // a persisted nav older than this = that drive is long
                                                       // over; don't offer to resume it on the next launch
