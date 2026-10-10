@@ -81,8 +81,10 @@ object CarIntegration {
         app.vela.carlauncher.media.MusicManager.refreshIfCreated()
     }
     fun onPause(activity: ComponentActivity) = Unit
-    fun onStop(activity: ComponentActivity) =
+    fun onStop(activity: ComponentActivity) {
+        CarLauncherSettings.finishInitialMapAttempt()
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(false)
+    }
     fun isDefaultHome(context: Context): Boolean {
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         return context.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
@@ -185,10 +187,14 @@ object CarIntegration {
                         androidx.compose.runtime.CompositionLocalProvider(
                             app.vela.carlauncher.map.LocalMapRendererFailureHost provides failureHost,
                         ) { content() }
+                        androidx.compose.runtime.LaunchedEffect(failureHost.state.ready) {
+                            if (failureHost.state.ready) CarLauncherSettings.finishInitialMapAttempt()
+                        }
                         androidx.compose.runtime.LaunchedEffect(failureHost.failure) {
                             failureHost.failure?.let {
-                                CarLauncherSettings.disableFailedMap(it.stage)
-                                android.widget.Toast.makeText(context, "Harita açılamadı. Müzik ve gösterge ekranına geçildi.", android.widget.Toast.LENGTH_LONG).show()
+                                if (CarLauncherSettings.disableFailedMap(it.stage)) {
+                                    android.widget.Toast.makeText(context, "Harita açılamadı. Müzik ve gösterge ekranına geçildi.", android.widget.Toast.LENGTH_LONG).show()
+                                }
                             }
                         }
                         androidx.compose.material3.TextButton(

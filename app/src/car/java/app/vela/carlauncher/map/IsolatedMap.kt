@@ -68,7 +68,7 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
                 }
             })
         }
-        if (!state.ready && (!state.failed || failureHost == null)) MapRendererStatusPanel(state, retry)
+        if (!state.ready) MapRendererStatusPanel(state, retry)
     }
 }
 

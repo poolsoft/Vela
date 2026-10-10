@@ -257,7 +257,9 @@ open class MapRendererService : Service() {
                 setType(WindowManager.LayoutParams.TYPE_PRIVATE_PRESENTATION)
                 attributes = attributes.apply { token = Binder(); gravity = Gravity.FILL }
                 setBackgroundDrawableResource(android.R.color.transparent)
-                addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+                // Input is forwarded explicitly over IPC; this off-screen window must not take launcher/IME focus.
+                addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
                 setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN)
             }
             life.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)

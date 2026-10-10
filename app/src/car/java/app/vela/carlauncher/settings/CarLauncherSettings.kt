@@ -241,9 +241,17 @@ object CarLauncherSettings {
         _maplessMainScreen.value = screen
         if (::prefs.isInitialized) prefs.edit().putString("car_launcher_mapless_main", screen).apply()
     }
-    fun disableFailedMap(reason: String) {
-        app.vela.util.FileLogger.w("MapStartup", "Map disabled for this and future sessions: $reason")
+    private var initialMapAttempt = true
+    fun finishInitialMapAttempt() { initialMapAttempt = false }
+    fun disableFailedMap(reason: String): Boolean {
+        if (!initialMapAttempt) {
+            app.vela.util.FileLogger.w("MapStartup", "Map failed after startup; keeping launcher mode: $reason")
+            return false
+        }
+        initialMapAttempt = false
+        app.vela.util.FileLogger.w("MapStartup", "Initial map startup failed; switching to mapless mode: $reason")
         setMaplessMode(true)
+        return true
     }
     private val _maplessMode = MutableStateFlow(false)
     val maplessMode: StateFlow<Boolean> = _maplessMode.asStateFlow()
