@@ -34,6 +34,7 @@ open class MapRendererService : Service() {
     private var displayWidth = 0
     private var displayHeight = 0
     private var displayDpi = 0
+    private var outputGeneration = 0
     private var scene by mutableStateOf<MapRenderScene?>(null)
     private val sceneQueue = kotlinx.coroutines.channels.Channel<Pair<Int, ParcelFileDescriptor>>(
         kotlinx.coroutines.channels.Channel.CONFLATED, onUndeliveredElement = { it.second.close() },
@@ -78,10 +79,21 @@ open class MapRendererService : Service() {
                         // itself on a metrics change; our display-bound Dialog can relayout.
                         display!!.resize(width, height, dpi)
                     }
-                    display!!.surface = surface
                     output?.release()
                     output = surface
                     if (resized) presentation?.window?.setLayout(width, height)
+                    // DisplayManager applies the new output projection during traversal.
+                    // A synchronous detach/attach can be coalesced into one transaction,
+                    // retaining the old clip. Let a traversal finish before reconnecting.
+                    val binding = ++outputGeneration
+                    Choreographer.getInstance().postFrameCallback {
+                        Choreographer.getInstance().postFrameCallback {
+                            if (binding == outputGeneration && output === surface && surface.isValid) {
+                                try { display?.surface = surface }
+                                catch (error: Exception) { fail("display", error) }
+                            }
+                        }
+                    }
                 }
                 displayWidth = width; displayHeight = height; displayDpi = dpi
                 presentation?.setRenderingActive(true)
@@ -104,6 +116,7 @@ open class MapRendererService : Service() {
                 "long" -> dpad.longPressAtCenter()
             }
             MapRendererTransport.SUSPEND -> {
+                outputGeneration++
                 presentation?.setRenderingActive(false)
                 display?.surface = null
                 output?.release(); output = null
