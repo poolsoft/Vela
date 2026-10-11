@@ -26,7 +26,8 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val owner = LocalLifecycleOwner.current
     val latestCallbacks by rememberUpdatedState(callbacks)
-    val client = remember(context) { IsolatedMapClient(context) { name, args -> latestCallbacks.dispatch(name, args) } }
+    val applicationContext = context.applicationContext
+    val client = remember(applicationContext) { IsolatedMapClient(applicationContext) { name, args -> latestCallbacks.dispatch(name, args) } }
     val state by client.state.collectAsState()
     val settings = rendererSettings(context)
     SideEffect { client.update(scene.copy(settings = settings, density = density.density, fontScale = density.fontScale,
@@ -40,8 +41,9 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
             if (event == Lifecycle.Event.ON_START) client.resume()
         }
         owner.lifecycle.addObserver(observer)
-        onDispose { owner.lifecycle.removeObserver(observer); dpad?.remote = null; client.close() }
+        onDispose { owner.lifecycle.removeObserver(observer); dpad?.remote = null }
     }
+    DisposableEffect(client) { onDispose { client.close() } }
     var surfaceGeneration by remember { mutableIntStateOf(0) }
     val failureHost = LocalMapRendererFailureHost.current
     val retry = { client.retry(); surfaceGeneration++; Unit }

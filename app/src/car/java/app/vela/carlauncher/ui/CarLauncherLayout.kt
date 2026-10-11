@@ -41,8 +41,14 @@ fun CarLauncherLayout(
     voiceAudioLevel: Float = 0f,
     haritaIcerigi: @Composable () -> Unit
 ) {
+    val latestMapContent by androidx.compose.runtime.rememberUpdatedState(haritaIcerigi)
+    // Portrait bypasses the launcher host. Keep the same map composition when
+    // moving between that branch and the landscape panel, including its IPC client.
+    val retainedMapContent = remember {
+        androidx.compose.runtime.movableContentOf { latestMapContent() }
+    }
     if (passthrough) {
-        Box(modifier.fillMaxSize()) { haritaIcerigi() }
+        Box(modifier.fillMaxSize()) { retainedMapContent() }
         return
     }
     val context = LocalContext.current
@@ -171,7 +177,7 @@ fun CarLauncherLayout(
             onAyarlarAc = { onOpenSettings() },
             onAsistanTiklandi = onAsistanTiklandi,
             modifier = Modifier.fillMaxSize(),
-            haritaIcerigi = haritaIcerigi
+            haritaIcerigi = retainedMapContent
         )
     }
 }
