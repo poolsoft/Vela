@@ -69,6 +69,11 @@ open class MapRendererService : Service() {
                 } else {
                     val resized = displayWidth != width || displayHeight != height || displayDpi != dpi
                     if (resized) {
+                        // Rebind the output after resizing. On API 30, resizing an attached
+                        // Surface keeps SurfaceFlinger's destination clip at the old width
+                        // even though the display, window and GL buffers have the new size.
+                        // The display/window/MapView stay alive; only the output is detached.
+                        display!!.surface = null
                         // Keep the same window/MapView/style. Presentation on API 27 cancels
                         // itself on a metrics change; our display-bound Dialog can relayout.
                         display!!.resize(width, height, dpi)

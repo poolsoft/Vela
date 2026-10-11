@@ -5,6 +5,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class OfflineStyleResourcesTest {
+    @Test fun decodedUrlsAreCheckedWithoutDependingOnSlashEscaping() {
+        val style = JSONObject("""{"sources":{
+          "remote":{"type":"raster","tiles":["HTTPS:\/\/host\/tile.png"]},
+          "local":{"type":"vector","tiles":["file:///maps/tile.pbf"]}},
+          "layers":[{"id":"remote","source":"remote"},{"id":"local","source":"local"}]}""")
+        assertEquals(setOf("remote"), removeRemoteStyleSources(style))
+        assertEquals("local", style.getJSONArray("layers").getJSONObject(0).getString("id"))
+    }
+
     @Test fun remoteRasterAndVectorSourcesCannotLeaveDanglingLayers() {
         val style = JSONObject("""{"sources":{
           "raster":{"type":"raster","tiles":["https://host/{z}.png"]},
