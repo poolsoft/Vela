@@ -38,6 +38,7 @@ android {
         buildConfigField("boolean", "DIAGNOSTIC_MUSIC_DISABLED", "false")
         // Temporary head-unit safety: no in-process sherpa-onnx ASR, Piper or wake-word JNI.
         buildConfigField("boolean", "NATIVE_VOICE_ENABLED", "false")
+        buildConfigField("boolean", "NATIVE_TTS_ENABLED", "true")
         targetSdk = 35
         // Overridable from CI: -PappVersionCode / -PappVersionName (ci.yml derives
         // them from the run number → 0.3.<run> / 2000+run). Defaults are local/dev only.

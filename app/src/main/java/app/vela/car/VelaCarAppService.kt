@@ -55,7 +55,17 @@ class VelaCarAppService : CarAppService() {
         // The neural voice is wired into VoiceGuide by the phone's view model; a drive started from
         // the car with the phone UI closed had no synth attached and fell back to the system TTS
         // (user 2026-09-21: "the voice that speaks is not vela voice"). Attach it here too.
-        if (app.vela.BuildConfig.NATIVE_VOICE_ENABLED && voiceGuide.neural == null && app.vela.core.voice.VelaPiper.isReady(this)) voiceGuide.neural = piperSynth
+        val prefs = getSharedPreferences("vela_settings", MODE_PRIVATE)
+        if (piperSynth.onFailure == null) piperSynth.onFailure = {
+            voiceGuide.useSystemEngineLazily("com.google.android.tts")
+            prefs.edit().putString("voice_engine", "com.google.android.tts").apply()
+        }
+        if (app.vela.BuildConfig.NATIVE_TTS_ENABLED &&
+            prefs.getBoolean("voice_isolated_tts_opt_in", false) &&
+            prefs.getString("voice_engine", null) == app.vela.core.voice.VelaPiper.ENGINE_ID &&
+            app.vela.core.voice.VelaPiper.isReady(this)) {
+            voiceGuide.useNeuralEngineLazily(piperSynth)
+        } else voiceGuide.useSystemEngineLazily("com.google.android.tts")
         // The downloaded place packs are opened by the phone's view model at start; a car session
         // with the phone UI never opened has to open them itself for offline car search.
         Thread { runCatching { poiPacks.registerPacks() } }.start()

@@ -43,6 +43,19 @@ class VoiceGuide @Inject constructor(
         requiredSystemEngine = packageName
         deferredEngine = packageName
         useNeural = false
+        neural?.stop()
+        neural = null
+    }
+
+    /** Select neural speech without binding or loading either engine at application startup. */
+    fun useNeuralEngineLazily(synth: NeuralSynth) {
+        requiredSystemEngine = null
+        deferredEngine = null
+        neural = synth
+        useNeural = true
+        currentEngine = VelaPiper.ENGINE_ID
+        ready = true
+        working = true
     }
 
     private fun failed(error: Throwable) {
@@ -462,7 +475,7 @@ class VoiceGuide @Inject constructor(
                 failed(java.util.concurrent.TimeoutException("TTS did not complete within 30 seconds"))
                 safely { tts?.stop() }
             }
-        }, 30_000)
+        }, if (useNeural) 95_000 else 30_000)
         runCatching { onSpoken?.invoke(text) }
         runCatching { onPromptAlert?.invoke() }
         if (!ready) {
@@ -511,7 +524,12 @@ class VoiceGuide @Inject constructor(
             // Romanize any foreign-script name for this (Latin) neural voice so it isn't dropped
             // (issue #184); the on-screen banner keeps the real local-script name.
             val spoken = forSpeech(SpokenScript.forVoice(text, n.voiceLanguage ?: t, roadNameLatin))
-            afterFocusLead(fresh) { n.speak(spoken, interrupt) { releaseFocus() } }
+            val request = speechRequest
+            speechStatus = "speaking"
+            afterFocusLead(fresh) { n.speak(spoken, interrupt) {
+                if (request == speechRequest) speechStatus = "done"
+                releaseFocus()
+            } }
             return
         }
         speakViaSystem(text, interrupt, t)
@@ -570,7 +588,8 @@ class VoiceGuide @Inject constructor(
         if (tts != null) return
         systemReady = false
         lastSystemLang = null
-        tts = requiredSystemEngine?.let { TextToSpeech(context, this, it) } ?: TextToSpeech(context, this)
+        val fallback = requiredSystemEngine ?: if (useNeural) "com.google.android.tts" else null
+        tts = fallback?.let { TextToSpeech(context, this, it) } ?: TextToSpeech(context, this)
         attachTtsListener()
     }
 

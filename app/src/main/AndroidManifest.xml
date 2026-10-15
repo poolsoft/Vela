@@ -217,6 +217,7 @@
             android:name="android.telephony.PROPERTY_SATELLITE_DATA_OPTIMIZED"
             android:value="${applicationId}" />
 
+        <service android:name=".voice.PiperService" android:process=":voice_tts" android:exported="false" />
 </application>
 
 </manifest>

@@ -60,7 +60,7 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
     }
     SettingsScaffold(stringResource(R.string.settings_voice), onBack) { topRow ->
         FilledTonalButton(modifier = topRow, onClick = { showVoiceTests = true }) { Text("Sesli komut ve TTS testleri") }
-        Hint("Google TTS ilk konuşmada açılır. Yerel ses motorları ve Hey Vela geçici olarak kapalıdır.")
+        Hint("Google TTS varsayılandır. Vela sesi seçildiğinde model yalnız test veya navigasyonda, ayrı süreçte yüklenir. Yerel sesli arama ve Hey Vela kapalıdır.")
         Spacer(Modifier.height(4.dp))
         // The master switch: persisted, and the in-nav speaker button toggles the SAME state.
         SettingsGroup {
@@ -117,7 +117,7 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
         run {
             val velaId = vm.defaultVoiceId()
             val vela = vm.voiceCatalog().firstOrNull { it.id == velaId }
-            if (app.vela.BuildConfig.NATIVE_VOICE_ENABLED && vela != null && velaId !in state.installedVoiceIds && state.voiceDownloadingId == null) {
+            if (app.vela.BuildConfig.NATIVE_TTS_ENABLED && vela != null && velaId !in state.installedVoiceIds && state.voiceDownloadingId == null) {
                 androidx.compose.material3.Button(
                     onClick = { vm.downloadVoice(velaId) },
                     modifier = Modifier.fillMaxWidth().dpadHighlight(androidx.compose.foundation.shape.RoundedCornerShape(24.dp)),
@@ -178,7 +178,7 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
 
         // Voice library - browse, download, switch between and remove Vela's neural voices (Piper).
         // Auto-expanded when nothing is installed so the download path is obvious.
-        if (app.vela.BuildConfig.NATIVE_VOICE_ENABLED) {
+        if (app.vela.BuildConfig.NATIVE_TTS_ENABLED) {
         var voiceLibExpanded by remember { mutableStateOf(openLibrary || state.installedVoiceIds.isEmpty()) }
         CollapsibleSectionTitle(
             stringResource(R.string.settings_voice_library),
