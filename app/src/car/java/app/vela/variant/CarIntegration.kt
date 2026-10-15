@@ -164,8 +164,6 @@ object CarIntegration {
     ) {
         // Mapless mode replaces the whole map composition, so no renderer or EGL surface starts.
         val mapless by CarLauncherSettings.maplessMode.collectAsState()
-        // Session-only manual map close remains available for diagnosis.
-        // Gate the whole MapScreen, not just its visibility, so no hidden EGL surface is created.
         val context = androidx.compose.ui.platform.LocalContext.current
         var testsOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
         val homeRequest by CarLauncherSettings.homeScreenRequest.collectAsState()
@@ -179,7 +177,6 @@ object CarIntegration {
             )
             return
         }
-        var mapOpen by remember { androidx.compose.runtime.mutableStateOf(true) }
         val failureHost = remember { app.vela.carlauncher.map.MapRendererFailureHost() }
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
         val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -194,7 +191,7 @@ object CarIntegration {
             haritaIcerigi = {
                 if (mapless) {
                     app.vela.carlauncher.ui.CarMaplessContent(onOpenSettings, onDiagnostics = { testsOpen = true })
-                } else if (mapOpen) {
+                } else {
                     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
                         androidx.compose.runtime.CompositionLocalProvider(
                             app.vela.carlauncher.map.LocalMapRendererFailureHost provides failureHost,
@@ -209,25 +206,6 @@ object CarIntegration {
                                 }
                             }
                         }
-                        androidx.compose.material3.TextButton(
-                            onClick = { CarLauncherSettings.setMaplessMode(true) },
-                            modifier = Modifier.align(Alignment.BottomCenter),
-                        ) { Text(stringResource(app.vela.R.string.car_map_renderer_close)) }
-                    }
-                } else Surface(modifier = Modifier.fillMaxSize()) {
-                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-                        horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(stringResource(app.vela.R.string.car_map_manual_start_detail))
-                        OutlinedButton(onClick = { testsOpen = true }) { Text("Adım adım tanı testleri") }
-                        Button(onClick = { mapRenderLevel.intValue = 3; mapOpen = true }) { Text(stringResource(app.vela.R.string.car_map_manual_start)) }
-                        OutlinedButton(onClick = { mapRenderLevel.intValue = 1; mapOpen = true }) {
-                            Text(stringResource(app.vela.R.string.car_map_empty_test))
-                        }
-                        OutlinedButton(onClick = { mapRenderLevel.intValue = 2; mapOpen = true }) {
-                            Text(stringResource(app.vela.R.string.car_map_style_test))
-                        }
-                        OutlinedButton(onClick = onOpenSettings) { Text(stringResource(app.vela.R.string.car_map_open_settings)) }
                     }
                 }
             }

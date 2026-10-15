@@ -4,10 +4,10 @@
     <string name="car_map_empty_test">Test empty map engine</string>
     <string name="car_map_style_test">Test style without offline archives</string>
 
-    <string name="car_map_renderer_loading">Loading map in a separate process…</string>
+    <string name="car_map_renderer_loading">Preparing your map</string>
+    <string name="car_map_renderer_loading_detail">Your offline map will be ready shortly.</string>
     <string name="car_map_renderer_failed">The map could not open. Details were saved to the logs.</string>
     <string name="car_map_renderer_retry">Retry map</string>
-    <string name="car_map_renderer_close">Close map</string>
 
     <string name="car_map_probe_detail">First step: test the separate map process. No map engine or map data will be loaded.</string>
     <string name="car_map_probe_start">Test map process</string>
