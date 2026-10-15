@@ -12,38 +12,33 @@
     android:paddingStart="4dp"
     android:paddingEnd="4dp">
 
-    <!-- ÜST CONTAINER (Desktop Mode ve Apps) -->
-    <LinearLayout
-        android:id="@+id/left_buttons_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:gravity="center">
+        <!-- Clock -->
+        <LinearLayout
+            android:id="@+id/clock_settings_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="?android:attr/selectableItemBackground"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp">
 
-        <ImageButton
-            android:id="@+id/btn_desktop_mode"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:src="@drawable/ic_desktop_mode"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:scaleType="fitCenter"
-            android:adjustViewBounds="true"
-            app:tint="@color/cl_text_hint"
-            android:padding="12dp"/>
+            <TextClock
+                android:id="@+id/dock_clock"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="@color/cl_m3_light_blue"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:fontFamily="sans-serif-black"
+                android:lineSpacingMultiplier="0.8"
+                android:format24Hour="@string/car_dock_clock_24h"
+                android:format12Hour="@string/car_dock_clock_12h"/>
 
-        <ImageButton
-            android:id="@+id/btn_app_list"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Apps"
-            android:scaleType="fitCenter"
-            android:adjustViewBounds="true"
-            android:src="@drawable/ic_apps_9_dots"
-            app:tint="@color/cl_primary"
-            android:padding="12dp" />
+        </LinearLayout>
 
-    </LinearLayout>
 
     <!-- ORTA CONTAINER (Kısayollar) -->
     <LinearLayout
@@ -65,12 +60,12 @@
                 android:id="@+id/dock_recycler"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="2dp"
-                android:layout_marginBottom="2dp"
-                android:clipToPadding="false"
-                android:paddingTop="6dp"
-                android:paddingBottom="6dp"
+                android:layout_gravity="center"
+                android:layout_marginTop="0dp"
+                android:layout_marginBottom="0dp"
+                android:clipToPadding="true"
+                android:paddingTop="0dp"
+                android:paddingBottom="0dp"
                 android:orientation="vertical"
         android:layout_weight="0"/>
 
@@ -104,7 +99,7 @@
                 android:layout_height="20dp"
                 android:src="@android:drawable/ic_media_play"
                 app:tint="@color/cl_accent_orange"
-                android:layout_marginBottom="2dp"/>
+                android:layout_marginBottom="0dp"/>
 
             <TextView
                 android:id="@+id/mini_music_title"
@@ -127,7 +122,7 @@
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:padding="4dp"
                 app:tint="@color/cl_primary"
-                android:layout_marginBottom="2dp"/>
+                android:layout_marginBottom="0dp"/>
 
             <ImageButton
                 android:id="@+id/mini_btn_next"
@@ -142,7 +137,7 @@
 
     </LinearLayout>
 
-    <!-- ALT CONTAINER (Asistan ve Saat) -->
+    <!-- Assistant above the bottom navigation buttons -->
     <LinearLayout
         android:id="@+id/right_buttons_container"
         android:layout_width="match_parent"
@@ -163,34 +158,42 @@
             android:layout_marginBottom="4dp"
             app:tint="@color/cl_text_secondary"/>
 
-        <!-- Clock -->
-        <LinearLayout
-            android:id="@+id/clock_settings_container"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:background="?android:attr/selectableItemBackground"
-            android:paddingTop="2dp"
-            android:paddingBottom="2dp">
-
-            <TextClock
-                android:id="@+id/dock_clock"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text=""
-                android:textColor="@color/cl_m3_light_blue"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:fontFamily="sans-serif-black"
-                android:lineSpacingMultiplier="0.8"
-                android:format24Hour="@string/car_dock_clock_24h"
-                android:format12Hour="@string/car_dock_clock_12h"/>
-
-        </LinearLayout>
 
     </LinearLayout>
+
+    <!-- Bottom navigation: layout mode and app drawer -->
+    <LinearLayout
+        android:id="@+id/left_buttons_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center">
+
+        <ImageButton
+            android:id="@+id/btn_desktop_mode"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_desktop_mode"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            app:tint="@color/cl_text_hint"
+            android:padding="12dp"/>
+
+        <ImageButton
+            android:id="@+id/btn_app_list"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Apps"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            android:src="@drawable/ic_apps_9_dots"
+            app:tint="@color/cl_primary"
+            android:padding="12dp" />
+
+    </LinearLayout>
+
 
     <!-- Hidden Layout Toggle Button -->
     <ImageButton

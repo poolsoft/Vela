@@ -90,6 +90,23 @@ class CarAppDockHost(
                 false
             )
             recycler.adapter = shortcutAdapter
+            if (isVertical) {
+                // Reserve whole rows, centered between the clock and navigation controls.
+                (recycler.parent as View).addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                    fitShortcutRows()
+                }
+                recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                    override fun onScrollStateChanged(view: RecyclerView, state: Int) {
+                        if (state != RecyclerView.SCROLL_STATE_IDLE) return
+                        val manager = view.layoutManager as LinearLayoutManager
+                        val first = manager.findViewByPosition(manager.findFirstVisibleItemPosition()) ?: return
+                        val top = manager.getDecoratedTop(first)
+                        val row = manager.getDecoratedMeasuredHeight(first)
+                        val offset = if (-top > row / 2) top + row else top
+                        if (offset != 0) view.smoothScrollBy(0, offset)
+                    }
+                })
+            }
             updateShortcuts(dockManager.kisayollar.value)
         }
     }
@@ -98,16 +115,34 @@ class CarAppDockHost(
         if (width <= 0 || height <= 0) return
         val density = context.resources.displayMetrics.density
         val cross = if (isVertical) width else height
-        val size = (cross - 8 * density).toInt().coerceIn((40 * density).toInt(), (64 * density).toInt())
+        val size = (cross - (if (isVertical) 12 else 8) * density).toInt()
+            .coerceIn((40 * density).toInt(), (64 * density).toInt())
         for (button in listOf(btnAppList, btnDesktopMode, rootView.findViewById<ImageButton>(R.id.btn_assistant))) {
             button ?: continue
             if (button.layoutParams.width != size || button.layoutParams.height != size)
                 button.layoutParams = button.layoutParams.apply { this.width = size; this.height = size }
         }
         shortcutAdapter.setItemSize(size)
+        fitShortcutRows()
         miniMusicContainer?.visibility = if (!isVertical && width / density >= 640) View.VISIBLE else View.GONE
         rootView.findViewById<View>(R.id.btn_assistant)?.visibility =
             if (isVertical || width / density >= 480) View.VISIBLE else View.GONE
+    }
+
+    private fun fitShortcutRows() {
+        if (!isVertical) return
+        val recycler = dockRecycler ?: return
+        val parent = recycler.parent as View
+        val density = context.resources.displayMetrics.density
+        val size = (rootView.width - 12 * density).toInt()
+            .coerceIn((40 * density).toInt(), (64 * density).toInt())
+        val row = size + 2 * (2 * density).toInt()
+        val available = parent.height
+        if (available < row) return
+        val height = minOf(available / row, shortcutAdapter.itemCount) * row
+        if (recycler.layoutParams.height != height) {
+            recycler.layoutParams = recycler.layoutParams.apply { this.height = height }
+        }
     }
 
     private var isListeningVoice = false
@@ -115,7 +150,10 @@ class CarAppDockHost(
     private val originalBackground = btnAssistant?.background
     private val originalImageTint = btnAssistant?.imageTintList
 
-    fun updateShortcuts(shortcuts: List<AppShortcut>) = shortcutAdapter.submitItems(shortcuts)
+    fun updateShortcuts(shortcuts: List<AppShortcut>) {
+        shortcutAdapter.submitItems(shortcuts)
+        fitShortcutRows()
+    }
 
     fun release() {
         voicePulseAnimator?.cancel()
