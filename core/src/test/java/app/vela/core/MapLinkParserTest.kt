@@ -8,6 +8,14 @@ import org.junit.Test
 
 class MapLinkParserTest {
 
+    @Test fun navigationLinksKeepTheirDestination() {
+        val point = MapLinkParser.parse("google.navigation:q=37.6,36.8&mode=d")!!
+        assertEquals(37.6, point.lat!!, 1e-6)
+        assertEquals(36.8, point.lng!!, 1e-6)
+        assertEquals("Kahramanmaras", MapLinkParser.parse("google.navigation:q=Kahramanmaras")!!.query)
+        assertNull(MapLinkParser.parse("google.navigation:"))
+    }
+
     @Test fun geoPoint() {
         val l = MapLinkParser.parse("geo:38.5449,-121.7405")!!
         assertEquals(38.5449, l.lat!!, 1e-6)

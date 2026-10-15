@@ -44,6 +44,8 @@ object CarIntegration {
     const val available = true
     private val mapRenderLevel = androidx.compose.runtime.mutableIntStateOf(3)
     fun isolatedAutoSurface(context: Context): app.vela.ui.map.SurfaceMapController? = app.vela.carlauncher.map.AutoSurfaceMap(context)
+    @Composable fun mapInputReady(): Boolean =
+        app.vela.carlauncher.map.LocalMapRendererFailureHost.current?.state?.ready ?: true
     @Composable fun RenderIsolatedMap(
         scene: app.vela.ui.map.MapRenderScene,
         callbacks: app.vela.ui.map.MapRenderCallbacks,
@@ -86,6 +88,11 @@ object CarIntegration {
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(false)
     }
     fun isDefaultHome(context: Context): Boolean {
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            val roles = context.getSystemService(android.app.role.RoleManager::class.java)
+            if (roles?.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) == true &&
+                roles.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) return true
+        }
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         return context.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
             ?.activityInfo?.packageName == context.packageName

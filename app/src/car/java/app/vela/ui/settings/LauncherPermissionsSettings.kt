@@ -86,8 +86,9 @@ internal fun LauncherPermissionsSettings(onBack: () -> Unit) {
     val isHomeRoleHeld = remember(revision) {
         if (Build.VERSION.SDK_INT >= 29) {
             val roles = context.getSystemService(RoleManager::class.java)
-            roles?.isRoleAvailable(RoleManager.ROLE_HOME) == true && roles.isRoleHeld(RoleManager.ROLE_HOME)
-        } else false
+            if (roles?.isRoleAvailable(RoleManager.ROLE_HOME) == true) roles.isRoleHeld(RoleManager.ROLE_HOME)
+            else app.vela.variant.CarIntegration.isDefaultHome(context)
+        } else app.vela.variant.CarIntegration.isDefaultHome(context)
     }
 
     SettingsScaffold(title = stringResource(R.string.car_permissions_title), onBack = onBack) { topRow ->

@@ -13,6 +13,7 @@ object CarIntegration {
     fun mapStorageAvailable(): Boolean = true
     const val available = false
     fun isolatedAutoSurface(context: Context): app.vela.ui.map.SurfaceMapController? = null
+    @Composable fun mapInputReady(): Boolean = true
     @Composable fun RenderIsolatedMap(
         scene: app.vela.ui.map.MapRenderScene,
         callbacks: app.vela.ui.map.MapRenderCallbacks,

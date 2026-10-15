@@ -49,6 +49,8 @@ object MapLinkParser {
     fun parse(raw: String): MapLink? {
         val link = when {
             raw.startsWith("geo:", ignoreCase = true) -> parseGeo(raw)
+            raw.startsWith("google.navigation:", ignoreCase = true) ->
+                parseGeo("geo:0,0?" + raw.substringAfter(':').removePrefix("?"))
             "/maps" in raw || "maps.google" in raw || "maps.app.goo.gl" in raw -> parseMaps(raw)
             else -> null
         }

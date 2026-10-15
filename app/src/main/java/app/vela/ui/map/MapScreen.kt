@@ -494,7 +494,8 @@ fun MapScreen(
     // Under D-pad the field blurs when focus walks the rows, so `searchExpanded` still carries the
     // overlay there (blur must not close it); BACK clears both and closes as before.
     val gates = SearchGates.of(state, searchExpanded, searchFocused)
-    val searchOpen = gates.searchOpen
+    val mapInputReady = app.vela.variant.CarIntegration.mapInputReady()
+    val searchOpen = mapInputReady && gates.searchOpen
     // The results panel is open (not collapsed to the "N results" pill) → hide the bottom map
     // chrome (scale bar / locate FAB / Search this area) so it never draws on top of the list at
     // ANY size, not just full screen. The panel and the chrome are siblings in the same Box and the
@@ -1472,6 +1473,7 @@ fun MapScreen(
                     // while the endpoints card above replaces it in directions mode.
                     val searchBar: @Composable () -> Unit = {
                     SearchBar(
+                        inputEnabled = mapInputReady,
                         query = state.query,
                         searching = state.searching,
                         onQueryChange = vm::onQueryChange,
