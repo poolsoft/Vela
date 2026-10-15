@@ -255,7 +255,9 @@ class MainActivity : ComponentActivity() {
         when (intent?.action) {
             Intent.ACTION_VIEW -> {
                 val data = intent.data?.toString() ?: return
-                MapLinkParser.parse(data)?.let { vm.openDeepLink(it) }
+                val target = MapLinkParser.parse(data)
+                if (target != null) vm.openDeepLink(target)
+                else if (MapLinkParser.isShareLink(data)) vm.openSharedText(data)
             }
             // Share TO Vela: a Google Maps share link imports without the copy-paste dance, a
             // geo:/maps URL opens like a deep link, plain text (an address someone texted you)

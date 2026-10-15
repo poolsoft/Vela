@@ -109,6 +109,11 @@ object CarIntegration {
     }
     @Composable fun ExitControl() = app.vela.carlauncher.ui.LauncherExitControl()
     fun onCreated(activity: ComponentActivity) {
+        val home = activity.packageManager.resolveActivity(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+            android.content.pm.PackageManager.MATCH_DEFAULT_ONLY,
+        )?.activityInfo
+        app.vela.util.FileLogger.i("HomeRole", "default=${isDefaultHome(activity)} resolved=${home?.packageName}/${home?.name}")
         app.vela.carlauncher.diag.DiagnosticService.start(activity)
         activity.lifecycleScope.launch {
             CarLauncherSettings.ekranYonu.collect { orientation ->
