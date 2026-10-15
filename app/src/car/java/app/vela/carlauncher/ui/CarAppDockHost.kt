@@ -123,8 +123,13 @@ class CarAppDockHost(
             .coerceIn((40 * density).toInt(), (64 * density).toInt())
         for (button in listOf(btnAppList, btnDesktopMode, rootView.findViewById<ImageButton>(R.id.btn_assistant))) {
             button ?: continue
-            if (button.layoutParams.width != size || button.layoutParams.height != size)
-                button.layoutParams = button.layoutParams.apply { this.width = size; this.height = size }
+            val buttonHeight = if (isVertical) (40 * density).toInt() else size
+            if (button.layoutParams.width != size || button.layoutParams.height != buttonHeight)
+                button.layoutParams = button.layoutParams.apply { this.width = size; this.height = buttonHeight }
+            if (isVertical) {
+                val padding = (8 * density).toInt()
+                button.setPadding(padding, padding, padding, padding)
+            }
         }
         shortcutAdapter.setItemSize(size)
         fitShortcutRows()
