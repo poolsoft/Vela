@@ -33,4 +33,8 @@ with tempfile.TemporaryDirectory() as directory:
             assert target.execute("SELECT a.hn,s.street_norm,a.city FROM addr a JOIN streetname s USING(sid)").fetchone() == ("12", "inonu caddesi", "Maraş")
             assert target.execute("SELECT COUNT(*) FROM streetpt").fetchone()[0] == 1
             assert target.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            target.commit()
+        with closing(sqlite3.connect(root / "snapshot.db")) as restored:
+            assert restored.execute("SELECT name FROM poi").fetchone()[0] == "Çınar Lokantası"
+            assert restored.execute("SELECT COUNT(*) FROM addr").fetchone()[0] == 1
 print("Offline search snapshot: WAL rows, Turkish text and address/street mapping passed.")
