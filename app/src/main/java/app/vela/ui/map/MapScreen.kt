@@ -246,10 +246,6 @@ private const val USE_MAPTILER = false
 private val SIDE_PANEL_WIDTH_MIN = 400.dp
 private val SIDE_PANEL_WIDTH_MAX = 520.dp
 
-/** Gap in px between the puck glyph's center and the current-road pill below it (issue #288).
- *  The nav puck bitmap is 202px drawn at ~half that on screen, so this clears its lower edge. */
-private const val PUCK_LABEL_GAP_PX = 62
-
 /** How far the OpenStreetMap credit lifts to clear the free-drive speed box, which sits in the same
  *  bottom-left corner: the box's height plus its 16 dp margin and a couple of dp of air. */
 private val SPEED_BOX_LIFT_DP = 78.dp
@@ -1377,7 +1373,7 @@ fun MapScreen(
                                 placeable.place(
                                     (at.x - placeable.width / 2f).roundToInt()
                                         .coerceIn(margin, maxX),
-                                    (at.y + PUCK_LABEL_GAP_PX).roundToInt(),
+                                    (at.y + NavPuckSizing.labelGapDp(app.vela.ui.PuckStyle.scale()).dp.roundToPx()).roundToInt(),
                                 )
                             }
                         },
@@ -1717,7 +1713,7 @@ fun MapScreen(
                                 .coerceAtLeast(margin)
                             placeable.place(
                                 (at.x - placeable.width / 2f).roundToInt().coerceIn(margin, maxX),
-                                (at.y - PUCK_LABEL_GAP_PX - placeable.height).roundToInt()
+                                (at.y - NavPuckSizing.labelGapDp(app.vela.ui.PuckStyle.scale()).dp.roundToPx() - placeable.height).roundToInt()
                                     .coerceAtLeast(margin),
                             )
                         }

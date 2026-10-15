@@ -1063,7 +1063,6 @@ fun VelaMapView(
     val puckOverlayX = remember { androidx.compose.runtime.mutableFloatStateOf(Float.NaN) }
     val puckOverlayY = remember { androidx.compose.runtime.mutableFloatStateOf(Float.NaN) }
     val puckOverlayRot = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-    val puckOverlaySquash = remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
     val puckOverlayHidLayer = remember { booleanArrayOf(false) } // ME_ARROW_LAYER hidden for the overlay
     fun dropPuckOverlay() {
         if (puckOverlayOn.value) puckOverlayOn.value = false
@@ -2779,12 +2778,11 @@ fun VelaMapView(
                     // the white glyph moved 1-2 px on 95% of frames). In follow mode the puck is
                     // therefore a Compose overlay at the projection of the SAME point through the
                     // camera state just set, so the two cannot disagree by a frame. Same look:
-                    // rotated by the bearing relative to the camera, squashed by the tilt.
+                    // rotated by the bearing relative to the camera, with a stable screen size.
                     val scr = cam.projection.toScreenLocation(MLLatLng(pt.lat, pt.lng))
                     puckOverlayX.floatValue = scr.x
                     puckOverlayY.floatValue = scr.y
                     puckOverlayRot.floatValue = (((navPuck.displayBearing - camState[2]).toFloat() % 360f) + 360f) % 360f
-                    puckOverlaySquash.floatValue = kotlin.math.cos(Math.toRadians(navTiltEase[0])).toFloat().coerceIn(0.2f, 1f)
                     if (!puckOverlayOn.value) puckOverlayOn.value = true
                     if (!puckOverlayHidLayer[0]) {
                         puckOverlayHidLayer[0] = true
@@ -4328,21 +4326,20 @@ fun VelaMapView(
     if (puckOverlayOn.value) {
         val puckKey = app.vela.ui.PuckStyle.key()
         val puckImg = remember(puckKey) { navPuckBitmap().asImageBitmap() }
-        val sizePx = puckImg.width
+        val sizeDp = NavPuckSizing.displayEdgeDp(puckImg.width).dp
+        val sizePx = with(density) { sizeDp.toPx() }
         androidx.compose.foundation.Image(
             bitmap = puckImg,
             contentDescription = null,
             modifier = Modifier
-                // Outer layer: place the center at the projected point and squash by the tilt
-                // (in SCREEN space, after the rotation below - hence two layers).
+                // Place the center in screen space; camera pitch must not resize the arrow.
                 .graphicsLayer {
                     translationX = puckOverlayX.floatValue - sizePx / 2f
                     translationY = puckOverlayY.floatValue - sizePx / 2f
-                    scaleY = puckOverlaySquash.floatValue
                 }
                 // Inner layer: the heading, relative to the camera (the map rotates under it).
                 .graphicsLayer { rotationZ = puckOverlayRot.floatValue }
-                .size(with(density) { sizePx.toDp() }),
+                .size(sizeDp),
         )
     }
     }
@@ -4463,7 +4460,8 @@ private fun ensureLayers(style: Style) {
     applyPoiTierFilters(style, fuelOnly = false)
 
     if (style.getImage(ME_ARROW_IMG) == null) style.addImage(ME_ARROW_IMG, arrowBitmap())
-    if (style.getImage(NAV_PUCK_IMG) == null) style.addImage(NAV_PUCK_IMG, navPuckBitmap())
+    if (style.getImage(NAV_PUCK_IMG) == null) style.addImage(NAV_PUCK_IMG,
+        navPuckBitmap().apply { density = NavPuckSizing.IMAGE_DENSITY_DPI })
 
     // Terrain relief — only over the OpenMapTiles basemap (the keyless path).
     if (basemapSrc(style) != null) ensureHillshade(style)
@@ -7874,6 +7872,8 @@ private fun applyData(
         )
         style.getLayer(ME_ARROW_LAYER)?.setProperties(
             PropertyFactory.iconImage(if (navMode) NAV_PUCK_IMG else ME_ARROW_IMG),
+            PropertyFactory.iconSize(if (navMode) NavPuckSizing.SYMBOL_SCALE else 1f),
+            PropertyFactory.iconPitchAlignment(if (navMode) Property.ICON_PITCH_ALIGNMENT_VIEWPORT else Property.ICON_PITCH_ALIGNMENT_MAP),
             PropertyFactory.visibility(if (me != null && bearing != null && !meStale && !puckOverlayOwnsArrow) Property.VISIBLE else Property.NONE),
         )
     }
@@ -7946,7 +7946,7 @@ internal fun navPuckBitmap(
 ): Bitmap {
     // 202 = +15% per issue #251 (2026-08-10); the earlier chain was 96 -> 112 -> 136 -> 176.
     // [scale] is the Settings "Arrow size" (issue #344): Large 1.25x, Extra large 1.5x.
-    val size = (202 * scale).toInt()
+    val size = (NavPuckSizing.BITMAP_EDGE * scale).toInt()
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     // Drawn in the original 176-space and scaled whole, so the disc/arrow/shadow proportions the
