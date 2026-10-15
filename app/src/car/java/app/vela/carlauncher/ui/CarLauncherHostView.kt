@@ -155,7 +155,8 @@ fun CarLauncherHostView(
                     onMiniMusicClick = { latestPanel("MUSIC") },
                     onPlayPauseClick = { latestPlay() },
                     onNextClick = { latestNext() },
-                    onAssistantClick = { latestAssistant() }
+                    onAssistantClick = { latestAssistant() },
+                    onSettingsClick = { latestSettings() }
                 ).also { dock.addView(it.rootView) }
             }
             binding.dockHost?.updateShortcuts(shortcuts)

@@ -27,7 +27,8 @@ class CarAppDockHost(
     private val onMiniMusicClick: () -> Unit,
     private val onPlayPauseClick: () -> Unit,
     private val onNextClick: () -> Unit,
-    private val onAssistantClick: () -> Unit = {}
+    private val onAssistantClick: () -> Unit = {},
+    private val onSettingsClick: () -> Unit
 ) {
 
     val rootView: View = LayoutInflater.from(context).inflate(
@@ -68,6 +69,7 @@ class CarAppDockHost(
         btnAppList?.setOnClickListener { onAppDrawerClick() }
         btnDesktopMode?.setOnClickListener { onDesktopClick() }
         btnAssistant?.setOnClickListener { onAssistantClick() }
+        rootView.findViewById<View>(R.id.clock_settings_container)?.setOnClickListener { onSettingsClick() }
         miniMusicContainer?.setOnClickListener { onMiniMusicClick() }
         miniMusicPlay?.setOnClickListener { onPlayPauseClick() }
         rootView.findViewById<View>(R.id.mini_btn_next)?.setOnClickListener { onNextClick() }
