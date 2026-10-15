@@ -81,6 +81,9 @@ class CarMusicPlayerHost(
         setupListeners()
         setupGestures()
         setupStateFlows()
+        rootView.findViewById<View>(R.id.playback_controls_layout).addOnLayoutChangeListener { _, l, _, r, _, _, _, _, _ ->
+            resizePlaybackButtons(r - l)
+        }
         rootView.addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ -> resizePlayer(r - l, b - t) }
     }
 
@@ -155,9 +158,18 @@ class CarMusicPlayerHost(
                 androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP, dp(6))
             applyTo(center)
         }
+        resizePlaybackButtons(rootView.findViewById<View>(R.id.playback_controls_layout).width)
+    }
+
+    private var lastPlaybackWidth = 0
+    private fun resizePlaybackButtons(width: Int) {
+        if (width <= 0 || width == lastPlaybackWidth) return
+        lastPlaybackWidth = width
+        val density = context.resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
         val controls = rootView.findViewById<androidx.constraintlayout.widget.ConstraintLayout>(R.id.playback_controls_layout)
         val buttons = androidx.constraintlayout.widget.ConstraintSet().apply { clone(controls) }
-        val size = ((contentWidth - 56) / 5f).coerceIn(32f, 64f).toInt()
+        val size = ((width / density - 32) / 5f).coerceIn(32f, 64f).toInt()
         for (id in intArrayOf(R.id.btn_shuffle, R.id.btn_prev, R.id.btn_play_container, R.id.btn_next, R.id.btn_repeat)) {
             buttons.constrainWidth(id, dp(size)); buttons.constrainHeight(id, dp(size))
             val padding = if (id == R.id.btn_play_container) 0 else dp(8)

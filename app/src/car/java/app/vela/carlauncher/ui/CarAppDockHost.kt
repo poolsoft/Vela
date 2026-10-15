@@ -52,11 +52,20 @@ class CarAppDockHost(
                 menu.add(0, 1, 0, R.string.car_dock_move_previous)
                 menu.add(0, 2, 1, R.string.car_dock_move_next)
                 menu.add(0, 3, 2, R.string.car_dock_remove)
+                if (!InternalApp.isInternalUri(shortcut.paketAdi)) {
+                    menu.add(0, 4, 3, R.string.car_app_mode_full)
+                    menu.add(0, 5, 4, R.string.car_app_mode_split)
+                    menu.add(0, 6, 5, R.string.car_app_mode_freeform).isEnabled =
+                        app.vela.carlauncher.apps.CarAppManager.getInstance(context).supportsFreeform()
+                }
                 setOnMenuItemClickListener { item ->
                     when (item.itemId) {
                         1 -> dockManager.kisayolTasi(shortcut.paketAdi, -1)
                         2 -> dockManager.kisayolTasi(shortcut.paketAdi, 1)
                         3 -> dockManager.kisayolSil(shortcut.paketAdi)
+                        4 -> dockManager.setLaunchMode(shortcut.paketAdi, app.vela.carlauncher.model.LaunchMode.FULL_SCREEN)
+                        5 -> dockManager.setLaunchMode(shortcut.paketAdi, app.vela.carlauncher.model.LaunchMode.SPLIT_SCREEN)
+                        6 -> dockManager.setLaunchMode(shortcut.paketAdi, app.vela.carlauncher.model.LaunchMode.OVERLAY)
                     }
                     true
                 }

@@ -152,17 +152,23 @@ class AppDockManager private constructor(private val context: Context) {
         }
     }
 
-    fun kisayolEkle(paketAdi: String): Boolean {
+    fun kisayolEkle(paketAdi: String, mode: LaunchMode = LaunchMode.FULL_SCREEN): Boolean {
         val guncel = _kisayollar.value.toMutableList()
         if (guncel.any { it.paketAdi == paketAdi }) return false
 
         val pm = context.packageManager
-        val shortcut = cozAppShortcut(paketAdi, guncel.size, LaunchMode.FULL_SCREEN, pm) ?: return false
+        val shortcut = cozAppShortcut(paketAdi, guncel.size, mode, pm) ?: return false
 
         guncel.add(shortcut)
         kaydetJson(guncel)
         _kisayollar.value = guncel
         return true
+    }
+
+    fun setLaunchMode(packageName: String, mode: LaunchMode) {
+        val updated = _kisayollar.value.map { if (it.paketAdi == packageName) it.copy(launchMode = mode) else it }
+        kaydetJson(updated)
+        _kisayollar.value = updated
     }
 
     fun kisayolTasi(paketAdi: String, delta: Int) {

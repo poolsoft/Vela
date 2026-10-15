@@ -224,7 +224,7 @@
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_previous"
+                android:src="@drawable/ic_music_prev"
                 android:padding="8dp"
                 android:scaleType="fitCenter"
                 app:tint="#FFFFFF" />
@@ -246,7 +246,7 @@
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_next"
+                android:src="@drawable/ic_music_next"
                 android:padding="8dp"
                 android:scaleType="fitCenter"
                 app:tint="#FFFFFF" />

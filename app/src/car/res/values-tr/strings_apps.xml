@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="car_app_add_dock">Dock’a ekle</string>
+    <string name="car_app_info">Uygulama bilgisi</string>
+    <string name="car_app_uninstall">Kaldır</string>
+    <string name="car_app_dock_split">Dock’a ekle · bölünmüş ekran isteği</string>
+    <string name="car_app_dock_freeform">Dock’a ekle · yüzen pencere</string>
+    <string name="car_app_mode_full">Normal aç</string>
+    <string name="car_app_mode_split">Bölünmüş ekran iste</string>
+    <string name="car_app_mode_freeform">Yüzen pencerede aç</string>
+    <string name="car_app_mode_saved">Dock kısayolu ve açılış tercihi kaydedildi</string>
+    <string name="car_app_freeform_unavailable">Bu cihaz yüzen pencere desteği bildirmiyor. Dock menüsünden normal açılışı seçin.</string>
+</resources>

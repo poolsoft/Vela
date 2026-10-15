@@ -89,7 +89,9 @@ enum class InternalApp(
 enum class LaunchMode {
     FULL_SCREEN,
     PANEL,
-    POPUP
+    POPUP,
+    SPLIT_SCREEN,
+    OVERLAY
 }
 
 /**
