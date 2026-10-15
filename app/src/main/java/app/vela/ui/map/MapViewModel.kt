@@ -2069,7 +2069,7 @@ class MapViewModel @Inject constructor(
             if (offlineNow()) {
                 val (offline, haveArea) = withContext(Dispatchers.IO) {
                     // Show local results without reverse-geocoding every row; selection fills the address.
-                    val pois = runCatching { offlinePoiStore.search(q, near) }.getOrDefault(emptyList())
+                    val pois = runCatching { offlinePoiStore.search(q, near) }.onFailure { app.vela.util.FileLogger.w("OfflineSearch", "POI query failed", it) }.getOrDefault(emptyList())
                     val isAddress = app.vela.core.data.OfflineAddressStore.looksLikeAddress(q)
                     val addrs = runCatching { addressStore.geocode(q, near) }.getOrDefault(emptyList())
                     val atAddr = if (isAddress) {
@@ -2084,7 +2084,7 @@ class MapViewModel @Inject constructor(
                         else -> addrs.distinctBy { it.id }
                     }
                     val have = merged.isNotEmpty() ||
-                        runCatching { offlinePoiStore.count() > 0 || addressStore.count() > 0 || addressStore.streetCount() > 0 }.getOrDefault(false)
+                        hasOfflineSearchData()
                     merged to have
                 }
                 _state.update {
@@ -2097,7 +2097,7 @@ class MapViewModel @Inject constructor(
                         haveArea ->
                             it.copy(results = emptyList(), status = appContext.getString(R.string.mapvm_offline_no_match, q), searching = false)
                         else ->
-                            it.copy(results = emptyList(), status = appContext.getString(R.string.mapvm_offline_no_data), searching = false)
+                            it.copy(results = emptyList(), status = offlineDataProblem(), searching = false)
                     }
                 }
                 return@launch
@@ -2223,9 +2223,9 @@ class MapViewModel @Inject constructor(
                     // A dead connection: if there's a downloaded area the query just didn't match it, else
                     // point the user at the offline download instead of a raw "Unable to resolve host".
                     val haveArea = withContext(Dispatchers.IO) {
-                        runCatching { offlinePoiStore.count() > 0 || addressStore.count() > 0 || addressStore.streetCount() > 0 }.getOrDefault(false)
+                        hasOfflineSearchData()
                     }
-                    val msg = if (haveArea) appContext.getString(R.string.mapvm_offline_no_match, q) else appContext.getString(R.string.mapvm_offline_no_data)
+                    val msg = if (haveArea) appContext.getString(R.string.mapvm_offline_no_match, q) else offlineDataProblem()
                     _state.update { it.copy(status = msg, searching = false) }
                 } else {
                     _state.update { it.copy(status = appContext.getString(R.string.mapvm_search_failed_reason, e.message), searching = false) }
@@ -2238,8 +2238,20 @@ class MapViewModel @Inject constructor(
      *  interpolated address hits (addresses first so a typed street resolves). Used both when the online
      *  scrape throws AND when it succeeds with zero results, so a small local place Google misses still
      *  surfaces instead of a blank screen. */
+    private fun hasOfflineSearchData(): Boolean =
+        listOf(offlinePoiStore::count, addressStore::count, addressStore::streetCount).any { count ->
+            runCatching { count() > 0 }
+                .onFailure { app.vela.util.FileLogger.w("OfflineSearch", "Data count failed", it) }.getOrDefault(false)
+        }
+
+    private fun offlineDataProblem(): String {
+        val failed = app.vela.core.data.OfflinePacks.failures.keys.map { java.io.File(it).name }
+        return if (failed.isNotEmpty()) appContext.getString(R.string.mapvm_offline_pack_unreadable, failed.joinToString())
+            else appContext.getString(R.string.mapvm_offline_no_data)
+    }
+
     private suspend fun offlineSearch(q: String, near: LatLng?): List<Place> = withContext(Dispatchers.IO) {
-        val pois = runCatching { offlinePoiStore.search(q, near) }.getOrDefault(emptyList())
+        val pois = runCatching { offlinePoiStore.search(q, near) }.onFailure { app.vela.util.FileLogger.w("OfflineSearch", "POI query failed", it) }.getOrDefault(emptyList())
         val addrs = runCatching { addressStore.geocode(q, near) }.getOrDefault(emptyList())
         val isAddr = app.vela.core.data.OfflineAddressStore.looksLikeAddress(q)
         (if (isAddr && addrs.isNotEmpty()) addrs + pois else pois + addrs).distinctBy { it.id }

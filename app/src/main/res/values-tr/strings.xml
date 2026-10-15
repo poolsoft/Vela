@@ -573,7 +573,8 @@
     <string name="search_settings_cd">Ayarlar</string>
     <string name="mapvm_shortcut_set">%1$s set to %2$s</string>
     <string name="mapvm_search_needs_recalibration">Aramanın yeniden kalibre edilmesi gerekiyor: %1$s</string>
-    <string name="mapvm_offline_no_data">You’re offline. Download an area in Settings ▸ Offline to search without a connection.</string>
+    <string name="mapvm_offline_no_data">Çevrimdışı yer/adres arama verisi bulunamadı. Haritanın görünmesi arama indeksinin yüklü olduğu anlamına gelmez. Arama verisini içeren yeni bir tam yedek yükleyin veya Yerler / POI paketi kurun.</string>
+    <string name="mapvm_offline_pack_unreadable">Arama paketi açılamadı: %1$s. Uygulama logundaki OfflineSearch kayıtlarını kontrol edin.</string>
     <string name="mapvm_offline_no_match">No offline results for ”%1$s” in your saved area. Offline search covers OpenStreetMap places you downloaded.</string>
     <string name="mapvm_no_results">No results for ”%1$s”.</string>
     <string name="mapvm_offline_results">Offline results (no connection)</string>

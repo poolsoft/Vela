@@ -237,6 +237,15 @@ object LauncherBackup {
                     }
                 }
             }
+            if (BackupCategory.PLACES in selectedCategories) {
+                app.vela.backup.OfflineSearchSnapshot.create(context)?.let { snapshot ->
+                    try {
+                        zipOut.putNextEntry(ZipEntry("files/poipacks/${snapshot.name}"))
+                        snapshot.inputStream().use { it.copyTo(zipOut, BUFFER_SIZE) }
+                        zipOut.closeEntry()
+                    } finally { snapshot.delete() }
+                }
+            }
             zipOut.finish()
             zipOut.flush()
         } finally {

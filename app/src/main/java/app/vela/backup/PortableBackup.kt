@@ -166,7 +166,9 @@ object PortableBackup {
         val revision = DownloadService.workRevision()
         val targetRoots = selectedCategories.flatMap { it.roots }.toSet()
         val original = inventory(app, targetRoots)
-        val dirs = targetRoots.filter { File(app.filesDir, it).isDirectory }.sorted()
+        val snapshot = if (ModularCategory.PLACES in selectedCategories) OfflineSearchSnapshot.create(app) else null
+        val dirs = (targetRoots.filter { File(app.filesDir, it).isDirectory } +
+            if (snapshot != null) listOf("poipacks") else emptyList()).distinct().sorted()
         
         val meta = mutableListOf<Source>()
         var personalText: String? = null
@@ -181,7 +183,9 @@ object PortableBackup {
             val bytes = launcherText.toByteArray(Charsets.UTF_8)
             meta += Source("launcher.json", null, bytes, bytes.size.toLong(), 0)
         }
-        val sources = original + meta
+        val sources = original + meta + listOfNotNull(snapshot?.let {
+            Source("poipacks/${it.name}", it, null, it.length(), it.lastModified())
+        })
         require(sources.isNotEmpty() && sources.size <= 100000)
         val total = sources.sumOf { it.size }
         val name = "Vela-backup-" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(java.time.ZoneOffset.UTC).format(Instant.now())
@@ -235,7 +239,7 @@ object PortableBackup {
         } catch (e: Exception) {
             runCatching { DocumentsContract.deleteDocument(app.contentResolver, folder) }
             throw e
-        }
+        } finally { snapshot?.delete() }
     }
 
     fun inspect(context: Context, tree: Uri) = run(context) { app ->

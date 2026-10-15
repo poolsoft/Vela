@@ -115,9 +115,10 @@ class OfflinePoiStore @Inject constructor(
         }
     }
 
-    fun count(): Int = helper.readableDatabase
-        .rawQuery("SELECT COUNT(*) FROM poi", null)
-        .use { if (it.moveToFirst()) it.getInt(0) else 0 } + OfflinePacks.count("poi")
+    fun count(): Int = runCatching {
+        helper.readableDatabase.rawQuery("SELECT COUNT(*) FROM poi", null)
+            .use { if (it.moveToFirst()) it.getInt(0) else 0 }
+    }.getOrDefault(0) + OfflinePacks.count("poi")
 
     /** Every POI within [radiusM] of [loc], nearest first: the businesses AT a typed address. A
      *  pack POI often has no `addr:*` of its own (most US chains do not in OSM), so an address
@@ -444,7 +445,10 @@ class OfflinePoiStore @Inject constructor(
         val temizTekTerim = ftsTemizle(norm(term))
 
         val adayHavuzu = LinkedHashMap<String, AramaAdayi>()
-        val tumDbListesi = listOf(helper.readableDatabase) + OfflinePacks.dbs
+        val local = runCatching { helper.readableDatabase }
+            .onFailure { android.util.Log.w("OfflinePoiStore", "Local cache could not open; keeping region packs", it) }
+            .getOrNull()
+        val tumDbListesi = listOfNotNull(local) + OfflinePacks.dbs
 
         for (db in tumDbListesi) {
             if (hasFtsTablosu(db)) {

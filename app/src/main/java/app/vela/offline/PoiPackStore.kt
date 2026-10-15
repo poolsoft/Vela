@@ -43,7 +43,14 @@ class PoiPackStore @Inject constructor(
         packsRoot.listFiles { f -> f.extension == "db" }?.map { it.absolutePath } ?: emptyList()
 
     /** Register every installed pack with the core stores. Call at startup and after install/delete. */
-    fun registerPacks() = OfflinePacks.reload(installedPaths())
+    fun registerPacks() {
+        val paths = installedPaths()
+        OfflinePacks.reload(paths)
+        app.vela.util.FileLogger.i("OfflineSearch", "packFiles=${paths.map { File(it).name }} opened=${OfflinePacks.dbs.size}")
+        OfflinePacks.failures.forEach { (path, reason) ->
+            app.vela.util.FileLogger.w("OfflineSearch", "Pack could not open: ${File(path).name}: $reason")
+        }
+    }
 
     /** Fetch the pack catalog. Supports multi-source manifests (Poolsoft fork, Upstream, Custom). */
     suspend fun manifest(manifestUrl: String = app.vela.BuildConfig.POI_PACK_MANIFEST_URL): List<RoutingRegion> = withContext(Dispatchers.IO) {
