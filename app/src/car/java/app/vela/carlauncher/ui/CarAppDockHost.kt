@@ -100,8 +100,10 @@ class CarAppDockHost(
                         if (state != RecyclerView.SCROLL_STATE_IDLE) return
                         val manager = view.layoutManager as LinearLayoutManager
                         val first = manager.findViewByPosition(manager.findFirstVisibleItemPosition()) ?: return
-                        val top = manager.getDecoratedTop(first)
-                        val row = manager.getDecoratedMeasuredHeight(first)
+                        val bounds = android.graphics.Rect()
+                        manager.getDecoratedBoundsWithMargins(first, bounds)
+                        val top = bounds.top
+                        val row = bounds.height()
                         val offset = if (-top > row / 2) top + row else top
                         if (offset != 0) view.smoothScrollBy(0, offset)
                     }
