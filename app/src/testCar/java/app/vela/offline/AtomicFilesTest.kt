@@ -22,6 +22,8 @@ class AtomicFilesTest {
     }
 
     @Test fun concurrentReadersOnlySeeCompleteReplacements() {
+        // Android and CI use Linux rename semantics; Windows locks open targets against replacement.
+        org.junit.Assume.assumeFalse(System.getProperty("os.name").startsWith("Windows"))
         val directory = Files.createTempDirectory("vela-reader").toFile()
         val executor = Executors.newSingleThreadExecutor()
         try {

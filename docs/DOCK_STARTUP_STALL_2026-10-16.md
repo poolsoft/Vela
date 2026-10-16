@@ -16,3 +16,7 @@ The dock now publishes shortcut identity/order/mode first, then resolves labels 
 The remaining work is to measure initial graphics/theme waits and surface-resize latency independently, then harden offline index writes and glyph-pack replacement. No watchdog threshold was raised and diagnostic reporting was not disabled.
 
 - Offline drawer, large-player and background/return checks retained the launcher and renderer PIDs and kept the style load count at one. Drawer and player contents were also inspected in screenshots. The captured offline session still had no stall report after these transitions.
+
+## Resize observations
+
+The offline retained session rendered the narrower map after opening the drawer in about 0.50 seconds and the wider map after closing it in about 0.44 seconds, using the client resize and next frame log timestamps. These are samples, not frame-perfect display latency measurements. The same session/style remained alive and the inspected screenshots covered the expected map area. A background/system-settings round trip produced several different heights while system bars settled; one resize took about 2.5 seconds to report a full frame. The API-30 output-detachment workaround remains because it prevents the old-width clip; no unverified renderer rewrite is included. Physical-device resize performance and initial graphics/theme stalls remain open.
