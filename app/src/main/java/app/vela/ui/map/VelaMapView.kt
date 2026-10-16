@@ -900,7 +900,7 @@ fun VelaMapView(
     val screenPositionHolder = rememberUpdatedState(screenPosition)
     val framingInsets = rememberUpdatedState(Triple(cameraLeftInsetPx, cameraTopInsetPx, cameraBottomInsetPx))
     val framingRightInset = rememberUpdatedState(cameraRightInsetPx)
-    val navTiltEase = remember { doubleArrayOf(if (isFragileOrEmulator()) 0.0 else 55.0) } // eased so the compass toggle glides, not snaps
+    val navTiltEase = remember { doubleArrayOf(if (isFragileOrEmulator() || lightProfileHolder.value) 0.0 else 55.0) } // eased so the compass toggle glides, not snaps
     val navPadEase = remember { doubleArrayOf(0.0) } // puck-low top padding as a height fraction, eased on (re)attach
     val wasNavRef = remember { booleanArrayOf(false) } // a drive actually ran - gates the one-shot camera teardown
     val onCompassTapHolder = rememberUpdatedState(onCompassTap)
@@ -2511,7 +2511,7 @@ fun VelaMapView(
             wasNavRef[0] = false
             navPuck.kalman.reset() // nav ended — don't carry a stale speed into the next trip
             navUserTilt[0] = Double.NaN // shove-set tilt is a per-drive override
-            navTiltEase[0] = if (isFragileOrEmulator()) 0.0 else 55.0 // next drive starts at the default pitch, not wherever this one ended
+            navTiltEase[0] = if (isFragileOrEmulator() || lightProfileHolder.value) 0.0 else 55.0 // next drive starts at the default pitch, not wherever this one ended
             // Camera padding is STICKY MapLibre state: the nav view's puck-low offset (top padding,
             // set on every follow frame + the pre-engage case) would otherwise shift the browse
             // camera's center for the rest of the session. Bearing + tilt are sticky the same way.
@@ -2776,7 +2776,7 @@ fun VelaMapView(
                         !navUserTilt[0].isNaN() -> navUserTilt[0]
                         else -> 55.0
                     }
-                    navTiltEase[0] += (tiltTgt - navTiltEase[0]) * kBrg
+                    navTiltEase[0] = if (lightProfileHolder.value) 0.0 else navTiltEase[0] + (tiltTgt - navTiltEase[0]) * kBrg
                     val paddingFraction = app.vela.core.config.MapCameraFraming.fraction(screenPositionHolder.value, !navNorthUpHolder.value)
                     navPadEase[0] += (paddingFraction - navPadEase[0]) * kPos
                     if (kotlin.math.abs(paddingFraction - navPadEase[0]) < 0.002) navPadEase[0] = paddingFraction
