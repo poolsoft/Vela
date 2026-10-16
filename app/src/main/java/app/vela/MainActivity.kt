@@ -70,6 +70,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         app.vela.util.FileLogger.i("MainActivity", "onCreate baslatildi. Intent: ${intent?.action}")
         installSplashScreen()
+        // Apply the saved window policy before Activity/Compose initialization can draw.
+        // Preferences have already been loaded by VelaApp (after pending restore recovery).
+        applySystemBarPreferences()
+        app.vela.util.FileLogger.i("SystemBars", "Before activity create: immersive=${CarIntegration.immersive.value}, statusBar=${CarIntegration.statusBarVisible.value}")
         super.onCreate(savedInstanceState)
         app.vela.diag.ProcessDiagnostics.activity("create")
         enableEdgeToEdge()
@@ -138,6 +142,13 @@ class MainActivity : ComponentActivity() {
     // One owner for both the XML launcher and Compose screens, including Home returns.
     private fun applySystemBarPreferences() {
         app.vela.ui.applyVelaSystemBars(window, darkSystemBarIcons)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // API 30+ can defer controller requests made before attachment. Reassert before
+        // the initial traversal instead of waiting for Compose's LaunchedEffect.
+        applySystemBarPreferences()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

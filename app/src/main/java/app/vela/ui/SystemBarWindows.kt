@@ -13,15 +13,25 @@ import androidx.core.view.WindowInsetsControllerCompat
 import app.vela.variant.CarIntegration
 
 fun applyVelaSystemBars(window: Window, darkIcons: Boolean = false) {
-    val controller = WindowCompat.getInsetsController(window, window.decorView)
+    // Window attributes take effect before DecorView is attached. Relying only on the
+    // insets controller queues the status-bar request until the first window focus.
+    val immersive = CarIntegration.immersive.value
+    val showStatus = !immersive && CarIntegration.statusBarVisible.value
+    val fullscreenFlag = android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN
+    val decor = window.decorView
+    if (showStatus || decor.hasWindowFocus()) window.clearFlags(fullscreenFlag)
+    else if (!decor.isAttachedToWindow) window.addFlags(fullscreenFlag)
+    // Once focus is available the controller owns visibility. Do not retain FLAG_FULLSCREEN:
+    // on older Android it would disable the keyboard's adjustResize behaviour.
+    val controller = WindowCompat.getInsetsController(window, decor)
     controller.isAppearanceLightStatusBars = darkIcons
     controller.isAppearanceLightNavigationBars = darkIcons
     controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-    if (CarIntegration.immersive.value) {
+    if (immersive) {
         controller.hide(WindowInsetsCompat.Type.systemBars())
     } else {
         controller.show(WindowInsetsCompat.Type.navigationBars())
-        if (CarIntegration.statusBarVisible.value) controller.show(WindowInsetsCompat.Type.statusBars())
+        if (showStatus) controller.show(WindowInsetsCompat.Type.statusBars())
         else controller.hide(WindowInsetsCompat.Type.statusBars())
     }
     androidx.core.view.ViewCompat.requestApplyInsets(window.decorView)
