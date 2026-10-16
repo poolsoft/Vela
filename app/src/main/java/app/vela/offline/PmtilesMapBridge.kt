@@ -137,17 +137,44 @@ internal class PmtilesTileSource(private val range: (Long, Int) -> ByteArray) {
         var offset = header.rootOffset; var length = header.rootLength
         repeat(4) {
             val key = offset to length
-            // Serialize only directory cache misses; independent tile reads/decompression run in parallel.
-            val directory = synchronized(directories) {
-                directories[key] ?: (PmtilesReader.decodeDirectory(
-                    inflate(read(offset, length), header.internalCompression), 1) ?: throw IOException("Invalid PMTiles directory")
-                    ).also { directories[key] = it }
-            }
+            val directory = directory(offset, length)
             val entry = PmtilesReader.find(directory, wanted) ?: return null
             if (entry.runLength > 0) return inflate(read(header.tileDataOffset + entry.offset, entry.length), header.tileCompression)
             offset = header.leafOffset + entry.offset; length = entry.length
         }
         throw IOException("PMTiles directory nesting exceeds limit")
+    }
+
+    // Share a miss for the same directory without holding the LRU lock during disk I/O.
+    private val pendingDirectories = HashMap<Pair<Long, Long>, java.util.concurrent.FutureTask<List<PmtilesReader.Entry>>>()
+
+    private fun directory(offset: Long, length: Long): List<PmtilesReader.Entry> {
+        val key = offset to length
+        val task = synchronized(directories) {
+            directories[key]?.let { return it }
+            pendingDirectories.getOrPut(key) {
+                java.util.concurrent.FutureTask {
+                    PmtilesReader.decodeDirectory(inflate(read(offset, length), header.internalCompression), 1)
+                        ?: throw IOException("Invalid PMTiles directory")
+                }
+            }
+        }
+        task.run() // FutureTask executes once; other callers wait for this directory only.
+        try {
+            val result = task.get()
+            synchronized(directories) { directories[key] = result }
+            return result
+        } catch (error: java.util.concurrent.ExecutionException) {
+            throw (error.cause ?: error)
+        } catch (error: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw IOException("PMTiles directory read interrupted", error)
+        } finally {
+            // An interrupted waiter must not remove a still-running task.
+            if (task.isDone) synchronized(directories) {
+                if (pendingDirectories[key] === task) pendingDirectories.remove(key)
+            }
+        }
     }
 
     private fun read(offset: Long, length: Long): ByteArray {

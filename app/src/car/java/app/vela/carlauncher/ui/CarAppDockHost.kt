@@ -31,7 +31,7 @@ class CarAppDockHost(
     private val onSettingsClick: () -> Unit
 ) {
 
-    val rootView: View = LayoutInflater.from(context).inflate(
+    val rootView: View = LayoutInflater.from(androidx.appcompat.view.ContextThemeWrapper(context, androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)).inflate(
         if (isVertical) R.layout.fragment_app_dock_sidebar else R.layout.fragment_app_dock,
         null,
         false
@@ -107,8 +107,12 @@ class CarAppDockHost(
                     fitShortcutRows()
                 }
                 recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                    private var snapPending = false
                     override fun onScrollStateChanged(view: RecyclerView, state: Int) {
-                        if (state != RecyclerView.SCROLL_STATE_IDLE) return
+                        if (state == RecyclerView.SCROLL_STATE_DRAGGING) snapPending = true
+                        if (state != RecyclerView.SCROLL_STATE_IDLE || !snapPending) return
+                        // Consume before scrolling: the correction must not schedule another correction.
+                        snapPending = false
                         val manager = view.layoutManager as LinearLayoutManager
                         val first = manager.findViewByPosition(manager.findFirstVisibleItemPosition()) ?: return
                         val bounds = android.graphics.Rect()
@@ -116,7 +120,9 @@ class CarAppDockHost(
                         val top = bounds.top
                         val row = bounds.height()
                         val offset = if (-top > row / 2) top + row else top
-                        if (offset != 0) view.smoothScrollBy(0, offset)
+                        if (kotlin.math.abs(offset) > 1 && view.canScrollVertically(if (offset > 0) 1 else -1)) {
+                            view.smoothScrollBy(0, offset)
+                        }
                     }
                 })
             }

@@ -6611,7 +6611,11 @@ class MapViewModel @Inject constructor(
         // each candidate file to see whether it actually draws the map there (issue #552). The
         // answers are memoized, so this is a handful of small reads on the first look at an area.
         basemapArchiveJob?.cancel()
-        basemapArchiveJob = viewModelScope.launch(Dispatchers.IO) { pickBasemapArchive(center) }
+        basemapArchiveJob = viewModelScope.launch(Dispatchers.IO) {
+            // Coalesce transient camera centres while preserving the first map load.
+            if (_state.value.basemapArchive != null) kotlinx.coroutines.delay(500)
+            pickBasemapArchive(center)
+        }
     }
 
     private var basemapArchiveJob: Job? = null
@@ -6633,6 +6637,7 @@ class MapViewModel @Inject constructor(
         val usable = file?.takeUnless { shallow && !_state.value.offline && !preferLocal }
         if (shallow) android.util.Log.i("VelaBasemap", "Shallow installed basemap: offline=${_state.value.offline}, preferLocal=$preferLocal")
         val uri = usable?.let { "pmtiles://file://${it.absolutePath}" }
+        kotlin.coroutines.coroutineContext.ensureActive()
         if (uri != _state.value.basemapArchive) {
             // Swapping the source re-points every basemap layer, which re-tiles and re-lays out the
             // whole map: a visible freeze. At the edge of a downloaded region the honest answer
@@ -6642,6 +6647,7 @@ class MapViewModel @Inject constructor(
             // ever delay a swap the view still wants.
             val since = android.os.SystemClock.elapsedRealtime() - lastBasemapSwapMs
             if (since < BASEMAP_SWAP_COOLDOWN_MS) kotlinx.coroutines.delay(BASEMAP_SWAP_COOLDOWN_MS - since)
+            kotlin.coroutines.coroutineContext.ensureActive()
             lastBasemapSwapMs = android.os.SystemClock.elapsedRealtime()
             val fonts = app.vela.offline.GlyphPackStore.installed(appContext)
             android.util.Log.i("VelaBasemap", "offline basemap for the view: ${uri?.substringAfterLast('/') ?: "none"} (glyph pack installed=$fonts)")

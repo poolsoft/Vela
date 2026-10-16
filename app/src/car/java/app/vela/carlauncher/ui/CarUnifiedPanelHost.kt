@@ -37,7 +37,7 @@ class CarUnifiedPanelHost(
     private val onAyarlarAc: () -> Unit
 ) {
 
-    val rootView: View = LayoutInflater.from(context).inflate(R.layout.fragment_unified_panel, null, false)
+    val rootView: View = LayoutInflater.from(androidx.appcompat.view.ContextThemeWrapper(context, androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)).inflate(R.layout.fragment_unified_panel, null, false)
 
     private val panelMenuBtn: ImageButton? = rootView.findViewById(R.id.panel_menu_btn)
     private val musicArea: View? = rootView.findViewById(R.id.music_area)

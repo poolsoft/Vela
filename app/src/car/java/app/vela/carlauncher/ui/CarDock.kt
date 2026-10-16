@@ -192,7 +192,8 @@ class DynamicDockShortcutAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        if (itemSizePx > 0) holder.button.layoutParams = holder.button.layoutParams.apply {
+        if (itemSizePx > 0 && (holder.button.layoutParams.width != itemSizePx ||
+                holder.button.layoutParams.height != itemSizePx)) holder.button.layoutParams = holder.button.layoutParams.apply {
             width = itemSizePx
             height = itemSizePx
         }

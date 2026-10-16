@@ -39,7 +39,7 @@ class CarMusicPlayerHost(
     private val onVisualizerPermission: () -> Unit
 ) {
 
-    val rootView: View = LayoutInflater.from(context).inflate(R.layout.fragment_music_player, null, false)
+    val rootView: View = LayoutInflater.from(androidx.appcompat.view.ContextThemeWrapper(context, androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)).inflate(R.layout.fragment_music_player, null, false)
 
     private val musicManager = MusicManager.getInstance(context)
     private val scope = CoroutineScope(Dispatchers.Main + Job())
@@ -161,22 +161,24 @@ class CarMusicPlayerHost(
         resizePlaybackButtons(rootView.findViewById<View>(R.id.playback_controls_layout).width)
     }
 
-    private var lastPlaybackWidth = 0
+    private var lastPlaybackSize = 0
     private fun resizePlaybackButtons(width: Int) {
-        if (width <= 0 || width == lastPlaybackWidth) return
-        lastPlaybackWidth = width
+        if (width <= 0) return
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
         val controls = rootView.findViewById<androidx.constraintlayout.widget.ConstraintLayout>(R.id.playback_controls_layout)
-        val buttons = androidx.constraintlayout.widget.ConstraintSet().apply { clone(controls) }
         val size = ((width / density - 32) / 5f).coerceIn(32f, 64f).toInt()
+        if (size == lastPlaybackSize) return
+        lastPlaybackSize = size
         for (id in intArrayOf(R.id.btn_shuffle, R.id.btn_prev, R.id.btn_play_container, R.id.btn_next, R.id.btn_repeat)) {
-            buttons.constrainWidth(id, dp(size)); buttons.constrainHeight(id, dp(size))
+            val button = controls.findViewById<View>(id)
+            if (button.layoutParams.width != dp(size) || button.layoutParams.height != dp(size)) {
+                button.layoutParams = button.layoutParams.apply { this.width = dp(size); this.height = dp(size) }
+            }
             val padding = if (id == R.id.btn_play_container) 0 else dp(8)
             rootView.findViewById<View>(id).setPadding(padding, padding, padding, padding)
         }
         btnPlay?.setPadding(dp(12), dp(12), dp(12), dp(12))
-        buttons.applyTo(controls)
     }
 
     private fun setupPanelsVisibility() {

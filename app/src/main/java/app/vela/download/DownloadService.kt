@@ -48,11 +48,6 @@ class DownloadService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val labels = synchronized(active) { active.toList() }
-        if (labels.isEmpty()) {
-            runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
-            stopSelf()
-            return START_NOT_STICKY
-        }
         try {
             val notif = buildNotification(labels)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -64,6 +59,12 @@ class DownloadService : Service() {
             Log.w(TAG, "foreground start failed; download continues without the keeper", t)
             stopSelf()
             return START_NOT_STICKY
+        }
+        // Work can finish between startForegroundService() and this callback. Fulfil the
+        // foreground promotion promise even for that short-lived start, then retire it.
+        if (labels.isEmpty()) {
+            runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+            stopSelf(startId)
         }
         return START_NOT_STICKY
     }

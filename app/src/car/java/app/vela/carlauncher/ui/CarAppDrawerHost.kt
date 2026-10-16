@@ -41,7 +41,7 @@ class CarAppDrawerHost(
     private val onAppClick: (AracUygulamasi) -> Unit
 ) {
 
-    val rootView: View = LayoutInflater.from(context).inflate(R.layout.fragment_app_drawer, null, false)
+    val rootView: View = LayoutInflater.from(androidx.appcompat.view.ContextThemeWrapper(context, androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)).inflate(R.layout.fragment_app_drawer, null, false)
 
     private val recyclerView: RecyclerView? = rootView.findViewById(R.id.apps_recycler_view)
     private val loadingProgress: ProgressBar? = rootView.findViewById(R.id.loading_progress)
@@ -93,8 +93,7 @@ class CarAppDrawerHost(
 
     private fun uygulamalariYukle() {
         loadingProgress?.visibility = if (appManager.apps.value == null) View.VISIBLE else View.GONE
-        appManager.apps.value?.let { tumUygulamalar = it.items; filtrele(searchInput?.text?.toString().orEmpty()) }
-        scope.launch {
+        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
             appManager.apps.collect { liste ->
                 if (liste == null) return@collect
                 tumUygulamalar = liste.items
