@@ -364,3 +364,7 @@ or if the system declines, the notification is exactly what it was before.
   device.
 - **Speed limits are only as good as OpenStreetMap.** Many roads carry no `maxspeed` tag, and
   there the badge is blank, which is the data rather than the lookup.
+
+## Bounded speech engine work
+
+Speech engine calls and stop/shutdown cleanup run on one daemon worker with at most eight pending jobs. A system speech deadline of 30 seconds includes time waiting for initialization or a busy engine; neural speech uses 95 seconds. Timeout releases focus and publishes failure without calling the engine on the UI thread. A broken engine may still occupy the worker; stale queued prompts are discarded rather than replayed after recovery.

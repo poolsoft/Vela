@@ -401,12 +401,12 @@ class MusicRepository private constructor(private val context: Context) {
             val yuklenenParcalar = mutableListOf<SesParcasi>()
             val knownFiles = HashSet<String>()
             for (i in 0 until array.length()) {
-                if (i % 128 == 0) app.vela.diag.ProcessDiagnostics.checkpoint("music cache: checking entry $i/${array.length()}")
+                if (i % 128 == 0) app.vela.diag.ProcessDiagnostics.checkpoint("music cache: restoring entry $i/${array.length()}")
                 val obj = array.getJSONObject(i)
                 val dosyaYolu = obj.optString("dosyaYolu", "")
                 if (dosyaYolu.isNotBlank()) {
                     val f = File(dosyaYolu)
-                    if (f.exists() && f.length() > 0 && knownFiles.add(musicFileIdentity(f))) {
+                    if (knownFiles.add(cachedMusicFileIdentity(dosyaYolu))) {
                         yuklenenParcalar.add(
                             SesParcasi(
                                 id = obj.optLong("id", i.toLong()),
@@ -416,7 +416,7 @@ class MusicRepository private constructor(private val context: Context) {
                                 sureMs = obj.optLong("sureMs", 0L),
                                 dosyaYolu = dosyaYolu,
                                 albumArtUri = null,
-                                eklenmeTarihi = obj.optLong("eklenmeTarihi", f.lastModified() / 1000L),
+                                eklenmeTarihi = obj.optLong("eklenmeTarihi", 0L),
                                 contentUri = obj.optString("contentUri", "").takeIf { it.isNotBlank() }
                                     ?: Uri.fromFile(f).toString(),
                                 folderPath = obj.optString("folderPath", f.parent ?: "")
@@ -426,7 +426,7 @@ class MusicRepository private constructor(private val context: Context) {
                 }
             }
 
-            app.vela.diag.ProcessDiagnostics.checkpoint("music cache: files checked in ${android.os.SystemClock.elapsedRealtime() - started} ms")
+            app.vela.diag.ProcessDiagnostics.checkpoint("music cache: metadata restored in ${android.os.SystemClock.elapsedRealtime() - started} ms")
             if (yuklenenParcalar.isNotEmpty()) {
                 val klasorMap = mutableMapOf<String, MutableList<SesParcasi>>()
                 for (p in yuklenenParcalar) {

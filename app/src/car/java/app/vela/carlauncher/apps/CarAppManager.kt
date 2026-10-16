@@ -48,6 +48,8 @@ class CarAppManager private constructor(private val context: Context) {
         override fun sizeOf(key: String, value: Drawable): Int =
             (value as? BitmapDrawable)?.bitmap?.allocationByteCount?.coerceAtLeast(1) ?: 4096
     }
+    private val iconLoads = HashMap<String, Deferred<Drawable?>>()
+    private val iconPermits = kotlinx.coroutines.sync.Semaphore(2)
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) { invalidate() }
     }
@@ -86,15 +88,52 @@ class CarAppManager private constructor(private val context: Context) {
     }
 
     fun invalidate() {
-        icons.evictAll()
-        revision.value++
+        val pending = synchronized(iconLoads) {
+            revision.value++
+            icons.evictAll()
+            iconLoads.values.toList().also { iconLoads.clear() }
+        }
+        pending.forEach { it.cancel() }
     }
 
-    suspend fun loadIcon(packageName: String): Drawable? = withContext(Dispatchers.IO) {
-        val generation = revision.value
-        val icon = icons.get(packageName) ?: runCatching { packageManager.getApplicationIcon(packageName) }.getOrNull()
-        if (generation != revision.value) return@withContext null
-        icon?.also { icons.put(packageName, it) }?.let { it.constantState?.newDrawable(context.resources)?.mutate() ?: it }
+    /** Cache hits do not wait for an IO dispatcher or replace an already displayed icon. */
+    fun peekIcon(packageName: String): Drawable? = icons.get(packageName)?.let(::copyIcon)
+
+    private fun copyIcon(icon: Drawable): Drawable = icon.constantState?.newDrawable()?.mutate() ?: icon
+
+    suspend fun loadIcon(packageName: String): Drawable? {
+        peekIcon(packageName)?.let { return it }
+        val task = synchronized(iconLoads) {
+            iconLoads[packageName] ?: scope.async(Dispatchers.IO, start = CoroutineStart.LAZY) {
+                iconPermits.acquire()
+                try {
+                    val generation = revision.value
+                    val icon = runCatching { packageManager.getApplicationIcon(packageName) }.getOrNull()
+                        ?.let { source ->
+                            // Cache display-sized pixels instead of full-size launcher artwork.
+                            val size = (64 * context.resources.displayMetrics.density).toInt().coerceIn(32, 192)
+                            runCatching {
+                                val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+                                source.setBounds(0, 0, size, size)
+                                source.draw(android.graphics.Canvas(bitmap))
+                                BitmapDrawable(context.resources, bitmap)
+                            }.getOrDefault(source)
+                        }
+                    ensureActive()
+                    synchronized(iconLoads) {
+                        if (generation != revision.value) null
+                        else icon?.also { icons.put(packageName, it) }
+                    }
+                } finally { iconPermits.release() }
+            }.also { job ->
+                iconLoads[packageName] = job
+                job.invokeOnCompletion {
+                    synchronized(iconLoads) { if (iconLoads[packageName] === job) iconLoads.remove(packageName) }
+                }
+            }
+        }
+        task.start()
+        return task.await()?.let(::copyIcon)
     }
 
     suspend fun yukluUygulamalariGetir(): List<AracUygulamasi> = apps.filterNotNull().first().items.map { app ->

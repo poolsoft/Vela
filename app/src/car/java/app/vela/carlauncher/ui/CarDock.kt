@@ -155,11 +155,12 @@ class DynamicDockShortcutAdapter(
     private val onItemClick: (AppShortcut) -> Unit
 ) : RecyclerView.Adapter<DynamicDockShortcutAdapter.ViewHolder>() {
 
-    private var itemSizePx = 0
-    fun setItemSize(size: Int) {
+    var itemSizePx = 0
+        private set
+    fun setItemSize(size: Int, notify: Boolean = true) {
         if (itemSizePx == size) return
         itemSizePx = size
-        notifyDataSetChanged()
+        if (notify) notifyDataSetChanged()
     }
 
     var onItemLongClick: ((AppShortcut, View) -> Unit)? = null
@@ -174,7 +175,7 @@ class DynamicDockShortcutAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val density = parent.context.resources.displayMetrics.density
-        val size = (48 * density).toInt()
+        val size = itemSizePx.takeIf { it > 0 } ?: (48 * density).toInt()
 
         val button = ImageButton(parent.context).apply {
             layoutParams = ViewGroup.MarginLayoutParams(size, size).apply {

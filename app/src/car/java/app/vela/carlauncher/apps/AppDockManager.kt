@@ -112,7 +112,7 @@ class AppDockManager private constructor(private val context: Context) {
         }
     }
 
-    private fun cozAppShortcut(pkg: String, order: Int, launchMode: LaunchMode, pm: PackageManager): AppShortcut? {
+    private suspend fun cozAppShortcut(pkg: String, order: Int, launchMode: LaunchMode, pm: PackageManager): AppShortcut? {
         if (InternalApp.isInternalUri(pkg)) {
             val internal = InternalApp.fromUri(pkg) ?: return null
             return AppShortcut(
@@ -127,7 +127,7 @@ class AppDockManager private constructor(private val context: Context) {
         return try {
             val appInfo = pm.getApplicationInfo(pkg, 0)
             val ad = pm.getApplicationLabel(appInfo).toString()
-            val ikon = pm.getApplicationIcon(appInfo)
+            val ikon = CarAppManager.getInstance(context).loadIcon(pkg)
             AppShortcut(
                 paketAdi = pkg,
                 ad = ad,

@@ -95,11 +95,23 @@ class CarAppDockHost(
         }
 
         dockRecycler?.let { recycler ->
-            recycler.layoutManager = LinearLayoutManager(
-                context,
-                if (isVertical) LinearLayoutManager.VERTICAL else LinearLayoutManager.HORIZONTAL,
-                false
-            )
+            recycler.layoutManager = object : LinearLayoutManager(context,
+                if (isVertical) LinearLayoutManager.VERTICAL else LinearLayoutManager.HORIZONTAL, false) {
+                override fun onMeasure(recycler: RecyclerView.Recycler, state: RecyclerView.State,
+                    widthSpec: Int, heightSpec: Int) {
+                    val spec = if (isVertical) widthSpec else heightSpec
+                    val padding = if (isVertical) rootView.paddingLeft + rootView.paddingRight
+                        else rootView.paddingTop + rootView.paddingBottom
+                    val cross = View.MeasureSpec.getSize(spec) + padding
+                    shortcutAdapter.setItemSize(dockShortcutSize(cross, context.resources.displayMetrics.density, isVertical), notify = false)
+                    super.onMeasure(recycler, state, widthSpec, heightSpec)
+                }
+                override fun measureChildWithMargins(child: View, widthUsed: Int, heightUsed: Int) {
+                    val size = shortcutAdapter.itemSizePx
+                    if (size > 0) child.layoutParams.apply { width = size; height = size }
+                    super.measureChildWithMargins(child, widthUsed, heightUsed)
+                }
+            }
             recycler.adapter = shortcutAdapter
             if (isVertical) {
                 // Reserve whole rows, centered between the clock and navigation controls.
@@ -134,8 +146,7 @@ class CarAppDockHost(
         if (width <= 0 || height <= 0) return
         val density = context.resources.displayMetrics.density
         val cross = if (isVertical) width else height
-        val size = (cross - (if (isVertical) 12 else 8) * density).toInt()
-            .coerceIn((40 * density).toInt(), (64 * density).toInt())
+        val size = dockShortcutSize(cross, density, isVertical)
         for (button in listOf(btnAppList, btnDesktopMode, rootView.findViewById<ImageButton>(R.id.btn_assistant))) {
             button ?: continue
             val buttonHeight = if (isVertical) (40 * density).toInt() else size
@@ -158,8 +169,9 @@ class CarAppDockHost(
         val recycler = dockRecycler ?: return
         val parent = recycler.parent as View
         val density = context.resources.displayMetrics.density
-        val size = (rootView.width - 12 * density).toInt()
-            .coerceIn((40 * density).toInt(), (64 * density).toInt())
+        if (rootView.width <= 0) return
+        val size = shortcutAdapter.itemSizePx.takeIf { it > 0 }
+            ?: dockShortcutSize(rootView.width, density, true)
         val row = size + 2 * (2 * density).toInt()
         val available = parent.height
         if (available < row) return

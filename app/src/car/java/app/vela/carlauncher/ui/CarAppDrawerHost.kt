@@ -69,13 +69,16 @@ class CarAppDrawerHost(
     }
 
     private fun setupViews() {
-        val grid = GridLayoutManager(context, 2)
-        recyclerView?.layoutManager = grid
-        recyclerView?.addOnLayoutChangeListener { view, l, _, r, _, _, _, _, _ ->
-            val usable = r - l - view.paddingLeft - view.paddingRight
-            val columns = (usable / (88 * context.resources.displayMetrics.density)).toInt().coerceIn(2, 8)
-            if (grid.spanCount != columns) grid.spanCount = columns
+        val grid = object : GridLayoutManager(context, 2) {
+            override fun onMeasure(recycler: RecyclerView.Recycler, state: RecyclerView.State,
+                widthSpec: Int, heightSpec: Int) {
+                val usable = View.MeasureSpec.getSize(widthSpec) - paddingLeft - paddingRight
+                val columns = drawerColumns(usable, context.resources.displayMetrics.density)
+                if (spanCount != columns) spanCount = columns
+                super.onMeasure(recycler, state, widthSpec, heightSpec)
+            }
         }
+        recyclerView?.layoutManager = grid
         recyclerView?.adapter = adapter
 
         btnClose?.setOnClickListener {
@@ -153,6 +156,7 @@ class CarAppDrawerHost(
         private val items = mutableListOf<AracUygulamasi>()
 
         fun guncelle(yeniListe: List<AracUygulamasi>) {
+            if (items == yeniListe) return
             items.clear()
             items.addAll(yeniListe)
             notifyDataSetChanged()
@@ -165,9 +169,11 @@ class CarAppDrawerHost(
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val item = items[position]
-            holder.bind(item, onItemClick)
+            val cached = item.ikon ?: appManager.peekIcon(item.paketAdi)
+            holder.bind(item, cached, onItemClick)
             holder.iconJob?.cancel()
-            if (item.ikon == null) holder.iconJob = scope.launch {
+            holder.iconJob = null
+            if (cached == null) holder.iconJob = scope.launch {
                 val icon = appManager.loadIcon(item.paketAdi)
                 if (holder.boundPackage == item.paketAdi && icon != null) holder.setIcon(icon)
             }
@@ -177,6 +183,7 @@ class CarAppDrawerHost(
         override fun onViewRecycled(holder: ViewHolder) {
             holder.iconJob?.cancel()
             holder.boundPackage = null
+            holder.hasIcon = false
             super.onViewRecycled(holder)
         }
 
@@ -185,17 +192,22 @@ class CarAppDrawerHost(
         class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
             var iconJob: Job? = null
             var boundPackage: String? = null
+            var hasIcon = false
             private val appIcon: ImageView? = itemView.findViewById(R.id.app_icon)
             private val appLabel: TextView? = itemView.findViewById(R.id.app_label)
 
-            fun bind(app: AracUygulamasi, onClick: (AracUygulamasi) -> Unit) {
+            fun bind(app: AracUygulamasi, icon: android.graphics.drawable.Drawable?, onClick: (AracUygulamasi) -> Unit) {
+                val samePackage = boundPackage == app.paketAdi
                 boundPackage = app.paketAdi
                 appLabel?.text = app.ad
-                if (app.ikon != null) appIcon?.setImageDrawable(app.ikon)
-                else appIcon?.setImageResource(android.R.drawable.sym_def_app_icon)
+                if (icon != null) setIcon(icon)
+                else if (!samePackage || !hasIcon) {
+                    hasIcon = false
+                    appIcon?.setImageResource(android.R.drawable.sym_def_app_icon)
+                }
                 itemView.setOnClickListener { onClick(app) }
             }
-            fun setIcon(icon: android.graphics.drawable.Drawable) { appIcon?.setImageDrawable(icon) }
+            fun setIcon(icon: android.graphics.drawable.Drawable) { hasIcon = true; appIcon?.setImageDrawable(icon) }
         }
     }
 }

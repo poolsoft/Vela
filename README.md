@@ -339,3 +339,5 @@ Vela is Free Software: you can use, study, share, and improve it at your will. Y
 The car dock publishes saved shortcut slots before loading app labels and icons on an IO worker, so package resource loading does not block the first launcher composition.
 
 Offline indexes and revision files use synced temporary replacements. Glyph installation validates staging before replacing the active directory and retains a recoverable previous directory during activation.
+
+Car launcher grids size their children from the first measure pass. Cached app icons bind immediately; misses share two background loaders and display-sized artwork. Cached music metadata restores without walking every media file. System TTS calls use a bounded background worker.

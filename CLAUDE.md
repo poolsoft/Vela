@@ -5999,3 +5999,5 @@ trademark collisions.
 Do not resolve dock app labels/icons inside Compose or the dock manager constructor. Keep package resource access on the IO metadata path and preserve edits when merging late results. Run `DockMetadataTest` and an offline cold-start check for changes to this path.
 
 Offline JSON metadata uses `writeAtomicText`; binary sprite copies use `writeAtomically`. Do not replace them with direct target writes. Keep glyph staging on the same filesystem and validate it before activation. Run `AtomicFilesTest` for changes to this path.
+
+TTS Binder calls, including timeout stop/shutdown, belong on `SpeechWorker`; main-handler callbacks must not call the engine. Keep drawer spans and dock sizes in the measure path, and use synchronous icon cache hits before scheduling misses. Cached music restore must not walk saved media paths; scans/playback perform availability checks.

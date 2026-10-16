@@ -2732,3 +2732,6 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 - [x] Car dock labels and icons load off the main thread; pending metadata preserves shortcut order, launch mode, additions and removals.
 
 - [x] Offline index/revision writes retain the previous complete file on failure; glyph activation keeps a recoverable previous directory.
+
+- [x] Car dock and drawer size before first layout, reuse cached icons without placeholder resets, and restore saved music metadata without a startup media walk.
+- [x] TTS motor calls and timeout cleanup run on one bounded worker instead of the UI thread.

@@ -424,3 +424,7 @@ recorded as the installer, so you can check before and after an update.
 ## Launcher dock startup
 
 The car launcher displays shortcut placeholders immediately and loads labels/icons on an IO worker. It applies metadata to current entries without restoring removed items or replacing an edited order or launch mode. Explicit reloads invalidate earlier completions. The map process and music service do not own this cache.
+
+## First-measure launcher layout and cache restore
+
+Drawer spans are derived from measured width before laying out cells (88 dp per cell, 2-8 columns). Dock creation and measurement share the current item size, so a scroll is not required to apply it. Cached icons bind immediately; two shared background loaders handle cache misses with display-sized artwork. A holder keeps its current same-package icon while a replacement is pending. Music startup restores saved metadata without statting every track; manual scans and playback retain file checks.
