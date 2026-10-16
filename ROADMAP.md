@@ -492,3 +492,7 @@ the shared hidden-WebView base, `NavController`) are in FEATURES.
   the main regions, used first with FOSSGIS as the fallback, removes the single failure that
   takes routing from every user at once. The nav diagnostics record which router answered, so the
   decision can be made from real drives.
+
+## Car launcher performance follow-up
+
+- Measure remaining cold-start and surface-resize stalls after moving dock package resource loading off the UI thread. Validate on the target head unit when available; emulator results do not establish driver performance there.

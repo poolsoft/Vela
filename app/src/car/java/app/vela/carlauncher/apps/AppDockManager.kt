@@ -1,14 +1,16 @@
 package app.vela.carlauncher.apps
 
 import android.content.Context
-import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.graphics.drawable.Drawable
-import androidx.core.content.ContextCompat
 import app.vela.carlauncher.model.AppShortcut
 import app.vela.carlauncher.model.InternalApp
 import app.vela.carlauncher.model.LaunchMode
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,18 +43,21 @@ class AppDockManager private constructor(private val context: Context) {
     private val _kisayollar = MutableStateFlow<List<AppShortcut>>(emptyList())
     val kisayollar: StateFlow<List<AppShortcut>> = _kisayollar.asStateFlow()
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var loadGeneration = 0
+
     init {
         yukleKisayollar()
     }
 
     fun yukleKisayollar() {
+        loadGeneration++
         val json = prefs.getString(KEY_SHORTCUTS, null)
         val liste = mutableListOf<AppShortcut>()
 
         if (!json.isNullOrBlank()) {
             try {
                 val array = JSONArray(json)
-                val pm = context.packageManager
 
                 for (i in 0 until array.length()) {
                     val obj = array.getJSONObject(i)
@@ -65,10 +70,7 @@ class AppDockManager private constructor(private val context: Context) {
                         LaunchMode.FULL_SCREEN
                     }
 
-                    val shortcut = cozAppShortcut(pkg, order, launchMode, pm)
-                    if (shortcut != null) {
-                        liste.add(shortcut)
-                    }
+                    liste.add(placeholder(pkg, order, launchMode))
                 }
             } catch (e: Exception) {
                 liste.clear()
@@ -77,10 +79,37 @@ class AppDockManager private constructor(private val context: Context) {
 
         if (json.isNullOrBlank()) {
             liste.addAll(varsayilanKisayollariOlustur())
-            kaydetJson(liste)
         }
 
         _kisayollar.value = liste.sortedBy { it.sira }
+        resolveMetadata(_kisayollar.value, persistDefaults = json.isNullOrBlank())
+    }
+
+    private fun placeholder(pkg: String, order: Int, mode: LaunchMode) =
+        AppShortcut(pkg, pkg.substringAfter("://"), sira = order, launchMode = mode)
+
+    private fun resolveMetadata(items: List<AppShortcut>, persistDefaults: Boolean = false) {
+        val generation = loadGeneration
+        scope.launch {
+            val started = android.os.SystemClock.elapsedRealtime()
+            val resolved = withContext(Dispatchers.IO) {
+                app.vela.diag.ProcessDiagnostics.checkpoint("dock: metadata load")
+                items.associate { item ->
+                    item.paketAdi to try {
+                        cozAppShortcut(item.paketAdi, item.sira, item.launchMode, context.packageManager)
+                    } catch (error: Exception) {
+                        app.vela.util.FileLogger.w("AppDockManager", "Shortcut metadata unavailable: ${error.javaClass.simpleName}")
+                        item
+                    }
+                }
+            }
+            if (generation != loadGeneration) return@launch
+            // Only enrich current entries: loading must not resurrect removals or undo edits.
+            _kisayollar.value = mergeDockMetadata(_kisayollar.value, resolved)
+            if (persistDefaults) kaydetJson(_kisayollar.value)
+            app.vela.diag.ProcessDiagnostics.checkpoint("dock: metadata ready")
+            app.vela.util.FileLogger.i("AppDockManager", "Metadata ready count=${_kisayollar.value.size} elapsedMs=${android.os.SystemClock.elapsedRealtime() - started}")
+        }
     }
 
     private fun cozAppShortcut(pkg: String, order: Int, launchMode: LaunchMode, pm: PackageManager): AppShortcut? {
@@ -112,7 +141,6 @@ class AppDockManager private constructor(private val context: Context) {
     }
 
     private fun varsayilanKisayollariOlustur(): List<AppShortcut> {
-        val pm = context.packageManager
         val varsayilanlar = listOf(
             "internal://neon_dashboard",
             "internal://dashboard",
@@ -126,11 +154,7 @@ class AppDockManager private constructor(private val context: Context) {
         var order = 0
 
         for (pkg in varsayilanlar) {
-            val shortcut = cozAppShortcut(pkg, order, LaunchMode.FULL_SCREEN, pm)
-            if (shortcut != null) {
-                liste.add(shortcut)
-                order++
-            }
+            liste.add(placeholder(pkg, order++, LaunchMode.FULL_SCREEN))
         }
         return liste
     }
@@ -157,11 +181,15 @@ class AppDockManager private constructor(private val context: Context) {
         if (guncel.any { it.paketAdi == paketAdi }) return false
 
         val pm = context.packageManager
-        val shortcut = cozAppShortcut(paketAdi, guncel.size, mode, pm) ?: return false
+        if (!InternalApp.isInternalUri(paketAdi)) {
+            try { pm.getApplicationInfo(paketAdi, 0) } catch (_: PackageManager.NameNotFoundException) { return false }
+        } else if (InternalApp.fromUri(paketAdi) == null) return false
+        val shortcut = placeholder(paketAdi, guncel.size, mode)
 
         guncel.add(shortcut)
         kaydetJson(guncel)
         _kisayollar.value = guncel
+        resolveMetadata(listOf(shortcut))
         return true
     }
 
@@ -199,4 +227,13 @@ class AppDockManager private constructor(private val context: Context) {
         prefs.edit().remove(KEY_SHORTCUTS).apply()
         yukleKisayollar()
     }
+}
+
+
+/** Metadata completion cannot overwrite user edits made while package resources load. */
+internal fun mergeDockMetadata(
+    current: List<AppShortcut>, resolved: Map<String, AppShortcut?>,
+): List<AppShortcut> = current.mapNotNull { item ->
+    if (!resolved.containsKey(item.paketAdi)) item
+    else resolved[item.paketAdi]?.let { item.copy(ad = it.ad, ikon = it.ikon) }
 }

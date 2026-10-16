@@ -333,3 +333,7 @@ is Esri World Imagery, with Google imagery where Esri has none at close zoom.
 [![GNU GPLv3 Image](https://www.gnu.org/graphics/gplv3-127x51.png)](http://www.gnu.org/licenses/gpl-3.0.en.html)
 
 Vela is Free Software: you can use, study, share, and improve it at your will. You may use, modify, and redistribute this project only if your modifications remain open-source under the same license.
+
+### Car dock startup
+
+The car dock publishes saved shortcut slots before loading app labels and icons on an IO worker, so package resource loading does not block the first launcher composition.

@@ -2719,3 +2719,7 @@ features this document describes only by rule. `ROADMAP.md` holds open work and 
 "not going to happen" list. `docs/book/` explains subsystems for a reader who wants to
 understand a behavior rather than rebuild it. `CLAUDE.md` carries the working rules for
 contributors and assistants.
+
+## Car dock metadata loading
+
+`AppDockManager` publishes package/order/launch-mode placeholders before resolving internal and installed-app metadata on `Dispatchers.IO`. Completion merges only label/icon fields into entries still present in the current list. Missing packages are omitted. Each explicit reload increments a generation; older completions cannot modify the new list. Default shortcuts are persisted after metadata resolution. New shortcuts resolve metadata through the same worker path.

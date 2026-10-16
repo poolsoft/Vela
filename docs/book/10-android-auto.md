@@ -420,3 +420,7 @@ recorded as the installer, so you can check before and after an update.
   Automotive, but nothing reads it yet; the speed badge is GPS speed.
 - **The voice is band-limited** by the protocol, 16 kHz or 8 kHz as above, and no setting in Vela
   changes that.
+
+## Launcher dock startup
+
+The car launcher displays shortcut placeholders immediately and loads labels/icons on an IO worker. It applies metadata to current entries without restoring removed items or replacing an edited order or launch mode. Explicit reloads invalidate earlier completions. The map process and music service do not own this cache.

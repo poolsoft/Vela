@@ -5993,3 +5993,7 @@ with a random 5 to 20 s backoff. Run the repair by hand after any wave to be sur
 
 Vela Maps (`app.vela`). "Vela" was clearance-checked and is free of maps-app and
 trademark collisions.
+
+## Car dock threading
+
+Do not resolve dock app labels/icons inside Compose or the dock manager constructor. Keep package resource access on the IO metadata path and preserve edits when merging late results. Run `DockMetadataTest` and an offline cold-start check for changes to this path.
