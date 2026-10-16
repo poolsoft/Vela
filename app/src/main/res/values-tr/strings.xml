@@ -1014,7 +1014,14 @@
     <string name="settings_voice_asr_not_installed">İnternetsiz eller serbest ses tanıma için model gereklidir.</string>
     <string name="settings_voice_asr_download">Ses tanıma modelini indir (%1$d MB)</string>
     <string name="settings_map_render_profile">Harita çizim profili</string>
-    <string name="settings_map_render_standard">Standart : kendi harita ayarlarım</string>
-    <string name="settings_map_render_light">Hafif : eski cihazlar için</string>
-    <string name="settings_map_render_profile_hint">Hafif profil çizimi 30 FPS ile sınırlar, haritayı düz tutar, 3D binaları ve arazi gölgelendirmesini gizler. Katman ve renk tercihleriniz korunur; Standart seçildiğinde yeniden geçerli olur. Haritayı yeniden yüklemeden hemen uygulanır.</string>
+    <string name="settings_map_render_standard">Standart: kendi harita ayarlarım</string>
+    <string name="settings_map_render_light">Hafif: eski cihazlar için</string>
+    <string name="settings_map_render_profile_hint">Hafif profil çizimi 30 FPS ile sınırlar, haritayı düz tutar, 3D binaları ve arazi gölgelendirmesini gizler. Katman ve renk tercihleriniz korunur; Standart seçildiğinde yeniden geçerli olur. Haritayı yeniden yüklemeden hemen uygulanır. Her açılışta ilk kullanılabilir harita karesine kadar Hafif kullanılır, ardından seçtiğiniz profil uygulanır. Özel profilde FPS ve eğimi seçebilir, aşağıdaki katmanları ayrı ayrı ayarlayabilirsiniz.</string>
+    <string name="settings_map_render_custom">Özel: detayları kendim seçeyim</string>
+    <string name="settings_map_custom_controls">Özel çizim ayarları</string>
+    <string name="settings_map_custom_fps">En yüksek kare hızı: %1$d FPS</string>
+    <string name="settings_map_custom_fps_hint">Düşük değerler CPU ve GPU yükünü azaltabilir; kaydırma ve navigasyon daha az akıcı olur.</string>
+    <string name="settings_map_custom_tilt">Kamera eğimine izin ver</string>
+    <string name="settings_map_custom_tilt_hint">Parmakla eğmeye ve navigasyonda otomatik eğime izin verir. Kapalıyken harita düz kalır. Eğim eski cihazlarda yükü artırabilir.</string>
+    <string name="settings_map_custom_layers_hint">Aşağıdaki katman anahtarlarından 3D bina, arazi gölgelendirmesi, bina ek katmanı ve diğer detayları seçin. Profiller arasında seçimleriniz korunur.</string>
 </resources>

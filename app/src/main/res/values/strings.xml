@@ -1107,7 +1107,14 @@
     <string name="car_backup_success">Backup completed successfully.</string>
     <string name="car_backup_restore_success">Selected items restored successfully.</string>
     <string name="settings_map_render_profile">Map rendering profile</string>
-    <string name="settings_map_render_standard">Standard : use my map settings</string>
-    <string name="settings_map_render_light">Light : for older devices</string>
-    <string name="settings_map_render_profile_hint">Light limits rendering to 30 fps, keeps the map flat, and hides 3D buildings and terrain shading. Your layer and color preferences are kept; Standard restores their effect. Applies immediately without reloading the map.</string>
+    <string name="settings_map_render_standard">Standard: use my map settings</string>
+    <string name="settings_map_render_light">Light: for older devices</string>
+    <string name="settings_map_render_profile_hint">Light limits rendering to 30 fps, keeps the map flat, and hides 3D buildings and terrain shading. Your layer and color preferences are kept; Standard restores their effect. Applies immediately without reloading the map. Every launch starts with Light until the first usable map frame, then applies your selected profile. Custom lets you choose the frame limit and tilt; layer switches below remain available.</string>
+    <string name="settings_map_render_custom">Custom: choose the details</string>
+    <string name="settings_map_custom_controls">Custom rendering</string>
+    <string name="settings_map_custom_fps">Maximum frame rate: %1$d FPS</string>
+    <string name="settings_map_custom_fps_hint">Lower values can reduce CPU and GPU load, with less fluid panning and navigation.</string>
+    <string name="settings_map_custom_tilt">Allow camera tilt</string>
+    <string name="settings_map_custom_tilt_hint">Allow tilt gestures and automatic navigation tilt. Turn off for a flat map. Tilt can increase the load on older devices.</string>
+    <string name="settings_map_custom_layers_hint">Use the layer switches below for 3D buildings, terrain shading, extra buildings and other details. Your choices are kept when switching profiles.</string>
 </resources>

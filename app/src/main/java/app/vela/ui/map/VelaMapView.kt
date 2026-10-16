@@ -655,7 +655,17 @@ internal fun VelaMapView(
     val context = LocalContext.current
     val renderLifecycle = LocalLifecycleOwner.current.lifecycle
     val renderEpoch = remember { intArrayOf(0) }
-    val lightProfile = app.vela.ui.MapRenderProfile.isLight()
+    var startupLight by remember { mutableStateOf(true) }
+    val requestedProfile = app.vela.ui.MapRenderProfile.selected.value
+    val selectedProfile = if (startupLight) app.vela.ui.MapRenderProfile.LIGHT else requestedProfile
+    val lightProfile = app.vela.ui.MapRenderProfile.isLight(selectedProfile)
+    val flatCamera = app.vela.ui.MapRenderProfile.flatCamera(selectedProfile)
+    val flatCameraHolder = rememberUpdatedState(flatCamera)
+    // Explicit Custom tilt is a user choice; Standard keeps the fragile-GPU nav default.
+    val navFlatCameraHolder = rememberUpdatedState(flatCamera ||
+        (selectedProfile != app.vela.ui.MapRenderProfile.CUSTOM && isFragileOrEmulator()))
+    val maxFps = app.vela.ui.MapRenderProfile.maxFps(selectedProfile)
+    val maxFpsHolder = rememberUpdatedState(maxFps)
     val lightProfileHolder = rememberUpdatedState(lightProfile)
     val density = LocalDensity.current
     // Push MapLibre's compass below the status bar (it defaults to the top-right corner, which sits
@@ -746,7 +756,7 @@ internal fun VelaMapView(
     val screenPositionHolder = rememberUpdatedState(screenPosition)
     val framingInsets = rememberUpdatedState(Triple(cameraLeftInsetPx, cameraTopInsetPx, cameraBottomInsetPx))
     val framingRightInset = rememberUpdatedState(cameraRightInsetPx)
-    val navTiltEase = remember { doubleArrayOf(if (isFragileOrEmulator() || lightProfileHolder.value) 0.0 else 55.0) } // eased so the compass toggle glides, not snaps
+    val navTiltEase = remember { doubleArrayOf(if (navFlatCameraHolder.value) 0.0 else 55.0) } // eased so the compass toggle glides, not snaps
     val navPadEase = remember { doubleArrayOf(0.0) } // puck-low top padding as a height fraction, eased on (re)attach
     val wasNavRef = remember { booleanArrayOf(false) } // a drive actually ran - gates the one-shot camera teardown
     val onCompassTapHolder = rememberUpdatedState(onCompassTap)
@@ -891,18 +901,19 @@ internal fun VelaMapView(
 
     var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
     var mapInitRequested by remember { mutableStateOf(false) }
-    LaunchedEffect(mapView, lightProfile) {
+    LaunchedEffect(mapView, selectedProfile, maxFps, flatCamera) {
         // Zero is ignored by SDK 10.3.7; restore the display budget explicitly.
         val refresh = (mapView.display?.refreshRate ?: 60f).toInt().coerceAtLeast(30)
-        mapView.setMaximumFps(if (lightProfile) 30 else refresh)
+        val appliedFps = if (maxFps > 0) minOf(maxFps, refresh) else refresh
+        mapView.setMaximumFps(appliedFps)
         mapView.getMapAsync { map ->
-            map.uiSettings.isTiltGesturesEnabled = !lightProfile
-            if (lightProfile && map.cameraPosition.tilt != 0.0) {
+            map.uiSettings.isTiltGesturesEnabled = !flatCamera
+            if (flatCamera && map.cameraPosition.tilt != 0.0) {
                 map.moveCamera(CameraUpdateFactory.newCameraPosition(
                     CameraPosition.Builder(map.cameraPosition).tilt(0.0).build()))
             }
         }
-        app.vela.util.FileLogger.i("MapProfile", "profile=${if (lightProfile) "light" else "standard"} fps=${if (lightProfile) 30 else refresh}")
+        app.vela.util.FileLogger.i("MapProfile", "profile=$selectedProfile fps=$appliedFps tilt=${!flatCamera} startup=$startupLight requested=$requestedProfile")
     }
 
     // Ending nav returns the camera to Google's flat north-up browse view — the follow camera's
@@ -2065,6 +2076,7 @@ internal fun VelaMapView(
             browseFlying[0] = false // whatever canceled the follow also canceled the flight (onCancel), but never leak
             return@LaunchedEffect
         }
+        val frameBudget = RenderFrameBudget()
         var frameEpoch = renderEpoch[0]
         var lastNanos = 0L
         while (true) {
@@ -2074,8 +2086,8 @@ internal fun VelaMapView(
             }
             val now = withFrameNanos { it }
             // The lifecycle can stop while withFrameNanos is already suspended.
-            if (frameEpoch != renderEpoch[0]) { lastNanos = 0L; frameEpoch = renderEpoch[0] }
-            if (lightProfileHolder.value && lastNanos != 0L && now - lastNanos < 30_000_000L) continue
+            if (frameEpoch != renderEpoch[0]) { lastNanos = 0L; frameEpoch = renderEpoch[0]; frameBudget.reset() }
+            if (!frameBudget.shouldRender(now, maxFpsHolder.value)) continue
             val dt = (if (lastNanos == 0L) 0.0 else ((now - lastNanos) / 1e9)).toFloat().coerceIn(0f, 0.1f)
             lastNanos = now
             val style = styleRef?.takeIf { it.isFullyLoaded } ?: continue
@@ -2178,7 +2190,7 @@ internal fun VelaMapView(
                         (kotlin.math.abs(db) / CAM_BRG_TURN_DEG).coerceAtMost(1.0)).toFloat()
                     val kBrg = (1f - kotlin.math.exp(-dt / brgTau)).toDouble()
                     browseAtt[0] = (cp.bearing + db * kBrg + 360.0) % 360.0
-                    browseAtt[1] = cp.tilt + ((if (lightProfileHolder.value) 0.0 else 55.0) - cp.tilt) * k
+                    browseAtt[1] = cp.tilt + ((if (flatCameraHolder.value) 0.0 else 55.0) - cp.tilt) * k
                     attSettling = true // camera state is live every frame while driving
                 } else {
                     // NORTH-UP, FLAT (walking/slow browse) - enforced against the LIVE camera every
@@ -2360,7 +2372,7 @@ internal fun VelaMapView(
             wasNavRef[0] = false
             navPuck.kalman.reset() // nav ended — don't carry a stale speed into the next trip
             navUserTilt[0] = Double.NaN // shove-set tilt is a per-drive override
-            navTiltEase[0] = if (isFragileOrEmulator() || lightProfileHolder.value) 0.0 else 55.0 // next drive starts at the default pitch, not wherever this one ended
+            navTiltEase[0] = if (navFlatCameraHolder.value) 0.0 else 55.0 // next drive starts at the default pitch, not wherever this one ended
             // Camera padding is STICKY MapLibre state: the nav view's puck-low offset (top padding,
             // set on every follow frame + the pre-engage case) would otherwise shift the browse
             // camera's center for the rest of the session. Bearing + tilt are sticky the same way.
@@ -2386,6 +2398,7 @@ internal fun VelaMapView(
         val cutStart = doubleArrayOf(Double.NaN) // cut piece [start, end] along the route (m)
         val cutEnd = doubleArrayOf(Double.NaN)
         val aheadAnchor = doubleArrayOf(Double.NaN) // where the uploaded ahead line begins (m)
+        val frameBudget = RenderFrameBudget()
         var frameEpoch = renderEpoch[0]
         var lastNanos = 0L
         while (true) {
@@ -2395,8 +2408,8 @@ internal fun VelaMapView(
             }
             val now = withFrameNanos { it }
             // The lifecycle can stop while withFrameNanos is already suspended.
-            if (frameEpoch != renderEpoch[0]) { lastNanos = 0L; frameEpoch = renderEpoch[0] }
-            if (lightProfileHolder.value && lastNanos != 0L && now - lastNanos < 30_000_000L) continue
+            if (frameEpoch != renderEpoch[0]) { lastNanos = 0L; frameEpoch = renderEpoch[0]; frameBudget.reset() }
+            if (!frameBudget.shouldRender(now, maxFpsHolder.value)) continue
             // Two frame deltas: dtRaw (true wall-clock, for the PHYSICS — a janky 150 ms frame
             // must integrate 150 ms of travel, else the puck loses distance and lurches at each
             // fix) and dt (clamped, for the EASING filters only, where a huge step just means
@@ -2623,12 +2636,12 @@ internal fun VelaMapView(
                     camState[3] += (tgtZoom - camState[3]) * kZoom
                     // Tilt: north-up or fragile GPU/emulator = flat; else a shove-set override wins over the 55 default.
                     val tiltTgt = when {
-                        isFragileOrEmulator() || lightProfileHolder.value -> 0.0
+                        navFlatCameraHolder.value -> 0.0
                         navNorthUpHolder.value -> 0.0
                         !navUserTilt[0].isNaN() -> navUserTilt[0]
                         else -> 55.0
                     }
-                    navTiltEase[0] = if (lightProfileHolder.value) 0.0 else navTiltEase[0] + (tiltTgt - navTiltEase[0]) * kBrg
+                    navTiltEase[0] = if (navFlatCameraHolder.value) 0.0 else navTiltEase[0] + (tiltTgt - navTiltEase[0]) * kBrg
                     val paddingFraction = app.vela.core.config.MapCameraFraming.fraction(screenPositionHolder.value, !navNorthUpHolder.value)
                     navPadEase[0] += (paddingFraction - navPadEase[0]) * kPos
                     if (kotlin.math.abs(paddingFraction - navPadEase[0]) < 0.002) navPadEase[0] = paddingFraction
@@ -2898,7 +2911,7 @@ internal fun VelaMapView(
                 // explicitly so it can't be off, and lift the default ~60° cap to 70° so a
                 // satisfying near-horizon 3D is reachable; browse-camera moves use
                 // newLatLngZoom (which preserves pitch), so a tilt the user sets sticks.
-                map.uiSettings.isTiltGesturesEnabled = !lightProfileHolder.value
+                map.uiSettings.isTiltGesturesEnabled = !flatCameraHolder.value
                 // Two-finger tilt was nearly impossible to trigger (user 2026-07-11): stock
                 // shove detection wants both fingers moving in near-perfect vertical parallel
                 // (20 degrees). Widen the accepted angle and drop the start threshold so a
@@ -3393,6 +3406,7 @@ internal fun VelaMapView(
                 }
                 var frameReportedForStyle: Style? = null
                 var partialReportedForStyle: Style? = null
+                var startupReleasePosted = false
                 var reportedWidth = -1
                 var reportedHeight = -1
                 mv.addOnDidFinishRenderingFrameListener { fully ->
@@ -3404,6 +3418,13 @@ internal fun VelaMapView(
                         partialReportedForStyle = null
                     }
                     val currentStyle = map.style
+                    // Leave the startup budget only after the initial usable map frame.
+                    // This changes drawing options in place, never the saved preference or style.
+                    if (!startupReleasePosted && currentStyle?.isFullyLoaded == true &&
+                        mv.width > 0 && mv.height > 0) {
+                        startupReleasePosted = true
+                        mv.post { startupLight = false }
+                    }
                     if (!fully && currentStyle != null && currentStyle !== partialReportedForStyle) {
                         partialReportedForStyle = currentStyle
                         app.vela.variant.CarIntegration.mapRendererStage("frame-partial")
@@ -4036,7 +4057,7 @@ internal fun VelaMapView(
                                 CameraPosition.Builder()
                                     .target(MLLatLng(loc.lat, loc.lng))
                                     .zoom(zoom)
-                                    .tilt(if (navNorthUp || lightProfileHolder.value) 0.0 else 55.0)
+                                    .tilt(if (navNorthUp || navFlatCameraHolder.value) 0.0 else 55.0)
                                     .bearing(if (navNorthUp) 0.0 else brg.toDouble())
                                     // Same puck-low offset as the engaged follow ticker.
                                     .padding(cameraLeftInsetPx.toDouble(),

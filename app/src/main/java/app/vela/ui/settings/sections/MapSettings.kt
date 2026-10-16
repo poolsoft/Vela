@@ -33,22 +33,43 @@ internal fun MapSettingsScreen(onBack: () -> Unit) {
             listOf(
                 app.vela.ui.MapRenderProfile.STANDARD to R.string.settings_map_render_standard,
                 app.vela.ui.MapRenderProfile.LIGHT to R.string.settings_map_render_light,
+                app.vela.ui.MapRenderProfile.CUSTOM to R.string.settings_map_render_custom,
             ).forEach { (id, label) ->
                 SelectableRow(label = stringResource(label),
                     selected = app.vela.ui.MapRenderProfile.selected.value == id,
-                    onClick = { app.vela.ui.MapRenderProfile.set(context, id) })
+                    onClick = { app.vela.ui.MapRenderProfile.set(context, id) },
+                    modifier = if (id == app.vela.ui.MapRenderProfile.STANDARD) topRow else Modifier)
             }
             Hint(stringResource(R.string.settings_map_render_profile_hint))
         }
         Spacer(Modifier.height(16.dp))
+        if (app.vela.ui.MapRenderProfile.selected.value == app.vela.ui.MapRenderProfile.CUSTOM) {
+            SettingsGroup(title = stringResource(R.string.settings_map_custom_controls)) {
+                Text(stringResource(R.string.settings_map_custom_fps, app.vela.ui.MapRenderProfile.customMaxFps.intValue),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
+                androidx.compose.material3.Slider(
+                    value = app.vela.ui.MapRenderProfile.customMaxFps.intValue.toFloat(),
+                    valueRange = 15f..60f,
+                    steps = 8,
+                    onValueChange = { app.vela.ui.MapRenderProfile.setMaxFps(context, it.toInt()) },
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                Hint(stringResource(R.string.settings_map_custom_fps_hint))
+                GroupDivider()
+                ToggleRow(label = stringResource(R.string.settings_map_custom_tilt),
+                    checked = app.vela.ui.MapRenderProfile.customTilt.value,
+                    onCheckedChange = { app.vela.ui.MapRenderProfile.setTilt(context, it) },
+                    hint = stringResource(R.string.settings_map_custom_tilt_hint))
+                Hint(stringResource(R.string.settings_map_custom_layers_hint))
+            }
+            Spacer(Modifier.height(16.dp))
+        }
         SettingsGroup {
         ToggleRow(
             label = stringResource(R.string.settings_live_traffic),
             checked = app.vela.ui.Traffic.on.value,
             onCheckedChange = { app.vela.ui.Traffic.set(context, it) },
             hint = stringResource(R.string.settings_live_traffic_hint),
-            // The top focusable control: Back routes its DOWN here, UP from here goes back to Back.
-            switchModifier = topRow,
         )
         GroupDivider()
         ToggleRow(

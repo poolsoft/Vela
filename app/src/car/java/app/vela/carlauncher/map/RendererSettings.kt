@@ -20,4 +20,10 @@ internal fun rendererSettings(context: Context): JsonObject = buildJsonObject {
             put("type", "string")
             put("value", app.vela.ui.MapRenderProfile.selected.value)
         })
+        put(app.vela.ui.MapRenderProfile.FPS_KEY, buildJsonObject {
+            put("type", "int"); put("value", app.vela.ui.MapRenderProfile.customMaxFps.intValue)
+        })
+        put(app.vela.ui.MapRenderProfile.TILT_KEY, buildJsonObject {
+            put("type", "boolean"); put("value", app.vela.ui.MapRenderProfile.customTilt.value)
+        })
     }
