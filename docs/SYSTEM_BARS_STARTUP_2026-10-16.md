@@ -17,3 +17,9 @@ Bu değişiklik uygulamanın kendi ilk penceresi/yerleşimi içindir. Android'in
 ## Doğrulama
 
 Kaynak farkı kontrol edildi; `git diff --check` başarılı. Kotlin derlemesi başlatıldı. Canlı/soğuk açılış için üç durum kontrol edilecek: immersive açık; immersive kapalı ve durum çubuğu açık; immersive kapalı ve durum çubuğu kapalı. Mevcut emülatör verileri korunacak.
+
+## Tamamlanan doğrulama
+
+Kotlin derlemesi ve Actions 38867000913 başarılı. 0.4.127-diagnostic x86 emülatöre veriler korunarak kuruldu. Üç soğuk açılışta ilk pencere ve 5 saniye sonraki pencere karşılaştırıldı: immersive açıkken iki çubuk gizli; immersive kapalı/durum çubuğu açıkken iki çubuk görünür; yalnız durum çubuğu kapalıyken status gizli ve gezinme görünür. Görünür durumun native requested-insets listesinde override bulunmaması Android'in varsayılan görünür davranışıdır; ekran görüntüsü de bunu doğrular. Üst arama alanı görünür durum çubuğunun altında yerleşti. Önceki immersive=true/status=false ayar dosyası test sonunda geri kondu.
+
+Kanıtlar `.logs/system-bars-startup-test/` altında initial/settled ekran görüntüleri, pencere dökümleri ve `[SystemBars] Before activity create` kayıtlarıdır. Soğuk açılıştaki harita region/world/region tekrarları bu testte ayrıca görüldü ve ayrı kamera başlangıcı düzeltmesine konu oldu.

@@ -864,6 +864,9 @@ fun VelaMapView(
     val transitStopsNow = rememberUpdatedState(transitStops)
     val parkingTap = rememberUpdatedState(onParkingTap)
     val cameraIdle = rememberUpdatedState(onCameraIdle)
+    // getMapAsync may complete after the first location/target update. Read the live seed,
+    // not the callback's original Compose snapshot.
+    val startupCamera = rememberUpdatedState((cameraTarget ?: myLocation) to cameraTargetZoom)
     val longPress = rememberUpdatedState(onMapLongPress)
     val addrLabelTap = rememberUpdatedState(onAddressLabelTap)
     val navPanned = rememberUpdatedState(onNavPanned)
@@ -2995,6 +2998,16 @@ fun VelaMapView(
         if (!mapInitRequested && mapRef == null) {
             mapInitRequested = true
             mv.getMapAsync { map ->
+                // Seed before registering idle/viewport listeners. Animating from MapLibre's
+                // default world camera reports intermediate views back to the VM, which can
+                // replace the selected regional archive with world, then load the region again.
+                startupCamera.value.first?.let { target ->
+                    val zoom = startupCamera.value.second
+                        ?: app.vela.core.config.CalibrationStore.latest.tune("browseZoomWide", 14.5)
+                    map.moveCamera(CameraUpdateFactory.newLatLngZoom(MLLatLng(target.lat, target.lng), zoom))
+                    lastCameraTarget = target
+                    app.vela.util.FileLogger.i("MapCamera", "Initial camera seeded before viewport listeners: $target zoom=$zoom")
+                }
                 map.uiSettings.isLogoEnabled = false
                 // Hide the bottom-left attribution "ⓘ" — open-tile attribution lives
                 // in Settings → About instead, so the map stays clean (Google-style).
