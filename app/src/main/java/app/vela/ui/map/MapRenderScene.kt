@@ -6,6 +6,9 @@ import app.vela.core.model.LatLng
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
+/** A covering screen can suspend the retained map without disposing its composition. */
+val LocalMapRenderingActive = androidx.compose.runtime.compositionLocalOf { true }
+
 /** Value-only renderer boundary. No ViewModel, Context or functions cross processes. */
 @Serializable
 data class MapRenderScene(

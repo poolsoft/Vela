@@ -187,6 +187,9 @@ fun VelaRoot(vm: MapViewModel = hiltViewModel()) {
     Box {
         // MapScreen stays composed even while Settings is open or CarMode toggles,
         // and CarLauncherLayout draws around or passes through it without recreating MapView.
+        androidx.compose.runtime.CompositionLocalProvider(
+            app.vela.ui.map.LocalMapRenderingActive provides !showSettings,
+        ) {
         CarIntegration.MapContainer(
             onOpenSettings = { settingsOpenCar = true; showSettings = true },
             onVoiceClick = { vm.triggerVoiceSearch() },
@@ -198,6 +201,7 @@ fun VelaRoot(vm: MapViewModel = hiltViewModel()) {
                 onOpenSettings = { showSettings = true },
                 onOpenVoiceSettings = { settingsOpenVoice = true; showSettings = true },
             )
+        }
         }
         if (showSettings) {
             SettingsScreen(

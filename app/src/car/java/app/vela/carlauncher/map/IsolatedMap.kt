@@ -25,6 +25,7 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
     val density = LocalDensity.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val owner = LocalLifecycleOwner.current
+    val renderingActive = LocalMapRenderingActive.current
     val latestCallbacks by rememberUpdatedState(callbacks)
     val applicationContext = context.applicationContext
     val client = remember(applicationContext) { IsolatedMapClient(applicationContext) { name, args -> latestCallbacks.dispatch(name, args) } }
@@ -34,13 +35,15 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
         tuning = app.vela.core.config.CalibrationStore.latest.tuning,
         mapPalette = app.vela.ui.MapColors.current(), pipActive = app.vela.ui.PipMode.active.value,
         hostWidthDp = configuration.screenWidthDp, hostHeightDp = configuration.screenHeightDp)) }
-    DisposableEffect(client, owner, dpad) {
+    DisposableEffect(client, owner, dpad, renderingActive) {
         dpad?.remote = client::key
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) client.pause()
-            if (event == Lifecycle.Event.ON_START) client.resume()
+        fun syncVisibility() {
+            if (renderingActive && owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) client.resume()
+            else client.pause()
         }
+        val observer = LifecycleEventObserver { _, _ -> syncVisibility() }
         owner.lifecycle.addObserver(observer)
+        syncVisibility()
         onDispose { owner.lifecycle.removeObserver(observer); dpad?.remote = null }
     }
     DisposableEffect(client) { onDispose { client.close() } }
@@ -300,11 +303,13 @@ internal class IsolatedMapClient(
     }
     fun retry() { disconnect(); mutableState.value = State(); surface = null }
     fun pause() {
+        if (!active) return
         active = false
         handler.removeCallbacks(monitor)
         send(MapRendererTransport.SUSPEND)
     }
     fun resume() {
+        if (active) return
         active = true
         if (state.value.failed) return
         if (!state.value.ready) openAt = SystemClock.elapsedRealtime()
