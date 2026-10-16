@@ -19,11 +19,9 @@ class VoiceGuideStartupTest {
         assertTrue(guide.working == null)
     }
 
-    @Test fun unavailableSystemServiceReportsFailureWithoutFallingBackToNeuralVoice() {
+    @Test fun unavailableSystemServiceSetsFailureStatusWithoutFallingBackToNeuralVoice() {
         val synth = RecordingSynth()
         val guide = VoiceGuide(ContextWrapper(null)).apply { neural = synth }
-        var failures = 0
-        guide.onFailure = { failures++ }
         guide.useSystemEngineLazily("com.google.android.tts")
 
         // The JVM context has no PackageManager/TTS service. A catchable platform failure must
@@ -31,7 +29,7 @@ class VoiceGuideStartupTest {
         guide.init("vela.piper")
         guide.speak("test", ignoreMute = true)
 
-        assertEquals(1, failures)
+        awaitWorker { guide.speechStatus.startsWith("error:") }
         assertTrue(guide.working == false)
         assertTrue(guide.speechStatus.startsWith("error:"))
         assertEquals(0, synth.loads)
@@ -47,7 +45,16 @@ class VoiceGuideStartupTest {
 
         assertEquals(0, synth.loads)
         assertEquals(0, synth.utterances)
+        awaitWorker { guide.working == true }
         assertTrue(guide.working == true)
+    }
+
+    // Plain JVM Android stubs do not execute Handler callbacks. Observe the worker's volatile
+    // health state; UI callback dispatch needs an Android runtime.
+    private fun awaitWorker(condition: () -> Boolean) {
+        val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(3)
+        while (!condition() && System.nanoTime() < deadline) Thread.sleep(5)
+        assertTrue("Speech worker did not reach the expected state", condition())
     }
 
     private class RecordingSynth : NeuralSynth {
