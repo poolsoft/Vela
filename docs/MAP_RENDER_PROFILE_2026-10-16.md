@@ -22,8 +22,32 @@ Renk stili ile çizim profili farklıdır. Mevcut Modern/Klasik palet seçimi G�
 - Navigasyon yokken NavController'ın dead-reckoning işi saniyelik uyanmak yerine navigasyon başlayana kadar StateFlow üzerinde bekler.
 - Renderer'ın yaşam döngüsü durduğunda iki kare bazlı kamera döngüsü bekler; dönüşte zaman farkı sıfırlanır. Harita nesnesi ve stil korunur.
 - Harita görünmüyorken ekran üzerinden hız sınırı sorgusu ve yol etiketi sorgusu da bekler; arka plandaki sesli navigasyon motorunun rota işlemleri korunur.
+- Ayarlar haritayı tamamen örttüğünde izole renderer duraklatılır. Ayarlardan dönüşte aynı MapView/stil yeniden kullanılır; tercih değişikliklerinin son hali renderer'a aktarılır. Activity hâlâ ön planda olsa bile bu görünürlük kontrolü geçerlidir.
+- Yeniden başlangıç sayacı, kare bekleyişi zaten askıdayken arka plana gidilmiş olsa bile dönüşte ilk kare zaman farkını sıfırlar; kapalı geçen süre tek bir kamera animasyonu adımı olarak uygulanmaz.
 - Aynı Surface ve aynı boyut için yinelenen SurfaceHolder callback'i tekrar OPEN göndermez. Gerçek boyut/yüzey değişiminde ve arka plandan dönüşte bağlama devam eder; önceki resize/clip düzeltmesi korunur.
 
 ## Doğrulama
 
-Kotlin derlemesi ve emülatörde profil/panel/arka plan testleri tamamlandığında sonuçlar buraya eklenecek. Fiziksel teypte CPU/FPS ölçümü yapılmadan performans yüzdesi veya tüm takılmaların giderildiği iddiası yoktur. Özellikle 3D ve arazi zaten kapalıysa Hafif'in ek katkısı kare/işlem sınırı ve düz kamera olacaktır.
+Yerel Kotlin derlemesi başarılı (ilk profil değişikliği 8 dakika 1 saniye, küçültülmüş renderer girişi 4 dakika 6 saniye). Son kaynak 0b83c7cbb için Actions 38893076104 başarılı; çekirdek ve renderer sınır testleri geçti. Diagnostic-133 / 0.4.133-diagnostic / versionCode 2233 x86 APK emülatöre mevcut veriler silinmeden kuruldu. Wi-Fi ve mobil veri kapalıydı.
+
+Diagnostic-132 otomatik derleme/testleri geçmesine rağmen API-30 x86 emülatörde VelaMapView için VerifyError verdi. Bu sürümün release başlığı ve notu kullanılmaması için işaretlendi. Hata sessizce yutulmadı: renderer girişindeki 104 ayrı parametre ve tekrarlanan scene/callback dönüşümü kaldırıldı. Zaten mevcut MapRenderScene ve MapRenderCallbacks doğrudan geçirilerek native Compose girişi dört parametreye indirildi; izole süreç seçimi scene.Draw sınırına alındı. Veri alanı ve callback eşlemeleri korunuyor. Bu düzenlemeden sonraki APK ayrıca gerçek Android açılışıyla doğrulanmalı; JVM testlerinin geçmesi ART doğrulama başarısını kanıtlamıyor.
+
+Diagnostic-133 cihaz testinde bu doğrulama da tamamlandı: hem launcher hem renderer açıldı, tam harita karesi geldi ve VerifyError tekrarlanmadı.
+
+| Kontrol | Sonuç |
+|---|---|
+| Soğuk açılış | Tek MapStyle Reload, tr-guney.pmtiles; dünya arşivine gidip gelme yok; tam çizim geldi. Testin toplam 85,3 saniyesi bekleme ve araç işlemlerini de içerir, açılış süresi ölçümü değildir. |
+| Hafif / Standart geçişi | Renderer MapProfile kaydı sırasıyla light fps=30 ve standard fps=60. Kaydedilmiş katman/renk tercihleri değişmedi; profil anahtarı renderer ayar dosyasına da ulaştı. Bu FPS değerleri uygulanan sınırdır, ölçülmüş gerçek FPS değildir. |
+| Drawer, büyük müzik, tam harita, Ayarlar ve Android Ayarlar uygulamasından dönüş | Ana PID 30960 ve renderer PID 31067 korundu; toplam stil yükleme sayısı 1 kaldı. Son durumda normal launcher ve Standart profil bırakıldı. |
+| Tam ekran çizimi | İlk anlık görüntüde eski harita genişliği ve sağda siyah alan vardı. Sekiz saniye beklendikten sonraki görüntüde tüm genişlik doldu. Kalıcı yarım çizim gözlenmedi; geçişin sıfır gecikmeli olduğu iddia edilmiyor. |
+| Çökme kontrolü | Son PID için yeni main FATAL yok; son events logcat örneğinde bu iki PID için am_anr yok. Bu kontrol geçmiş kayıtların veya bütün olası senaryoların hatasız olduğu anlamına gelmez. |
+
+Watchdog iki adet yaklaşık 3 saniyelik main-thread stall kaydı üretti: açılışta ve büyük müzik paneline geçerken. İkincisinin stack'i HardwareRenderer.nSyncAndDrawFrame içinde; bu bir sistem ANR doğrulaması değildir, ancak bütün takılmaların çözülmüş sayılmaması için kayda alındı. Panel geçişindeki kayıt .logs/map-profile-test-20261016/music-panel-stall.txt içinde.
+
+Ayarlar haritayı örterken aynı emülatörde alınan iki kısa örnek: diagnostic-128 renderer'ı 10,83 saniyede 558 CPU tick; diagnostic-133 renderer'ı 11,70 saniyede 2 CPU tick tüketti. Süreler ve süreçler farklı; bu tek örnek kontrollü bir performans benchmark'ı değildir. Native renderer'ın örtülü ekran altında gereksiz çalışmasının durmasıyla uyumludur; uygulamanın toplam CPU'su veya fiziksel teyp kazancı olarak yorumlanmamalı.
+
+Kanıtlar: .logs/map-profile-test-20261016/ içinde exercise.py, snapshot.py, check_boot.py, profile-result.json, transition-result.json, old-settings-cpu.json, new-settings-cpu.json, ekran görüntüleri ve loglar. Soğuk açılış çıktısı .logs/map-camera-bootstrap-test/profile133-result.json içindedir. Müzik kütüphanesi bu testte boştu; panel geçişi doğrulandı, parça çalma testi yapılmadı.
+
+## Kalan doğrulama ve sonraki paket
+
+Fiziksel teypte CPU/FPS ölçümü yapılmadan performans yüzdesi veya tüm takılmaların giderildiği iddiası yoktur. Özellikle 3D ve arazi zaten kapalıysa Hafif'in ek katkısı kare/işlem sınırı ve düz kamera olacaktır. Tam ekran geçişinin ilk karesindeki gecikme, düşük donanımda ayrıca ölçülmeli. Güvenli paket indeks yazımı, font swap koruması ve çevrimdışı rota uç kontrolü bu ilk çizim/boşta çalışma paketinin dışında, upstream raporundaki sıradaki işlerdir.
