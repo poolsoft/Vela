@@ -51,3 +51,19 @@ Kanıtlar: .logs/map-profile-test-20261016/ içinde exercise.py, snapshot.py, ch
 ## Kalan doğrulama ve sonraki paket
 
 Fiziksel teypte CPU/FPS ölçümü yapılmadan performans yüzdesi veya tüm takılmaların giderildiği iddiası yoktur. Özellikle 3D ve arazi zaten kapalıysa Hafif'in ek katkısı kare/işlem sınırı ve düz kamera olacaktır. Tam ekran geçişinin ilk karesindeki gecikme, düşük donanımda ayrıca ölçülmeli. Güvenli paket indeks yazımı, font swap koruması ve çevrimdışı rota uç kontrolü bu ilk çizim/boşta çalışma paketinin dışında, upstream raporundaki sıradaki işlerdir.
+
+
+## Özel profil ve geçici Hafif başlangıç
+
+- Özel profilde 15-60 FPS sınırı ve kamera eğimi seçilebilir. Mevcut katman anahtarları kullanılır; ikinci bir 3D bina veya arazi tercihi oluşturulmaz.
+- Özel FPS/eğim değerleri profil değiştirildiğinde korunur.
+- Her yeni harita örneği kayıtlı seçimden bağımsız olarak geçici Hafif bütçesiyle başlar. Stil hazırken ilk kullanılabilir çizim karesi gelince kayıtlı profil aynı MapView üzerinde uygulanır. Tercih dosyası değiştirilmez; profil geçişi stil yüklemesi başlatmaz.
+- Arka plandan dönüş, panel büyütme ve sıradan boyut değişiklikleri başlangıç bütçesini yeniden etkinleştirmez.
+- FPS zamanlayıcısı 45 FPS gibi ara değerleri destekler; uzun duraklamadan sonra birikmiş kareleri topluca çalıştırmaz.
+- Kaynak commit: `4a75eb2dc`; Build APK çalışması `38897473872` başarılı, `diagnostic-134` x86 APK emülatöre veri silmeden kuruldu.
+- Yerel `compileCarReleaseKotlin` ve `RenderFrameBudgetTest` başarılı: 2 test, 0 hata.
+- Çevrimdışı soğuk açılışta kayıtlı Özel 45 FPS/eğim açık tercihine rağmen önce `profile=light fps=30 tilt=false startup=true requested=custom`, ardından `profile=custom fps=45 tilt=true startup=false requested=custom` kaydedildi. Yerel tr-guney stili yalnız bir kez yüklendi ve tam harita karesi geldi.
+- Kanıtlar: `.logs/map-camera-bootstrap-test/profile134-custom-*`, `.logs/map-profile-test-20261016/custom-enabled.json` ve `custom-controls.png`.
+- Bu test performans sorunlarının tamamının giderildiği anlamına gelmez: soğuk açılışta main-thread stall tanı kaydı hâlâ var. Fiziksel teyp doğrulaması yapılmadı.
+
+- Özel arayüz testi de başarılı: 45 FPS/eğim açık seçimi, Hafif → Özel dönüşünde korundu; launcher/renderer süreçleri aynı kaldı ve stil yeniden yüklenmedi (`custom-result.json`).
