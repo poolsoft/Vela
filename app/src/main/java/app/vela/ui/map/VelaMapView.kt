@@ -809,6 +809,7 @@ fun VelaMapView(
     )) return
     val context = LocalContext.current
     val renderLifecycle = LocalLifecycleOwner.current.lifecycle
+    val renderEpoch = remember { intArrayOf(0) }
     val lightProfile = app.vela.ui.MapRenderProfile.isLight()
     val lightProfileHolder = rememberUpdatedState(lightProfile)
     val density = LocalDensity.current
@@ -2219,6 +2220,7 @@ fun VelaMapView(
             browseFlying[0] = false // whatever canceled the follow also canceled the flight (onCancel), but never leak
             return@LaunchedEffect
         }
+        var frameEpoch = renderEpoch[0]
         var lastNanos = 0L
         while (true) {
             if (!renderLifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
@@ -2226,6 +2228,8 @@ fun VelaMapView(
                 renderLifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.STARTED) }
             }
             val now = withFrameNanos { it }
+            // The lifecycle can stop while withFrameNanos is already suspended.
+            if (frameEpoch != renderEpoch[0]) { lastNanos = 0L; frameEpoch = renderEpoch[0] }
             if (lightProfileHolder.value && lastNanos != 0L && now - lastNanos < 30_000_000L) continue
             val dt = (if (lastNanos == 0L) 0.0 else ((now - lastNanos) / 1e9)).toFloat().coerceIn(0f, 0.1f)
             lastNanos = now
@@ -2537,6 +2541,7 @@ fun VelaMapView(
         val cutStart = doubleArrayOf(Double.NaN) // cut piece [start, end] along the route (m)
         val cutEnd = doubleArrayOf(Double.NaN)
         val aheadAnchor = doubleArrayOf(Double.NaN) // where the uploaded ahead line begins (m)
+        var frameEpoch = renderEpoch[0]
         var lastNanos = 0L
         while (true) {
             if (!renderLifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
@@ -2544,6 +2549,8 @@ fun VelaMapView(
                 renderLifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.STARTED) }
             }
             val now = withFrameNanos { it }
+            // The lifecycle can stop while withFrameNanos is already suspended.
+            if (frameEpoch != renderEpoch[0]) { lastNanos = 0L; frameEpoch = renderEpoch[0] }
             if (lightProfileHolder.value && lastNanos != 0L && now - lastNanos < 30_000_000L) continue
             // Two frame deltas: dtRaw (true wall-clock, for the PHYSICS — a janky 150 ms frame
             // must integrate 150 ms of travel, else the puck loses distance and lurches at each
@@ -2990,7 +2997,7 @@ fun VelaMapView(
         // addObserver delivers the owner's current state; eager calls duplicate EGL resume.
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START -> mapView.onStart()
+                Lifecycle.Event.ON_START -> { renderEpoch[0]++; mapView.onStart() }
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
                 Lifecycle.Event.ON_STOP -> mapView.onStop()
