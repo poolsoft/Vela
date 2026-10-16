@@ -50,6 +50,28 @@ object PmtilesReader {
         }
     }.getOrNull()
 
+    /** Cheap structural check for imported files; does not decompress or scan all map tiles. */
+    internal fun validateContainer(file: File) {
+        RandomAccessFile(file, "r").use { input ->
+            require(input.length() >= HEADER_LEN) { "Truncated PMTiles header: ${file.name}" }
+            val raw = ByteArray(HEADER_LEN)
+            input.readFully(raw)
+            val h = requireNotNull(header(raw)) { "Invalid PMTiles v3 header: ${file.name}" }
+            val size = input.length()
+            fun section(name: String, offset: Long, length: Long) {
+                require(offset >= 0 && length >= 0 && offset <= size && length <= size - offset &&
+                    (length == 0L || offset >= HEADER_LEN)) { "PMTiles $name outside file: ${file.name}" }
+            }
+            require(h.rootLength > 0 && h.minZoom in 0..30 && h.maxZoom in h.minZoom..30) {
+                "Invalid PMTiles root or zoom range: ${file.name}"
+            }
+            section("root", h.rootOffset, h.rootLength)
+            section("metadata", h.metaOffset, h.metaLength)
+            section("leaves", h.leafOffset, le64(raw, 48))
+            section("tiles", h.tileDataOffset, le64(raw, 64))
+        }
+    }
+
     internal fun header(head: ByteArray): Header? {
         if (head.size < HEADER_LEN || String(head, 0, 7) != "PMTiles" || head[7].toInt() != 3) return null
         return Header(

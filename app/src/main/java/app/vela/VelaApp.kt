@@ -85,6 +85,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
             app.vela.util.FileLogger.i("VelaApp", "Lightweight process startup: no launcher, music, location or downloads")
             return
         }
+        app.vela.backup.BackupRestore.logRecovery(this)
         // The same lazy system-only policy covers the phone UI and drives started by Android Auto.
         voiceGuide.get().apply {
             useSystemEngineLazily("com.google.android.tts")
