@@ -337,3 +337,5 @@ Vela is Free Software: you can use, study, share, and improve it at your will. Y
 ### Car dock startup
 
 The car dock publishes saved shortcut slots before loading app labels and icons on an IO worker, so package resource loading does not block the first launcher composition.
+
+Offline indexes and revision files use synced temporary replacements. Glyph installation validates staging before replacing the active directory and retains a recoverable previous directory during activation.

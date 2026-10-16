@@ -107,7 +107,7 @@ class PoiPackStore @Inject constructor(
 
     private fun writeRev(id: String, rev: Int) = synchronized(revsLock) {
         packsRoot.mkdirs()
-        File(packsRoot, "revs.json").writeText(readRevs().put(id, rev).toString())
+        File(packsRoot, "revs.json").writeAtomicText(readRevs().put(id, rev).toString())
     }
 
     /** Download + unzip [region]'s pack to `poipacks/<id>.db` and register it. 0..100 progress. */
@@ -243,7 +243,7 @@ class PoiPackStore @Inject constructor(
         File(packsRoot, "$id.db").delete()
         synchronized(revsLock) {
             packsRoot.mkdirs()
-            File(packsRoot, "revs.json").writeText(readRevs().apply { remove(id) }.toString())
+            File(packsRoot, "revs.json").writeAtomicText(readRevs().apply { remove(id) }.toString())
         }
         registerPacks()
     }

@@ -2730,3 +2730,5 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
   ever sent to a geocoder, never the name or the list.
 
 - [x] Car dock labels and icons load off the main thread; pending metadata preserves shortcut order, launch mode, additions and removals.
+
+- [x] Offline index/revision writes retain the previous complete file on failure; glyph activation keeps a recoverable previous directory.

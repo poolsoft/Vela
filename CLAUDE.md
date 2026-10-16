@@ -5997,3 +5997,5 @@ trademark collisions.
 ## Car dock threading
 
 Do not resolve dock app labels/icons inside Compose or the dock manager constructor. Keep package resource access on the IO metadata path and preserve edits when merging late results. Run `DockMetadataTest` and an offline cold-start check for changes to this path.
+
+Offline JSON metadata uses `writeAtomicText`; binary sprite copies use `writeAtomically`. Do not replace them with direct target writes. Keep glyph staging on the same filesystem and validate it before activation. Run `AtomicFilesTest` for changes to this path.

@@ -353,3 +353,7 @@ MISS_MEMO_MS    =   600_000   // an unreachable manifest is not retried for ten 
   rebaked every night, so a downloaded region's places show Update roughly weekly.
 - **A region's edge is still a seam.** The rules above remove the flicker and the blank screen,
   but offline, past the last installed archive, the view drops to the world floor's low-zoom map.
+
+## Safe local metadata and font replacement
+
+Indexes and revision JSON files are written to a unique sibling staging file, synced, and atomically moved into place. Failed writes preserve the previous complete file. Sprite assets follow the same rule. Glyph installs validate the required ranges first, preserve the old directory as `glyphs.previous` during activation, and recover that directory if activation was interrupted with no active glyph directory. Explicit font removal also clears the recovery copy.

@@ -508,12 +508,12 @@ abstract class PmtilesRegionStore(
 
     private fun writeDead(id: String, bytes: Long) {
         root.mkdirs()
-        File(root, "dead.json").writeText(readDead().put(id, bytes).toString())
+        File(root, "dead.json").writeAtomicText(readDead().put(id, bytes).toString())
     }
 
     private fun writeRev(id: String, rev: Int) {
         root.mkdirs()
-        File(root, "revs.json").writeText(readRevs().put(id, rev).toString())
+        File(root, "revs.json").writeAtomicText(readRevs().put(id, rev).toString())
     }
 
     /** Installed archives whose bbox center falls inside [s],[w],[n],[e]: the ones that belong to
@@ -536,7 +536,7 @@ abstract class PmtilesRegionStore(
         root.mkdirs()
         val arr = JSONArray()
         index.forEach { (id, b) -> arr.put(JSONObject().put("id", id).put("bbox", JSONArray(b.toList()))) }
-        indexFile.writeText(arr.toString())
+        indexFile.writeAtomicText(arr.toString())
     }
 
     private companion object {

@@ -2723,3 +2723,7 @@ contributors and assistants.
 ## Car dock metadata loading
 
 `AppDockManager` publishes package/order/launch-mode placeholders before resolving internal and installed-app metadata on `Dispatchers.IO`. Completion merges only label/icon fields into entries still present in the current list. Missing packages are omitted. Each explicit reload increments a generation; older completions cannot modify the new list. Default shortcuts are persisted after metadata resolution. New shortcuts resolve metadata through the same worker path.
+
+## Offline metadata replacement
+
+Index, revision and dead-space JSON writes use a unique sibling temporary file, flush its file descriptor, and atomically replace the target with the API-26 `Files.move` operation. Readers retain the old complete file until replacement. A failed write removes staging and leaves the target intact. Existing store locks still serialize read-modify-write operations. Sprite asset copies use the same replacement path. Glyph staging resides beside the active directory, validates required ranges and rejects extracted paths outside staging before activation. Activation renames the old directory to `glyphs.previous`; failure or a later lookup with a missing active directory restores it. A successful installation removes the previous directory. Explicit deletion removes that recovery directory too.
