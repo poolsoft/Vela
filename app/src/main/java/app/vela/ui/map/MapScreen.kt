@@ -3702,7 +3702,7 @@ private fun MapSurface(
             }
         }
     }
-    VelaMapView(
+    MapRenderScene(
         styleUri = mapStyleUri,
         myLocation = state.myLocation,
         myBearing = state.myBearing,
@@ -3760,9 +3760,6 @@ private fun MapSurface(
             }
         },
         altColor = if (darkTheme) "#C8CDD4" else "#9AA0A6",
-        onSelectAlternate = vm::selectRoute,
-        // Every route wears its time on the map, placed where it runs apart from the others;
-        // tapping a bubble picks that route. Both choosers (the classic one since 2026-09-17).
         routeBubbles = if (state.directionsOpen && !state.navigating && state.routes.size > 1 &&
             state.travelMode != app.vela.core.model.TravelMode.TRANSIT
         ) {
@@ -3793,16 +3790,10 @@ private fun MapSurface(
         navDriveMode = state.travelMode == app.vela.core.model.TravelMode.DRIVE,
         navLabelExclude = navLabelExclude,
         navUpcomingRoads = navUpcomingRoads,
-        onNavRoadLatin = { vm.onNavRoadLatin(it) },
-        // Follow yields to a manual pan AND to step preview: the per-frame follow ticker used
-        // to keep re-pointing the camera at the puck while a banner swipe was trying to fly to
-        // the previewed turn - the two fought at 60 fps (user 2026-07-14). The puck itself
-        // keeps updating either way; only the camera steps aside.
         navFollowing = !state.navCameraDetached && state.previewStepIndex == null,
         navNorthUp = state.navNorthUp,
         // The compass below the nav card is the heading-up/north-up toggle during a drive
         // (a reorient-to-north tap would be overridden by the follow a frame later anyway).
-        onCompassTap = { if (state.navigating) { vm.toggleNavNorthUp(); true } else false },
         poisEnabled = app.vela.ui.MapPoiPrefs.showPois.value,
         // The POI bitmaps are fixed pixels, so below hdpi they render physically huge (a 240x320
         // phone at 120 dpi, issue #400, showed pins a fifth of the screen wide). Below 1.75x the
@@ -3810,16 +3801,11 @@ private fun MapSurface(
         poiIconScale = app.vela.ui.MapPoiPrefs.iconScale.floatValue * lowDensityIconScale(LocalDensity.current.density),
         // No density correction on labels: see the parameter's note in VelaMapView.
         poiLabelScale = app.vela.ui.MapPoiPrefs.iconScale.floatValue,
-        onNavPanned = vm::onNavPanned,
         ambientCoversView = state.ambientCoversView,
         // Grabbing the map with a sheet up drops it down out of the way so the map is yours
         // to look at (Google does the same): the results sheet to its bar, the place sheet to
         // its minimized card. The bar / a drag brings them back.
         driveFollowing = driveFollowing,
-        onMapTap = onMapTap,
-        onUserPan = onUserPan,
-        onScaleChanged = { metersPerPixelState.value = it },
-        onOverlayState = onOverlayState,
         darkTheme = darkTheme,
         amoled = amoled,
         applyKeylessTheme = !hasMapTiler,
@@ -3837,22 +3823,10 @@ private fun MapSurface(
         previewTarget = state.previewStepIndex?.let { state.activeRoute?.maneuvers?.getOrNull(it)?.location },
         navOverviewTick = navOverviewTick,
         navRecenterTick = navRecenterTick,
-        onNavZoomOverride = onNavZoomOverride,
-        onPuckScreen = { x, y -> puckScreen.value = Offset(x, y) },
-        onPoiTap = vm::onPoiTap,
-        onMarkerTap = { i -> displayedPlaces(state).getOrNull(i)?.let(vm::selectPlace) },
         parkingSpot = state.parkingSpot,
-        onParkingTap = { vm.showParkedCar(context.getString(R.string.map_parked_car)) },
-        // Saved places stick out while browsing (issue #171): every list place + quick-save
-        // draws its list's icon/emoji in the list's color. Hidden while a result set owns the
-        // map (a list's own results would double-draw) and during nav/replay (declutter).
         savedPins = savedPinData.map { it.first },
-        onSavedPinTap = { i -> savedPinData.getOrNull(i)?.second?.let(vm::selectPlace) },
         svPose = svPose,
         svTopInsetPx = (screenHeightPx * 0.55f).toInt(),
-        onSvMapTap = vm::moveStreetViewTo,
-        // No stale ambient dots mid-drive: the fetch pauses during nav, and the basemap POIs
-        // (kept visible in nav now) cover the gas-station-on-the-way case without duplicates.
         ambientPois = if (state.navigating) emptyList() else ambientMarkersOf(state),
         buildingOverlays = state.buildingOverlays,
         addressOverlays = state.addressOverlays,
@@ -3860,7 +3834,6 @@ private fun MapSurface(
         placesOverlays = state.placesOverlays,
         hiddenOpenPlaceIds = state.hiddenOpenPlaceIds,
         ambientClosed = if (state.navigating) emptyList() else state.ambientClosed.map { MapMarker(it.name, it.location, it.category) },
-        onOpenPlaceClosed = vm::onOpenPlaceClosed,
         placesPending = state.placesPending,
         placesOneSet = state.placesOneSet,
         osmBusinesses = app.vela.ui.MapPoiPrefs.osmBusinesses.value,
@@ -3890,8 +3863,6 @@ private fun MapSurface(
             }
         },
         basemapArchive = state.basemapArchive,
-        onOpenPlaceTap = vm::onOpenPlaceTap,
-        onRoadLimitKmh = vm::onOverlayRoadLimit,
         speedOverlayOn = speedOverlayArmed, // motion-armed with hysteresis - NEVER on the parked browse map
 
         trafficControls = state.trafficControls,
@@ -3901,17 +3872,50 @@ private fun MapSurface(
         // drops at the same coordinate and the two bus glyphs stacked read as a glitch
         // (user 2026-07-13). Structural list equality keeps the identity gate quiet.
         transitStops = state.transitStops.filterNot { st -> state.selected?.id == "gtfs:${st.stopId}" },
-        onTransitStopTap = vm::onTransitStopTap,
         navBannerBottomPx = if (state.navigating) navBannerBottomPx else 0,
         // Index into the SHOWN list (the same one ambientMarkersOf uploads), not the raw
         // pool - while a place is open the shown list drops the selected place's copy, so
         // raw-pool indices would be off by one past it.
-        onAmbientTap = { i -> ambientShownOf(state).getOrNull(i)?.let(vm::selectPlace) },
-        onCameraIdle = vm::onCameraIdle,
-        onMapLongPress = vm::onMapLongPress,
-        onAddressLabelTap = vm::onAddressLabelTap,
-        onViewport = vm::onViewport,
-        dpadController = mapDpad,
+
+    ).Draw(
+        callbacks = MapRenderCallbacks(
+            onSelectAlternate = vm::selectRoute,
+            // Every route wears its time on the map, placed where it runs apart from the others;
+            // tapping a bubble picks that route. Both choosers (the classic one since 2026-09-17).
+            onNavRoadLatin = { vm.onNavRoadLatin(it) },
+            // Follow yields to a manual pan AND to step preview: the per-frame follow ticker used
+            // to keep re-pointing the camera at the puck while a banner swipe was trying to fly to
+            // the previewed turn - the two fought at 60 fps (user 2026-07-14). The puck itself
+            // keeps updating either way; only the camera steps aside.
+            onCompassTap = { if (state.navigating) { vm.toggleNavNorthUp(); true } else false },
+            onNavPanned = vm::onNavPanned,
+            onMapTap = onMapTap,
+            onUserPan = onUserPan,
+            onScaleChanged = { metersPerPixelState.value = it },
+            onOverlayState = onOverlayState,
+            onNavZoomOverride = onNavZoomOverride,
+            onPuckScreen = { x, y -> puckScreen.value = Offset(x, y) },
+            onPoiTap = vm::onPoiTap,
+            onMarkerTap = { i -> displayedPlaces(state).getOrNull(i)?.let(vm::selectPlace) },
+            onParkingTap = { vm.showParkedCar(context.getString(R.string.map_parked_car)) },
+            // Saved places stick out while browsing (issue #171): every list place + quick-save
+            // draws its list's icon/emoji in the list's color. Hidden while a result set owns the
+            // map (a list's own results would double-draw) and during nav/replay (declutter).
+            onSavedPinTap = { i -> savedPinData.getOrNull(i)?.second?.let(vm::selectPlace) },
+            onSvMapTap = vm::moveStreetViewTo,
+            // No stale ambient dots mid-drive: the fetch pauses during nav, and the basemap POIs
+            // (kept visible in nav now) cover the gas-station-on-the-way case without duplicates.
+            onOpenPlaceClosed = vm::onOpenPlaceClosed,
+            onOpenPlaceTap = vm::onOpenPlaceTap,
+            onRoadLimitKmh = vm::onOverlayRoadLimit,
+            onTransitStopTap = vm::onTransitStopTap,
+            onAmbientTap = { i -> ambientShownOf(state).getOrNull(i)?.let(vm::selectPlace) },
+            onCameraIdle = vm::onCameraIdle,
+            onMapLongPress = vm::onMapLongPress,
+            onAddressLabelTap = vm::onAddressLabelTap,
+            onViewport = vm::onViewport,
+        ),
+        dpad = mapDpad,
         modifier = Modifier.fillMaxSize(),
     )
 }

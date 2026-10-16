@@ -543,270 +543,115 @@ private fun flightCb() = object : com.mapbox.mapboxsdk.maps.MapboxMap.Cancelable
  * The location dot also shows a heading arrow when a GPS bearing is available.
  */
 @Composable
-fun VelaMapView(
-    styleUri: String,
-    myLocation: LatLng?,
-    myBearing: Float?,
-    myAccuracyM: Float? = null,
-    mySpeed: Float? = null,
-    myFixRaw: LatLng? = null, // last accepted raw fix (pre low-pass), for the free-drive follow estimator
-    mySpeedRaw: Float? = null, // THIS fix's own measurement (null = fix had none) — Kalman feed
-    // Trip-replay time scale (1 = live). The recorded fixes arrive speedup× faster than real time
-    // but carry REAL speeds, so all the puck's wall-clock physics (dead-reckon integration, blind
-    // window, easing time-constants, plausibility caps) must run in TRACE time or the puck reckons
-    // 1/speedup of the ground covered per fix and surges to catch up — the "stuttery arrow +
-    // pulsing mph" replay artifact. At speedup=1 every formula is byte-identical to before.
-    replaySpeedup: Float = 1f,
-    replaying: Boolean = false, // trip replay: synthetic fixes, so LIVE sensors must stay out of the puck
-    compassHeading: Float? = null, // device facing (sensor); points the browse cone when stopped
-    locationStale: Boolean = false,
-    cameraTarget: LatLng?,
-    cameraTargetZoom: Double? = null, // deep-link z= override for the target fly (null = default framing)
-    recenterTick: Int = 0, // bumped on each recenter tap → force a move even if already "centered"
-    cameraBottomInsetPx: Int = 0,
-    // Landscape side-panel width (the place/results sheets as a left column): the optical center
-    // shifts RIGHT instead of up, so a focused pin lands in the map strip beside the panel.
-    cameraLeftInsetPx: Int = 0,
-    cameraRightInsetPx: Int = 0,
-    cameraTopInsetPx: Int = 0, // measured top chrome (the endpoints card) - the route fit clears it
-    routePolyline: List<LatLng>,
-    routeColor: String,
-    routeDashed: Boolean = false, // draw the route dashed (walking / biking), Google-style
-    // The transit itinerary whose drill-down is open in the chooser (issue #233): its ride legs
-    // draw as agency-colored lines through the stops with white stop dots, walk legs as dotted
-    // links. Null = nothing drawn. The caller gates it to the open, non-navigating chooser — or
-    // to step-by-step transit nav (issue #232), where [transitNavLeg] is the guided leg's index
-    // and the camera frames THAT leg instead of the whole trip, re-framing on each advance.
-    transitPreview: app.vela.core.model.TransitItinerary? = null,
-    transitNavLeg: Int? = null,
-
-    // Per-segment live traffic as (startFraction, endFraction, level) along the route
-    // — colors the route line like Google (free-flow elsewhere). Empty = no live data.
-    routeTrafficSpans: List<Triple<Float, Float, Int>> = emptyList(),
-    alternates: List<Pair<Int, List<LatLng>>> = emptyList(),
-    altColor: String = "#9AA0A6",
-    onSelectAlternate: (Int) -> Unit = {},
-    routeBubbles: List<RouteBubble> = emptyList(), // Google-style chooser experiment: time bubbles on the routes
-    markers: List<MapMarker>,
-    // Intermediate trip stops in VISIT ORDER - drawn as numbered teal pins (1, 2, ...) while a
-    // trip is planned or driven; reordering the stops re-numbers the pins (list identity keys it).
-    stopPins: List<LatLng> = emptyList(),
-    destinationPin: LatLng? = null, // the trip's END, drawn as a flag beside the numbered stops
-    // Drive nav, tap-to-stop: the place the card is offering, drawn as a red "+" teardrop so the
-    // driver can see WHERE the offer is before the button changes the drive.
-    candidatePin: LatLng? = null,
-    frameMarkers: Boolean,
-    // True while a PLACE SHEET owns the camera (a result is open): the marker-cluster fit is
-    // remembered, not forgotten, so closing the sheet returns to the results WITHOUT re-framing
-    // the whole cluster (the "zooms me out when I exit the POI" report, user 2026-07-18). The
-    // forget still happens when the sheet closes with no place open (a pan away + reopening the
-    // list deliberately re-frames).
-    holdMarkerFit: Boolean = false,
-    navMode: Boolean,
-    navDriveMode: Boolean = false, // navigating a DRIVE route -> the aggressive car-mode declutter
-    navLabelExclude: List<String> = emptyList(), // roads already DRIVEN: never bubble-label the road you're ON
-    navUpcomingRoads: List<String> = emptyList(), // the next turns' target roads: always bubble-labeled
-    // Foreign-name romanizing (issue #184): as nav road tiles load, report each road's local name ->
-    // its basemap name:latin, so guidance can SAY/SHOW the real romanized name instead of the ICU
-    // consonant skeleton. Accumulates across the drive; called only when the map grows.
-    onNavRoadLatin: (Map<String, String>) -> Unit = {},
-    navFollowing: Boolean = true,
-    navNorthUp: Boolean = false,
-    // Free-drive follow (no route open): when true the camera tracks the live fix north-up and
-    // the heading beam is smoothed per frame, the way the puck is during nav. The caller drops it
-    // to false on a user pan and raises it again on the locate tap.
-    driveFollowing: Boolean = false,
-    onNavPanned: () -> Unit = {},
-    ambientCoversView: Boolean = false, // viewport inside the ambient-Google fetch area → OSM POIs yield
-    onUserPan: () -> Unit = {},
-    onMapTap: () -> Unit = {}, // ANY map tap, before POI/marker resolution - dismiss-transients hook
-    onScaleChanged: (metersPerPixel: Double) -> Unit = {},
-    // Debug badge feed: reports the fill-buildings overlay state on each settle - "none" (no overlay
-    // in this region), "hidden" (auto-suppressed because OSM is dense here) or "drawing" (visible).
-    // Only wired when the Building-overlay-debug developer toggle is on; a no-op otherwise.
-    onOverlayState: (String) -> Unit = {},
-    darkTheme: Boolean,
-    amoled: Boolean = false,
-    applyKeylessTheme: Boolean,
-    trafficOn: Boolean,
-    transitOn: Boolean = false, // highlight rail (train + subway/tram) lines from the basemap tiles
-    satelliteOn: Boolean = false, // Esri World Imagery raster under the symbol layers (map button)
-    satDeep: Int = 0, // deep imagery for this area (issue #244): 0 none, 20..22 Esri native level, -1 Google fallback
-    topographyOn: Boolean = false, // terrain-relief hillshade; OFF by default (Google-style)
-    previewTarget: LatLng?,
-    navOverviewTick: Int = 0, // bumped by the in-nav Overview button — fly the camera out to the whole route
-    navRecenterTick: Int = 0, // bumped by the nav Re-center button — drop the pinch zoom/tilt overrides back to auto
-    // Reports whether a manual pinch/shove override is active during nav (true on set, false on
-    // clear) so the screen can show Re-center for a zoomed-but-still-following camera (issue #238).
-    onNavZoomOverride: (Boolean) -> Unit = {},
-    /** The drawn puck's position in SCREEN px while navigating, so the caller can hang the
-     *  current-road label off it (issue #288). Reported only when it actually moves. */
-    onPuckScreen: (Float, Float) -> Unit = { _, _ -> },
-    onPoiTap: (name: String, location: LatLng, poiKind: String?) -> Unit,
-    onMarkerTap: (index: Int) -> Unit,
-    parkingSpot: LatLng? = null, // saved "parked here" pin; tap → onParkingTap
-    savedPins: List<SavedPin> = emptyList(), // saved/list places while browsing (issue #171)
-    onSavedPinTap: (index: Int) -> Unit = {},
-    onParkingTap: () -> Unit = {},
-    // Street View pose while the half-screen pano viewer is open: [lat, lng, compassYawDeg].
-    // Draws the rotating view cone at the pano and eases the camera there on each pano hop.
-    svPose: DoubleArray? = null,
-    // Height (px) of the Street View pane covering the top of the screen: applied as camera TOP
-    // padding while the viewer is open so the pose puck centers in the VISIBLE strip below it.
-    svTopInsetPx: Int = 0,
-    // Tap on the mini-map while Street View is open = "take me there": the viewer jumps to the
-    // nearest pano at the tapped point. Pre-empts all POI/pin tap resolution while the pane is up.
-    onSvMapTap: (LatLng) -> Unit = {},
-    ambientPois: List<MapMarker> = emptyList(),
-    onAmbientTap: (index: Int) -> Unit = {},
-    onTransitStopTap: (app.vela.core.data.transit.Transitous.MapStop) -> Unit = {},
-    buildingOverlays: List<String> = emptyList(), // full pmtiles:// source URIs (file:// downloaded / https:// streamed)
-    addressOverlays: List<String> = emptyList(), // pmtiles:// URIs for house-number labels (streamed, OpenAddresses)
-    maxspeedOverlays: List<String> = emptyList(), // pmtiles:// URIs for the posted-speed overlay (streamed); read under the puck
-    hiddenOpenPlaceIds: Set<String> = emptySet(), // Overture ids whose Google listing said permanently closed: never drawn
-    ambientClosed: List<MapMarker> = emptyList(), // permanently closed places in Google's last nearby answer (Both mode purge)
-    onOpenPlaceClosed: (id: String) -> Unit = {}, // an open place matched one of [ambientClosed]: hide it for good
-    placesPending: Boolean = false, // the open places source is on but its lookup has not answered yet
-    placesOneSet: Boolean = false, // the covering places archive carries OSM's landmarks: hide the basemap's point layers
-    osmBusinesses: Boolean = false, // draw OSM's businesses under the open places layer too (deduped by name)
-    navExitCallout: Pair<LatLng, String>? = null, // the exit you are taking: green bubble with its number
-    navTapPlaces: Boolean = false, // drive nav: show the divert-worthy places and let a tap offer one as a stop
-    placesOverlays: List<String> = emptyList(),   // pmtiles:// URIs of the open-data places layer (Overture), file:// or streamed
-    basemapArchive: String? = null,               // pmtiles://file:// of an installed offline basemap covering the view; swaps the style's tile source
-    onOpenPlaceTap: (app.vela.core.model.Place) -> Unit = {}, // a tapped open-places feature, seeded from its tile attributes
-    onRoadLimitKmh: (Double?) -> Unit = {}, // reports the maxspeed (km/h) read from the overlay under the puck, or null
-    speedOverlayOn: Boolean = false, // only query the overlay while it can matter (driving / navigating)
-    trafficControls: List<app.vela.core.data.TrafficControl> = emptyList(), // OSM lights + stop signs drawn at high zoom
-    flockCameras: List<app.vela.core.data.AlprCamera> = emptyList(), // ALPR/Flock cameras drawn at high zoom
-    speedCameras: List<app.vela.core.data.SpeedCamera> = emptyList(), // fixed radar cameras (issue #229)
-    transitStops: List<app.vela.core.data.transit.Transitous.MapStop> = emptyList(), // canonical GTFS stops at street zoom
-    navBannerBottomPx: Int = 0, // measured screen-Y of the maneuver banner's bottom edge; drops the compass below it during nav
-    // Compass tap: return true to CONSUME (nav uses it to toggle heading-up/north-up); false runs
-    // the default reorient-to-north animation.
-    onCompassTap: () -> Boolean = { false },
-    poisEnabled: Boolean = true, // master "Show places on the map" - also hides the OSM fallback POIs
-    poiIconScale: Float = 1f, // Settings icon-size multiplier (low-density car screens want < 1)
-    // LABELS do not take the low-density correction. That correction exists because an icon is a
-    // fixed-pixel BITMAP, which a 120 dpi head unit draws physically huge; text is rendered from
-    // SDF glyphs at a size that already accounts for the pixel ratio, so shrinking it by the same
-    // factor just made it unreadable in a car (user 2026-09-19, "text next to POIs is way too
-    // small" with the icons finally right). This is the Settings multiplier alone.
-    poiLabelScale: Float = 1f,
-    onCameraIdle: (center: LatLng) -> Unit,
-    onMapLongPress: (location: LatLng) -> Unit,
-    onAddressLabelTap: (number: String, location: LatLng, tileStreet: String?) -> Unit = { _, _, _ -> },
-    onViewport: (south: Double, west: Double, north: Double, east: Double, zoom: Double) -> Unit = { _, _, _, _, _ -> },
-    dpadController: MapDpadController? = null, // key-driven pan/zoom/select for D-pad-only devices (docs/dpad.md)
-    modifier: Modifier = Modifier,
+internal fun VelaMapView(
+    scene: MapRenderScene,
+    callbacks: MapRenderCallbacks,
+    dpadController: MapDpadController?,
+    modifier: Modifier,
 ) {
-    if (app.vela.variant.CarIntegration.RenderIsolatedMap(
-        scene = MapRenderScene(
-            styleUri = styleUri,
-            myLocation = myLocation,
-            myBearing = myBearing,
-            myAccuracyM = myAccuracyM,
-            mySpeed = mySpeed,
-            myFixRaw = myFixRaw,
-            mySpeedRaw = mySpeedRaw,
-            replaySpeedup = replaySpeedup,
-            replaying = replaying,
-            compassHeading = compassHeading,
-            locationStale = locationStale,
-            cameraTarget = cameraTarget,
-            cameraTargetZoom = cameraTargetZoom,
-            recenterTick = recenterTick,
-            cameraBottomInsetPx = cameraBottomInsetPx,
-            cameraLeftInsetPx = cameraLeftInsetPx,
-            cameraRightInsetPx = cameraRightInsetPx,
-            cameraTopInsetPx = cameraTopInsetPx,
-            routePolyline = routePolyline,
-            routeColor = routeColor,
-            routeDashed = routeDashed,
-            transitPreview = transitPreview,
-            transitNavLeg = transitNavLeg,
-            routeTrafficSpans = routeTrafficSpans,
-            alternates = alternates,
-            altColor = altColor,
-            routeBubbles = routeBubbles,
-            markers = markers,
-            stopPins = stopPins,
-            destinationPin = destinationPin,
-            candidatePin = candidatePin,
-            frameMarkers = frameMarkers,
-            holdMarkerFit = holdMarkerFit,
-            navMode = navMode,
-            navDriveMode = navDriveMode,
-            navLabelExclude = navLabelExclude,
-            navUpcomingRoads = navUpcomingRoads,
-            navFollowing = navFollowing,
-            navNorthUp = navNorthUp,
-            driveFollowing = driveFollowing,
-            ambientCoversView = ambientCoversView,
-            darkTheme = darkTheme,
-            amoled = amoled,
-            applyKeylessTheme = applyKeylessTheme,
-            trafficOn = trafficOn,
-            transitOn = transitOn,
-            satelliteOn = satelliteOn,
-            satDeep = satDeep,
-            topographyOn = topographyOn,
-            previewTarget = previewTarget,
-            navOverviewTick = navOverviewTick,
-            navRecenterTick = navRecenterTick,
-            parkingSpot = parkingSpot,
-            savedPins = savedPins,
-            svPose = svPose,
-            svTopInsetPx = svTopInsetPx,
-            ambientPois = ambientPois,
-            buildingOverlays = buildingOverlays,
-            addressOverlays = addressOverlays,
-            maxspeedOverlays = maxspeedOverlays,
-            hiddenOpenPlaceIds = hiddenOpenPlaceIds,
-            ambientClosed = ambientClosed,
-            placesPending = placesPending,
-            placesOneSet = placesOneSet,
-            osmBusinesses = osmBusinesses,
-            navExitCallout = navExitCallout,
-            navTapPlaces = navTapPlaces,
-            placesOverlays = placesOverlays,
-            basemapArchive = basemapArchive,
-            speedOverlayOn = speedOverlayOn,
-            trafficControls = trafficControls,
-            flockCameras = flockCameras,
-            speedCameras = speedCameras,
-            transitStops = transitStops,
-            navBannerBottomPx = navBannerBottomPx,
-            poisEnabled = poisEnabled,
-            poiIconScale = poiIconScale,
-            poiLabelScale = poiLabelScale,
-        ),
-        callbacks = MapRenderCallbacks(
-            onSelectAlternate = onSelectAlternate,
-            onNavRoadLatin = onNavRoadLatin,
-            onNavPanned = onNavPanned,
-            onUserPan = onUserPan,
-            onMapTap = onMapTap,
-            onScaleChanged = onScaleChanged,
-            onOverlayState = onOverlayState,
-            onNavZoomOverride = onNavZoomOverride,
-            onPuckScreen = onPuckScreen,
-            onPoiTap = onPoiTap,
-            onMarkerTap = onMarkerTap,
-            onSavedPinTap = onSavedPinTap,
-            onParkingTap = onParkingTap,
-            onSvMapTap = onSvMapTap,
-            onAmbientTap = onAmbientTap,
-            onTransitStopTap = onTransitStopTap,
-            onOpenPlaceClosed = onOpenPlaceClosed,
-            onOpenPlaceTap = onOpenPlaceTap,
-            onRoadLimitKmh = onRoadLimitKmh,
-            onCompassTap = onCompassTap,
-            onCameraIdle = onCameraIdle,
-            onMapLongPress = onMapLongPress,
-            onAddressLabelTap = onAddressLabelTap,
-            onViewport = onViewport,
-        ), dpad = dpadController, modifier = modifier,
-    )) return
+    // Keep the Compose/Dex method signature small; the scene already owns all renderer values.
+    val styleUri = scene.styleUri
+    val myLocation = scene.myLocation
+    val myBearing = scene.myBearing
+    val myAccuracyM = scene.myAccuracyM
+    val mySpeed = scene.mySpeed
+    val myFixRaw = scene.myFixRaw
+    val mySpeedRaw = scene.mySpeedRaw
+    val replaySpeedup = scene.replaySpeedup
+    val replaying = scene.replaying
+    val compassHeading = scene.compassHeading
+    val locationStale = scene.locationStale
+    val cameraTarget = scene.cameraTarget
+    val cameraTargetZoom = scene.cameraTargetZoom
+    val recenterTick = scene.recenterTick
+    val cameraBottomInsetPx = scene.cameraBottomInsetPx
+    val cameraLeftInsetPx = scene.cameraLeftInsetPx
+    val cameraRightInsetPx = scene.cameraRightInsetPx
+    val cameraTopInsetPx = scene.cameraTopInsetPx
+    val routePolyline = scene.routePolyline
+    val routeColor = scene.routeColor
+    val routeDashed = scene.routeDashed
+    val transitPreview = scene.transitPreview
+    val transitNavLeg = scene.transitNavLeg
+    val routeTrafficSpans = scene.routeTrafficSpans
+    val alternates = scene.alternates
+    val altColor = scene.altColor
+    val routeBubbles = scene.routeBubbles
+    val markers = scene.markers
+    val stopPins = scene.stopPins
+    val destinationPin = scene.destinationPin
+    val candidatePin = scene.candidatePin
+    val frameMarkers = scene.frameMarkers
+    val holdMarkerFit = scene.holdMarkerFit
+    val navMode = scene.navMode
+    val navDriveMode = scene.navDriveMode
+    val navLabelExclude = scene.navLabelExclude
+    val navUpcomingRoads = scene.navUpcomingRoads
+    val navFollowing = scene.navFollowing
+    val navNorthUp = scene.navNorthUp
+    val driveFollowing = scene.driveFollowing
+    val ambientCoversView = scene.ambientCoversView
+    val darkTheme = scene.darkTheme
+    val amoled = scene.amoled
+    val applyKeylessTheme = scene.applyKeylessTheme
+    val trafficOn = scene.trafficOn
+    val transitOn = scene.transitOn
+    val satelliteOn = scene.satelliteOn
+    val satDeep = scene.satDeep
+    val topographyOn = scene.topographyOn
+    val previewTarget = scene.previewTarget
+    val navOverviewTick = scene.navOverviewTick
+    val navRecenterTick = scene.navRecenterTick
+    val parkingSpot = scene.parkingSpot
+    val savedPins = scene.savedPins
+    val svPose = scene.svPose
+    val svTopInsetPx = scene.svTopInsetPx
+    val ambientPois = scene.ambientPois
+    val buildingOverlays = scene.buildingOverlays
+    val addressOverlays = scene.addressOverlays
+    val maxspeedOverlays = scene.maxspeedOverlays
+    val hiddenOpenPlaceIds = scene.hiddenOpenPlaceIds
+    val ambientClosed = scene.ambientClosed
+    val placesPending = scene.placesPending
+    val placesOneSet = scene.placesOneSet
+    val osmBusinesses = scene.osmBusinesses
+    val navExitCallout = scene.navExitCallout
+    val navTapPlaces = scene.navTapPlaces
+    val placesOverlays = scene.placesOverlays
+    val basemapArchive = scene.basemapArchive
+    val speedOverlayOn = scene.speedOverlayOn
+    val trafficControls = scene.trafficControls
+    val flockCameras = scene.flockCameras
+    val speedCameras = scene.speedCameras
+    val transitStops = scene.transitStops
+    val navBannerBottomPx = scene.navBannerBottomPx
+    val poisEnabled = scene.poisEnabled
+    val poiIconScale = scene.poiIconScale
+    val poiLabelScale = scene.poiLabelScale
+    val onSelectAlternate = callbacks.onSelectAlternate
+    val onNavRoadLatin = callbacks.onNavRoadLatin
+    val onNavPanned = callbacks.onNavPanned
+    val onUserPan = callbacks.onUserPan
+    val onMapTap = callbacks.onMapTap
+    val onScaleChanged = callbacks.onScaleChanged
+    val onOverlayState = callbacks.onOverlayState
+    val onNavZoomOverride = callbacks.onNavZoomOverride
+    val onPuckScreen = callbacks.onPuckScreen
+    val onPoiTap = callbacks.onPoiTap
+    val onMarkerTap = callbacks.onMarkerTap
+    val onSavedPinTap = callbacks.onSavedPinTap
+    val onParkingTap = callbacks.onParkingTap
+    val onSvMapTap = callbacks.onSvMapTap
+    val onAmbientTap = callbacks.onAmbientTap
+    val onTransitStopTap = callbacks.onTransitStopTap
+    val onOpenPlaceClosed = callbacks.onOpenPlaceClosed
+    val onOpenPlaceTap = callbacks.onOpenPlaceTap
+    val onRoadLimitKmh = callbacks.onRoadLimitKmh
+    val onCompassTap = callbacks.onCompassTap
+    val onCameraIdle = callbacks.onCameraIdle
+    val onMapLongPress = callbacks.onMapLongPress
+    val onAddressLabelTap = callbacks.onAddressLabelTap
+    val onViewport = callbacks.onViewport
     val context = LocalContext.current
     val renderLifecycle = LocalLifecycleOwner.current.lifecycle
     val renderEpoch = remember { intArrayOf(0) }
