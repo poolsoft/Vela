@@ -203,6 +203,7 @@ open class MapRendererService : Service() {
         app.vela.ui.AppLocale.init(applicationContext)
         app.vela.ui.OfflineMode.init(applicationContext)
         app.vela.ui.Buildings3d.init(applicationContext)
+        app.vela.ui.MapRenderProfile.init(applicationContext)
         app.vela.ui.GoogleFree.init(applicationContext)
         app.vela.ui.HouseNumbers.init(applicationContext)
         app.vela.ui.LayersButton.init(applicationContext)

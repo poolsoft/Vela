@@ -15,4 +15,9 @@ internal fun rendererSettings(context: Context): JsonObject = buildJsonObject {
                 })
             })
         }
+        // Read the observable choice in the host composition, not just a prefs snapshot.
+        put("map_render_profile", buildJsonObject {
+            put("type", "string")
+            put("value", app.vela.ui.MapRenderProfile.selected.value)
+        })
     }

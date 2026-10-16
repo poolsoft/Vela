@@ -152,6 +152,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.ui.GoogleFree.init(this) // "Use Vela without Google": mirrors into the :core NoGoogle flag
         app.vela.ui.OfflineMode.init(this) // "Sadece cevrimdisi calis": every remote path checks this
         app.vela.ui.Buildings3d.init(this)
+        app.vela.ui.MapRenderProfile.init(this)
         app.vela.ui.RouteTrail.init(this)
         app.vela.ui.RoadLabel.init(this)
         app.vela.ui.PuckStyle.init(this)

@@ -1,4 +1,4 @@
-# Vela upstream karşılaştırması — 16 Ekim 2026
+# Vela upstream karşılaştırması - 16 Ekim 2026
 
 ## Kapsam ve yöntem
 

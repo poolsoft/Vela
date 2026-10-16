@@ -1013,4 +1013,8 @@
     <string name="settings_voice_asr_installed">Çevrimdışı ses tanıma modeli hazır (Whisper %1$d MB)</string>
     <string name="settings_voice_asr_not_installed">İnternetsiz eller serbest ses tanıma için model gereklidir.</string>
     <string name="settings_voice_asr_download">Ses tanıma modelini indir (%1$d MB)</string>
+    <string name="settings_map_render_profile">Harita çizim profili</string>
+    <string name="settings_map_render_standard">Standart : kendi harita ayarlarım</string>
+    <string name="settings_map_render_light">Hafif : eski cihazlar için</string>
+    <string name="settings_map_render_profile_hint">Hafif profil çizimi 30 FPS ile sınırlar, haritayı düz tutar, 3D binaları ve arazi gölgelendirmesini gizler. Katman ve renk tercihleriniz korunur; Standart seçildiğinde yeniden geçerli olur. Haritayı yeniden yüklemeden hemen uygulanır.</string>
 </resources>

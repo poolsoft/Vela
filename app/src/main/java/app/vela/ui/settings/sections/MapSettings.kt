@@ -27,6 +27,21 @@ internal fun MapSettingsScreen(onBack: () -> Unit) {
     SettingsScaffold(stringResource(R.string.settings_map), onBack) { topRow ->
         Spacer(Modifier.height(4.dp))
         SettingsGroup {
+            Text(stringResource(R.string.settings_map_render_profile),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+            listOf(
+                app.vela.ui.MapRenderProfile.STANDARD to R.string.settings_map_render_standard,
+                app.vela.ui.MapRenderProfile.LIGHT to R.string.settings_map_render_light,
+            ).forEach { (id, label) ->
+                SelectableRow(label = stringResource(label),
+                    selected = app.vela.ui.MapRenderProfile.selected.value == id,
+                    onClick = { app.vela.ui.MapRenderProfile.set(context, id) })
+            }
+            Hint(stringResource(R.string.settings_map_render_profile_hint))
+        }
+        Spacer(Modifier.height(16.dp))
+        SettingsGroup {
         ToggleRow(
             label = stringResource(R.string.settings_live_traffic),
             checked = app.vela.ui.Traffic.on.value,

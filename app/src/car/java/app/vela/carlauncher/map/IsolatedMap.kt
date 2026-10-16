@@ -150,6 +150,8 @@ internal class IsolatedMapClient(
             return
         }
         val changed = width != w || height != h || dpi != density
+        // Identical holder callbacks must not detach/rebind a healthy output again.
+        if (!changed && surface === value && opened && active && !mutableState.value.failed) return
         surface = value; width = w; height = h; dpi = density
         if (changed && opened) {
             // A resize keeps the existing map/style; only the first frame needs startup UI.
