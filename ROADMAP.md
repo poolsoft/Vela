@@ -505,3 +505,6 @@ the shared hidden-WebView base, `NavController`) are in FEATURES.
 
 
 - Validate the automatic render budget on the target head unit, including the 30-second sustained-frame threshold and thermal behavior. Keep existing explicit profiles and custom preferences intact.
+
+
+- Validate cold on-demand map activation on the GLES2 head unit after a mapless boot; verify startup preference and music continuity remain intact.

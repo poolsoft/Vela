@@ -216,3 +216,8 @@ it says more.
 ### Automatic camera budget
 
 Settings > Map offers Automatic alongside Standard, Light and Custom. Automatic uses the existing low-end hardware classification and starts Light on GLES2 or small-heap devices. Otherwise it uses Standard, falling back to Light only after three consecutive slow 10-second windows with at least 20 frames and at least half taking 80 ms. Light uses 30 FPS and a flat camera without 3D buildings or terrain shading. Decisions last for the renderer process and preserve stored custom controls; Custom restores those controls after startup. Settings explain the selected device budget.
+
+
+### Opening a mapless session on demand
+
+The drawer includes Map, which can also be pinned to the dock. It opens the renderer in the current session and returns the launcher to its split map/music layout. Startup remains mapless when that preference was selected. Repeated taps preserve the active map. An error after explicit opening stays in the map error/retry view rather than changing the startup preference.

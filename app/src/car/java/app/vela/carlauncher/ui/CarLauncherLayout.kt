@@ -135,6 +135,10 @@ fun CarLauncherLayout(
     fun launchApp(uri: String) {
         val launched = apps.uygulamayiBaslat(uri) { internal ->
             when (internal) {
+                InternalApp.MAP -> {
+                    CarLauncherSettings.openMapForSession()
+                    showSplit()
+                }
                 InternalApp.SETTINGS -> { showSplit(); onOpenSettings() }
                 InternalApp.MUSIC -> { contentMode = "UNIFIED"; showPanel("MUSIC") }
                 InternalApp.DASHBOARD -> { contentMode = "UNIFIED"; showPanel("DASHBOARD") }

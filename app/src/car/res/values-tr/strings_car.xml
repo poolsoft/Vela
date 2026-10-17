@@ -308,4 +308,5 @@
     <string name="car_settings_open_btn">Aç</string>
     <string name="car_permissions_subtitle">Konum, bildirim ve sistem erişim izinleri</string>
     <string name="settings_close">Kapat</string>
+    <string name="car_internal_map">Harita</string>
 </resources>

@@ -346,3 +346,6 @@ Offline OBF routing reserves launcher/music heap space, supports true cancellati
 
 
 Automatic map rendering is available in Settings > Map. It selects Light on limited hardware and can reduce sustained slow rendering without changing saved custom preferences.
+
+
+The internal Map app opens the map on demand from mapless mode without restarting or changing the saved startup preference. It can be pinned to the dock using the existing drawer action.

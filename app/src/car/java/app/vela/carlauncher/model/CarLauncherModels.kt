@@ -53,6 +53,7 @@ enum class InternalApp(
     val varsayilanAd: String,
     val ikonResId: Int
 ) {
+    MAP("internal://map", "Harita", R.drawable.ic_internal_map),
     SETTINGS("internal://settings", "Ayarlar", R.drawable.ic_internal_settings),
     MUSIC("internal://music", "Müzik", R.drawable.ic_internal_music),
     ANTENNA("internal://antenna", "Anten", R.drawable.ic_internal_antenna),
@@ -60,6 +61,7 @@ enum class InternalApp(
     NEON_DASHBOARD("internal://neon_dashboard", "Dijital Gösterge", R.drawable.ic_internal_neon_dashboard);
 
     fun getAd(context: Context): String = context.getString(when (this) {
+        MAP -> R.string.car_internal_map
         SETTINGS -> R.string.car_internal_settings
         MUSIC -> R.string.car_internal_music
         ANTENNA -> R.string.car_internal_antenna

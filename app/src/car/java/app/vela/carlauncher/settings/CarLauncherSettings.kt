@@ -183,7 +183,7 @@ object CarLauncherSettings {
         if (force || !::prefs.isInitialized) {
             prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             _maplessPreference.value = prefs.getBoolean("car_launcher_mapless_mode", false)
-            if (!sessionInitialized || _maplessPreference.value) {
+            if (!sessionInitialized) {
                 _maplessMode.value = _maplessPreference.value
                 sessionInitialized = true
             }
@@ -257,6 +257,13 @@ object CarLauncherSettings {
     val maplessMode: StateFlow<Boolean> = _maplessMode.asStateFlow()
     private val _maplessScreen = MutableStateFlow("speedometer")
     val maplessScreen: StateFlow<String> = _maplessScreen.asStateFlow()
+
+    /** Explicit session-only opening; the next process still honors the saved startup choice. */
+    fun openMapForSession() {
+        sessionInitialized = true
+        initialMapAttempt = false
+        _maplessMode.value = false
+    }
 
     fun setMaplessMode(enabled: Boolean) {
         _maplessPreference.value = enabled

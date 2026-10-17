@@ -108,7 +108,7 @@ internal fun OfflineSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onClose
         LaunchedEffect(Unit) { vm.offlineAddressCount { offlineAddrCount = it } }
         SettingsGroup(title = stringResource(R.string.settings_offline_map_area)) {
         if (!app.vela.variant.CarIntegration.mapStorageAvailable()) {
-            Hint("Haritasız oturumda SDK harita deposu kapalıdır. PMTiles dosyaları ve dosya yedekleme kullanılabilir. Haritayı etkinleştirmek için ayarı değiştirip uygulamayı yeniden başlatın.")
+            Hint("Haritasız oturumda SDK harita deposu kapalıdır. PMTiles dosyaları ve dosya yedekleme kullanılabilir. Araç modunda haritayı bu oturum için açmak üzere uygulama çekmecesindeki Harita simgesine dokunun.")
         }
         FilledTonalButton(
             // The top focusable control: Back routes its DOWN here, UP from here goes back to Back.

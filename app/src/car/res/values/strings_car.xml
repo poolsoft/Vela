@@ -314,4 +314,5 @@
     <string name="car_settings_open_btn">Open</string>
     <string name="car_permissions_subtitle">Location, notification, and system access permissions</string>
     <string name="settings_close">Close</string>
+    <string name="car_internal_map">Map</string>
 </resources>

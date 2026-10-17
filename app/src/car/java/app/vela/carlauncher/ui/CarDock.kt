@@ -129,6 +129,7 @@ fun CarDock(
                             shortcut.paketAdi == "internal://music" -> onMuzikPaneliAc()
                             shortcut.paketAdi == "internal://settings" -> onAyarlarTiklandi()
                             shortcut.paketAdi == "internal://antenna" -> onAntenTiklandi()
+                            shortcut.paketAdi == "internal://map" -> app.vela.carlauncher.settings.CarLauncherSettings.openMapForSession()
                             InternalApp.isInternalUri(shortcut.paketAdi) -> onAyarlarTiklandi()
                             else -> {
                                 try {

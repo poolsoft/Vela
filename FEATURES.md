@@ -2741,3 +2741,6 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 
 
 - [x] Automatic device-aware map profile, session-only sustained-render downgrade, and visible device/budget explanation.
+
+
+- [x] Internal Map shortcut in the drawer and dock picker, with session-only mapless-to-map activation.

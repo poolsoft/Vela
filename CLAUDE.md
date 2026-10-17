@@ -6008,3 +6008,6 @@ Routing: coroutine callers use RouteEngine.routeAwait, including detached fallba
 
 
 Automatic map profile: measure rendering duration rather than idle frame intervals. Require three populated slow windows before a session-only downgrade; propagate it over the renderer stage channel. Never persist automatic decisions over user layer or custom profile values.
+
+
+Map activation: internal://map opens only the current session. Keep maplessPreference (persisted startup) separate from maplessMode (active session), including forced preference refreshes. Manual activation must not become an automatic startup failure fallback or persist a different startup choice.

@@ -343,7 +343,7 @@ private fun CarAppearanceSettingsScreen(
             SettingsGroup(title = "Haritasız mod") {
                 ToggleRow(
                     label = "Haritasız çalış",
-                    hint = "Haritasız mod haritayı hemen kapatır. Haritaya dönmek için seçeneği kapatıp uygulamayı yeniden başlatın.",
+                    hint = "Haritasız mod haritayı hemen kapatır. Çekmecedeki veya dock’a eklediğiniz Harita simgesi bu oturum için haritayı açar; başlangıç tercihiniz korunur.",
                     checked = mapless,
                     onCheckedChange = { CarLauncherSettings.setMaplessMode(it) }
                 )
