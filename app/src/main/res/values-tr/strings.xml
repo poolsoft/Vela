@@ -108,7 +108,7 @@
     <string name="settings_transit_layer">Toplu taşıma hatlarını vurgula</string>
     <string name="settings_transit_layer_hint">Haritada tren ve metro hatlarını çizer.</string>
     <string name="settings_topography">Arazi gölgelendirmesi</string>
-    <string name="settings_topography_hint">Haritadaki tepe ve dağları gölgelendirir. Varsayılan olarak kapalıdır.</string>
+    <string name="settings_topography_hint">Haritadaki tepe ve dağları gölgelendirir. Varsayılan olarak kapalıdır; Hafif profilde ve sürüş navigasyonunda gizlenir.</string>
     <string name="settings_speed_cams">Hız kameraları</string>
     <string name="settings_speed_cam_warn">Sesli uyar</string>
     <string name="settings_speed_cam_warn_hint">Navigasyon sırasında yaklaşırken sesli olarak uyarır.</string>
@@ -123,7 +123,7 @@
     <string name="settings_read_all_reviews">“Tüm değerlendirmeleri oku” düğmesi</string>
     <string name="settings_read_all_reviews_hint">Uygulama içinde tüm değerlendirmeleri gösteren düğmeyi ekler.</string>
     <string name="settings_buildings_3d">3D binalar</string>
-    <string name="settings_buildings_3d_hint">Yakınlaştırmada 3D binalar. Kapatmak eski telefonlarda haritayı daha akıcı hale getirebilir.</string>
+    <string name="settings_buildings_3d_hint">Haritada gezinirken yakınlaştırmada 3D binalar. Navigasyonda, uydu görünümünde ve Hafif profilde gizlenir. Kapatmak eski cihazlarda kaydırmayı hızlandırabilir.</string>
     <string name="settings_building_overlay">Eksik binaları doldur</string>
     <string name="settings_building_overlay_hint">Haritada eksik olan alanlarda bina şekillerini çizer.</string>
     <string name="settings_building_debug">Bina katmanı hata ayıklama</string>
@@ -1016,7 +1016,9 @@
     <string name="settings_map_render_profile">Harita çizim profili</string>
     <string name="settings_map_render_standard">Standart: kendi harita ayarlarım</string>
     <string name="settings_map_render_light">Hafif: eski cihazlar için</string>
-    <string name="settings_map_render_profile_hint">Hafif profil çizimi 30 FPS ile sınırlar, haritayı düz tutar, 3D binaları ve arazi gölgelendirmesini gizler. Katman ve renk tercihleriniz korunur; Standart seçildiğinde yeniden geçerli olur. Haritayı yeniden yüklemeden hemen uygulanır. Her açılışta ilk kullanılabilir harita karesine kadar Hafif kullanılır, ardından seçtiğiniz profil uygulanır. Düşük bellekli veya GLES2 cihazlarda Standart profil açılıştan sonra da Hafif bütçeyi korur. Bu korumayı değiştirmek için Özel profilde FPS, eğim ve katmanları seçebilirsiniz.</string>
+    <string name="settings_map_render_profile_hint">Hafif profil çizimi 30 FPS ile sınırlar, haritayı düz tutar, 3D binaları ve arazi gölgelendirmesini gizler. Katman ve renk tercihleriniz korunur. Her açılışta ilk kullanılabilir kareye kadar Hafif kullanılır, ardından seçtiğiniz profil uygulanır. Otomatik cihaz koruması isteğe bağlıdır ve varsayılan olarak kapalıdır. Özel profilde FPS, eğim ve katman seçimleriniz geçerlidir.</string>
+    <string name="settings_map_auto_budget">Otomatik cihaz performans koruması</string>
+    <string name="settings_map_auto_budget_hint">İsteğe bağlıdır, varsayılan olarak kapalıdır. Düşük bellekli veya GLES2 cihazlarda Standart profil Hafif bütçeyi kullanır: 30 FPS, düz harita, 3D bina ve arazi gölgelendirmesi kapalı. Kayıtlı tercihleriniz korunur; Standart seçimlerinizi uygulamak için bu ayarı kapatın. Özel profil bu seçenekle sınırlandırılmaz.</string>
     <string name="settings_map_render_custom">Özel: detayları kendim seçeyim</string>
     <string name="settings_map_custom_controls">Özel çizim ayarları</string>
     <string name="settings_map_custom_fps">En yüksek kare hızı: %1$d FPS</string>

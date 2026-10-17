@@ -26,4 +26,7 @@ internal fun rendererSettings(context: Context): JsonObject = buildJsonObject {
         put(app.vela.ui.MapRenderProfile.TILT_KEY, buildJsonObject {
             put("type", "boolean"); put("value", app.vela.ui.MapRenderProfile.customTilt.value)
         })
+        put(app.vela.ui.MapRenderProfile.AUTO_BUDGET_KEY, buildJsonObject {
+            put("type", "boolean"); put("value", app.vela.ui.MapRenderProfile.autoDeviceBudget.value)
+        })
     }

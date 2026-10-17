@@ -2737,4 +2737,4 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 - [x] TTS motor calls and timeout cleanup run on one bounded worker instead of the UI thread.
 
 - [x] Heap-aware OBF routing budgets, engine cancellation, obsolete-request replacement, and hierarchy-aware car routing.
-- [x] Persistent low-end Standard map budget with an explicit Custom override.
+- [x] Opt-in low-end map protection with preserved user preferences and requested/effective layer diagnostics.

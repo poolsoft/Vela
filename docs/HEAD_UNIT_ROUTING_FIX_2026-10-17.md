@@ -7,7 +7,7 @@
 - OBF budgets derive from the real process heap and reserve launcher/music headroom. Low-headroom requests fail safely rather than using a fixed 256 MB budget on a 96 MiB process. Tile contexts unload on exit and before route planning; speed-limit lookups use a small adaptive context and skip a busy router.
 - Car routes enable Java HH when indexes exist, and base-road two-phase routing when base subregions exist. No new native ABI or dependency is required. The installed data decides the available hierarchy.
 - The no-file OsmandRegions adapter now returns empty downloadable-region suggestions. Merely setting CALCULATE_MISSING_MAPS=false was insufficient: HH still queried that uninitialized reader and failed with Reader == null. Coverage and actual route computation still use installed OBF readers.
-- Standard remains Light on low-end devices after the first frame; Custom is the explicit user override. GLES classification reads packed reqGlEsVersion instead of trying to parse the display string 2.0 as hexadecimal. This retains 30 FPS, a flat camera and the existing reduced layer budget on weak devices.
+- Automatic device performance protection is a visible opt-in switch, off by default. It can keep Standard on the Light budget on weak devices; Custom is unaffected. Existing selections are honored when the switch is off. GLES classification reads packed reqGlEsVersion instead of trying to parse the display string 2.0 as hexadecimal. This retains 30 FPS, a flat camera and the existing reduced layer budget on weak devices.
 - HOME intent filters/default selection are not rewritten and no crash restart loop is introduced.
 
 ## Reproducible validation
@@ -26,7 +26,9 @@ At 96 MiB, the public Wilmington-to-Delmar fixture completed a 161.6 km road rou
 
 Initial testing found and fixed the HH world-regions reader failure; the final accepted run uses the installed HH indexes successfully. The earlier classic-engine memory failure must not be presented as evidence that the data lacks HH.
 
-Full debug/release core tests, car profile test, CI APK and emulator verification are pending at this checkpoint.
+All 690 core tests in each debug/release variant passed (8 optional tests skipped without fixtures). The optional 96 MiB fixture run passed all five checks. The car profile test and release Kotlin compilation also passed before the user-preference refinement; final APK/emulator checks include the opt-in version.
+
+The initial runtime commit forced Standard to Light on low-end devices. This was corrected following the user's clarification: automatic protection must be optional and existing enabled features must be considered. Do not install the superseded diagnostic-139 build for validating this preference behavior. Requested/effective profile, 3D buildings, topography, traffic and transit choices are logged to diagnose the actual selected workload instead of assuming defaults.
 
 ## Limits and follow-up
 

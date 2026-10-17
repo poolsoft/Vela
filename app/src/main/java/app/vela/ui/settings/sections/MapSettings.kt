@@ -41,6 +41,11 @@ internal fun MapSettingsScreen(onBack: () -> Unit) {
                     modifier = if (id == app.vela.ui.MapRenderProfile.STANDARD) topRow else Modifier)
             }
             Hint(stringResource(R.string.settings_map_render_profile_hint))
+            GroupDivider()
+            ToggleRow(label = stringResource(R.string.settings_map_auto_budget),
+                checked = app.vela.ui.MapRenderProfile.autoDeviceBudget.value,
+                onCheckedChange = { app.vela.ui.MapRenderProfile.setAutoDeviceBudget(context, it) },
+                hint = stringResource(R.string.settings_map_auto_budget_hint))
         }
         Spacer(Modifier.height(16.dp))
         if (app.vela.ui.MapRenderProfile.selected.value == app.vela.ui.MapRenderProfile.CUSTOM) {

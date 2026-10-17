@@ -2736,7 +2736,7 @@ The Java route budget in MiB is floor(min((maxHeap - usedHeap - reserve) / 2, ma
 
 Car routing enables Java HH only when installed readers expose HH indexes; COMPLEX two-phase routing is selected when base-road subregions exist. Data lacking both hierarchies uses the bounded classic path. No straight-line segmentation or distance cutoff replaces real road routing. Native Valhalla retains its current API cancellation limitations.
 
-Low-end Standard resolves to Light after startup; Custom explicitly overrides the protection. Stronger devices retain Standard after startup. Existing layer preferences and renderer-session retention remain unchanged.
+The boolean map_auto_device_budget defaults to false. Only explicit enablement lets low-end Standard resolve to Light after startup; Custom is unaffected. Without it, selected Standard applies normally after startup. Renderer settings transport the observable option for immediate updates, preserving all existing profile/layer preferences. Existing layer preferences and renderer-session retention remain unchanged.
 
 HH routing does not require a world-regions file for download suggestions. With missing-map suggestions disabled, the OsmandRegions adapter returns no downloadable-region hints; installed OBF coverage and HH indexes still determine the route. This prevents the uninitialized world-region reader from rejecting an otherwise valid HH calculation.
 

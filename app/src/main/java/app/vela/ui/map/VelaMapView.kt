@@ -658,7 +658,8 @@ internal fun VelaMapView(
     var startupLight by remember { mutableStateOf(true) }
     val requestedProfile = app.vela.ui.MapRenderProfile.selected.value
     val selectedProfile = app.vela.ui.MapRenderProfile.effective(
-        requestedProfile, app.vela.ui.MemoryPressure.lowEnd, startupLight)
+        requestedProfile, app.vela.ui.MemoryPressure.lowEnd, startupLight,
+        app.vela.ui.MapRenderProfile.autoDeviceBudget.value)
     val lightProfile = app.vela.ui.MapRenderProfile.isLight(selectedProfile)
     val flatCamera = app.vela.ui.MapRenderProfile.flatCamera(selectedProfile)
     val flatCameraHolder = rememberUpdatedState(flatCamera)
@@ -902,7 +903,7 @@ internal fun VelaMapView(
 
     var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
     var mapInitRequested by remember { mutableStateOf(false) }
-    LaunchedEffect(mapView, selectedProfile, maxFps, flatCamera) {
+    LaunchedEffect(mapView, selectedProfile, maxFps, flatCamera, topographyOn, app.vela.ui.Buildings3d.on.value, navMode, navDriveMode, satelliteOn, trafficOn, transitOn) {
         // Zero is ignored by SDK 10.3.7; restore the display budget explicitly.
         val refresh = (mapView.display?.refreshRate ?: 60f).toInt().coerceAtLeast(30)
         val appliedFps = if (maxFps > 0) minOf(maxFps, refresh) else refresh
@@ -914,7 +915,9 @@ internal fun VelaMapView(
                     CameraPosition.Builder(map.cameraPosition).tilt(0.0).build()))
             }
         }
-        app.vela.util.FileLogger.i("MapProfile", "profile=$selectedProfile fps=$appliedFps tilt=${!flatCamera} startup=$startupLight requested=$requestedProfile")
+        app.vela.util.FileLogger.i("MapProfile", "profile=$selectedProfile fps=$appliedFps tilt=${!flatCamera} startup=$startupLight requested=$requestedProfile autoBudget=${app.vela.ui.MapRenderProfile.autoDeviceBudget.value} " +
+            "buildingsRequested=${app.vela.ui.Buildings3d.on.value} buildingsEffective=${app.vela.ui.Buildings3d.on.value && !lightProfile && !satelliteOn && !navMode} " +
+            "topographyRequested=$topographyOn topographyEffective=${topographyOn && !lightProfile && !(navMode && navDriveMode)} trafficRequested=$trafficOn transitRequested=$transitOn")
     }
 
     // Ending nav returns the camera to Google's flat north-up browse view — the follow camera's

@@ -325,6 +325,7 @@ private val SEARCH_INDEX: List<Pair<Int, SettingsSection>> = listOf(
     R.string.settings_follow_system_language to SettingsSection.APPEARANCE,
     // Map
     R.string.settings_map_render_profile to SettingsSection.MAP,
+    R.string.settings_map_auto_budget to SettingsSection.MAP,
     R.string.settings_map_render_standard to SettingsSection.MAP,
     R.string.settings_map_render_light to SettingsSection.MAP,
     R.string.settings_map_render_custom to SettingsSection.MAP,

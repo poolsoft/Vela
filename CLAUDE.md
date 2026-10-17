@@ -6002,4 +6002,6 @@ Offline JSON metadata uses `writeAtomicText`; binary sprite copies use `writeAto
 
 TTS Binder calls, including timeout stop/shutdown, belong on `SpeechWorker`; main-handler callbacks must not call the engine. Keep drawer spans and dock sizes in the measure path, and use synchronous icon cache hits before scheduling misses. Cached music restore must not walk saved media paths; scans/playback perform availability checks.
 
+Map preferences: automatic device protection is off by default and never rewrites layer/profile selections. Keep the observable option in the renderer settings snapshot; log requested and effective layers separately.
+
 Routing: coroutine callers use RouteEngine.routeAwait, including detached fallback workers and multi-stop legs. Do not call the blocking route adapter from coroutine paths. Forward RouteControl through composites. OBF progress, heap watcher and finally cleanup must stay coupled. A passing desktop route is not a 96 MiB head-unit performance result.

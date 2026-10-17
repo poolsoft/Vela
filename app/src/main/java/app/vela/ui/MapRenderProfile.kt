@@ -12,14 +12,16 @@ object MapRenderProfile {
     private const val KEY = "map_render_profile"
     const val FPS_KEY = "map_custom_max_fps"
     const val TILT_KEY = "map_custom_tilt"
+    const val AUTO_BUDGET_KEY = "map_auto_device_budget"
     val selected = mutableStateOf(STANDARD)
     val customMaxFps = mutableIntStateOf(30)
     val customTilt = mutableStateOf(false)
+    val autoDeviceBudget = mutableStateOf(false)
     fun isLight(profile: String = selected.value) = profile == LIGHT
     fun maxFps(profile: String = selected.value) = when (profile) { LIGHT -> 30; CUSTOM -> customMaxFps.intValue; else -> 0 }
     fun flatCamera(profile: String = selected.value) = isLight(profile) || (profile == CUSTOM && !customTilt.value)
-    fun effective(profile: String, lowEnd: Boolean, startup: Boolean): String =
-        if (startup || (lowEnd && profile == STANDARD)) LIGHT else profile
+    fun effective(profile: String, lowEnd: Boolean, startup: Boolean, automaticBudget: Boolean = false): String =
+        if (startup || (automaticBudget && lowEnd && profile == STANDARD)) LIGHT else profile
     private fun valid(value: String?) = when (value) { LIGHT, CUSTOM -> value; else -> STANDARD }
 
     fun init(context: Context) {
@@ -27,6 +29,7 @@ object MapRenderProfile {
         selected.value = valid(prefs.getString(KEY, STANDARD))
         customMaxFps.intValue = prefs.getInt(FPS_KEY, 30).coerceIn(15, 60)
         customTilt.value = prefs.getBoolean(TILT_KEY, false)
+        autoDeviceBudget.value = prefs.getBoolean(AUTO_BUDGET_KEY, false)
     }
 
     fun set(context: Context, value: String) {
@@ -45,5 +48,11 @@ object MapRenderProfile {
         customTilt.value = value
         context.getSharedPreferences("vela_settings", Context.MODE_PRIVATE)
             .edit().putBoolean(TILT_KEY, value).apply()
+    }
+
+    fun setAutoDeviceBudget(context: Context, value: Boolean) {
+        autoDeviceBudget.value = value
+        context.getSharedPreferences("vela_settings", Context.MODE_PRIVATE)
+            .edit().putBoolean(AUTO_BUDGET_KEY, value).apply()
     }
 }
