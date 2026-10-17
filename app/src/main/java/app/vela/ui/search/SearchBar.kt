@@ -255,21 +255,13 @@ fun SearchBar(
                     )
                 }
             }
-            // Quiet offline indicator: a grayed globe-with-a-slash + "Offline", shown when there's no
-            // connection (replaces the old banner). Hidden while typing so it doesn't crowd the clear "X".
+            // Keep the offline state accessible without shrinking the search hit area.
             if (offline && query.isEmpty() && onBack == null) {
                 Icon(
                     Icons.Default.PublicOff,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
+                    contentDescription = stringResource(R.string.search_offline),
+                    modifier = Modifier.padding(end = 4.dp).size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    stringResource(R.string.search_offline),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(end = 4.dp),
                 )
             }
             // Your lists, moved here from the head of the category-chip row (issue #290): there it

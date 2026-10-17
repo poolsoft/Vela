@@ -372,3 +372,6 @@ Speech engine calls and stop/shutdown cleanup run on one daemon worker with at m
 Map performance diagnostics record requested and effective 3D-building/topography states separately, including startup, profile and navigation restrictions; the device-protection toggle is opt-in and never rewrites stored layer choices.
 
 OBF requests use a 60-second deadline, cooperative engine progress cancellation and latest-request replacement. Every route context unloads its tiles on completion or failure; speed lookups skip a busy route instead of queuing behind it. Car searches enable Java HH for indexed data and COMPLEX two-phase search for base-road data. The native Valhalla adapter remains first choice when initialized; logs name the selected engine and OBF hierarchy capabilities.
+
+
+The map search offline indicator uses an accessible icon without a text label. Stopping speech invalidates queued utterances but preserves the system TTS initialization callback; engine binding callbacks are gated by binding generation, not speech cancellation. Head-unit audio output remains a device acceptance check.

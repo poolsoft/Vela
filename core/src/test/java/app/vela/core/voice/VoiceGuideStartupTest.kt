@@ -49,6 +49,26 @@ class VoiceGuideStartupTest {
         assertTrue(guide.working == true)
     }
 
+    @Test fun stopDoesNotDiscardAnInFlightSystemInitializationResult() {
+        val guide = VoiceGuide(ContextWrapper(null))
+        val workerField = VoiceGuide::class.java.getDeclaredField("speechWorker").apply { isAccessible = true }
+        val worker = workerField.get(guide) as SpeechWorker
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val unblock = java.util.concurrent.CountDownLatch(1)
+        try {
+            worker.execute { entered.countDown(); unblock.await(3, java.util.concurrent.TimeUnit.SECONDS) }
+            assertTrue(entered.await(3, java.util.concurrent.TimeUnit.SECONDS))
+            guide.onInit(android.speech.tts.TextToSpeech.ERROR)
+            guide.stop()
+            unblock.countDown()
+            awaitWorker { guide.speechStatus.startsWith("error:") }
+            assertTrue(guide.working == false)
+        } finally {
+            unblock.countDown()
+            worker.close()
+        }
+    }
+
     // Plain JVM Android stubs do not execute Handler callbacks. Observe the worker's volatile
     // health state; UI callback dispatch needs an Android runtime.
     private fun awaitWorker(condition: () -> Boolean) {

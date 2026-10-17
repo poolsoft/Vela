@@ -40,6 +40,14 @@ class VoiceGuide @Inject constructor(
         }
     }
 
+    // A stop cancels speech, not the service connection. Dropping onInit leaves a bound
+    // engine permanently unready and every later prompt waits until its deadline.
+    private fun bindingTask(action: () -> Unit) {
+        if (!speechWorker.execute { safely(action) }) {
+            focusHandler.post { failed(IllegalStateException("TTS worker unavailable")) }
+        }
+    }
+
     private fun stopEngine(engine: TextToSpeech? = tts) {
         engine ?: return
         engineTask { engine.stop() }
@@ -341,7 +349,7 @@ class VoiceGuide @Inject constructor(
         lastSystemLang = null
         val expected = bindingGeneration.incrementAndGet()
         val listener = TextToSpeech.OnInitListener { status ->
-            engineTask { if (expected == bindingGeneration.get() && !systemInitFailed) handleInit(status) }
+            bindingTask { if (expected == bindingGeneration.get() && !systemInitFailed) handleInit(status) }
         }
         tts = if (enginePackage != null) TextToSpeech(context, listener, enginePackage)
             else TextToSpeech(context, listener)
@@ -358,7 +366,11 @@ class VoiceGuide @Inject constructor(
             override fun onStop(utteranceId: String?, interrupted: Boolean) { if (tts !== bound) return; if (!speechStatus.startsWith("error:")) speechStatus = "stopped"; releaseFocus() }
             @Deprecated("deprecated") override fun onError(utteranceId: String?) {
                 if (tts !== bound) return
-                failed(IllegalStateException("TTS synthesis failed"))
+                failed(IllegalStateException("TTS synthesis failed engine=$currentEngine language=${targetLang()}"))
+            }
+            override fun onError(utteranceId: String?, errorCode: Int) {
+                if (tts !== bound) return
+                failed(IllegalStateException("TTS synthesis failed code=$errorCode engine=$currentEngine language=${targetLang()}"))
             }
         })
     }
@@ -370,7 +382,7 @@ class VoiceGuide @Inject constructor(
         speak(app.vela.core.i18n.NavStringsRegistry.current().voiceTest(), interrupt = true, ignoreMute = true)
     }
 
-    override fun onInit(status: Int) = engineTask { handleInit(status) }
+    override fun onInit(status: Int) = bindingTask { handleInit(status) }
 
     private fun handleInit(status: Int) {
         if (systemInitFailed) return
@@ -399,6 +411,7 @@ class VoiceGuide @Inject constructor(
         t.setPitch(1.0f)
         if (systemInitFailed) return
         systemReady = true
+        android.util.Log.i("VoiceGuide", "System TTS ready engine=$currentEngine")
         systemInitFailed = false
         lastSystemLang = null // force setLanguage on the first utterance
         if (!useNeural) { ready = true; working = true } // this system engine is the PRIMARY voice
@@ -619,7 +632,7 @@ class VoiceGuide @Inject constructor(
         lastSystemLang = null
         val fallback = requiredSystemEngine ?: if (useNeural) "com.google.android.tts" else null
         val expected = bindingGeneration.incrementAndGet()
-        val listener = TextToSpeech.OnInitListener { status -> engineTask { if (expected == bindingGeneration.get() && !systemInitFailed) handleInit(status) } }
+        val listener = TextToSpeech.OnInitListener { status -> bindingTask { if (expected == bindingGeneration.get() && !systemInitFailed) handleInit(status) } }
         tts = fallback?.let { TextToSpeech(context, listener, it) } ?: TextToSpeech(context, listener)
         attachTtsListener()
     }
@@ -635,7 +648,6 @@ class VoiceGuide @Inject constructor(
         speechStatus = "stopped"
         speechRequest.incrementAndGet()
         generation.incrementAndGet()
-        speechWorker.clearPending()
         openerToken++ // cancel any deferred nav-start opener still waiting for its road name
         stopEngine()
         safely { neural?.stop() }
