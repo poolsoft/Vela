@@ -375,3 +375,6 @@ OBF requests use a 60-second deadline, cooperative engine progress cancellation 
 
 
 The map search offline indicator uses an accessible icon without a text label. Stopping speech invalidates queued utterances but preserves the system TTS initialization callback; engine binding callbacks are gated by binding generation, not speech cancellation. Head-unit audio output remains a device acceptance check.
+
+
+The in-app language picker excludes Hebrew. An existing explicit he or iw preference migrates to English before resource wrapping and navigation localization. Verify the picker and saved-language migration in the next packaged build.
