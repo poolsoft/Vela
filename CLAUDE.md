@@ -6011,3 +6011,6 @@ Automatic map profile: measure rendering duration rather than idle frame interva
 
 
 Map activation: internal://map opens only the current session. Keep maplessPreference (persisted startup) separate from maplessMode (active session), including forced preference refreshes. Manual activation must not become an automatic startup failure fallback or persist a different startup choice.
+
+
+Launcher ownership: singleTask does not prevent every HOME versus standard-task duplicate on target ROMs. Gate duplicates before ViewModel/Compose setup, restore the live AppTask, and scope lifecycle/PiP writes to the current owner. Do not recover this case by restarting the renderer or stopping media/navigation. Run scripts/test_launcher_task_reuse.py against the intended emulator after changes.

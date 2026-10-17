@@ -26,6 +26,47 @@ import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private val ownsLauncherUi get() = !CarIntegration.available || launcherOwner.get() === this
+
+    companion object {
+        private var launcherOwner = java.lang.ref.WeakReference<MainActivity>(null)
+
+        private fun liveOwner(): MainActivity? = launcherOwner.get()?.takeUnless {
+            it.isFinishing || it.isDestroyed || it.isChangingConfigurations
+        }
+
+        /** Restore our own task, including PiP, instead of asking Android for another task type. */
+        fun returnToApp(context: Context, incoming: Intent = Intent(Intent.ACTION_MAIN)) {
+            val owner = if (CarIntegration.available) liveOwner() else null
+            if (owner != null) {
+                val restored = runCatching {
+                    val manager = context.getSystemService(android.app.ActivityManager::class.java)
+                    @Suppress("DEPRECATION")
+                    val task = manager.appTasks.firstOrNull { it.taskInfo.id == owner.taskId }
+                    if (owner.isInPictureInPictureMode && task != null) {
+                        task.startActivity(context, Intent(incoming).setClass(context, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        }, null)
+                    } else {
+                        owner.receiveReturnIntent(Intent(incoming))
+                        // Some ROMs omit HOME from appTasks, although its live task still exists.
+                        if (task != null) task.moveToFront() else manager.moveTaskToFront(owner.taskId, 0)
+                    }
+                    app.vela.util.FileLogger.i("LauncherTask", "Restored owner task=${owner.taskId} instance=${System.identityHashCode(owner)} pip=${owner.isInPictureInPictureMode}")
+                    true
+                }.onFailure { app.vela.util.FileLogger.w("LauncherTask", "Task restore failed", it) }.getOrDefault(false)
+                if (restored) return
+            }
+            context.startActivity(Intent(incoming).setClass(context, MainActivity::class.java).apply {
+                if (action == Intent.ACTION_MAIN && CarIntegration.isDefaultHome(context)) {
+                    removeCategory(Intent.CATEGORY_LAUNCHER)
+                    addCategory(Intent.CATEGORY_HOME)
+                }
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            })
+        }
+    }
+
     // Same instance the Compose tree gets (both resolve to this activity's store),
     // so a deep link handled here shows up in the UI.
     private val vm: MapViewModel by viewModels()
@@ -52,6 +93,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!ownsLauncherUi) return
+        if (!isInPictureInPictureMode) app.vela.ui.PipMode.active.value = false
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            runCatching { setPictureInPictureParams(pipParams(vm.state.value.navigating && !CarIntegration.isDefaultHome(this))) }
+        }
         app.vela.diag.ProcessDiagnostics.activity("resume")
         app.vela.util.FileLogger.i("MainActivity", "onResume - Uygulama on planda")
         // The 12/24-hour clock setting can change while Vela sits in the background (issue #357).
@@ -62,6 +108,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        if (!ownsLauncherUi) return
         app.vela.diag.ProcessDiagnostics.activity("pause")
         app.vela.util.FileLogger.i("MainActivity", "onPause - Uygulama arka plana geciyor")
         CarIntegration.onPause(this)
@@ -75,6 +122,17 @@ class MainActivity : ComponentActivity() {
         applySystemBarPreferences()
         app.vela.util.FileLogger.i("SystemBars", "Before activity create: immersive=${CarIntegration.immersive.value}, statusBar=${CarIntegration.statusBarVisible.value}")
         super.onCreate(savedInstanceState)
+        if (CarIntegration.available) {
+            val existing = liveOwner()
+            if (existing != null && existing !== this) {
+                app.vela.util.FileLogger.w("LauncherTask", "Rejecting duplicate task=$taskId instance=${System.identityHashCode(this)}; ownerTask=${existing.taskId} home=${intent?.hasCategory(Intent.CATEGORY_HOME)}")
+                returnToApp(this, intent ?: Intent(Intent.ACTION_MAIN))
+                finish()
+                return
+            }
+            launcherOwner = java.lang.ref.WeakReference(this)
+        }
+        app.vela.util.FileLogger.i("LauncherTask", "Owner created task=$taskId instance=${System.identityHashCode(this)} home=${intent?.hasCategory(Intent.CATEGORY_HOME)}")
         app.vela.diag.ProcessDiagnostics.activity("create")
         enableEdgeToEdge()
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
@@ -97,7 +155,7 @@ class MainActivity : ComponentActivity() {
                 vm.state.collect { s ->
                     if (s.navigating != last) {
                         last = s.navigating
-                        runCatching { setPictureInPictureParams(pipParams(s.navigating)) }
+                        runCatching { setPictureInPictureParams(pipParams(s.navigating && !CarIntegration.isDefaultHome(this@MainActivity))) }
                             .onFailure { android.util.Log.w("VelaPip", "setPictureInPictureParams failed", it) }
                     }
                 }
@@ -182,7 +240,7 @@ class MainActivity : ComponentActivity() {
         super.onUserLeaveHint()
         // Pre-Android-12 manual PiP entry (12+ auto-enters via the params above).
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S &&
-            vm.state.value.navigating
+            ownsLauncherUi && !CarIntegration.isDefaultHome(this) && vm.state.value.navigating
         ) {
             runCatching { enterPictureInPictureMode(pipParams(true)) }
                 .onFailure { android.util.Log.w("VelaPip", "enterPictureInPictureMode failed", it) }
@@ -194,7 +252,7 @@ class MainActivity : ComponentActivity() {
         newConfig: android.content.res.Configuration,
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        app.vela.ui.PipMode.active.value = isInPictureInPictureMode
+        if (ownsLauncherUi) app.vela.ui.PipMode.active.value = isInPictureInPictureMode
     }
 
     /** Settings exit is explicit; Home relaunches the selected launcher, a normal app exits. */
@@ -233,6 +291,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        receiveReturnIntent(intent)
+    }
+
+    private fun receiveReturnIntent(intent: Intent) {
         setIntent(intent)
         app.vela.util.FileLogger.i("MainActivity", "onNewIntent: ${intent.action}, home=${intent.hasCategory(Intent.CATEGORY_HOME)}, task=$taskId")
         handleIntent(intent)
@@ -240,6 +302,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (!ownsLauncherUi) return
         app.vela.diag.ProcessDiagnostics.activity("start", true)
         app.vela.util.FileLogger.i("MainActivity", "onStart")
         app.vela.ui.AppVisibility.foreground.value = true
@@ -247,6 +310,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        if (!ownsLauncherUi) return
         app.vela.diag.ProcessDiagnostics.activity("stop", false)
         app.vela.util.FileLogger.i("MainActivity", "onStop")
         app.vela.ui.AppVisibility.foreground.value = false
@@ -255,6 +319,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (!ownsLauncherUi) return
+        if (launcherOwner.get() === this) {
+            launcherOwner.clear()
+            app.vela.ui.AppLocale.onLocaleChanged = null
+        }
         app.vela.diag.ProcessDiagnostics.activity("destroy finishing=$isFinishing configChange=$isChangingConfigurations task=$taskId")
         app.vela.util.FileLogger.i("MainActivity", "onDestroy - Activity kapandi")
     }

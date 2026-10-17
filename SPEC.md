@@ -2751,3 +2751,12 @@ The auto profile selects Light when MemoryPressure.lowEnd is true (OS low-RAM, h
 ### On-demand map activation
 
 The internal://map launcher entry calls openMapForSession, clears the active mapless flag, ends initial-startup fallback eligibility and selects the normal split view. It does not write car_launcher_mapless_mode. Repeated activation is idempotent. Forced settings refresh reads the saved startup preference but does not overwrite the initialized active session. An explicit mapless toggle still closes the map immediately; a new process honors the saved startup preference. The internal app catalog and existing dock pin menu expose the entry without altering existing dock shortcuts.
+
+
+### Launcher activity ownership and task restoration
+
+The car variant holds a weak reference to its current interactive MainActivity. A second live Activity, including a separate HOME/standard task instance on the same process, forwards its intent to the owner and finishes before MapViewModel, Compose, media UI or renderer setup. A configuration replacement may claim ownership when the previous owner is changing configurations. Only the current owner updates foreground, floating-button lifecycle and PiP state; an old Activity stopping after its replacement cannot mark the app background.
+
+Launcher aliases and the floating button restore the owner's own AppTask instead of issuing a generic new-task launch. A ROM that omits HOME from appTasks uses moveTaskToFront with the normal REORDER_TASKS permission. PiP task restoration uses AppTask.startActivity with single-top/clear-top and no new-task flag. A cold MAIN launch uses CATEGORY_HOME when Vela holds the default Home role. Deep links and navigation intents are delivered to the retained owner.
+
+Automatic PiP is disabled while Vela is the default Home launcher on both API 26-30 and API 31+ paths. Standalone navigation retains PiP. A fullscreen owner resume clears stale PipMode state. Rejected duplicates and obsolete owners do not initialize or disconnect a second map client. Task restoration failure is logged; retained map/navigation state is not intentionally reset.

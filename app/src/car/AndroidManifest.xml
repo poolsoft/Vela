@@ -24,6 +24,8 @@
         </intent>
     </queries>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Restore the live HOME task on ROMs that omit it from ActivityManager.appTasks. -->
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
     <application>
         <service android:name="app.vela.carlauncher.diag.DiagnosticService"
             android:process=":diagnostics" android:exported="false"

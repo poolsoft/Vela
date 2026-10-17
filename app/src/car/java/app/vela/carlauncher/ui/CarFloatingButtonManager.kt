@@ -312,12 +312,7 @@ class CarFloatingButtonManager private constructor(private val context: Context)
 
     private fun bringAppToForeground() {
         try {
-            val intent = Intent(context, MainActivity::class.java).apply {
-                action = Intent.ACTION_MAIN
-                addCategory(Intent.CATEGORY_LAUNCHER)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            }
-            context.startActivity(intent)
+            MainActivity.returnToApp(context)
         } catch (e: Exception) {
             e.printStackTrace()
         }

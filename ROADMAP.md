@@ -508,3 +508,6 @@ the shared hidden-WebView base, `NavController`) are in FEATURES.
 
 
 - Validate cold on-demand map activation on the GLES2 head unit after a mapless boot; verify startup preference and music continuity remain intact.
+
+
+- Validate Android Auto/head-unit takeover followed by floating-button and physical HOME return on the target ROM. Emulator task reuse checks cover HOME, notification-style direct entry and aliases; OEM-specific task and PiP handling still requires hardware validation.
