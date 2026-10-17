@@ -351,4 +351,4 @@ Automatic map rendering is available in Settings > Map. It selects Light on limi
 The internal Map app opens the map on demand from mapless mode without restarting or changing the saved startup preference. It can be pinned to the dock using the existing drawer action.
 
 
-Launcher task reuse: HOME, the floating button and cosmetic launcher aliases restore the live launcher task using its original HOME/standard intent category. A duplicate Activity is rejected before creating a ViewModel or map UI; late callbacks from non-owner Activities cannot change foreground/PiP state. Car navigation uses the floating return button instead of native PiP; the standard maps variant retains PiP.
+Launcher task reuse: HOME, the floating button and cosmetic launcher aliases restore the live launcher task using its original HOME/standard intent category. A duplicate Activity does not create a ViewModel or map UI; once focused, it restores the exact original task ID and finishes; late callbacks from non-owner Activities cannot change foreground/PiP state. Car navigation uses the floating return button instead of native PiP; the standard maps variant retains PiP.

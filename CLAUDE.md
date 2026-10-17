@@ -6013,7 +6013,7 @@ Automatic map profile: measure rendering duration rather than idle frame interva
 Map activation: internal://map opens only the current session. Keep maplessPreference (persisted startup) separate from maplessMode (active session), including forced preference refreshes. Manual activation must not become an automatic startup failure fallback or persist a different startup choice.
 
 
-Launcher ownership: singleTask does not prevent every HOME versus standard-task duplicate on target ROMs. Gate duplicates before ViewModel/Compose setup, restore the live task with its original intent category after a redirect has resumed, and scope lifecycle/PiP writes to the current owner. The car variant excludes native PiP; keep background navigation and floating task restoration instead. Do not recover this case by restarting the renderer or stopping media/navigation. Run scripts/test_launcher_task_reuse.py against the intended emulator after changes.
+Launcher ownership: singleTask does not prevent every HOME versus standard-task duplicate on target ROMs. Gate duplicates before ViewModel/Compose setup, use the original intent category for normal returns and the exact task ID after a duplicate HOME redirect has resumed and gained focus, and scope lifecycle/PiP writes to the current owner. The car variant excludes native PiP; keep background navigation and floating task restoration instead. Do not recover this case by restarting the renderer or stopping media/navigation. Run scripts/test_launcher_task_reuse.py against the intended emulator after changes.
 
 
 Build validation: scripts/check_car_launcher_manifest.py verifies the packaged car manifest, not only source declarations. Keep the packaged PiP policy check in the APK workflow.

@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
         if (!ownsLauncherUi) {
             // HOME stops app switches. Wait until this redirect is resumed before launching
             // the retained standard task, otherwise Android may silently reject the return.
-            completeRedirect()
+            if (window.decorView.hasWindowFocus()) completeRedirect()
             return
         }
         if (!isInPictureInPictureMode) app.vela.ui.PipMode.active.value = false
@@ -198,7 +198,12 @@ class MainActivity : ComponentActivity() {
         val pending = redirectIntent ?: return
         redirectIntent = null
         window.decorView.post {
-            returnToApp(this, pending)
+            val owner = liveOwner()
+            if (owner != null) runCatching {
+                owner.receiveReturnIntent(pending)
+                getSystemService(android.app.ActivityManager::class.java).moveTaskToFront(owner.taskId, 0)
+                app.vela.util.FileLogger.i("LauncherTask", "Requested focused redirect to exact owner task=${owner.taskId}")
+            }.onFailure { app.vela.util.FileLogger.e("LauncherTask", "Focused task return failed", it) }
             finish()
         }
     }
@@ -303,7 +308,7 @@ class MainActivity : ComponentActivity() {
         val forwarded = intent.getParcelableExtra<Intent>(RETURN_INTENT)
         if (!ownsLauncherUi) {
             redirectIntent = forwarded ?: intent
-            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) completeRedirect()
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) && window.decorView.hasWindowFocus()) completeRedirect()
             return
         }
         receiveReturnIntent(forwarded ?: intent)

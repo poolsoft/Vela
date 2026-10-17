@@ -515,3 +515,5 @@ the shared hidden-WebView base, `NavController`) are in FEATURES.
 - Revisit a separate, independently owned navigation PiP surface only if required for the car variant; do not put the launcher Activity into the pinned task.
 
 - Validate immediate physical HOME returns while Android app switches are stopped on the target ROM; retained-task redirects now wait for the redirect Activity to resume.
+
+- Confirm window-focused, exact-task HOME redirection on the head unit; do not rely on generic component reuse while a duplicate HOME task exists.
