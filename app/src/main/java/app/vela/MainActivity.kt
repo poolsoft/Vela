@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
             it.isFinishing || it.isDestroyed || it.isChangingConfigurations
         }
 
-        /** Restore our own task, including PiP, instead of asking Android for another task type. */
+        /** Restore our own task instead of asking Android for another task type. */
         fun returnToApp(context: Context, incoming: Intent = Intent(Intent.ACTION_MAIN)) {
             val owner = if (CarIntegration.available) liveOwner() else null
             if (owner != null) {
@@ -43,15 +43,9 @@ class MainActivity : ComponentActivity() {
                     val manager = context.getSystemService(android.app.ActivityManager::class.java)
                     @Suppress("DEPRECATION")
                     val task = manager.appTasks.firstOrNull { it.taskInfo.id == owner.taskId }
-                    if (owner.isInPictureInPictureMode && task != null) {
-                        task.startActivity(context, Intent(incoming).setClass(context, MainActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                        }, null)
-                    } else {
-                        owner.receiveReturnIntent(Intent(incoming))
-                        // Some ROMs omit HOME from appTasks, although its live task still exists.
-                        if (task != null) task.moveToFront() else manager.moveTaskToFront(owner.taskId, 0)
-                    }
+                    owner.receiveReturnIntent(Intent(incoming))
+                    // Some ROMs omit HOME from appTasks, although its live task still exists.
+                    if (task != null) task.moveToFront() else manager.moveTaskToFront(owner.taskId, 0)
                     app.vela.util.FileLogger.i("LauncherTask", "Restored owner task=${owner.taskId} instance=${System.identityHashCode(owner)} pip=${owner.isInPictureInPictureMode}")
                     true
                 }.onFailure { app.vela.util.FileLogger.w("LauncherTask", "Task restore failed", it) }.getOrDefault(false)
@@ -95,8 +89,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         if (!ownsLauncherUi) return
         if (!isInPictureInPictureMode) app.vela.ui.PipMode.active.value = false
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            runCatching { setPictureInPictureParams(pipParams(vm.state.value.navigating && !CarIntegration.isDefaultHome(this))) }
+        if (!CarIntegration.available && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            runCatching { setPictureInPictureParams(pipParams(vm.state.value.navigating)) }
         }
         app.vela.diag.ProcessDiagnostics.activity("resume")
         app.vela.util.FileLogger.i("MainActivity", "onResume - Uygulama on planda")
@@ -149,13 +143,13 @@ class MainActivity : ComponentActivity() {
         // onUserLeaveHint below calls enterPictureInPictureMode by hand. Everything is
         // best-effort (runCatching): a launcher or ROM that forbids PiP just falls back to the
         // notification-only background nav that already works.
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        if (!CarIntegration.available && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             lifecycleScope.launch {
                 var last: Boolean? = null
                 vm.state.collect { s ->
                     if (s.navigating != last) {
                         last = s.navigating
-                        runCatching { setPictureInPictureParams(pipParams(s.navigating && !CarIntegration.isDefaultHome(this@MainActivity))) }
+                        runCatching { setPictureInPictureParams(pipParams(s.navigating)) }
                             .onFailure { android.util.Log.w("VelaPip", "setPictureInPictureParams failed", it) }
                     }
                 }
@@ -221,7 +215,7 @@ class MainActivity : ComponentActivity() {
     private fun pipParams(autoEnter: Boolean): android.app.PictureInPictureParams {
         val b = android.app.PictureInPictureParams.Builder()
             .setAspectRatio(android.util.Rational(3, 4))
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        if (!CarIntegration.available && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             b.setAutoEnterEnabled(autoEnter)
             b.setSeamlessResizeEnabled(false) // map surfaces cross-fade better than they stretch
         }
@@ -240,7 +234,7 @@ class MainActivity : ComponentActivity() {
         super.onUserLeaveHint()
         // Pre-Android-12 manual PiP entry (12+ auto-enters via the params above).
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S &&
-            ownsLauncherUi && !CarIntegration.isDefaultHome(this) && vm.state.value.navigating
+            ownsLauncherUi && !CarIntegration.available && vm.state.value.navigating
         ) {
             runCatching { enterPictureInPictureMode(pipParams(true)) }
                 .onFailure { android.util.Log.w("VelaPip", "enterPictureInPictureMode failed", it) }

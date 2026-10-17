@@ -189,6 +189,12 @@ jobs:
             "$AAPT" dump badging "$apk" | grep -q '^application-debuggable'
           done
 
+      - name: Verify packaged launcher task and PiP policy
+        run: |
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
+          test -n "$AAPT"
+          python scripts/check_car_launcher_manifest.py --aapt "$AAPT" release-apks/*.apk
+
       - name: Inspect APK sizes and native libraries
         run: |
           for apk in release-apks/*.apk; do

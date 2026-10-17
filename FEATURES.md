@@ -2746,4 +2746,4 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 - [x] Internal Map shortcut in the drawer and dock picker, with session-only mapless-to-map activation.
 
 
-- [x] Live launcher task reuse across HOME, floating-button and alias entry; duplicate UI rejection and owner-scoped foreground/PiP state.
+- [x] Live launcher task reuse across HOME, floating-button and alias entry; duplicate UI rejection and owner-scoped foreground/PiP state. Native PiP is excluded from the car variant; the standard maps variant retains it.

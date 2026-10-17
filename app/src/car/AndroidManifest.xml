@@ -46,7 +46,8 @@
         <!-- All launcher aliases and the media notification reuse the same task. -->
         <activity android:name=".MainActivity"
             android:launchMode="singleTask"
-            tools:replace="android:launchMode">
+            android:supportsPictureInPicture="false"
+            tools:replace="android:launchMode,android:supportsPictureInPicture">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />

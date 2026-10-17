@@ -225,4 +225,7 @@ The drawer includes Map, which can also be pinned to the dock. It opens the rend
 
 ### Returning to the retained launcher
 
-HOME and standard tasks can contain distinct MainActivity instances despite singleTask. The car build keeps one interactive owner, rejects another before map setup and restores the retained task from floating-button and alias entry. Only that owner writes foreground/PiP state, preventing a late old onStop from exposing the background-only button over the active launcher. Default Home operation does not enter automatic PiP; standalone navigation still supports PiP. The map and navigation belong to the retained owner and are not restarted on task return.
+HOME and standard tasks can contain distinct MainActivity instances despite singleTask. The car build keeps one interactive owner, rejects another before map setup and restores the retained task from floating-button and alias entry. Only that owner writes foreground/PiP state, preventing a late old onStop from exposing the background-only button over the active launcher. The car variant never enters automatic PiP, including outside the default Home role; background navigation and the floating return button remain available. The standard maps variant retains PiP. The map and navigation belong to the retained owner and are not restarted on task return.
+
+
+The APK workflow checks the merged, packaged MainActivity PiP exclusion before publication so a manifest-merge override cannot silently re-enable car PiP.
