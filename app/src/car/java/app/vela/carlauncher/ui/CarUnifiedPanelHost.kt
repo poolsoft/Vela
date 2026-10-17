@@ -204,8 +204,12 @@ class CarUnifiedPanelHost(
 
     fun updateMedia(m: MedyaParcasi) {
         val previous = appliedMedia
-        if (previous != null && previous.baslik == m.baslik && previous.sanatci == m.sanatci && previous.caliyorMu == m.caliyorMu) return
+        if (previous != null && previous.baslik == m.baslik && previous.sanatci == m.sanatci && previous.caliyorMu == m.caliyorMu && previous.sourceId == m.sourceId && previous.sourceKind == m.sourceKind && previous.paketAdi == m.paketAdi && previous.canControl == m.canControl && previous.canSkipNext == m.canSkipNext && previous.canSkipPrevious == m.canSkipPrevious) return
         appliedMedia = m
+        MediaSourceIcon.bind(rootView.findViewById(R.id.music_source_icon), m, externalOnly = true)
+        btnPlay?.isEnabled = m.canControl
+        btnPrev?.isEnabled = m.canSkipPrevious
+        btnNext?.isEnabled = m.canSkipNext
         trackTitle?.text = if (m.baslik.isNotBlank() && m.baslik != "Müzik Çalınmıyor") {
             m.baslik
         } else {

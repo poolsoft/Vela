@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** Variant-owned seam: the map and activity never import launcher implementation types. */
 object CarIntegration {
+    fun onSpeechStateChanged(speaking: Boolean) = app.vela.carlauncher.media.MusicManager.onSpeechStateChanged(speaking)
     fun mapStorageAvailable(): Boolean = !CarLauncherSettings.maplessMode.value
     const val available = true
     private val mapRenderLevel = androidx.compose.runtime.mutableIntStateOf(3)

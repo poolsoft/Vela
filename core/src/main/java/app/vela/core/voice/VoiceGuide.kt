@@ -223,8 +223,14 @@ class VoiceGuide @Inject constructor(
     val isSpeaking: Boolean
         get() = synchronized(focusLock) { activeUtterances > 0 || focusHeld }
 
+    /** Music-source interruption notification is separate from the microphone echo guard. */
+    @Volatile var onPlaybackInterruptionChanged: ((Boolean) -> Unit)? = null
+
     private fun notifySpeakingState(speaking: Boolean) {
-        focusHandler.post { onSpeakingStateChanged?.invoke(speaking) }
+        focusHandler.post {
+            runCatching { onSpeakingStateChanged?.invoke(speaking) }
+            runCatching { onPlaybackInterruptionChanged?.invoke(speaking) }
+        }
     }
 
     // Abandon focus a beat AFTER the last prompt ends (see releaseFocus) rather than instantly, so the

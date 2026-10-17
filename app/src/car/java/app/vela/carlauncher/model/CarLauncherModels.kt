@@ -17,7 +17,13 @@ data class MedyaParcasi(
     val caliyorMu: Boolean = false,
     val toplamSureMs: Long = 0L,
     val anlikKonumMs: Long = 0L,
-    val paketAdi: String = ""
+    val paketAdi: String = "",
+    val sourceId: String = "internal",
+    val sourceKind: String = "internal",
+    val sourceLabel: String = "",
+    val canControl: Boolean = true,
+    val canSkipNext: Boolean = true,
+    val canSkipPrevious: Boolean = true
 )
 
 /**

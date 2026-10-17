@@ -128,6 +128,17 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
+        <ImageView
+            android:id="@+id/music_source_icon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginTop="8dp"
+            android:scaleType="fitCenter"
+            android:visibility="gone"
+            android:importantForAccessibility="yes"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
         <!-- Mini Album Cover inside panel -->
         <ImageView
             android:id="@+id/music_mini_art"

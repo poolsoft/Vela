@@ -19,11 +19,20 @@ class UniversalBluetoothAdapter(
     private var title = ""
     private var artist = ""
     private var registered = false
+    private var phoneCall = false
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+    private fun inCall(): Boolean = phoneCall || audioManager.mode in setOf(
+        android.media.AudioManager.MODE_IN_CALL, android.media.AudioManager.MODE_IN_COMMUNICATION,
+        android.media.AudioManager.MODE_RINGTONE)
     val canControl: Boolean get() = platform != CarHardwareManager.Platform.STANDARD
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
             if (intent == null) return
             when (intent.action) {
+                android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED -> {
+                    val state = intent.getStringExtra(android.telephony.TelephonyManager.EXTRA_STATE)
+                    phoneCall = state != null && state != android.telephony.TelephonyManager.EXTRA_STATE_IDLE
+                }
                 "android.bluetooth.a2dp-sink.profile.action.CONNECTION_STATE_CHANGED" -> {
                     connected = intent.getIntExtra("android.bluetooth.profile.extra.STATE", 0) == 2
                     if (!connected) { playing = false; title = ""; artist = "" }
@@ -47,6 +56,7 @@ class UniversalBluetoothAdapter(
     }
     init {
         val filter = IntentFilter().apply {
+            addAction(android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED)
             addAction("android.bluetooth.a2dp-sink.profile.action.CONNECTION_STATE_CHANGED")
             addAction("android.bluetooth.a2dp-sink.profile.action.PLAYING_STATE_CHANGED")
             if (platform == CarHardwareManager.Platform.XY_AUTO) addAction("com.acloud.intent.play_status")
@@ -78,7 +88,7 @@ class UniversalBluetoothAdapter(
     override fun albumKapagi(): Bitmap? = null
     override fun toplamSureMs() = 0L
     override fun anlikKonumMs() = 0L
-    override fun caliyorMu() = connected && playing
+    override fun caliyorMu() = connected && playing && !inCall()
     override fun serbestBirak() {
         if (registered) runCatching { context.unregisterReceiver(receiver) }
         registered = false

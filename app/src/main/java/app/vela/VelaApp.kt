@@ -89,6 +89,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         // The same lazy system-only policy covers the phone UI and drives started by Android Auto.
         voiceGuide.get().apply {
             useSystemEngineLazily("com.google.android.tts")
+            onPlaybackInterruptionChanged = { app.vela.variant.CarIntegration.onSpeechStateChanged(it) }
             onFailure = { error ->
                 app.vela.util.FileLogger.e("VoiceGuide", "System TTS failed", error)
                 app.vela.diag.ProcessDiagnostics.checkpoint("tts: failure ${error.javaClass.simpleName}")

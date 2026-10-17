@@ -278,13 +278,21 @@ class CarMusicPlayerHost(
             setOnClickListener { anchor ->
                 android.widget.PopupMenu(context, anchor).apply {
                     musicManager.availableSources().forEach { (key, label) ->
-                        menu.addSubMenu(label).apply {
-                            add(R.string.car_source_select).setOnMenuItemClickListener { musicManager.selectSource(key); true }
+                        menu.addSubMenu((if (key == musicManager.selectedSourceKey()) "✓ " else "") + label).apply {
+                            add(R.string.car_source_select).setOnMenuItemClickListener { musicManager.selectSource(key, play = false); true }
                             add(R.string.car_source_play).setOnMenuItemClickListener { musicManager.selectSource(key, play = true); true }
+                            add("Bu kaynakta kal").setOnMenuItemClickListener { musicManager.selectSource(key, play = false, lock = true); true }
+                            add("Smart Focus'a dahil et").apply {
+                                isCheckable = true
+                                isChecked = musicManager.isSourceTrackingEnabled(key)
+                                setOnMenuItemClickListener { musicManager.setSourceTracking(key, !isChecked); true }
+                            }
                         }
                     }
-                    menu.add(R.string.car_source_auto).setOnMenuItemClickListener {
-                        musicManager.allowAutomaticSourceTracking(); true
+                    menu.add(R.string.car_source_auto).apply {
+                        isCheckable = true
+                        isChecked = musicManager.isAutomaticTracking()
+                        setOnMenuItemClickListener { musicManager.allowAutomaticSourceTracking(); true }
                     }
                     show()
                 }
@@ -455,6 +463,9 @@ class CarMusicPlayerHost(
 
     fun updateMediaState(ignoredSnapshot: MedyaParcasi) {
         val medya = musicManager.currentPlayback()
+        MediaSourceIcon.bind(rootView.findViewById(R.id.app_icon), medya)
+        rootView.findViewById<View>(R.id.app_selector_launch).contentDescription =
+            "${medya.sourceLabel}: " + context.getString(R.string.car_music_source)
         nowPlayingCenterTitle?.text = if (medya.baslik.isNotBlank()) medya.baslik else "Parça Adı"
         nowPlayingCenterArtist?.text = if (medya.sanatci.isNotBlank()) medya.sanatci else "Sanatçı"
 
@@ -475,10 +486,10 @@ class CarMusicPlayerHost(
         playerVisualizer?.setPlaying(medya.caliyorMu)
 
         btnPlay?.isEnabled = musicManager.canControl()
-        btnPrev?.isEnabled = musicManager.canControl()
-        btnNext?.isEnabled = musicManager.canControl()
-        btnShuffle?.isEnabled = true
-        btnRepeat?.isEnabled = true
+        btnPrev?.isEnabled = musicManager.canSkipPrevious()
+        btnNext?.isEnabled = musicManager.canSkipNext()
+        btnShuffle?.isEnabled = musicManager.isInternalPlayback()
+        btnRepeat?.isEnabled = musicManager.isInternalPlayback()
         val duration = medya.toplamSureMs.coerceIn(0L, Int.MAX_VALUE.toLong())
         seekbar?.isEnabled = duration > 0 && musicManager.canSeek()
         if (!isSeeking) {

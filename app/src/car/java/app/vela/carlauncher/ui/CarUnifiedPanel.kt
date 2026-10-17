@@ -127,6 +127,10 @@ fun CarUnifiedPanel(
                 albumArt?.setImageResource(R.drawable.bg_track_art_placeholder)
             }
 
+            MediaSourceIcon.bind(view.findViewById(R.id.music_source_icon), medya, externalOnly = true)
+            btnPlay?.isEnabled = medya.canControl
+            view.findViewById<ImageButton>(R.id.music_btn_prev)?.isEnabled = medya.canSkipPrevious
+            view.findViewById<ImageButton>(R.id.music_btn_next)?.isEnabled = medya.canSkipNext
             panelClock?.text = saatMetni
 
             trackTitle?.text = if (medya.baslik.isNotBlank() && medya.baslik != "Müzik Seçilmedi") {

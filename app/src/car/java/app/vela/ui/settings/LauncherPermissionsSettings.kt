@@ -68,11 +68,13 @@ internal fun LauncherPermissionsSettings(onBack: () -> Unit) {
 
     // İzin durumları
     val audioPermission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
+    val phonePermission = Manifest.permission.READ_PHONE_STATE
     val micPermission = Manifest.permission.RECORD_AUDIO
     val btPermission = if (Build.VERSION.SDK_INT >= 31) Manifest.permission.BLUETOOTH_CONNECT else null
     val notifPermission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null
 
     val isAudioGranted = remember(revision) { ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED }
+    val isPhoneGranted = remember(revision) { ContextCompat.checkSelfPermission(context, phonePermission) == PackageManager.PERMISSION_GRANTED }
     val isMicGranted = remember(revision) { ContextCompat.checkSelfPermission(context, micPermission) == PackageManager.PERMISSION_GRANTED }
     val isBtGranted = remember(revision) { btPermission == null || ContextCompat.checkSelfPermission(context, btPermission) == PackageManager.PERMISSION_GRANTED }
     val isNotifGranted = remember(revision) { notifPermission == null || ContextCompat.checkSelfPermission(context, notifPermission) == PackageManager.PERMISSION_GRANTED }
@@ -102,6 +104,13 @@ internal fun LauncherPermissionsSettings(onBack: () -> Unit) {
             icon = Icons.Default.MusicNote,
             modifier = topRow
         ) {
+            PermissionRow(
+                title = "Telefon görüşmesini algıla",
+                desc = "Smart Focus'un görüşmeyi BT müziği saymaması için kullanılır. Arama geçmişi veya telefon numarası okunmaz.",
+                icon = Icons.Default.Phone,
+                granted = isPhoneGranted,
+                onClick = { permission.launch(phonePermission) },
+            )
             // Müzik Kütüphanesi
             PermissionRow(
                 title = stringResource(R.string.car_permission_audio),
@@ -448,6 +457,18 @@ fun SmartFocusPreferences() {
             prefs.edit().putBoolean("auto_follow", it).apply()
             if (it) app.vela.carlauncher.media.MusicManager.getInstance(context).allowAutomaticSourceTracking()
         })
+        Text("Kaynaklar: Otomatik takibe dahil edilecek oynatıcılar")
+        val manager = remember { app.vela.carlauncher.media.MusicManager.getInstance(context) }
+        val media by manager.medyaDurumu.collectAsState()
+        val sourcesRevision by manager.sourcesRevision.collectAsState()
+        manager.availableSources().forEach { (key, label) ->
+            var enabled by remember(key, media.sourceId, sourcesRevision) { mutableStateOf(manager.isSourceTrackingEnabled(key)) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, Modifier.weight(1f))
+                Switch(checked = enabled, onCheckedChange = { enabled = it; manager.setSourceTracking(key, it) })
+            }
+        }
+        Text("BT yalnız medya oynatmasını takip eder; görüşme veya yalnız bağlantı kaynak değiştirmez. ZLink/Android Auto gerçek medya oturumu sunuyorsa takip edilir.")
         val keys = listOf("last", "internal", "bluetooth", "hcn_radio", "xy_radio")
         val labels = listOf(stringResource(R.string.car_source_last), stringResource(R.string.car_source_internal), "Bluetooth", "HCN Radio", "XYAuto Radio")
         Text(stringResource(R.string.car_startup_source))

@@ -41,6 +41,10 @@ class MusicManager private constructor(private val context: Context) : InternalM
             }
         }
         fun refreshIfCreated() { instance?.senkronizeEtMedyaDurumu() }
+        fun onSpeechStateChanged(speaking: Boolean) { instance?.let { manager ->
+            manager.ttsSpeaking = speaking
+            manager.senkronizeEtMedyaDurumu()
+        } }
     }
 
     interface MusicUIListener {
@@ -90,6 +94,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         }
     }
     private fun saveFocus(vararg values: Pair<String, Any>) {
+        if (values.all { (key, value) -> focusState[key] == value }) return
         focusState = focusState + values
         focusScope.launch(focusWriteDispatcher) {
             val editor = focusPrefs.edit()
@@ -102,11 +107,82 @@ class MusicManager private constructor(private val context: Context) : InternalM
             editor.apply()
         }
     }
+    private val focusPolicy = SmartFocusPolicy()
+    private val focusRecheck = Runnable { senkronizeEtMedyaDurumu() }
+    private var ttsSpeaking = runCatching { (context.applicationContext as? app.vela.VelaApp)?.voiceGuide?.get()?.isSpeaking == true }.getOrDefault(false)
+    private var phoneCall = false
+    private val callReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: android.content.Intent?) {
+            val state = intent?.getStringExtra(android.telephony.TelephonyManager.EXTRA_STATE)
+            phoneCall = state != null && state != android.telephony.TelephonyManager.EXTRA_STATE_IDLE
+            senkronizeEtMedyaDurumu()
+        }
+    }
+    private fun isCallActive(): Boolean = phoneCall || audioManager.mode in setOf(
+        AudioManager.MODE_IN_CALL, AudioManager.MODE_IN_COMMUNICATION, AudioManager.MODE_RINGTONE)
+
+    fun isSourceTrackingEnabled(key: String): Boolean {
+        val preferred = app.vela.carlauncher.settings.CarLauncherSettings.tercihEdilenMuzikUygulamasi.value
+        return focusState["follow:$key"] as? Boolean ?: (key == "internal" || key == "bluetooth" ||
+            key == "xy_music" || key == "hcn_music" || key.endsWith("radio") ||
+            key == "session:$preferred" || MediaSourceIdentity.isProjection(key.removePrefix("session:")))
+    }
+    fun setSourceTracking(key: String, enabled: Boolean) { saveFocus("follow:$key" to enabled); _sourcesRevision.value++; senkronizeEtMedyaDurumu() }
+    fun isSourceLocked(): Boolean = manualSelection
+    fun isAutomaticTracking(): Boolean = !manualSelection && focusState["auto_follow"] != false
+    private val _sourcesRevision = MutableStateFlow(0)
+    val sourcesRevision = _sourcesRevision.asStateFlow()
+    fun selectedSourceKey(): String = sourceKey(selectedAdapter)
+
+    private fun sourceSnapshots(): List<SmartFocusPolicy.Source> = buildList {
+        adapters.filter { it !== mediaSessionAdapter }.forEach { adapter ->
+            val key = sourceKey(adapter)
+            val linked = sourcePackage(adapter)?.let { pkg -> controllers.firstOrNull { it.packageName == pkg } }
+            val state = linked?.playbackState?.state
+            add(SmartFocusPolicy.Source(key, if (linked != null) state == android.media.session.PlaybackState.STATE_PLAYING else adapter.caliyorMu(),
+                isSourceTrackingEnabled(key), adapter === internalAdapter || adapter.aktifMi() || linked != null,
+                state == android.media.session.PlaybackState.STATE_BUFFERING || state == android.media.session.PlaybackState.STATE_CONNECTING))
+        }
+        val dedicated = adapters.filter { it !== mediaSessionAdapter }.mapNotNull { sourcePackage(it) }.toSet()
+        controllers.filter { it.packageName !in dedicated }.forEach { controller ->
+            val state = controller.playbackState?.state
+            val key = "session:${controller.packageName}"
+            add(SmartFocusPolicy.Source(key, state == android.media.session.PlaybackState.STATE_PLAYING,
+                isSourceTrackingEnabled(key), true,
+                state == android.media.session.PlaybackState.STATE_BUFFERING || state == android.media.session.PlaybackState.STATE_CONNECTING))
+        }
+    }
+
+    private fun adoptSource(key: String) {
+        val source = when {
+            key == "internal" -> internalAdapter
+            key == "bluetooth" -> bluetoothAdapter
+            key == "xy_music" -> xyAutoAdapter
+            key == "hcn_music" -> hcnMusicAdapter
+            key == "hcn_radio" -> hcnRadioAdapter
+            key == "xy_radio" -> xyRadioAdapter
+            key.startsWith("session:") -> mediaSessionAdapter
+            else -> return
+        }
+        pinnedSessionPackage = if (source === mediaSessionAdapter) key.removePrefix("session:") else sourcePackage(source)
+        mediaSessionAdapter.setController(controllers.firstOrNull { it.packageName == pinnedSessionPackage })
+        selectedAdapter = source
+        hcnRadioAdapter.select(source === hcnRadioAdapter)
+        xyRadioAdapter.select(source === xyRadioAdapter)
+        aktifKaynak = if (source === internalAdapter) KaynakTipi.INTERNAL else KaynakTipi.EXTERNAL
+    }
+
+    private val sourceLabels = mutableMapOf<String, String>()
+    private fun sourceLabel(source: BaseMediaAdapter): String {
+        val pkg = sourcePackage(source) ?: return source.kaynakAdi()
+        return sourceLabels.getOrPut(pkg) { runCatching {
+            context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg, 0)).toString()
+        }.getOrDefault(source.kaynakAdi()) }
+    }
     private var manualSelection = false
     private var publishing = false
     private var controllers = emptyList<MediaController>()
     private val sessionCallbacks = mutableMapOf<MediaController, MediaController.Callback>()
-    private val competingPlaying = mutableSetOf<String>()
     private var pinnedSessionPackage: String? = null
     private var userCommandVersion = 0
     private var startupScheduled = false
@@ -134,6 +210,17 @@ class MusicManager private constructor(private val context: Context) : InternalM
     }
 
     init {
+        runCatching {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                @Suppress("DEPRECATION")
+                val state = runCatching { (context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager)?.callState }.getOrNull()
+                phoneCall = state != null && state != android.telephony.TelephonyManager.CALL_STATE_IDLE
+            }
+            val filter = android.content.IntentFilter(android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED)
+            if (android.os.Build.VERSION.SDK_INT >= 33) context.registerReceiver(callReceiver, filter, Context.RECEIVER_EXPORTED)
+            else context.registerReceiver(callReceiver, filter)
+        }
         internalPlayer.setListener(this)
         senkronizeEtMedyaDurumu()
         focusScope.launch {
@@ -157,53 +244,25 @@ class MusicManager private constructor(private val context: Context) : InternalM
             return
         }
         controllers = sessions.filterNot { LauncherMediaPeers.contains(context, it.packageName) }
+        _sourcesRevision.value++
         app.vela.util.FileLogger.d(TAG, "Oturumlar guncellendi. Paketler: ${controllers.map { it.packageName }}")
 
         sessionCallbacks.keys.filter { it !in controllers }.forEach { controller ->
             sessionCallbacks.remove(controller)?.let { controller.unregisterCallback(it) }
-            competingPlaying.remove(controller.packageName)
         }
         controllers.filter { it !in sessionCallbacks }.forEach { controller ->
             val callback = object : MediaController.Callback() {
-                override fun onPlaybackStateChanged(state: android.media.session.PlaybackState?) {
-                    val playing = state?.state == android.media.session.PlaybackState.STATE_PLAYING
-                    if (!playing) competingPlaying.remove(controller.packageName)
-                    if (manualSelection && playing && controller.packageName != sourcePackage(selectedAdapter)) {
-                        if (competingPlaying.add(controller.packageName)) {
-                            if (((state?.actions ?: 0L) and android.media.session.PlaybackState.ACTION_PAUSE) != 0L)
-                                controller.transportControls.pause()
-                            else _sourceStatus.value = context.getString(app.vela.R.string.car_source_conflict)
-                        }
-                    } else if (!manualSelection && playing) {
-                        // OsmAnd mimarisi: Asla onOturumlarYenilendi cagirma!
-                        // Sadece yeni calan oturumu aktif secip durumu senkronize et
-                        if (mediaSessionAdapter.getController() != controller) {
-                            app.vela.util.FileLogger.i(TAG, "Calan yeni oturum tespit edildi: ${controller.packageName}")
-                            mediaSessionAdapter.setController(controller)
-                        }
-                        senkronizeEtMedyaDurumu()
-                    } else {
-                        senkronizeEtMedyaDurumu()
-                    }
-                }
-
-                override fun onMetadataChanged(metadata: android.media.MediaMetadata?) {
-                    senkronizeEtMedyaDurumu()
-                }
+                override fun onPlaybackStateChanged(state: android.media.session.PlaybackState?) { senkronizeEtMedyaDurumu() }
+                override fun onMetadataChanged(metadata: android.media.MediaMetadata?) { senkronizeEtMedyaDurumu() }
+                override fun onSessionDestroyed() { onOturumlarYenilendi(controllers.filter { it != controller }) }
             }
             sessionCallbacks[controller] = callback
             controller.registerCallback(callback, anaHandler)
             if (manualSelection) callback.onPlaybackStateChanged(controller.playbackState)
         }
-        val preferred = pinnedSessionPackage
-            ?: app.vela.carlauncher.settings.CarLauncherSettings.tercihEdilenMuzikUygulamasi.value
-        val candidate = if (manualSelection && pinnedSessionPackage != null) {
-            controllers.firstOrNull { it.packageName == pinnedSessionPackage }
-        } else controllers.firstOrNull { it.packageName == preferred && it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING }
-            ?: controllers.firstOrNull { it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING }
-            ?: controllers.firstOrNull { it.packageName == preferred }
-            ?: controllers.firstOrNull()
-        mediaSessionAdapter.setController(candidate)
+        // Keep the chosen session stable; source policy observes every controller separately.
+        val selectedPackage = if (selectedAdapter === mediaSessionAdapter) pinnedSessionPackage else sourcePackage(selectedAdapter)
+        mediaSessionAdapter.setController(controllers.firstOrNull { it.packageName == selectedPackage })
         senkronizeEtMedyaDurumu()
     }
 
@@ -219,7 +278,8 @@ class MusicManager private constructor(private val context: Context) : InternalM
     }
 
     private fun sourcePackage(source: BaseMediaAdapter): String? = when (source) {
-        mediaSessionAdapter -> mediaSessionAdapter.getPackageName().ifBlank { null }
+        mediaSessionAdapter -> mediaSessionAdapter.getPackageName().takeIf { it.isNotBlank() } ?: pinnedSessionPackage
+        bluetoothAdapter -> controllers.firstOrNull { it.packageName.contains("bluetooth", ignoreCase = true) }?.packageName
         hcnMusicAdapter -> hcnMusicAdapter.packageName
         hcnRadioAdapter -> hcnRadioAdapter.packageName
         xyRadioAdapter -> xyRadioAdapter.packageName
@@ -227,21 +287,23 @@ class MusicManager private constructor(private val context: Context) : InternalM
     }
 
     /** One owner for source changes, including a player still preparing asynchronously. */
+    private fun pausePreviousOwner(adapter: BaseMediaAdapter) {
+        if (!adapter.caliyorMu()) return
+        if (adapter === mediaSessionAdapter && !sessionAction(android.media.session.PlaybackState.ACTION_PAUSE or
+                android.media.session.PlaybackState.ACTION_PLAY_PAUSE)) {
+            _sourceStatus.value = context.getString(app.vela.R.string.car_source_conflict)
+            return
+        }
+        adapter.duraklat()
+    }
+
     private fun requestSmartFocus(source: BaseMediaAdapter) {
         val wasPublishing = publishing
         publishing = true
         try {
-        val targetPackage = sourcePackage(source)
-        val paused = mutableSetOf<String>()
-        if (source !== internalAdapter) internalPlayer.duraklat()
-        adapters.filter { it !== source && it !== internalAdapter && it.caliyorMu() }.forEach {
-            val pkg = sourcePackage(it)
-            if ((pkg == null || pkg != targetPackage) && paused.add(pkg ?: sourceKey(it))) it.duraklat()
-        }
-        controllers.filter { it.packageName != targetPackage &&
-            it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING }.forEach { controller ->
-            if (paused.add(controller.packageName)) controller.transportControls.pause()
-        }
+        // Only release the previous music owner, never all system/call/navigation sessions.
+        if (source !== internalAdapter && selectedAdapter === internalAdapter) internalPlayer.duraklat()
+        else if (source !== selectedAdapter) pausePreviousOwner(playbackAdapter())
         selectedAdapter = source
         aktifKaynak = if (source === internalAdapter) KaynakTipi.INTERNAL else KaynakTipi.EXTERNAL
         hcnRadioAdapter.select(source === hcnRadioAdapter)
@@ -251,7 +313,6 @@ class MusicManager private constructor(private val context: Context) : InternalM
 
     private fun userCommand() {
         userCommandVersion++
-        manualSelection = true
         userPaused = false
         _sourceStatus.value = null
     }
@@ -264,12 +325,13 @@ class MusicManager private constructor(private val context: Context) : InternalM
         userCommandVersion++
         saveFocus("auto_follow" to true)
         manualSelection = false
-        pinnedSessionPackage = null
         onOturumlarYenilendi(controllers)
     }
 
     fun oynatDahiliParca(parca: SesParcasi, liste: List<SesParcasi> = emptyList()) {
         userCommand()
+        manualSelection = false
+        focusPolicy.selected("internal", sourceSnapshots())
         pinnedSessionPackage = null
         requestSmartFocus(internalAdapter)
         internalPlayer.parcaAtaVeOynat(parca, liste)
@@ -300,19 +362,20 @@ class MusicManager private constructor(private val context: Context) : InternalM
 
     fun availableSources(): List<Pair<String, String>> = buildList {
         add("internal" to context.getString(app.vela.R.string.car_source_internal))
-        controllers.distinctBy { it.packageName }.forEach { controller ->
-            val label = runCatching { context.packageManager.getApplicationLabel(
-                context.packageManager.getApplicationInfo(controller.packageName, 0)).toString() }.getOrDefault(controller.packageName)
+        val dedicated = adapters.filter { it !== mediaSessionAdapter }.mapNotNull { sourcePackage(it) }.toSet()
+        controllers.distinctBy { it.packageName }.filter { it.packageName !in dedicated }.forEach { controller ->
+            val label = sourceLabels.getOrPut(controller.packageName) { runCatching { context.packageManager.getApplicationLabel(
+                context.packageManager.getApplicationInfo(controller.packageName, 0)).toString() }.getOrDefault(controller.packageName) }
             add("session:${controller.packageName}" to label)
         }
-        if (bluetoothAdapter.aktifMi()) add("bluetooth" to bluetoothAdapter.kaynakAdi())
+        if (bluetoothAdapter.aktifMi() || sourcePackage(bluetoothAdapter) != null) add("bluetooth" to bluetoothAdapter.kaynakAdi())
         if (xyAutoAdapter.aktifMi()) add("xy_music" to xyAutoAdapter.kaynakAdi())
         if (hcnMusicAdapter.installed()) add("hcn_music" to hcnMusicAdapter.kaynakAdi())
         if (hcnRadioAdapter.packageName != null) add("hcn_radio" to hcnRadioAdapter.kaynakAdi())
         if (xyRadioAdapter.packageName != null) add("xy_radio" to xyRadioAdapter.kaynakAdi())
     }
 
-    fun selectSource(key: String, play: Boolean = playbackAdapter().caliyorMu(), fromUser: Boolean = true) {
+    fun selectSource(key: String, play: Boolean = false, fromUser: Boolean = true, lock: Boolean = false) {
         if (fromUser) userCommand()
         val source = when {
             key == "internal" -> internalAdapter
@@ -330,17 +393,18 @@ class MusicManager private constructor(private val context: Context) : InternalM
             mediaSessionAdapter -> controller != null
             hcnRadioAdapter -> hcnRadioAdapter.packageName != null
             xyRadioAdapter -> xyRadioAdapter.packageName != null
-            else -> source.aktifMi()
+            else -> source.aktifMi() || sourcePackage(source)?.let { pkg -> controllers.any { it.packageName == pkg } } == true
         }
-        if (!ready || (source === bluetoothAdapter && !bluetoothAdapter.canControl)) {
+        if (!ready || (play && source === bluetoothAdapter && !bluetoothAdapter.canControl && sourcePackage(bluetoothAdapter) == null) || (play && isCallActive())) {
             _sourceStatus.value = context.getString(app.vela.R.string.car_source_unavailable)
             return
         }
-        // Pin before callback delivery; a stale playing event cannot take the selection back.
-        manualSelection = true
+        // A normal selection is not a permanent lock. Consume already-playing stale events.
+        focusPolicy.selected(key, sourceSnapshots())
+        manualSelection = lock
+        publishing = true
         if (source === mediaSessionAdapter) {
-            if (playbackAdapter() === mediaSessionAdapter && mediaSessionAdapter.getController() != controller)
-                mediaSessionAdapter.duraklat()
+            if (play && sourceKey(selectedAdapter) != key) pausePreviousOwner(playbackAdapter())
             pinnedSessionPackage = controller?.packageName
             mediaSessionAdapter.setController(controller)
         } else {
@@ -349,7 +413,15 @@ class MusicManager private constructor(private val context: Context) : InternalM
                 mediaSessionAdapter.setController(controllers.firstOrNull { it.packageName == pinnedSessionPackage })
         }
         publishing = true
-        try { requestSmartFocus(source) } finally { publishing = false }
+        try {
+            if (play) requestSmartFocus(source)
+            else {
+                selectedAdapter = source
+                aktifKaynak = if (source === internalAdapter) KaynakTipi.INTERNAL else KaynakTipi.EXTERNAL
+                hcnRadioAdapter.select(source === hcnRadioAdapter)
+                xyRadioAdapter.select(source === xyRadioAdapter)
+            }
+        } finally { publishing = false }
         saveFocus("last_source" to key)
         if (play && !playbackAdapter().caliyorMu()) {
             playbackAdapter().oynat()
@@ -368,6 +440,8 @@ class MusicManager private constructor(private val context: Context) : InternalM
         val index = internalPlayer.kuyruk.value.indexOfFirst { it.libraryKey() == track.libraryKey() }
         if (index < 0) return
         userCommand()
+        manualSelection = false
+        focusPolicy.selected("internal", sourceSnapshots())
         pinnedSessionPackage = null
         requestSmartFocus(internalAdapter)
         internalPlayer.indexeGoreOynat(index)
@@ -380,11 +454,20 @@ class MusicManager private constructor(private val context: Context) : InternalM
         sourcePackage(selectedAdapter) != null && sourcePackage(selectedAdapter) == mediaSessionAdapter.getPackageName())
         mediaSessionAdapter else selectedAdapter
 
-    fun canControl(): Boolean = when (selectedAdapter) {
+    private fun sessionAction(action: Long): Boolean =
+        ((mediaSessionAdapter.getController()?.playbackState?.actions ?: 0L) and action) != 0L
+
+    fun canControl(): Boolean = !isCallActive() && when (playbackAdapter()) {
         bluetoothAdapter -> bluetoothAdapter.aktifMi() && bluetoothAdapter.canControl
-        mediaSessionAdapter -> mediaSessionAdapter.aktifMi()
+        mediaSessionAdapter -> sessionAction(android.media.session.PlaybackState.ACTION_PLAY_PAUSE or
+            if (mediaSessionAdapter.caliyorMu()) android.media.session.PlaybackState.ACTION_PAUSE
+            else android.media.session.PlaybackState.ACTION_PLAY)
         else -> true
     }
+    fun canSkipNext(): Boolean = !isCallActive() && if (playbackAdapter() === mediaSessionAdapter)
+        sessionAction(android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT) else canControl()
+    fun canSkipPrevious(): Boolean = !isCallActive() && if (playbackAdapter() === mediaSessionAdapter)
+        sessionAction(android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS) else canControl()
 
     fun canSeek(): Boolean = isInternalPlayback() ||
         (playbackAdapter() === mediaSessionAdapter &&
@@ -393,7 +476,8 @@ class MusicManager private constructor(private val context: Context) : InternalM
 
     fun currentPlayback(): MedyaParcasi = _medyaDurumu.value.copy(
         anlikKonumMs = playbackAdapter().anlikKonumMs(), toplamSureMs = playbackAdapter().toplamSureMs(),
-        caliyorMu = playbackAdapter().caliyorMu()
+        caliyorMu = playbackAdapter().caliyorMu() && !isCallActive(), canControl = canControl(),
+        canSkipNext = canSkipNext(), canSkipPrevious = canSkipPrevious()
     )
     fun oynat() {
         userCommand()
@@ -410,14 +494,14 @@ class MusicManager private constructor(private val context: Context) : InternalM
         userCommand()
         userPaused = true
         internalPlayer.duraklat() // Also cancels a pending focus-resume from a former local source.
-        if (selectedAdapter !== internalAdapter) playbackAdapter().duraklat()
+        if (selectedAdapter !== internalAdapter && !isCallActive()) playbackAdapter().duraklat()
         saveFocus("was_playing" to false)
         senkronizeEtMedyaDurumu()
     }
     fun oynatDuraklat() { if (playbackAdapter().caliyorMu()) duraklat() else oynat() }
-    fun sonraki() { userCommand(); playbackAdapter().sonraki(); senkronizeEtMedyaDurumu() }
-    fun onceki() { userCommand(); playbackAdapter().onceki(); senkronizeEtMedyaDurumu() }
-    fun konumaGit(konumMs: Long) { playbackAdapter().konumaGit(konumMs.coerceAtLeast(0L)) }
+    fun sonraki() { if (canSkipNext()) { userCommand(); playbackAdapter().sonraki(); senkronizeEtMedyaDurumu() } }
+    fun onceki() { if (canSkipPrevious()) { userCommand(); playbackAdapter().onceki(); senkronizeEtMedyaDurumu() } }
+    fun konumaGit(konumMs: Long) { if (!isCallActive() && canSeek()) playbackAdapter().konumaGit(konumMs.coerceAtLeast(0L)) }
 
     /**
      * Direksiyon kumandasi veya donanim medya tuslarini isler.
@@ -469,13 +553,20 @@ class MusicManager private constructor(private val context: Context) : InternalM
         if (publishing) return
         publishing = true
         try {
-        if (!manualSelection && focusState["auto_follow"] != false) {
-            // A connection/metadata event alone is never a takeover request.
-            val playing = adapters.firstOrNull { it.caliyorMu() }
-            if (playing != null && !selectedAdapter.caliyorMu()) {
-                userCommandVersion++ // A real playback event also supersedes a delayed startup request.
-                requestSmartFocus(playing)
-            }
+        val snapshots = sourceSnapshots()
+        val current = sourceKey(selectedAdapter)
+        val target = focusPolicy.choose(snapshots, current, focusState["auto_follow"] != false,
+            manualSelection, isCallActive() || ttsSpeaking || duckingAktifMi, android.os.SystemClock.elapsedRealtime())
+        anaHandler.removeCallbacks(focusRecheck)
+        focusPolicy.nextCheckInMs?.let { anaHandler.postDelayed(focusRecheck, it) }
+        if (target != current) {
+            userCommandVersion++
+            val old = playbackAdapter()
+            val targetPlaying = snapshots.firstOrNull { it.id == target }?.playing == true
+            if (targetPlaying && selectedAdapter === internalAdapter) internalPlayer.duraklat()
+            else if (targetPlaying) pausePreviousOwner(old)
+            app.vela.util.FileLogger.i(TAG, "SmartFocus $current -> $target playing=$targetPlaying")
+            adoptSource(target)
         }
         // A dedicated OEM source may publish its truthful state through MediaSession.
         val aktifAdaptor = playbackAdapter()
@@ -483,17 +574,22 @@ class MusicManager private constructor(private val context: Context) : InternalM
             baslik = aktifAdaptor.baslik().ifBlank { "Müzik Seçilmedi" },
             sanatci = aktifAdaptor.sanatci().ifBlank { "Sanatçı" },
             albumKapagi = aktifAdaptor.albumKapagi(),
-            caliyorMu = aktifAdaptor.caliyorMu(),
+            caliyorMu = aktifAdaptor.caliyorMu() && !isCallActive(),
             toplamSureMs = aktifAdaptor.toplamSureMs(),
             anlikKonumMs = aktifAdaptor.anlikKonumMs(),
-            paketAdi = if (aktifAdaptor is AndroidMediaSessionAdapter) aktifAdaptor.getPackageName() else ""
+            paketAdi = sourcePackage(selectedAdapter).orEmpty(),
+            sourceId = sourceKey(selectedAdapter),
+            sourceKind = MediaSourceIdentity.kind(sourceKey(selectedAdapter), sourcePackage(selectedAdapter)),
+            sourceLabel = sourceLabel(selectedAdapter),
+            canControl = canControl(), canSkipNext = canSkipNext(), canSkipPrevious = canSkipPrevious()
         )
 
+        val mediaChanged = _medyaDurumu.value != yeniMedya
         _medyaDurumu.value = yeniMedya
         if (userCommandVersion > 0 || yeniMedya.caliyorMu) {
             saveFocus("last_source" to sourceKey(selectedAdapter), "was_playing" to (yeniMedya.caliyorMu && !userPaused))
         }
-        listeners.forEach { listener ->
+        if (mediaChanged) listeners.forEach { listener ->
             listener.onParcaDegisti(yeniMedya)
             listener.onCalmaDurumuDegisti(yeniMedya.caliyorMu)
         }
@@ -522,6 +618,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         anaHandler.removeCallbacks(duckGeriYuklemeGorevi)
         // Talimat bitince 800ms sonra yumusakca geri yukle
         anaHandler.postDelayed(duckGeriYuklemeGorevi, 800)
+        anaHandler.postDelayed(focusRecheck, 850)
     }
 
     private fun sesiEskiHalineGetir() {
