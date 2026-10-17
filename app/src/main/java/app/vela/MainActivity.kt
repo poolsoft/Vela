@@ -198,13 +198,10 @@ class MainActivity : ComponentActivity() {
         val pending = redirectIntent ?: return
         redirectIntent = null
         window.decorView.post {
-            val owner = liveOwner()
-            if (owner != null) runCatching {
-                owner.receiveReturnIntent(pending)
-                getSystemService(android.app.ActivityManager::class.java).moveTaskToFront(owner.taskId, 0)
-                app.vela.util.FileLogger.i("LauncherTask", "Requested focused redirect to exact owner task=${owner.taskId}")
-            }.onFailure { app.vela.util.FileLogger.e("LauncherTask", "Focused task return failed", it) }
+            // Exclude this temporary HOME record from singleTask lookup before returning.
+            // Otherwise Android can deliver the launch back to this duplicate itself.
             finish()
+            returnToApp(this, pending)
         }
     }
 

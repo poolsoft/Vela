@@ -517,3 +517,5 @@ the shared hidden-WebView base, `NavController`) are in FEATURES.
 - Validate immediate physical HOME returns while Android app switches are stopped on the target ROM; retained-task redirects now wait for the redirect Activity to resume.
 
 - Confirm window-focused, exact-task HOME redirection on the head unit; do not rely on generic component reuse while a duplicate HOME task exists.
+
+- Validate finish-before-return HOME redirection on the target ROM; the temporary record must be excluded before the retained singleTask owner is resolved.
