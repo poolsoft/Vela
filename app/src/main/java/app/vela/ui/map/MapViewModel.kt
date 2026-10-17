@@ -7235,6 +7235,8 @@ class MapViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
+            val local = withContext(Dispatchers.IO) { regionCatalog.installedRegions() }
+            _state.update { it.copy(routingRegions = local) }
             val regions = regionCatalog.manifest(app.vela.BuildConfig.OBF_MANIFEST_URL)
             _state.update { it.copy(routingRegions = regions) }
             val extras = regionExtrasMb(regions)

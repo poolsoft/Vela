@@ -357,3 +357,6 @@ MISS_MEMO_MS    =   600_000   // an unreachable manifest is not retried for ten 
 ## Safe local metadata and font replacement
 
 Indexes and revision JSON files are written to a unique sibling staging file, synced, and atomically moved into place. Failed writes preserve the previous complete file. Sprite assets follow the same rule. Glyph installs validate the required ranges first, preserve the old directory as `glyphs.previous` during activation, and recover that directory if activation was interrupted with no active glyph directory. Explicit font removal also clears the recovery copy.
+
+
+Downloaded regions are listed from local OBF, basemap and POI inventory before a server catalog request. A validated per-source catalog cache supplies display names when available; a restored region without cache uses its local ID and cannot initiate a download without a catalog URL. Missing network access does not hide installed packages. Target head-unit restore remains an acceptance check.

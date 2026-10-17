@@ -51,6 +51,10 @@ class ObfStore @Inject constructor(
         .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
+    /** Installed routing bounds are local metadata, independent of the download catalog. */
+    fun installedBounds(): Map<String, DoubleArray> =
+        readIndex().filterKeys { File(root, "$it.obf").let { file -> file.isFile && file.length() > 0 } }
+
     fun installedIds(): Set<String> =
         readIndex().keys.filter { File(root, "$it.obf").let { f -> f.exists() && f.length() > 0 } }.toSet()
 

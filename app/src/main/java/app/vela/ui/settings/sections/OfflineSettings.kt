@@ -310,7 +310,7 @@ internal fun OfflineSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onClose
         // one place instead of being read out of a 450-row catalog.
         SubHead(stringResource(R.string.settings_downloaded_title))
         LaunchedEffect(Unit) { vm.refreshRoutingRegions() }
-        val installedRegions = state.routingRegions.filter { it.id in state.routingInstalledIds }
+        val installedRegions = state.routingRegions.filter { it.id in state.routingInstalledIds || it.id in state.basemapInstalledIds || it.id in state.poiPackInstalledIds }
         val loc = state.myLocation
         val primary = state.routingRegions.filter { r -> loc != null && r.covers(loc.lat, loc.lng) }
             .minByOrNull { (it.n - it.s) * (it.e - it.w) }
@@ -602,6 +602,8 @@ private fun RegionRow(
                     installed && packInstalled -> stringResource(R.string.settings_routing_installed_places)
                     routingInstalled -> stringResource(R.string.settings_routing_installed)
                     here -> stringResource(R.string.settings_routing_size_installed_here, fmtMb(regionInstalledMb(region, packRegion, state.regionExtrasMb[region.id] ?: 0)))
+                    basemapInstalled -> "Sokak haritası yüklü; rota verisi yok"
+                    packInstalled -> "Yer arama verisi yüklü; rota verisi yok"
                     else -> stringResource(R.string.settings_routing_size_installed, fmtMb(regionInstalledMb(region, packRegion, state.regionExtrasMb[region.id] ?: 0)))
                 },
                 style = MaterialTheme.typography.bodySmall,
@@ -626,7 +628,7 @@ private fun RegionRow(
                 DpadFocusHandoff(keeper)
                 FilledTonalButton(
                     onClick = { vm.updateRegion(region) },
-                    enabled = !isDownloading,
+                    enabled = !isDownloading && app.vela.ui.OfflineMode.networkAllowed && region.url.isNotBlank(),
                     modifier = Modifier.dpadFocusKept(keeper),
                 ) { Text(stringResource(R.string.settings_update_region)) }
                 IconButton(onClick = { vm.deleteRoutingGraph(region.id) }) {
@@ -637,7 +639,7 @@ private fun RegionRow(
                 DpadFocusHandoff(keeper)
                 FilledTonalButton(
                     onClick = { vm.completeBasemapDownload(region) },
-                    enabled = !isDownloading,
+                    enabled = !isDownloading && app.vela.ui.OfflineMode.networkAllowed && region.url.isNotBlank(),
                     modifier = Modifier.dpadFocusKept(keeper),
                 ) { Text("Haritayı Tamamla") }
                 IconButton(onClick = { vm.deleteRoutingGraph(region.id) }) {
@@ -648,14 +650,14 @@ private fun RegionRow(
                 DpadFocusHandoff(keeper)
                 FilledTonalButton(
                     onClick = { vm.downloadPoiPackFor(region) },
-                    enabled = !isDownloading,
+                    enabled = !isDownloading && app.vela.ui.OfflineMode.networkAllowed && region.url.isNotBlank(),
                     modifier = Modifier.dpadFocusKept(keeper),
                 ) { Text(stringResource(R.string.settings_get_places)) }
                 IconButton(onClick = { vm.deleteRoutingGraph(region.id) }) {
                     Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.settings_routing_remove))
                 }
             }
-            routingInstalled -> {
+            routingInstalled || basemapInstalled || packInstalled -> {
                 DpadFocusHandoff(keeper)
                 IconButton(onClick = { vm.deleteRoutingGraph(region.id) }, modifier = Modifier.dpadFocusKept(keeper)) {
                     Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.settings_routing_remove))
@@ -670,7 +672,7 @@ private fun RegionRow(
                         if (regionInstalledMb(region, packRegion, state.regionExtrasMb[region.id] ?: 0) > CONFIRM_MB) onConfirm(region)
                         else vm.downloadRoutingGraph(region)
                     },
-                    enabled = !isDownloading,
+                    enabled = !isDownloading && app.vela.ui.OfflineMode.networkAllowed && region.url.isNotBlank(),
                     modifier = Modifier.dpadFocusKept(keeper),
                 ) { Text(stringResource(R.string.settings_download)) }
             }

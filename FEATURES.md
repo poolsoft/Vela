@@ -2753,3 +2753,6 @@ Car launcher HOME entry uses the lightweight CarLauncherEntryActivity forwarder;
 
 
 The map search offline indicator uses an accessible icon without a text label. Stopping speech invalidates queued utterances but preserves the system TTS initialization callback; engine binding callbacks are gated by binding generation, not speech cancellation. Head-unit audio output remains a device acceptance check.
+
+
+Downloaded regions are listed from local OBF, basemap and POI inventory before a server catalog request. A validated per-source catalog cache supplies display names when available; a restored region without cache uses its local ID and cannot initiate a download without a catalog URL. Missing network access does not hide installed packages. Target head-unit restore remains an acceptance check.
