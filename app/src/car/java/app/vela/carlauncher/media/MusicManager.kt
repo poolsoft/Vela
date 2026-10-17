@@ -420,8 +420,8 @@ class MusicManager private constructor(private val context: Context) : InternalM
         focusPolicy.selected(key, sourceSnapshots())
         manualSelection = lock
         publishing = true
+        if (play) releaseOwnerFor(key)
         if (source === mediaSessionAdapter) {
-            if (play && sourceKey(selectedAdapter) != key) pausePreviousOwner(playbackAdapter())
             pinnedSessionPackage = controller?.packageName
             mediaSessionAdapter.setController(controller)
         } else {
