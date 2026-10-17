@@ -2738,3 +2738,6 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 
 - [x] Heap-aware OBF routing budgets, engine cancellation, obsolete-request replacement, and hierarchy-aware car routing.
 - [x] Opt-in low-end map protection with preserved user preferences and requested/effective layer diagnostics.
+
+
+- [x] Automatic device-aware map profile, session-only sustained-render downgrade, and visible device/budget explanation.

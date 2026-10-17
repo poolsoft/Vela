@@ -1026,4 +1026,8 @@
     <string name="settings_map_custom_tilt">Kamera eğimine izin ver</string>
     <string name="settings_map_custom_tilt_hint">Parmakla eğmeye ve navigasyonda otomatik eğime izin verir. Kapalıyken harita düz kalır. Eğim eski cihazlarda yükü artırabilir.</string>
     <string name="settings_map_custom_layers_hint">Aşağıdaki katman anahtarlarından 3D bina, arazi gölgelendirmesi, bina ek katmanı ve diğer detayları seçin. Profiller arasında seçimleriniz korunur.</string>
+    <string name="settings_map_render_auto">Otomatik (önerilen)</string>
+    <string name="settings_map_auto_light">Hafif: sınırlı bellek/GLES2 veya sürekli yavaş çizim. 30 FPS, düz kamera; 3D bina ve arazi gölgelendirmesi kapalı.</string>
+    <string name="settings_map_auto_standard">Standart: cihaz kapasitesi normal çizime uygun. Sürekli yavaş çizimde bu oturum için Hafif seçilir.</string>
+    <string name="settings_map_auto_details">Cihaz bellek sınırı: %1$d MB; GLES: 0x%2$s. Özel FPS, eğim ve katman tercihleriniz kayıtlı kalır.</string>
 </resources>

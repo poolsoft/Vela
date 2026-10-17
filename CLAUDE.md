@@ -6005,3 +6005,6 @@ TTS Binder calls, including timeout stop/shutdown, belong on `SpeechWorker`; mai
 Map preferences: automatic device protection is off by default and never rewrites layer/profile selections. Keep the observable option in the renderer settings snapshot; log requested and effective layers separately.
 
 Routing: coroutine callers use RouteEngine.routeAwait, including detached fallback workers and multi-stop legs. Do not call the blocking route adapter from coroutine paths. Forward RouteControl through composites. OBF progress, heap watcher and finally cleanup must stay coupled. A passing desktop route is not a 96 MiB head-unit performance result.
+
+
+Automatic map profile: measure rendering duration rather than idle frame intervals. Require three populated slow windows before a session-only downgrade; propagate it over the renderer stage channel. Never persist automatic decisions over user layer or custom profile values.

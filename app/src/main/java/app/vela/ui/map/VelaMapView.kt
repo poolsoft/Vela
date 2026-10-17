@@ -658,7 +658,7 @@ internal fun VelaMapView(
     var startupLight by remember { mutableStateOf(true) }
     val requestedProfile = app.vela.ui.MapRenderProfile.selected.value
     val selectedProfile = app.vela.ui.MapRenderProfile.effective(
-        requestedProfile, app.vela.ui.MemoryPressure.lowEnd, startupLight,
+        requestedProfile, app.vela.ui.MemoryPressure.lowEnd || app.vela.ui.MapRenderProfile.slowRendering.value, startupLight,
         app.vela.ui.MapRenderProfile.autoDeviceBudget.value)
     val lightProfile = app.vela.ui.MapRenderProfile.isLight(selectedProfile)
     val flatCamera = app.vela.ui.MapRenderProfile.flatCamera(selectedProfile)
@@ -3408,12 +3408,30 @@ internal fun VelaMapView(
                         }
                     }
                 }
+                val automaticFrameBudget = app.vela.ui.MapRenderProfile.FrameBudget()
+                var frameStartedAt = 0L
+                mv.addOnWillStartRenderingFrameListener {
+                    frameStartedAt = android.os.SystemClock.elapsedRealtime()
+                }
                 var frameReportedForStyle: Style? = null
                 var partialReportedForStyle: Style? = null
                 var startupReleasePosted = false
                 var reportedWidth = -1
                 var reportedHeight = -1
                 mv.addOnDidFinishRenderingFrameListener { fully ->
+                    val finishedAt = android.os.SystemClock.elapsedRealtime()
+                    if (!startupLight && frameStartedAt > 0 &&
+                        app.vela.ui.MapRenderProfile.selected.value == app.vela.ui.MapRenderProfile.AUTO &&
+                        automaticFrameBudget.sample(finishedAt, finishedAt - frameStartedAt)) {
+                        mv.post {
+                            if (!app.vela.ui.MapRenderProfile.slowRendering.value) {
+                                app.vela.ui.MapRenderProfile.slowRendering.value = true
+                                app.vela.variant.CarIntegration.mapRendererStage("auto-light")
+                            }
+                        }
+                    }
+                    frameStartedAt = 0L
+
                     // Report the first frame at a new size even when the retained style is unchanged.
                     if (mv.width != reportedWidth || mv.height != reportedHeight) {
                         reportedWidth = mv.width

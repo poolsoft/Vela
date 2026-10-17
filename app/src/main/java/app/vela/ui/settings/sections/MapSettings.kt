@@ -31,6 +31,7 @@ internal fun MapSettingsScreen(onBack: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
             listOf(
+                app.vela.ui.MapRenderProfile.AUTO to R.string.settings_map_render_auto,
                 app.vela.ui.MapRenderProfile.STANDARD to R.string.settings_map_render_standard,
                 app.vela.ui.MapRenderProfile.LIGHT to R.string.settings_map_render_light,
                 app.vela.ui.MapRenderProfile.CUSTOM to R.string.settings_map_render_custom,
@@ -41,8 +42,15 @@ internal fun MapSettingsScreen(onBack: () -> Unit) {
                     modifier = if (id == app.vela.ui.MapRenderProfile.STANDARD) topRow else Modifier)
             }
             Hint(stringResource(R.string.settings_map_render_profile_hint))
+            if (app.vela.ui.MapRenderProfile.selected.value == app.vela.ui.MapRenderProfile.AUTO) {
+                val limited = app.vela.ui.MemoryPressure.lowEnd || app.vela.ui.MapRenderProfile.slowRendering.value
+                Hint(stringResource(if (limited) R.string.settings_map_auto_light else R.string.settings_map_auto_standard))
+                Hint(stringResource(R.string.settings_map_auto_details,
+                    app.vela.ui.MemoryPressure.heapClassMb,
+                    app.vela.ui.MemoryPressure.glEsVersion.toString(16)))
+            }
             GroupDivider()
-            ToggleRow(label = stringResource(R.string.settings_map_auto_budget),
+            if (app.vela.ui.MapRenderProfile.selected.value != app.vela.ui.MapRenderProfile.AUTO) ToggleRow(label = stringResource(R.string.settings_map_auto_budget),
                 checked = app.vela.ui.MapRenderProfile.autoDeviceBudget.value,
                 onCheckedChange = { app.vela.ui.MapRenderProfile.setAutoDeviceBudget(context, it) },
                 hint = stringResource(R.string.settings_map_auto_budget_hint))

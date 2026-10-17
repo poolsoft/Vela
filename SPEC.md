@@ -2741,3 +2741,8 @@ The boolean map_auto_device_budget defaults to false. Only explicit enablement l
 HH routing does not require a world-regions file for download suggestions. With missing-map suggestions disabled, the OsmandRegions adapter returns no downloadable-region hints; installed OBF coverage and HH indexes still determine the route. This prevents the uninitialized world-region reader from rejecting an otherwise valid HH calculation.
 
 Device classification reads the packed reqGlEsVersion integer. Parsing the display string such as 2.0 as hexadecimal is invalid and must not hide a GLES2 device from low-end graphics protection.
+
+
+### Automatic map rendering
+
+The auto profile selects Light when MemoryPressure.lowEnd is true (OS low-RAM, heap class below 128 MiB, or reported GLES below 3), otherwise Standard. Existing explicit profile choices are preserved. Startup remains Light until the first usable frame. Frame duration is measured between the SDK start/finish rendering callbacks. Three consecutive windows of at least 10 seconds, each containing at least 20 frames with at least half taking 80 ms or longer, select Light for the renderer process lifetime. Sparse/fast windows reset the streak. There is no automatic upward oscillation within that process. The renderer reports the downgrade to the launcher over the existing validated stage channel. Custom FPS, tilt and layer preferences are never rewritten; Custom bypasses the automatic budget after startup. Light applies 30 FPS, flat camera and the existing 3D/terrain exclusions. Traffic/transit preferences are unchanged. Settings display the hardware budget and its reason; navigation and satellite exclusions still apply independently.

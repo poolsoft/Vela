@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableIntStateOf
 
 /** Rendering budget, independent of palette and the user's individual layer preferences. */
 object MapRenderProfile {
+    const val AUTO = "auto"
     const val STANDARD = "standard"
     const val LIGHT = "light"
     const val CUSTOM = "custom"
@@ -17,12 +18,32 @@ object MapRenderProfile {
     val customMaxFps = mutableIntStateOf(30)
     val customTilt = mutableStateOf(false)
     val autoDeviceBudget = mutableStateOf(false)
+    // Session-only downgrade: never overwrite the user's profile or layer preferences.
+    val slowRendering = mutableStateOf(false)
+    internal class FrameBudget {
+        private var start = 0L
+        private var frames = 0
+        private var slow = 0
+        private var slowWindows = 0
+        fun sample(nowMs: Long, durationMs: Long): Boolean {
+            if (start == 0L) start = nowMs
+            frames++
+            if (durationMs >= 80) slow++
+            if (nowMs - start < 10_000) return false
+            if (frames >= 20) slowWindows = if (slow * 2 >= frames) slowWindows + 1 else 0
+            else slowWindows = 0
+            start = nowMs; frames = 0; slow = 0
+            return slowWindows >= 3
+        }
+    }
     fun isLight(profile: String = selected.value) = profile == LIGHT
     fun maxFps(profile: String = selected.value) = when (profile) { LIGHT -> 30; CUSTOM -> customMaxFps.intValue; else -> 0 }
     fun flatCamera(profile: String = selected.value) = isLight(profile) || (profile == CUSTOM && !customTilt.value)
     fun effective(profile: String, lowEnd: Boolean, startup: Boolean, automaticBudget: Boolean = false): String =
-        if (startup || (automaticBudget && lowEnd && profile == STANDARD)) LIGHT else profile
-    private fun valid(value: String?) = when (value) { LIGHT, CUSTOM -> value; else -> STANDARD }
+        if (startup) LIGHT
+        else if (profile == AUTO) if (lowEnd) LIGHT else STANDARD
+        else if (automaticBudget && lowEnd && profile == STANDARD) LIGHT else profile
+    private fun valid(value: String?) = when (value) { AUTO, LIGHT, CUSTOM -> value; else -> STANDARD }
 
     fun init(context: Context) {
         val prefs = context.getSharedPreferences("vela_settings", Context.MODE_PRIVATE)

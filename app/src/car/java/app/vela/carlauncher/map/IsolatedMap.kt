@@ -176,6 +176,7 @@ internal class IsolatedMapClient(
         val attempt = session
         bindAt = SystemClock.elapsedRealtime(); heartbeatAt = bindAt
         mutableState.value = State()
+        app.vela.ui.MapRenderProfile.slowRendering.value = false
         val receiver = Messenger(Handler(Looper.getMainLooper()) { msg ->
             val data = msg.data
             if (attempt == session && connection != null &&
@@ -186,6 +187,7 @@ internal class IsolatedMapClient(
                 when (msg.what) {
                     MapRendererTransport.STAGE -> {
                         val stage = data.getString("stage").orEmpty()
+                        if (stage == "auto-light") app.vela.ui.MapRenderProfile.slowRendering.value = true
                         if (stage.startsWith("error:")) fail(stage)
                         else if (stage != "heartbeat") {
                             terminalStage = stage

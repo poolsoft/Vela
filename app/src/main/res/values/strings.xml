@@ -1119,4 +1119,8 @@
     <string name="settings_map_custom_tilt">Allow camera tilt</string>
     <string name="settings_map_custom_tilt_hint">Allow tilt gestures and automatic navigation tilt. Turn off for a flat map. Tilt can increase the load on older devices.</string>
     <string name="settings_map_custom_layers_hint">Use the layer switches below for 3D buildings, terrain shading, extra buildings and other details. Your choices are kept when switching profiles.</string>
+    <string name="settings_map_render_auto">Automatic (recommended)</string>
+    <string name="settings_map_auto_light">Light: limited memory/GLES2 or sustained slow rendering. 30 FPS, flat camera, 3D buildings and terrain shading disabled.</string>
+    <string name="settings_map_auto_standard">Standard: device capacity allows normal rendering. Sustained slow rendering switches to Light for this session.</string>
+    <string name="settings_map_auto_details">Device heap: %1$d MB; GLES: 0x%2$s. Your custom FPS, tilt and layer preferences remain saved.</string>
 </resources>
