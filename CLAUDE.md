@@ -6035,3 +6035,5 @@ Car Smart Focus uses per-source playback edges and explicit app opt-in, with a s
 
 
 Smart Focus retains the playback owner separately from a browsed paused source, so Select followed by Play releases only the previous audible or preparing source once. Include this deferred handoff in head-unit acceptance.
+
+Equalizer entry points use CarHardwareManager and the persisted car_launcher_equalizer_app preference. Keep settings as a picker and player buttons as launch-or-pick controls.

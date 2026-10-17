@@ -1,5 +1,7 @@
 package app.vela.carlauncher.ui
 
+import androidx.core.graphics.drawable.toBitmap
+import app.vela.carlauncher.settings.CarLauncherSettings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -186,6 +188,10 @@ fun CarMusicPlayerView(
                 }
 
                 // DSP / Ekolayzir Butonu
+                val equalizerPackage by CarLauncherSettings.ekolayzirPaketi.collectAsState()
+                val equalizerIcon = remember(equalizerPackage) {
+                    CarHardwareManager.getInstance(context).equalizerIcon()?.toBitmap(48, 48)?.asImageBitmap()
+                }
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -194,7 +200,11 @@ fun CarMusicPlayerView(
                         .clickable { CarHardwareManager.getInstance(context).openEqualizer(context) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
+                    if (equalizerIcon != null) Image(
+                        bitmap = equalizerIcon,
+                        contentDescription = "Ekolayzır",
+                        modifier = Modifier.size(28.dp)
+                    ) else Icon(
                         imageVector = Icons.Default.Equalizer,
                         contentDescription = "Ekolayzır",
                         tint = ClPrimary,

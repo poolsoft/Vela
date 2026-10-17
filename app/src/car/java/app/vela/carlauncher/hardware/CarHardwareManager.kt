@@ -78,38 +78,68 @@ class CarHardwareManager private constructor(private val context: Context) {
      * Donanimsal Ekolayzir / DSP ses efektlerini acar.
      */
     fun openEqualizer(activityContext: Context) {
-        val secilenPaket = CarLauncherSettings.ekolayzirPaketi.value
-        if (!secilenPaket.isNullOrBlank() && launchApp(activityContext, secilenPaket)) {
+        val selected = CarLauncherSettings.ekolayzirPaketi.value
+        if (!selected.isNullOrBlank()) {
+            val intent = activityContext.packageManager.getLaunchIntentForPackage(selected)
+                ?: Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).setPackage(selected)
+            try {
+                activityContext.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "Selected equalizer is unavailable: $selected", e)
+                CarLauncherSettings.setEkolayzirPaketi(null)
+                Toast.makeText(activityContext, "Seçilen ekolayzır açılamadı. Yeniden seçin.", Toast.LENGTH_SHORT).show()
+            }
+        }
+        chooseEqualizer(activityContext)
+    }
+
+    fun equalizerLabel(): String = CarLauncherSettings.ekolayzirPaketi.value?.let {
+        runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(it, 0)).toString() }.getOrNull()
+    } ?: "Uygulama seçilmedi"
+
+    fun equalizerIcon(): android.graphics.drawable.Drawable? = CarLauncherSettings.ekolayzirPaketi.value?.let {
+        runCatching { context.packageManager.getApplicationIcon(it) }.getOrNull()
+    }
+
+    fun chooseEqualizer(activityContext: Context) {
+        val pm = activityContext.packageManager
+        val launchers = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+        val panels = pm.queryIntentActivities(Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL), 0)
+        val apps = (panels + launchers).filter { it.activityInfo.packageName != context.packageName }
+            .distinctBy { it.activityInfo.packageName }
+            .sortedBy { it.loadLabel(pm).toString().lowercase() }
+        if (apps.isEmpty()) {
+            Toast.makeText(activityContext, "Seçilebilir uygulama bulunamadı", Toast.LENGTH_SHORT).show()
             return
         }
-
-        // Platforma ozel paket denemeleri
-        when (platform) {
-            Platform.XY_AUTO -> {
-                if (launchApp(activityContext, "sys.xy.tumu.app") || launchApp(activityContext, "com.xy.eq")) {
-                    return
-                }
-            }
-            Platform.HCN -> {
-                if (launchApp(activityContext, "com.hcn.AutoSettings") || launchApp(activityContext, "com.hcn.dsp")) {
-                    return
-                }
-            }
-            Platform.STANDARD -> {
-                // Standart Android DSP Paneli Intent'i
-                try {
-                    val intent = Intent(AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    activityContext.startActivity(intent)
-                    return
-                } catch (e: Exception) {
-                    Log.w(TAG, "Standart audio effect kontrol paneli bulunamadi", e)
+        val selected = CarLauncherSettings.ekolayzirPaketi.value
+        val adapter = object : android.widget.BaseAdapter() {
+            override fun getCount() = apps.size
+            override fun getItem(position: Int) = apps[position]
+            override fun getItemId(position: Int) = position.toLong()
+            override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+                val app = apps[position]
+                val dp = activityContext.resources.displayMetrics.density
+                return android.widget.LinearLayout(activityContext).apply {
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    setPadding((20 * dp).toInt(), (12 * dp).toInt(), (20 * dp).toInt(), (12 * dp).toInt())
+                    addView(android.widget.ImageView(activityContext).apply { setImageDrawable(app.loadIcon(pm)) },
+                        android.widget.LinearLayout.LayoutParams((40 * dp).toInt(), (40 * dp).toInt()))
+                    addView(android.widget.TextView(activityContext).apply {
+                        text = (if (app.activityInfo.packageName == selected) "✓  " else "") + app.loadLabel(pm)
+                        textSize = 18f
+                        setPadding((16 * dp).toInt(), 0, 0, 0)
+                    })
                 }
             }
         }
-
-        Toast.makeText(activityContext, "Ekolayzır uygulaması bulunamadı", Toast.LENGTH_SHORT).show()
+        android.app.AlertDialog.Builder(activityContext)
+            .setTitle("Ekolayzır uygulamasını seç")
+            .setAdapter(adapter) { _, index -> CarLauncherSettings.setEkolayzirPaketi(apps[index].activityInfo.packageName) }
+            .setNeutralButton("Seçimi temizle") { _, _ -> CarLauncherSettings.setEkolayzirPaketi(null) }
+            .setNegativeButton("İptal", null)
+            .show()
     }
 
     /**
@@ -148,18 +178,4 @@ class CarHardwareManager private constructor(private val context: Context) {
         }
     }
 
-    private fun launchApp(ctx: Context, pkg: String): Boolean {
-        return try {
-            val intent = ctx.packageManager.getLaunchIntentForPackage(pkg)
-            if (intent != null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                ctx.startActivity(intent)
-                true
-            } else {
-                false
-            }
-        } catch (e: Exception) {
-            false
-        }
-    }
 }

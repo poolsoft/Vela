@@ -698,6 +698,7 @@ private fun CarMusicSettingsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val equalizerPackage by CarLauncherSettings.ekolayzirPaketi.collectAsState()
     val tercihEdilenMuzik by CarLauncherSettings.tercihEdilenMuzikUygulamasi.collectAsState()
     val kucukGorsellestirici by CarLauncherSettings.gorsellestiriciTipi.collectAsState()
     val buyukGorsellestirici by CarLauncherSettings.largeVisualizer.collectAsState()
@@ -797,11 +798,11 @@ private fun CarMusicSettingsScreen(
 
             SettingsGroup(title = "Ses Geliştirme (DSP)") {
                 ActionRow(
-                    label = "Ekolayzır / DSP Ayarlarını Aç",
-                    detail = "Cihazın dahili ses işlemcisi ve ekolayzır panelini başlatır",
-                    actionText = "Aç",
+                    label = "Ekolayzır uygulaması",
+                    detail = equalizerPackage?.let { app.vela.carlauncher.hardware.CarHardwareManager.getInstance(context).equalizerLabel() } ?: "Uygulama seçilmedi",
+                    actionText = "Seç",
                     onClick = {
-                        app.vela.carlauncher.hardware.CarHardwareManager.getInstance(context).openEqualizer(context)
+                        app.vela.carlauncher.hardware.CarHardwareManager.getInstance(context).chooseEqualizer(context)
                     }
                 )
             }

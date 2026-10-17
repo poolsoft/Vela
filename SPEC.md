@@ -2781,3 +2781,5 @@ Car Smart Focus uses per-source playback edges and explicit app opt-in, with a s
 
 
 Smart Focus retains the playback owner separately from a browsed paused source, so Select followed by Play releases only the previous audible or preparing source once. Include this deferred handoff in head-unit acceptance.
+
+The equalizer package preference is shared by settings and all player entry points. Settings always opens the application picker. Playback buttons open the selected application directly, or show the picker when unset or unavailable. Selection alone does not launch the application; clearing restores the unselected state. The large-player button displays the selected application icon without a color tint. The picker includes launcher applications and audio-effect control-panel handlers, deduplicated by package.

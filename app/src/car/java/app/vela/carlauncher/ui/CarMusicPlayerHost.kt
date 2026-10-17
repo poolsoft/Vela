@@ -370,6 +370,18 @@ class CarMusicPlayerHost(
     }
 
     private fun setupStateFlows() {
+        scope.launch {
+            app.vela.carlauncher.settings.CarLauncherSettings.ekolayzirPaketi.collectLatest {
+                val hardware = CarHardwareManager.getInstance(context)
+                val icon = hardware.equalizerIcon()
+                btnDockEqualizer?.clearColorFilter()
+                btnDockEqualizer?.imageTintList = null
+                if (icon != null) btnDockEqualizer?.setImageDrawable(icon)
+                else btnDockEqualizer?.setImageResource(R.drawable.ic_music_equalizer)
+                btnDockEqualizer?.contentDescription = "Ekolayzır: ${hardware.equalizerLabel()}"
+            }
+        }
+
         val scanAnim = android.view.animation.RotateAnimation(
             0f, 360f,
             android.view.animation.Animation.RELATIVE_TO_SELF, 0.5f,
