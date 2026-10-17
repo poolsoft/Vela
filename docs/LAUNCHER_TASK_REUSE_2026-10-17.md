@@ -26,3 +26,8 @@ Actual Android Auto/head-unit takeover still requires a test on the target ROM. 
 [Android tasks and back stack](https://developer.android.com/guide/components/activities/tasks-and-back-stack) describes singleTask reuse and intent delivery. Task-category matching and the resumed redirect use public Activity APIs; no hidden window-management API is used.
 
 The build workflow verifies the packaged MainActivity launch mode and disabled car PiP with scripts/check_car_launcher_manifest.py, rather than checking only source XML. That test correctly rejects diagnostic-143.
+
+
+## Final local acceptance
+
+The separate HOME entry release build passed all three task-return paths on the offline API-30 x86 emulator. Active navigation also survived normal-app floating return and default-HOME return: PID 15783, owner task 666, one renderer session, one style load, zero duplicate rejections, zero restore failures and zero fatal exceptions. Screenshots confirm the route and map after floating return. An early HOME-return screenshot captured a temporarily black renderer surface; a later capture confirms drawing resumes without a new session. This does not establish head-unit rendering performance or actual Android Auto takeover behavior. The emulator retains its application data and Vela Home role.
