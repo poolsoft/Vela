@@ -78,10 +78,9 @@ class RouteBudget private constructor(
  * route first inside the budget wins, so a slow Google cannot hold back a ready offline route and
  * a slow offline compute cannot hold back Google.
  *
- * The on-device compute is UNSTRUCTURED on purpose, the same trap as the avoid path
- * (AVOID_ONDEVICE_TIMEOUT_MS): the native router ignores cancellation, and a structured child
- * would keep the caller open until it finished. Past the budget it is abandoned and finishes into
- * the void.
+ * The worker remains detached so a native backend cannot keep the caller past its deadline.
+ * Every exit cancels it; routeAwait propagates cancellation into the cooperative OBF search.
+ * A native backend without a cancellation API can still finish late and its result is discarded.
  */
 object RerouteFallback {
     enum class Source { GOOGLE_READY, GOOGLE, ON_DEVICE, NONE }
@@ -90,7 +89,7 @@ object RerouteFallback {
 
     suspend fun pick(
         google: Deferred<List<Route>>,
-        onDevice: (() -> List<Route>)?,
+        onDevice: (suspend () -> List<Route>)?,
         budgetMs: Long,
         clock: () -> Long = System::nanoTime,
     ): Outcome {
@@ -104,28 +103,24 @@ object RerouteFallback {
         val offline: Deferred<List<Route>>? = onDevice?.let { block ->
             CoroutineScope(Dispatchers.IO).async { runCatching { block() }.getOrDefault(emptyList()) }
         }
-        var g: List<Route>? = if (google.isCompleted) emptyList() else null
-        var o: List<Route>? = if (offline == null) emptyList() else null
-        withTimeoutOrNull(budgetMs.coerceAtLeast(0L)) {
-            while (g.isNullOrEmpty() && o.isNullOrEmpty() && (g == null || o == null)) {
-                select<Unit> {
-                    if (g == null) google.onAwait { g = it }
-                    if (o == null) offline?.onAwait { o = it }
+        return try {
+            var g: List<Route>? = if (google.isCompleted) emptyList() else null
+            var o: List<Route>? = if (offline == null) emptyList() else null
+            withTimeoutOrNull(budgetMs.coerceAtLeast(0L)) {
+                while (g.isNullOrEmpty() && o.isNullOrEmpty() && (g == null || o == null)) {
+                    select<Unit> {
+                        if (g == null) google.onAwait { g = it }
+                        if (o == null) offline?.onAwait { o = it }
+                    }
                 }
             }
-        }
-        val gr = g
-        val or = o
-        return when {
-            !or.isNullOrEmpty() && gr.isNullOrEmpty() -> Outcome(or, Source.ON_DEVICE, waited(), true)
-            !gr.isNullOrEmpty() -> {
-                offline?.cancel() // best effort; a native compute already running ignores it
-                Outcome(gr, Source.GOOGLE, waited(), offline != null)
+            val gr = g
+            val or = o
+            when {
+                !or.isNullOrEmpty() && gr.isNullOrEmpty() -> Outcome(or, Source.ON_DEVICE, waited(), true)
+                !gr.isNullOrEmpty() -> Outcome(gr, Source.GOOGLE, waited(), offline != null)
+                else -> Outcome(emptyList(), Source.NONE, waited(), offline != null)
             }
-            else -> {
-                offline?.cancel()
-                Outcome(emptyList(), Source.NONE, waited(), offline != null)
-            }
-        }
+        } finally { offline?.cancel() }
     }
 }

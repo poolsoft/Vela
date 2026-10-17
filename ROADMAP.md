@@ -500,3 +500,5 @@ the shared hidden-WebView base, `NavController`) are in FEATURES.
 - Validate interrupted offline writes and font installation on the target storage hardware; atomic file replacement does not establish durability against every OEM power-loss behavior.
 
 - Verify measured-first dock/drawer layout, shared icon caching, fast cached-music restore and worker-isolated TTS on the target head unit; continue profiling workspace drawing and graphics-driver stalls independently.
+
+- Validate long-distance offline routing and cancellation on the 96 MiB head unit using its installed data. HH/base-road capability and selected engine are now logged; data without hierarchy may still fail within a safe budget. Native Valhalla cancellation remains limited by its external API.

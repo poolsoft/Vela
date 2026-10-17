@@ -1016,7 +1016,7 @@
     <string name="settings_map_render_profile">Harita çizim profili</string>
     <string name="settings_map_render_standard">Standart: kendi harita ayarlarım</string>
     <string name="settings_map_render_light">Hafif: eski cihazlar için</string>
-    <string name="settings_map_render_profile_hint">Hafif profil çizimi 30 FPS ile sınırlar, haritayı düz tutar, 3D binaları ve arazi gölgelendirmesini gizler. Katman ve renk tercihleriniz korunur; Standart seçildiğinde yeniden geçerli olur. Haritayı yeniden yüklemeden hemen uygulanır. Her açılışta ilk kullanılabilir harita karesine kadar Hafif kullanılır, ardından seçtiğiniz profil uygulanır. Özel profilde FPS ve eğimi seçebilir, aşağıdaki katmanları ayrı ayrı ayarlayabilirsiniz.</string>
+    <string name="settings_map_render_profile_hint">Hafif profil çizimi 30 FPS ile sınırlar, haritayı düz tutar, 3D binaları ve arazi gölgelendirmesini gizler. Katman ve renk tercihleriniz korunur; Standart seçildiğinde yeniden geçerli olur. Haritayı yeniden yüklemeden hemen uygulanır. Her açılışta ilk kullanılabilir harita karesine kadar Hafif kullanılır, ardından seçtiğiniz profil uygulanır. Düşük bellekli veya GLES2 cihazlarda Standart profil açılıştan sonra da Hafif bütçeyi korur. Bu korumayı değiştirmek için Özel profilde FPS, eğim ve katmanları seçebilirsiniz.</string>
     <string name="settings_map_render_custom">Özel: detayları kendim seçeyim</string>
     <string name="settings_map_custom_controls">Özel çizim ayarları</string>
     <string name="settings_map_custom_fps">En yüksek kare hızı: %1$d FPS</string>

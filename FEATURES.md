@@ -2735,3 +2735,6 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 
 - [x] Car dock and drawer size before first layout, reuse cached icons without placeholder resets, and restore saved music metadata without a startup media walk.
 - [x] TTS motor calls and timeout cleanup run on one bounded worker instead of the UI thread.
+
+- [x] Heap-aware OBF routing budgets, engine cancellation, obsolete-request replacement, and hierarchy-aware car routing.
+- [x] Persistent low-end Standard map budget with an explicit Custom override.

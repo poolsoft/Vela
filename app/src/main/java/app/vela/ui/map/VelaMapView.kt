@@ -657,7 +657,8 @@ internal fun VelaMapView(
     val renderEpoch = remember { intArrayOf(0) }
     var startupLight by remember { mutableStateOf(true) }
     val requestedProfile = app.vela.ui.MapRenderProfile.selected.value
-    val selectedProfile = if (startupLight) app.vela.ui.MapRenderProfile.LIGHT else requestedProfile
+    val selectedProfile = app.vela.ui.MapRenderProfile.effective(
+        requestedProfile, app.vela.ui.MemoryPressure.lowEnd, startupLight)
     val lightProfile = app.vela.ui.MapRenderProfile.isLight(selectedProfile)
     val flatCamera = app.vela.ui.MapRenderProfile.flatCamera(selectedProfile)
     val flatCameraHolder = rememberUpdatedState(flatCamera)

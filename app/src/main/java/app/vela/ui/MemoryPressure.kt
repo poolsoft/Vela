@@ -46,7 +46,7 @@ object MemoryPressure {
     @Volatile var heapClassMb: Int = 0
         private set
 
-    /** Reported GLES version parsed from `deviceConfigurationInfo.glEsVersion` (`0x20000` = ES 2.0),
+    /** Packed GLES version from `deviceConfigurationInfo.reqGlEsVersion` (`0x20000` = ES 2.0),
      *  or 0 when the platform does not report one. */
     @Volatile var glEsVersion: Int = 0
         private set
@@ -65,7 +65,7 @@ object MemoryPressure {
         val systemLowRam = am?.isLowRamDevice == true
         val smallHeap = heapClassMb in 1..127
         glEsVersion = runCatching {
-            (am?.deviceConfigurationInfo?.glEsVersion ?: "").trim().removePrefix("0x").toInt(16)
+            am?.deviceConfigurationInfo?.reqGlEsVersion ?: 0
         }.getOrDefault(0)
         // GLES 1.x/2.x only (the teyp reports 0x20000): our GLES3 pipeline cannot run there.
         val weakGpu = glEsVersion in 1..0x2FFFF

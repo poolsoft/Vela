@@ -428,3 +428,5 @@ The car launcher displays shortcut placeholders immediately and loads labels/ico
 ## First-measure launcher layout and cache restore
 
 Drawer spans are derived from measured width before laying out cells (88 dp per cell, 2-8 columns). Dock creation and measurement share the current item size, so a scroll is not required to apply it. Cached icons bind immediately; two shared background loaders handle cache misses with display-sized artwork. A holder keeps its current same-package icon while a replacement is pending. Music startup restores saved metadata without statting every track; manual scans and playback retain file checks.
+
+On low-end devices Standard keeps Light rendering after the first frame (30 FPS, flat map, reduced layers). Custom is the explicit override. The launcher and music retain Java-heap headroom during OBF routing; raising a routing budget above the process heap is prohibited.

@@ -12,6 +12,8 @@ import app.vela.core.data.MapDataSource
 import app.vela.core.data.SuggestResult
 import app.vela.core.data.RerouteFallback
 import app.vela.core.data.RouteBudget
+import app.vela.core.data.routeAwait
+import app.vela.core.data.awaitAndCancel
 import app.vela.core.data.RouteEngine
 import app.vela.core.data.RouteGeometry
 import app.vela.core.data.RoutingPrefs
@@ -818,7 +820,7 @@ class GoogleMapsDataSource @Inject constructor(
                     googleD,
                     onDevice = if (routeEngine.isReady(mode)) {
                         {
-                            routeEngine.route(origin, destination, mode, avoidTolls, avoidHighways, avoidFerries, departBearingDeg)
+                            routeEngine.routeAwait(origin, destination, mode, avoidTolls, avoidHighways, avoidFerries, departBearingDeg)
                                 .map { it.copy(offline = true) }
                         }
                     } else null,
@@ -873,18 +875,13 @@ class GoogleMapsDataSource @Inject constructor(
             // template without the feature block makes withAvoid a no-op (review 2026-09-06).
             if (avoidWanted && gTop != null && DirectionsPb.avoidSupported(calibration.current().directionsPb)) avoidHonored = true
             if (avoidWanted && gTop == null && routeEngine.isReady(mode)) {
-                // BOUNDED: the obf engine can spend many seconds on a long route, and this branch
-                // used to wait for it unconditionally - with an offline region installed an
-                // avoid-toggled plan just sat there (the Reddit report). The compute runs on an
-                // UNSTRUCTURED scope on purpose: a structured child would keep this coroutineScope
-                // from returning until the non-cancellable native compute finished, which would
-                // defeat the timeout entirely. Past the deadline the online chain answers (tagged
-                // not-honored below) and the orphaned compute finishes and is discarded.
+                // Keep the caller bounded even if a native backend ignores cancellation.
+                // awaitAndCancel also stops a cooperative OBF search when this branch expires.
                 val avoidD = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).async {
-                    runCatching { routeEngine.route(origin, destination, mode, avoidTolls, avoidHighways, avoidFerries, departBearingDeg).map { it.copy(offline = true) } }.getOrDefault(emptyList())
+                    runCatching { routeEngine.routeAwait(origin, destination, mode, avoidTolls, avoidHighways, avoidFerries, departBearingDeg).map { it.copy(offline = true) } }.getOrDefault(emptyList())
                 }
                 val avoidWait = budget.remainingMs()?.let { minOf(it, AVOID_ONDEVICE_TIMEOUT_MS) } ?: AVOID_ONDEVICE_TIMEOUT_MS
-                val avoidRoutes = kotlinx.coroutines.withTimeoutOrNull(avoidWait) { avoidD.await() } ?: emptyList()
+                val avoidRoutes = avoidD.awaitAndCancel(avoidWait) ?: emptyList()
                 if (avoidRoutes.isNotEmpty()) {
                     avoidHonored = true
                     // Offline (no Google answer): the engine's own time is all there is. Online,
@@ -923,7 +920,7 @@ class GoogleMapsDataSource @Inject constructor(
             // obf region file, if one covers this area. No traffic offline, but complete named turns.
             // (Planning only: a bounded fetch with an empty open router returned above.)
             val onDevice = if (open.isEmpty() && trafficRoute == null && routeEngine.isReady(mode))
-                routeEngine.route(origin, destination, mode, avoidTolls, avoidHighways, avoidFerries, departBearingDeg).map { it.copy(offline = true) } else emptyList()
+                routeEngine.routeAwait(origin, destination, mode, avoidTolls, avoidHighways, avoidFerries, departBearingDeg).map { it.copy(offline = true) } else emptyList()
             // Lead with Google's jam-avoiding path (option 3) only when it EARNS it: its live in-traffic
             // ETA is within a small margin of OSRM's FREE-FLOW best, so even Google's detour is time-
             // competitive → the jam is real. The old code led with the snap on ANY >700 m divergence, so a
@@ -1052,12 +1049,12 @@ class GoogleMapsDataSource @Inject constructor(
         if (routeEngine.isReady(mode)) {
             val onDeviceD = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).async {
                 runCatching {
-                    if (waypoints.isEmpty()) routeEngine.route(origin, destination, mode, avoidTolls, avoidHighways, avoidFerries).map { it.copy(offline = true) }
+                    if (waypoints.isEmpty()) routeEngine.routeAwait(origin, destination, mode, avoidTolls, avoidHighways, avoidFerries).map { it.copy(offline = true) }
                     else listOfNotNull(chainOnDevice(points, mode, avoidTolls, avoidHighways, avoidFerries))
                 }.getOrDefault(emptyList())
             }
             val budget = if (urgent) BIKE_ONDEVICE_URGENT_MS else BIKE_ONDEVICE_TIMEOUT_MS
-            val onDevice = kotlinx.coroutines.withTimeoutOrNull(budget) { onDeviceD.await() } ?: emptyList()
+            val onDevice = onDeviceD.awaitAndCancel(budget) ?: emptyList()
             if (onDevice.isNotEmpty()) {
                 diag.record("directions", "BICYCLE safe → on-device ${onDevice.size} routes / ${onDevice.first().maneuvers.size} steps", "")
                 return onDevice
@@ -1159,7 +1156,7 @@ class GoogleMapsDataSource @Inject constructor(
      *  point), each non-final leg's ARRIVE and non-first leg's DEPART dropped (mirroring what routeVia's
      *  parser does for via boundaries), distances/durations summed. Null if any leg can't be routed
      *  (cross-region or off-graph), so the caller can fall through. */
-    private fun chainOnDevice(
+    private suspend fun chainOnDevice(
         points: List<LatLng>,
         mode: TravelMode,
         avoidTolls: Boolean = false,
@@ -1170,7 +1167,7 @@ class GoogleMapsDataSource @Inject constructor(
         val legs = points.zipWithNext().mapIndexed { i, (a, b) ->
             // Only the first leg starts where the car is pointing; a stop is just a place.
             val bearing = if (i == 0) departBearingDeg else null
-            runCatching { routeEngine.route(a, b, mode, avoidTolls, avoidHighways, avoidFerries, bearing).firstOrNull()?.copy(offline = true) }.getOrNull() ?: return null
+            runCatching { routeEngine.routeAwait(a, b, mode, avoidTolls, avoidHighways, avoidFerries, bearing).firstOrNull()?.copy(offline = true) }.getOrNull() ?: return null
         }
         val polyline = legs.flatMapIndexed { i, leg -> if (i == 0) leg.polyline else leg.polyline.drop(1) }
         // Boundary DEPART/ARRIVE steps are dropped, but their step distance is FOLDED into the

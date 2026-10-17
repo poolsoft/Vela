@@ -368,3 +368,5 @@ or if the system declines, the notification is exactly what it was before.
 ## Bounded speech engine work
 
 Speech engine calls and stop/shutdown cleanup run on one daemon worker with at most eight pending jobs. A system speech deadline of 30 seconds includes time waiting for initialization or a busy engine; neural speech uses 95 seconds. Timeout releases focus and publishes failure without calling the engine on the UI thread. A broken engine may still occupy the worker; stale queued prompts are discarded rather than replayed after recovery.
+
+OBF requests use a 60-second deadline, cooperative engine progress cancellation and latest-request replacement. Every route context unloads its tiles on completion or failure; speed lookups skip a busy route instead of queuing behind it. Car searches enable Java HH for indexed data and COMPLEX two-phase search for base-road data. The native Valhalla adapter remains first choice when initialized; logs name the selected engine and OBF hierarchy capabilities.

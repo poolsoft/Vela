@@ -6001,3 +6001,5 @@ Do not resolve dock app labels/icons inside Compose or the dock manager construc
 Offline JSON metadata uses `writeAtomicText`; binary sprite copies use `writeAtomically`. Do not replace them with direct target writes. Keep glyph staging on the same filesystem and validate it before activation. Run `AtomicFilesTest` for changes to this path.
 
 TTS Binder calls, including timeout stop/shutdown, belong on `SpeechWorker`; main-handler callbacks must not call the engine. Keep drawer spans and dock sizes in the measure path, and use synchronous icon cache hits before scheduling misses. Cached music restore must not walk saved media paths; scans/playback perform availability checks.
+
+Routing: coroutine callers use RouteEngine.routeAwait, including detached fallback workers and multi-stop legs. Do not call the blocking route adapter from coroutine paths. Forward RouteControl through composites. OBF progress, heap watcher and finally cleanup must stay coupled. A passing desktop route is not a 96 MiB head-unit performance result.

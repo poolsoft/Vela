@@ -18,6 +18,8 @@ object MapRenderProfile {
     fun isLight(profile: String = selected.value) = profile == LIGHT
     fun maxFps(profile: String = selected.value) = when (profile) { LIGHT -> 30; CUSTOM -> customMaxFps.intValue; else -> 0 }
     fun flatCamera(profile: String = selected.value) = isLight(profile) || (profile == CUSTOM && !customTilt.value)
+    fun effective(profile: String, lowEnd: Boolean, startup: Boolean): String =
+        if (startup || (lowEnd && profile == STANDARD)) LIGHT else profile
     private fun valid(value: String?) = when (value) { LIGHT, CUSTOM -> value; else -> STANDARD }
 
     fun init(context: Context) {

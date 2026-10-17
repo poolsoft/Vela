@@ -663,16 +663,8 @@ names (`Route.roadNamesLatin`).
   where a one-way carriageway joins its two-way continuation under lane markings the router
   emits `Turn left` with a turn angle of well under a degree and `skipToSpeak` false (measured on
   a state file). The angle is the router's own measurement; a real left is tens of degrees.
-- A trip routes on the **smallest installed region box covering both endpoints**; boxes
-  overlap at borders, so selection falls through to the next smallest. A trip that does not fit
-  one region falls back online.
-- **Long routes can fail outright, not merely run slowly.** Past its budget the router throws
-  rather than degrading, and `MEMORY_MB` is 256 because the app already runs near its
-  `largeHeap` ceiling. Measured on a desktop with the shipped configuration, car profile:
-  4 km 0.87 s at 256 MB; 57 km 5.65 s at 256 MB; 151 km fails at 256 MB and takes 4.6 s at
-  1024 MB; 348 km fails at 1024 MB and takes 41.9 s at 3072 MB. The threshold is
-  region-dependent, not a fixed distance. Offline routing is therefore a city and metro
-  feature; intercity needs OsmAnd's precomputed HH, which the bake does not generate.
+- Routing loads installed files intersecting the padded trip bounding box; their union must cover both endpoints.
+- Long routes require suitable routing hierarchy and sufficient safe heap headroom. Car requests enable HH indexes or base-road two-phase search when available. Classic fallback can still exhaust its budget, so it returns safely rather than increasing the budget beyond the process heap. Installed assets can carry HH indexes independently of old adapter comments; data capabilities are detected and logged per calculation.
 - Three Android runtime requirements, all invisible until the engine logs:
   commons-logging's reflective discovery must be pre-pinned to `SimpleLog` before any OsmAnd
   class loads (R8 strips the implementation and the discovery NPEs on ART); `kxml2-vela.jar`
@@ -2735,3 +2727,17 @@ The drawer computes `floor(usableWidthPx / (88 * density))`, clamped to 2-8 colu
 Music index restore trusts saved metadata, deduplicates known primary-storage aliases without filesystem canonicalization, and does not stat every saved file. Playback and explicit user scans retain file checks. A manual scan still uses canonical identities. Missing cached entries can remain visible until a scan; no automatic scan is introduced.
 
 Voice engine initialization, setup, speech, stop and shutdown use one daemon speech worker with at most eight queued tasks. A blocked third-party TTS call cannot occupy the UI thread or spawn unlimited replacement threads. Speech deadlines include queue and initialization time (30 seconds for system TTS, 95 seconds for neural speech). Failure clears pending work, invalidates stale queued tasks, releases focus and publishes failure without waiting for `TextToSpeech.stop`. Cleanup remains on the worker and may itself remain blocked by a faulty engine. New engine bindings reject callbacks from abandoned bindings. Lazy engine startup remains unchanged.
+
+### Offline route resource protection
+
+All coroutine route calls use routeAwait and propagate cancellation through RouteControl to the blocking OBF RouteCalculationProgress. Direct adapter calls receive the same default 60-second deadline. A newer OBF request cancels the previous request; canceled waiters do not enter the search. Detached avoid/bicycle/fallback workers are canceled on timeout, parent cancellation and successful completion.
+
+The Java route budget in MiB is floor(min((maxHeap - usedHeap - reserve) / 2, maxHeap / 3, 96 MiB) / MiB), where reserve=max(24 MiB, maxHeap / 4). Budgets below 8 MiB reject the search safely. A shared daemon checks every 100 ms and cancels when free process headroom falls below max(12 MiB, maxHeap / 8). Native routing-memory configuration is 16 MiB. The speed-lookup context uses clamp(maxHeapMiB / 24, 2, 8) MiB and is unloaded before route planning. Route contexts unload tiles in finally. These are admission and best-effort runtime guards, not a guarantee against every OEM allocation failure.
+
+Car routing enables Java HH only when installed readers expose HH indexes; COMPLEX two-phase routing is selected when base-road subregions exist. Data lacking both hierarchies uses the bounded classic path. No straight-line segmentation or distance cutoff replaces real road routing. Native Valhalla retains its current API cancellation limitations.
+
+Low-end Standard resolves to Light after startup; Custom explicitly overrides the protection. Stronger devices retain Standard after startup. Existing layer preferences and renderer-session retention remain unchanged.
+
+HH routing does not require a world-regions file for download suggestions. With missing-map suggestions disabled, the OsmandRegions adapter returns no downloadable-region hints; installed OBF coverage and HH indexes still determine the route. This prevents the uninitialized world-region reader from rejecting an otherwise valid HH calculation.
+
+Device classification reads the packed reqGlEsVersion integer. Parsing the display string such as 2.0 as hexadecimal is invalid and must not hide a GLES2 device from low-end graphics protection.

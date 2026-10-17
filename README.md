@@ -341,3 +341,5 @@ The car dock publishes saved shortcut slots before loading app labels and icons 
 Offline indexes and revision files use synced temporary replacements. Glyph installation validates staging before replacing the active directory and retains a recoverable previous directory during activation.
 
 Car launcher grids size their children from the first measure pass. Cached app icons bind immediately; misses share two background loaders and display-sized artwork. Cached music metadata restores without walking every media file. System TTS calls use a bounded background worker.
+
+Offline OBF routing reserves launcher/music heap space, supports true cancellation and uses available HH/base-road hierarchy for car trips. Low-end devices keep the Light rendering budget under Standard; Custom remains an explicit override.
