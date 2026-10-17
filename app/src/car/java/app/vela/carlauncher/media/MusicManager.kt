@@ -107,6 +107,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
             editor.apply()
         }
     }
+    private val playbackOwnership = PlaybackOwnership()
     private val focusPolicy = SmartFocusPolicy()
     private val focusRecheck = Runnable { senkronizeEtMedyaDurumu() }
     private var ttsSpeaking = runCatching { (context.applicationContext as? app.vela.VelaApp)?.voiceGuide?.get()?.isSpeaking == true }.getOrDefault(false)
@@ -287,14 +288,31 @@ class MusicManager private constructor(private val context: Context) : InternalM
     }
 
     /** One owner for source changes, including a player still preparing asynchronously. */
-    private fun pausePreviousOwner(adapter: BaseMediaAdapter) {
-        if (!adapter.caliyorMu()) return
-        if (adapter === mediaSessionAdapter && !sessionAction(android.media.session.PlaybackState.ACTION_PAUSE or
-                android.media.session.PlaybackState.ACTION_PLAY_PAUSE)) {
-            _sourceStatus.value = context.getString(app.vela.R.string.car_source_conflict)
-            return
+    private fun releaseOwnerFor(target: String) {
+        playbackOwnership.start(target, sourceKey(selectedAdapter)) { previous ->
+            if (previous == "internal") {
+                // Includes asynchronous preparation and a pending transient-focus resume.
+                internalPlayer.duraklat()
+            } else {
+                val adapter = when (previous) {
+                    "bluetooth" -> bluetoothAdapter
+                    "xy_music" -> xyAutoAdapter
+                    "hcn_music" -> hcnMusicAdapter
+                    "hcn_radio" -> hcnRadioAdapter
+                    "xy_radio" -> xyRadioAdapter
+                    else -> null
+                }
+                val pkg = if (previous.startsWith("session:")) previous.removePrefix("session:")
+                    else adapter?.let { sourcePackage(it) }
+                val controller = controllers.firstOrNull { it.packageName == pkg }
+                if (controller != null && controller.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING) {
+                    val actions = controller.playbackState?.actions ?: 0L
+                    if ((actions and (android.media.session.PlaybackState.ACTION_PAUSE or
+                            android.media.session.PlaybackState.ACTION_PLAY_PAUSE)) != 0L) controller.transportControls.pause()
+                    else _sourceStatus.value = context.getString(app.vela.R.string.car_source_conflict)
+                } else if (adapter?.caliyorMu() == true) adapter.duraklat()
+            }
         }
-        adapter.duraklat()
     }
 
     private fun requestSmartFocus(source: BaseMediaAdapter) {
@@ -302,8 +320,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         publishing = true
         try {
         // Only release the previous music owner, never all system/call/navigation sessions.
-        if (source !== internalAdapter && selectedAdapter === internalAdapter) internalPlayer.duraklat()
-        else if (source !== selectedAdapter) pausePreviousOwner(playbackAdapter())
+        releaseOwnerFor(sourceKey(source))
         selectedAdapter = source
         aktifKaynak = if (source === internalAdapter) KaynakTipi.INTERNAL else KaynakTipi.EXTERNAL
         hcnRadioAdapter.select(source === hcnRadioAdapter)
@@ -561,10 +578,8 @@ class MusicManager private constructor(private val context: Context) : InternalM
         focusPolicy.nextCheckInMs?.let { anaHandler.postDelayed(focusRecheck, it) }
         if (target != current) {
             userCommandVersion++
-            val old = playbackAdapter()
             val targetPlaying = snapshots.firstOrNull { it.id == target }?.playing == true
-            if (targetPlaying && selectedAdapter === internalAdapter) internalPlayer.duraklat()
-            else if (targetPlaying) pausePreviousOwner(old)
+            if (targetPlaying) releaseOwnerFor(target)
             app.vela.util.FileLogger.i(TAG, "SmartFocus $current -> $target playing=$targetPlaying")
             adoptSource(target)
         }
@@ -584,6 +599,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
             canControl = canControl(), canSkipNext = canSkipNext(), canSkipPrevious = canSkipPrevious()
         )
 
+        if (yeniMedya.caliyorMu) playbackOwnership.observedPlaying(yeniMedya.sourceId)
         val mediaChanged = _medyaDurumu.value != yeniMedya
         _medyaDurumu.value = yeniMedya
         if (userCommandVersion > 0 || yeniMedya.caliyorMu) {

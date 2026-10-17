@@ -97,4 +97,36 @@ class SmartFocusPolicyTest {
         choose(p, paused, "session:music", now = 1)
         assertEquals("session:music", choose(p, paused, "session:music", now = 2001))
     }
+    @Test fun selectThenPlayReleasesTheAudibleOwnerNotTheBrowsedSource() {
+        val ownership = PlaybackOwnership()
+        ownership.observedPlaying("session:previous")
+        val released = mutableListOf<String>()
+        ownership.start("session:browsed", "session:browsed", released::add)
+        assertEquals(listOf("session:previous"), released)
+    }
+    @Test fun repeatedStartDoesNotPauseThePreviousOwnerTwice() {
+        val ownership = PlaybackOwnership()
+        ownership.observedPlaying("session:previous")
+        val released = mutableListOf<String>()
+        ownership.start("session:next", "session:previous", released::add)
+        ownership.start("session:next", "session:next", released::add)
+        assertEquals(listOf("session:previous"), released)
+    }
+    @Test fun preparingInternalOwnerIsReleasedOnExternalTakeover() {
+        val ownership = PlaybackOwnership()
+        val released = mutableListOf<String>()
+        ownership.start("internal", "internal", released::add)
+        ownership.start("bluetooth", "internal", released::add)
+        assertEquals(listOf("internal"), released)
+    }
+    @Test fun reentrantCallbackCannotReleaseAnOwnerTwice() {
+        val ownership = PlaybackOwnership()
+        ownership.observedPlaying("session:previous")
+        var releases = 0
+        ownership.start("bluetooth", "session:previous") {
+            releases++
+            ownership.start("bluetooth", "session:previous") { releases++ }
+        }
+        assertEquals(1, releases)
+    }
 }

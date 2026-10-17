@@ -11,3 +11,5 @@ ZLink, SpeedPlay, AutoKit and Android Auto projection sessions are followed when
 The large-player source button shows the active source icon. Both small-panel implementations show external icons only and add no new selector. Bluetooth uses a Bluetooth icon, never an inferred phone app icon. Application icons are cached. Model identity is independent of artwork and track metadata. Controls follow published session capabilities; external shuffle/repeat do not manipulate the internal queue.
 
 Validation pending: focused policy tests, packaged release check, offline emulator MediaSession handoff, selection and icon inspection. Real BT/HFP/MCU radio and opaque projection bridges require the head unit.
+
+The playback owner is retained separately from the displayed selection. Passive selection sends no play/pause; a later Play releases the retained owner before starting the target, including a pending internal preparation. Ownership is updated before commands to prevent duplicate releases from reentrant callbacks.

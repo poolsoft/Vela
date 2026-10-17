@@ -73,3 +73,14 @@ internal object MediaSourceIdentity {
         pkg.startsWith("com.suding.speedplay") || pkg.startsWith("cn.manstep.phonemirrorBox") ||
         pkg == "com.google.android.projection.gearhead"
 }
+
+/** Browsing a paused source must not forget the previous audible or preparing owner. */
+internal class PlaybackOwnership {
+    private var owner: String? = null
+    fun observedPlaying(source: String) { owner = source }
+    fun start(target: String, displayed: String, release: (String) -> Unit) {
+        val previous = owner ?: displayed
+        owner = target // Set first: a pause callback may reenter source synchronization.
+        if (previous != target) release(previous)
+    }
+}
