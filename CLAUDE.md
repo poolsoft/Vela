@@ -6017,3 +6017,6 @@ Launcher ownership: singleTask does not prevent every HOME versus standard-task 
 
 
 Build validation: scripts/check_car_launcher_manifest.py verifies the packaged car manifest, not only source declarations. Keep the packaged PiP policy check in the APK workflow.
+
+
+Car launcher HOME entry uses the lightweight CarLauncherEntryActivity forwarder; MainActivity is always a standard singleTask UI with car PiP disabled. Updating from the former MainActivity HOME component can require selecting Vela as the default Home app again. Target head-unit projection takeover remains a device acceptance check.

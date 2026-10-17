@@ -42,16 +42,11 @@ class MainActivity : ComponentActivity() {
         /** Reuse the owner's task type and let Android deliver its foreground launch normally. */
         fun returnToApp(context: Context, incoming: Intent = Intent(Intent.ACTION_MAIN)) {
             val owner = if (CarIntegration.available) liveOwner() else null
-            val launch = if (owner != null) {
-                Intent(Intent.ACTION_MAIN).setClass(context, MainActivity::class.java).apply {
-                    addCategory(if (owner.ownerHomeTask) Intent.CATEGORY_HOME else Intent.CATEGORY_LAUNCHER)
-                    putExtra(RETURN_INTENT, incoming)
-                }
-            } else Intent(incoming).setClass(context, MainActivity::class.java).apply {
-                if (action == Intent.ACTION_MAIN && CarIntegration.isDefaultHome(context)) {
-                    removeCategory(Intent.CATEGORY_LAUNCHER)
-                    addCategory(Intent.CATEGORY_HOME)
-                }
+            // HOME belongs only to the forwarding entry Activity. The UI always uses a
+            // standard task, including a cold launch from the system Home role.
+            val launch = Intent(Intent.ACTION_MAIN).setClass(context, MainActivity::class.java).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+                putExtra(RETURN_INTENT, incoming)
             }
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             context.startActivity(launch)

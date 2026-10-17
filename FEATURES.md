@@ -2747,3 +2747,6 @@ Status legend: ✅ done · 🟡 partial / in progress · ⬜ planned
 
 
 - [x] Live launcher task reuse across HOME, floating-button and alias entry; duplicate UI rejection and owner-scoped foreground/PiP state. HOME redirects wait for resume and window focus, then exclude the temporary record before returning to the retained task. Native PiP is excluded from the car variant; the standard maps variant retains it.
+
+
+Car launcher HOME entry uses the lightweight CarLauncherEntryActivity forwarder; MainActivity is always a standard singleTask UI with car PiP disabled. Updating from the former MainActivity HOME component can require selecting Vela as the default Home app again. Target head-unit projection takeover remains a device acceptance check.

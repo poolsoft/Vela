@@ -8,14 +8,12 @@ The open x86 emulator independently contained two live MainActivity records: a s
 
 ## Change
 
-- One weakly held interactive launcher owner per app process.
-- A duplicate forwards the intent and finishes before navigation ViewModel, Compose/media UI or renderer setup.
-- Alias and floating-button returns match the original owner task category. The actual incoming intent is forwarded separately and delivered once. Cold MAIN entry is normalized to HOME when Vela holds the role.
-- A duplicate HOME Activity waits for resume and window focus, marks itself finishing to exclude that temporary record from singleTask lookup, then launches the retained owner. No task-move API or REORDER_TASKS permission is needed. AOSP Android 11 confirms that task-move calls remain subject to stopped app switches even with a focused caller. Diagnostic-145 showed that a generic singleTask launch can resolve to the duplicate itself; it is superseded for Home-return validation. Diagnostic-144 exposed Android silently rejecting an immediate AppTask move while HOME had stopped app switches; it is superseded for task-return validation.
-- Late non-owner lifecycle/PiP callbacks cannot override foreground state.
-- The car variant disables PiP, including normal-app mode and projection takeover. Background navigation and the floating return button remain available. The standard maps variant retains PiP.
-- A standalone-PiP regression exposed Android 11 rejecting AppTask.startActivity for the singleTask root; restoring its alias did not reliably expand the retained map. Car PiP is therefore excluded rather than relying on role detection or hidden window APIs.
-- No map files are deleted, startup preferences changed or service-based navigation/music intentionally stopped.
+- HOME belongs to the lightweight CarLauncherEntryActivity, which forwards to MainActivity and finishes without creating map or media UI.
+- MainActivity always receives a standard LAUNCHER intent, with the original command forwarded separately. It never registers HOME in the car manifest.
+- Native car PiP is disabled. Background navigation, music and the floating return button remain available. Standard maps builds retain PiP.
+- The owner guard prevents late non-owner callbacks from overwriting foreground state.
+- Updating the HOME component may require selecting Vela as the default Home app once again; application data remains intact.
+- Diagnostic-144 through diagnostic-147 did not pass the cold standard-entry to HOME regression. Matching categories, task moves and finishing a temporary duplicate do not reliably repair a HOME/standard split after creation. Separate entry components prevent this split at the manifest boundary.
 
 ## Validation
 

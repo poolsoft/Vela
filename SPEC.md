@@ -2763,3 +2763,6 @@ The car launcher variant disables PiP in its manifest and both API 26-30 and API
 
 
 The APK publishing workflow checks the packaged MainActivity with aapt: exactly one declaration, launchMode singleTask (0x2), supportsPictureInPicture false. This guards manifest-merge regressions independently of the runtime PiP conditions.
+
+
+Car launcher HOME entry uses the lightweight CarLauncherEntryActivity forwarder; MainActivity is always a standard singleTask UI with car PiP disabled. Updating from the former MainActivity HOME component can require selecting Vela as the default Home app again. Target head-unit projection takeover remains a device acceptance check.

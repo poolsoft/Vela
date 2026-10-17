@@ -519,3 +519,6 @@ the shared hidden-WebView base, `NavController`) are in FEATURES.
 - Confirm window-focused, exact-task HOME redirection on the head unit; do not rely on generic component reuse while a duplicate HOME task exists.
 
 - Validate finish-before-return HOME redirection on the target ROM; the temporary record must be excluded before the retained singleTask owner is resolved.
+
+
+Car launcher HOME entry uses the lightweight CarLauncherEntryActivity forwarder; MainActivity is always a standard singleTask UI with car PiP disabled. Updating from the former MainActivity HOME component can require selecting Vela as the default Home app again. Target head-unit projection takeover remains a device acceptance check.

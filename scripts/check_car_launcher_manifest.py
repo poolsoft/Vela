@@ -15,3 +15,7 @@ for apk in args.apks:
     assert re.search(r'android:launchMode[^=]*=\(type 0x10\)0x2', main[0]), f'{apk}: launcher must be singleTask'
     assert re.search(r'android:supportsPictureInPicture[^=]*=\(type 0x12\)0x0', main[0]), f'{apk}: car launcher must not support PiP'
     print(f'PASS: packaged launcher is singleTask with PiP disabled: {apk}')
+
+    blocks = re.findall(r'(?m)^( +)E: activity \([^\n]+\)\n(.*?)(?=^\1E: |\Z)', xml, re.S | re.M)
+    home_owners = [block for _, block in blocks if 'android.intent.category.HOME' in block]
+    assert len(home_owners) == 1 and 'app.vela.carlauncher.ui.CarLauncherEntryActivity' in home_owners[0], f'{apk}: HOME must belong only to the forwarding entry'

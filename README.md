@@ -352,3 +352,6 @@ The internal Map app opens the map on demand from mapless mode without restartin
 
 
 Launcher task reuse: HOME, the floating button and cosmetic launcher aliases restore the live launcher task using its original HOME/standard intent category. A duplicate Activity does not create a ViewModel or map UI; once focused, it marks itself finishing before requesting the original owner task; late callbacks from non-owner Activities cannot change foreground/PiP state. Car navigation uses the floating return button instead of native PiP; the standard maps variant retains PiP.
+
+
+Car launcher HOME entry uses the lightweight CarLauncherEntryActivity forwarder; MainActivity is always a standard singleTask UI with car PiP disabled. Updating from the former MainActivity HOME component can require selecting Vela as the default Home app again. Target head-unit projection takeover remains a device acceptance check.
