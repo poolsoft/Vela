@@ -27,6 +27,8 @@ import kotlinx.coroutines.launch
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val ownsLauncherUi get() = !CarIntegration.available || launcherOwner.get() === this
+    private var ownerHomeTask = false
+    private var redirectIntent: Intent? = null
 
     companion object {
         private var launcherOwner = java.lang.ref.WeakReference<MainActivity>(null)
@@ -35,29 +37,25 @@ class MainActivity : ComponentActivity() {
             it.isFinishing || it.isDestroyed || it.isChangingConfigurations
         }
 
-        /** Restore our own task instead of asking Android for another task type. */
+        private const val RETURN_INTENT = "app.vela.launcher.RETURN_INTENT"
+
+        /** Reuse the owner's task type and let Android deliver its foreground launch normally. */
         fun returnToApp(context: Context, incoming: Intent = Intent(Intent.ACTION_MAIN)) {
             val owner = if (CarIntegration.available) liveOwner() else null
-            if (owner != null) {
-                val restored = runCatching {
-                    val manager = context.getSystemService(android.app.ActivityManager::class.java)
-                    @Suppress("DEPRECATION")
-                    val task = manager.appTasks.firstOrNull { it.taskInfo.id == owner.taskId }
-                    owner.receiveReturnIntent(Intent(incoming))
-                    // Some ROMs omit HOME from appTasks, although its live task still exists.
-                    if (task != null) task.moveToFront() else manager.moveTaskToFront(owner.taskId, 0)
-                    app.vela.util.FileLogger.i("LauncherTask", "Restored owner task=${owner.taskId} instance=${System.identityHashCode(owner)} pip=${owner.isInPictureInPictureMode}")
-                    true
-                }.onFailure { app.vela.util.FileLogger.w("LauncherTask", "Task restore failed", it) }.getOrDefault(false)
-                if (restored) return
-            }
-            context.startActivity(Intent(incoming).setClass(context, MainActivity::class.java).apply {
+            val launch = if (owner != null) {
+                Intent(Intent.ACTION_MAIN).setClass(context, MainActivity::class.java).apply {
+                    addCategory(if (owner.ownerHomeTask) Intent.CATEGORY_HOME else Intent.CATEGORY_LAUNCHER)
+                    putExtra(RETURN_INTENT, incoming)
+                }
+            } else Intent(incoming).setClass(context, MainActivity::class.java).apply {
                 if (action == Intent.ACTION_MAIN && CarIntegration.isDefaultHome(context)) {
                     removeCategory(Intent.CATEGORY_LAUNCHER)
                     addCategory(Intent.CATEGORY_HOME)
                 }
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            })
+            }
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            context.startActivity(launch)
+            app.vela.util.FileLogger.i("LauncherTask", "Requested return ownerTask=${owner?.taskId} homeTask=${owner?.ownerHomeTask}")
         }
     }
 
@@ -87,7 +85,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (!ownsLauncherUi) return
+        if (!ownsLauncherUi) {
+            // HOME stops app switches. Wait until this redirect is resumed before launching
+            // the retained standard task, otherwise Android may silently reject the return.
+            completeRedirect()
+            return
+        }
         if (!isInPictureInPictureMode) app.vela.ui.PipMode.active.value = false
         if (!CarIntegration.available && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             runCatching { setPictureInPictureParams(pipParams(vm.state.value.navigating)) }
@@ -120,10 +123,12 @@ class MainActivity : ComponentActivity() {
             val existing = liveOwner()
             if (existing != null && existing !== this) {
                 app.vela.util.FileLogger.w("LauncherTask", "Rejecting duplicate task=$taskId instance=${System.identityHashCode(this)}; ownerTask=${existing.taskId} home=${intent?.hasCategory(Intent.CATEGORY_HOME)}")
-                returnToApp(this, intent ?: Intent(Intent.ACTION_MAIN))
-                finish()
+                @Suppress("DEPRECATION")
+                val forwarded = intent?.getParcelableExtra<Intent>(RETURN_INTENT)
+                redirectIntent = forwarded ?: intent ?: Intent(Intent.ACTION_MAIN)
                 return
             }
+            ownerHomeTask = intent?.hasCategory(Intent.CATEGORY_HOME) == true
             launcherOwner = java.lang.ref.WeakReference(this)
         }
         app.vela.util.FileLogger.i("LauncherTask", "Owner created task=$taskId instance=${System.identityHashCode(this)} home=${intent?.hasCategory(Intent.CATEGORY_HOME)}")
@@ -186,6 +191,15 @@ class MainActivity : ComponentActivity() {
                     } else VelaRoot(vm = vm)
                 }
             }
+        }
+    }
+
+    private fun completeRedirect() {
+        val pending = redirectIntent ?: return
+        redirectIntent = null
+        window.decorView.post {
+            returnToApp(this, pending)
+            finish()
         }
     }
 
@@ -285,7 +299,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        receiveReturnIntent(intent)
+        @Suppress("DEPRECATION")
+        val forwarded = intent.getParcelableExtra<Intent>(RETURN_INTENT)
+        if (!ownsLauncherUi) {
+            redirectIntent = forwarded ?: intent
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) completeRedirect()
+            return
+        }
+        receiveReturnIntent(forwarded ?: intent)
     }
 
     private fun receiveReturnIntent(intent: Intent) {

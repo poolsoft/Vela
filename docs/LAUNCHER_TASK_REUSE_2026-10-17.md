@@ -10,7 +10,8 @@ The open x86 emulator independently contained two live MainActivity records: a s
 
 - One weakly held interactive launcher owner per app process.
 - A duplicate forwards the intent and finishes before navigation ViewModel, Compose/media UI or renderer setup.
-- Alias and floating-button returns restore the exact owner task. Cold MAIN entry is normalized to HOME when Vela holds the role.
+- Alias and floating-button returns match the original owner task category. The actual incoming intent is forwarded separately and delivered once. Cold MAIN entry is normalized to HOME when Vela holds the role.
+- A duplicate HOME Activity waits for resume before posting the retained-task launch and finishing. Diagnostic-144 exposed Android silently rejecting an immediate AppTask move while HOME had stopped app switches; it is superseded for task-return validation.
 - Late non-owner lifecycle/PiP callbacks cannot override foreground state.
 - The car variant disables PiP, including normal-app mode and projection takeover. Background navigation and the floating return button remain available. The standard maps variant retains PiP.
 - A standalone-PiP regression exposed Android 11 rejecting AppTask.startActivity for the singleTask root; restoring its alias did not reliably expand the retained map. Car PiP is therefore excluded rather than relying on role detection or hidden window APIs.
@@ -24,6 +25,6 @@ Actual Android Auto/head-unit takeover still requires a test on the target ROM. 
 
 ## Platform reference
 
-[ActivityManager.AppTask](https://developer.android.com/reference/android/app/ActivityManager.AppTask) provides task-bound restoration and activity delivery; no hidden window-management API is used.
+[Android tasks and back stack](https://developer.android.com/guide/components/activities/tasks-and-back-stack) describes singleTask reuse and intent delivery. Task-category matching and the resumed redirect use public Activity APIs; no hidden window-management API is used.
 
 The build workflow verifies the packaged MainActivity launch mode and disabled car PiP with scripts/check_car_launcher_manifest.py, rather than checking only source XML. That test correctly rejects diagnostic-143.

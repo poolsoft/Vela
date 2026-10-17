@@ -513,3 +513,5 @@ the shared hidden-WebView base, `NavController`) are in FEATURES.
 - Validate Android Auto/head-unit takeover followed by floating-button and physical HOME return on the target ROM. Emulator task reuse checks cover HOME, notification-style direct entry and aliases; OEM-specific task and PiP handling still requires hardware validation.
 
 - Revisit a separate, independently owned navigation PiP surface only if required for the car variant; do not put the launcher Activity into the pinned task.
+
+- Validate immediate physical HOME returns while Android app switches are stopped on the target ROM; retained-task redirects now wait for the redirect Activity to resume.
