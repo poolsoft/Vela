@@ -145,4 +145,19 @@ class SmartFocusPolicyTest {
         choose(p, stopped, "session:projection", now = 5)
         assertEquals("internal", choose(p, stopped, "session:projection", now = 2005))
     }
+    @Test fun returningToAutomaticImmediatelyFollowsExistingExternalPlayback() {
+        val p = SmartFocusPolicy()
+        val sources = listOf(s("internal"), s("session:selected"), s("bluetooth", true))
+        p.selected("session:selected", sources)
+        choose(p, sources, "session:selected", pin = true)
+        p.resumeAutomatic()
+        assertEquals("bluetooth", choose(p, sources, "session:selected", now = 1))
+    }
+    @Test fun returningToAutomaticWithNoExternalPlaybackShowsInternalImmediately() {
+        val p = SmartFocusPolicy()
+        val sources = listOf(s("internal"), s("session:selected"))
+        p.selected("session:selected", sources)
+        p.resumeAutomatic()
+        assertEquals("internal", choose(p, sources, "session:selected", now = 1))
+    }
 }

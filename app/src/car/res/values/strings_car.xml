@@ -42,7 +42,7 @@
     <string name="car_wallpaper_clear">Remove wallpaper</string>
     <string name="car_desktop_text_scale">Desktop text size</string>
     <string name="car_picture_in_picture">Open picture-in-picture</string>
-    <string name="car_source_internal">Local music</string>
+    <string name="car_source_internal">Vela Music</string>
     <string name="car_music_source">Choose music source</string>
     <string name="car_antenna_from_lat">Origin latitude</string>
     <string name="car_antenna_from_lon">Origin longitude</string>
@@ -315,4 +315,19 @@
     <string name="car_permissions_subtitle">Location, notification, and system access permissions</string>
     <string name="settings_close">Close</string>
     <string name="car_internal_map">Map</string>
+    <string name="car_sources_title">Music controls</string>
+    <string name="car_sources_auto">Automatic tracking</string>
+    <string name="car_sources_auto_hint">Controls follow playing music. With no external music, Vela Music is shown.</string>
+    <string name="car_sources_current">Controlling: %1$s</string>
+    <string name="car_sources_playing">Playing</string>
+    <string name="car_sources_waiting">Waiting for music</string>
+    <string name="car_sources_manual">Choose a player manually</string>
+    <string name="car_sources_manual_hint">This turns off automatic tracking. Selection does not start music; use Play in the player.</string>
+    <string name="car_sources_manual_selected">Controlling %1$s. Automatic tracking is off.</string>
+    <string name="car_sources_auto_selected">Automatic tracking is on</string>
+    <string name="car_sources_access">Allow notification access to detect and control other music apps.</string>
+    <string name="car_sources_access_action">Allow access</string>
+    <string name="car_sources_done">Done</string>
+    <string name="car_sources_controlled">Current player</string>
+    <string name="car_sources_phone_hint">Start phone music on the phone. Bluetooth and compatible Android Auto players appear when available.</string>
 </resources>

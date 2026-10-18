@@ -342,6 +342,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         userCommandVersion++
         saveFocus("auto_follow" to true)
         manualSelection = false
+        focusPolicy.resumeAutomatic()
         onOturumlarYenilendi(controllers)
     }
 
@@ -375,6 +376,17 @@ class MusicManager private constructor(private val context: Context) : InternalM
             }
         }
         return restored
+    }
+
+    data class SourceOption(val key: String, val label: String, val packageName: String?, val kind: String, val playing: Boolean)
+
+    fun sourceOptions(): List<SourceOption> {
+        val states = sourceSnapshots().associateBy { it.id }
+        return availableSources().map { (key, label) ->
+            val adapter = adapters.firstOrNull { sourceKey(it) == key }
+            val pkg = if (key.startsWith("session:")) key.removePrefix("session:") else adapter?.let { sourcePackage(it) }
+            SourceOption(key, label, pkg, MediaSourceIdentity.kind(key, pkg), states[key]?.playing == true && !isCallActive())
+        }
     }
 
     fun availableSources(): List<Pair<String, String>> = buildList {
@@ -419,6 +431,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         // A normal selection is not a permanent lock. Consume already-playing stale events.
         focusPolicy.selected(key, sourceSnapshots())
         manualSelection = lock
+        if (lock) saveFocus("auto_follow" to false)
         publishing = true
         if (play) releaseOwnerFor(key)
         if (source === mediaSessionAdapter) {

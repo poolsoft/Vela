@@ -388,3 +388,5 @@ Smart Focus retains the playback owner separately from a browsed paused source, 
 Equalizer selection is shared across settings and player controls. The large player displays the selected application icon; an unset selection opens the picker.
 
 Smart Focus tracks playing external music by default and returns to internal controls when it stops, without starting playback. Media listener recovery runs on foreground return. Radio labels are hardware-neutral, radio tuning is observed before selection, and HOME forwarding waits for entry resume.
+
+The large player uses a flat music-control dialog with automatic tracking, current playback status and icon rows for explicit manual control. Selecting a row never starts playback; returning to automatic tracking immediately follows existing external music.

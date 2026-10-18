@@ -541,3 +541,5 @@ Smart Focus retains the playback owner separately from a browsed paused source, 
 Equalizer acceptance remains open for proprietary head-unit DSP activities and their audio-session requirements.
 
 Validate native radio commands and HOME return on the physical head unit. Confirm whether its projection bridge exposes a MediaSession or a documented vendor playback protocol; app foreground and USB connection alone remain insufficient playback evidence.
+
+Validate the flat music-control chooser on the physical head unit, including touch targets, font scaling, radio entries and returning from manual to automatic tracking.

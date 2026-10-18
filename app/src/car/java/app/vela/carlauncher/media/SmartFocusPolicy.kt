@@ -14,6 +14,12 @@ internal class SmartFocusPolicy {
     var nextCheckInMs: Long? = null
         private set
 
+    fun resumeAutomatic() {
+        initialized = false
+        selectedWhilePaused = null
+        stoppedAt = null
+    }
+
     fun selected(id: String, sources: List<Source>) {
         observe(sources)
         initialized = true

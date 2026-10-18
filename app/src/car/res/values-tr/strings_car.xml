@@ -42,7 +42,7 @@
     <string name="car_wallpaper_clear">Duvar kâğıdını kaldır</string>
     <string name="car_desktop_text_scale">Masaüstü yazı boyutu</string>
     <string name="car_picture_in_picture">Küçük kayan pencereyi aç</string>
-    <string name="car_source_internal">Yerel müzik</string>
+    <string name="car_source_internal">Vela Müzik</string>
     <string name="car_music_source">Müzik kaynağı seç</string>
     <string name="car_antenna_from_lat">Başlangıç enlemi</string>
     <string name="car_antenna_from_lon">Başlangıç boylamı</string>
@@ -309,4 +309,19 @@
     <string name="car_permissions_subtitle">Konum, bildirim ve sistem erişim izinleri</string>
     <string name="settings_close">Kapat</string>
     <string name="car_internal_map">Harita</string>
+    <string name="car_sources_title">Müzik kontrolü</string>
+    <string name="car_sources_auto">Otomatik takip</string>
+    <string name="car_sources_auto_hint">Çalan müziği takip eder. Yoksa Vela Müzik görünür.</string>
+    <string name="car_sources_current">Kontrol edilen: %1$s</string>
+    <string name="car_sources_playing">Çalıyor</string>
+    <string name="car_sources_waiting">Müzik bekleniyor</string>
+    <string name="car_sources_manual">Elle seç (otomatik takip kapanır)</string>
+    <string name="car_sources_manual_hint">Elle seçim otomatik takibi kapatır. Seçim müzik başlatmaz; oynatmak için ▶ düğmesine basın.</string>
+    <string name="car_sources_manual_selected">%1$s seçildi. Otomatik takip kapalı.</string>
+    <string name="car_sources_auto_selected">Otomatik takip açık</string>
+    <string name="car_sources_access">Diğer müzik uygulamalarını algılamak ve kontrol etmek için bildirim erişimine izin verin.</string>
+    <string name="car_sources_access_action">İzin ver</string>
+    <string name="car_sources_done">Tamam</string>
+    <string name="car_sources_controlled">Kontrol ediliyor</string>
+    <string name="car_sources_phone_hint">Telefon müziğini telefondan başlatın. Bluetooth ve uyumlu Android Auto oynatıcıları kullanılabilir olduğunda burada görünür.</string>
 </resources>

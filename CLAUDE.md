@@ -6039,3 +6039,5 @@ Smart Focus retains the playback owner separately from a browsed paused source, 
 Equalizer entry points use CarHardwareManager and the persisted car_launcher_equalizer_app preference. Keep settings as a picker and player buttons as launch-or-pick controls.
 
 Keep Smart Focus default follow enabled for external sessions. Hardware observation must not depend on which source the UI selected. The HOME forwarder uses a translucent theme and waits for resume; do not restore NoDisplay with an immediate HOME redirect.
+
+MusicSourceDialog is the flat XML-player chooser. Keep automatic and manual modes explicit, never send Play on row selection, and keep technical source filters in settings.

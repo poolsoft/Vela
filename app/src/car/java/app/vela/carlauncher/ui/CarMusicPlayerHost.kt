@@ -43,6 +43,7 @@ class CarMusicPlayerHost(
 
     private val musicManager = MusicManager.getInstance(context)
     private val scope = CoroutineScope(Dispatchers.Main + Job())
+    private var sourceDialog: android.app.AlertDialog? = null
 
     // Sol Dock
     private val btnClose: ImageButton? = rootView.findViewById(R.id.btn_close)
@@ -275,27 +276,9 @@ class CarMusicPlayerHost(
     private fun setupListeners() {
         rootView.findViewById<View>(R.id.app_selector_launch).apply {
             contentDescription = context.getString(R.string.car_music_source)
-            setOnClickListener { anchor ->
-                android.widget.PopupMenu(context, anchor).apply {
-                    musicManager.availableSources().forEach { (key, label) ->
-                        menu.addSubMenu((if (key == musicManager.selectedSourceKey()) "✓ " else "") + label).apply {
-                            add(R.string.car_source_select).setOnMenuItemClickListener { musicManager.selectSource(key, play = false); true }
-                            add(R.string.car_source_play).setOnMenuItemClickListener { musicManager.selectSource(key, play = true); true }
-                            add("Bu kaynakta kal").setOnMenuItemClickListener { musicManager.selectSource(key, play = false, lock = true); true }
-                            add("Smart Focus'a dahil et").apply {
-                                isCheckable = true
-                                isChecked = musicManager.isSourceTrackingEnabled(key)
-                                setOnMenuItemClickListener { musicManager.setSourceTracking(key, !isChecked); true }
-                            }
-                        }
-                    }
-                    menu.add(R.string.car_source_auto).apply {
-                        isCheckable = true
-                        isChecked = musicManager.isAutomaticTracking()
-                        setOnMenuItemClickListener { musicManager.allowAutomaticSourceTracking(); true }
-                    }
-                    show()
-                }
+            setOnClickListener {
+                sourceDialog?.dismiss()
+                sourceDialog = MusicSourceDialog.show(context, musicManager, scope)
             }
         }
 
@@ -458,6 +441,8 @@ class CarMusicPlayerHost(
     }
 
     fun release() {
+        sourceDialog?.dismiss()
+        sourceDialog = null
         scope.cancel()
         playerVisualizer?.setPlaying(false)
         library.release()

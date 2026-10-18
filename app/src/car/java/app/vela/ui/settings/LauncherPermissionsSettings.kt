@@ -469,12 +469,15 @@ fun SmartFocusPreferences() {
             }
         }
         Text("BT yalnız medya oynatmasını takip eder; görüşme veya yalnız bağlantı kaynak değiştirmez. ZLink/Android Auto gerçek medya oturumu sunuyorsa takip edilir.")
-        val keys = listOf("last", "internal", "bluetooth", "hcn_radio", "xy_radio")
-        val labels = listOf(stringResource(R.string.car_source_last), stringResource(R.string.car_source_internal), "Bluetooth", "HCN Radio", "XYAuto Radio")
+        val startupSources = listOf(
+            "last" to stringResource(R.string.car_source_last),
+            "internal" to stringResource(R.string.car_source_internal),
+            "bluetooth" to "Bluetooth"
+        ) + manager.availableSources().filter { it.first !in setOf("internal", "bluetooth") }
         Text(stringResource(R.string.car_startup_source))
-        keys.forEachIndexed { index, key ->
+        startupSources.forEach { (key, label) ->
             Button(onClick = { source = key; prefs.edit().putString("startup_source", key).apply() }, modifier = Modifier.fillMaxWidth()) {
-                Text((if (source == key) "✓ " else "") + labels[index])
+                Text((if (source == key) "✓ " else "") + label)
             }
         }
         Text(stringResource(R.string.car_bt_wait, seconds))
