@@ -376,3 +376,5 @@ Equalizer selection is shared across settings and player controls. The large pla
 Smart Focus tracks playing external music by default and returns to internal controls when it stops, without starting playback. Media listener recovery runs on foreground return. Radio labels are hardware-neutral, radio tuning is observed before selection, and HOME forwarding waits for entry resume.
 
 The large player uses a flat music-control dialog with automatic tracking, current playback status and icon rows for explicit manual control. Selecting a row never starts playback; returning to automatic tracking immediately follows existing external music.
+
+Small music panel: the outlined clock supports turquoise (default), theme, amber, and white outline colors from its menu. Night mode dims the fill independently of the panel background. The external source icon opens the shared source chooser. Track titles wrap to two lines; a 3 dp progress indicator is hidden when duration is unavailable. The visualizer toggle is saved locally.

@@ -214,7 +214,22 @@
             app:layout_constraintTop_toBottomOf="@id/music_track_artist"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintBottom_toTopOf="@id/music_controls"/>
+            app:layout_constraintBottom_toTopOf="@id/music_progress"/>
+
+        <ProgressBar
+            android:id="@+id/music_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="3dp"
+            android:layout_marginBottom="8dp"
+            android:max="1000"
+            android:indeterminate="false"
+            android:progressTint="#3FD9CA"
+            android:progressBackgroundTint="#33FFFFFF"
+            android:importantForAccessibility="no"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/music_controls" />
 
         <!-- Controls -->
         <LinearLayout

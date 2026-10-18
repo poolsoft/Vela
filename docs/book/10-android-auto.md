@@ -433,3 +433,5 @@ Automatic device protection is optional and off by default. If enabled, Standard
 
 
 Car launcher HOME entry uses the lightweight CarLauncherEntryActivity forwarder; MainActivity is always a standard singleTask UI with car PiP disabled. Updating from the former MainActivity HOME component can require selecting Vela as the default Home app again. Target head-unit projection takeover remains a device acceptance check.
+
+Small music panel: the outlined clock supports turquoise (default), theme, amber, and white outline colors from its menu. Night mode dims the fill independently of the panel background. The external source icon opens the shared source chooser. Track titles wrap to two lines; a 3 dp progress indicator is hidden when duration is unavailable. The visualizer toggle is saved locally.

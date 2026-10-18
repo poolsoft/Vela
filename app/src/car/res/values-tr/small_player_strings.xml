@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="car_small_clock_color">Saat rengi</string>
+    <string name="car_small_clock_turquoise">Turkuaz</string>
+    <string name="car_small_clock_theme">Tema rengi</string>
+    <string name="car_small_clock_amber">Kehribar</string>
+    <string name="car_small_clock_outline">Beyaz kontur</string>
+    <string name="car_small_visualizer">Görselleştirici</string>
+</resources>

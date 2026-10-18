@@ -543,3 +543,5 @@ Equalizer acceptance remains open for proprietary head-unit DSP activities and t
 Validate native radio commands and HOME return on the physical head unit. Confirm whether its projection bridge exposes a MediaSession or a documented vendor playback protocol; app foreground and USB connection alone remain insufficient playback evidence.
 
 Validate the flat music-control chooser on the physical head unit, including touch targets, font scaling, radio entries and returning from manual to automatic tracking.
+
+- Verify small-player clock contrast and source chooser touch targets on physical head units in day and night modes.

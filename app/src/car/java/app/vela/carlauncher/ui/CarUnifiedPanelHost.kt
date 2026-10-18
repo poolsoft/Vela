@@ -1,6 +1,11 @@
 package app.vela.carlauncher.ui
 
 import android.content.Context
+import android.graphics.Color
+import android.widget.ProgressBar
+import app.vela.carlauncher.media.MusicManager
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageButton
@@ -51,6 +56,25 @@ class CarUnifiedPanelHost(
 
     private val musicControls: View? = rootView.findViewById(R.id.music_controls)
 
+    private val preferences = context.getSharedPreferences("small_music_panel", Context.MODE_PRIVATE)
+    private val scope = MainScope()
+    private var sourceDialog: android.app.AlertDialog? = null
+    private val progress: ProgressBar? = rootView.findViewById(R.id.music_progress)
+    private var showVisualizer = preferences.getBoolean("visualizer", true)
+
+    private fun applyClockColor() {
+        val color = when (preferences.getInt("clock_color", 0)) {
+            1 -> androidx.core.content.ContextCompat.getColor(context, R.color.cl_primary)
+            2 -> Color.rgb(255, 191, 96)
+            3 -> Color.TRANSPARENT
+            else -> Color.rgb(63, 217, 202)
+        }
+        val night = context.resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        clockView?.fillColor = if (night && color != Color.TRANSPARENT)
+            (color and 0x00FFFFFF) or 0xCC000000.toInt() else color
+    }
+
     private var appliedMedia: MedyaParcasi? = null
     private var lifecycle: Lifecycle? = null
     private var active = false
@@ -76,7 +100,8 @@ class CarUnifiedPanelHost(
         active = value
         rootView.removeCallbacks(clockTick)
         if (value) rootView.post(clockTick)
-        visualizer?.setPlaying(value && (appliedMedia?.caliyorMu == true))
+        visualizer?.setPlaying(value && showVisualizer && (appliedMedia?.caliyorMu == true))
+        if (!value) { sourceDialog?.dismiss(); sourceDialog = null }
     }
 
     private val clockTick = object : Runnable {
@@ -99,6 +124,8 @@ class CarUnifiedPanelHost(
     }
 
     fun release() {
+        sourceDialog?.dismiss()
+        scope.cancel()
         lifecycle?.removeObserver(observer)
         rootView.removeOnAttachStateChangeListener(attachment)
         setActive(false)
@@ -131,6 +158,12 @@ class CarUnifiedPanelHost(
     }
 
     private fun setupViews() {
+        applyClockColor()
+        visualizer?.visibility = if (showVisualizer) View.VISIBLE else View.INVISIBLE
+        rootView.findViewById<ImageView>(R.id.music_source_icon)?.setOnClickListener {
+            sourceDialog?.dismiss()
+            sourceDialog = MusicSourceDialog.show(context, MusicManager.getInstance(context), scope)
+        }
         musicArea?.setOnClickListener { onMuzikPaneliAc() }
         clockView?.setOnClickListener { onMuzikPaneliAc() }
         trackTitle?.setOnClickListener { onMuzikPaneliAc() }
@@ -164,8 +197,31 @@ class CarUnifiedPanelHost(
         popup.menu.add(0, 4, 3, "Ayarlar")
         popup.menu.add(0, 5, 4, "Bellek Temizle")
 
+        val colors = popup.menu.addSubMenu(R.string.car_small_clock_color)
+        listOf(R.string.car_small_clock_turquoise, R.string.car_small_clock_theme,
+            R.string.car_small_clock_amber, R.string.car_small_clock_outline).forEachIndexed { index, label ->
+            colors.add(1, 20 + index, index, label).apply {
+                isCheckable = true
+                isChecked = preferences.getInt("clock_color", 0) == index
+            }
+        }
+        popup.menu.add(0, 30, 6, R.string.car_small_visualizer).apply {
+            isCheckable = true; isChecked = showVisualizer
+        }
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                in 20..23 -> {
+                    preferences.edit().putInt("clock_color", item.itemId - 20).apply()
+                    applyClockColor()
+                    true
+                }
+                30 -> {
+                    showVisualizer = !showVisualizer
+                    preferences.edit().putBoolean("visualizer", showVisualizer).apply()
+                    visualizer?.visibility = if (showVisualizer) View.VISIBLE else View.INVISIBLE
+                    visualizer?.setPlaying(active && showVisualizer && appliedMedia?.caliyorMu == true)
+                    true
+                }
                 1 -> {
                     onMuzikPaneliAc()
                     true
@@ -203,6 +259,9 @@ class CarUnifiedPanelHost(
     }
 
     fun updateMedia(m: MedyaParcasi) {
+        progress?.visibility = if (m.toplamSureMs > 0) View.VISIBLE else View.INVISIBLE
+        progress?.progress = if (m.toplamSureMs > 0)
+            ((m.anlikKonumMs.coerceIn(0, m.toplamSureMs).toDouble() / m.toplamSureMs) * 1000).toInt() else 0
         val previous = appliedMedia
         if (previous != null && previous.baslik == m.baslik && previous.sanatci == m.sanatci && previous.caliyorMu == m.caliyorMu && previous.sourceId == m.sourceId && previous.sourceKind == m.sourceKind && previous.paketAdi == m.paketAdi && previous.canControl == m.canControl && previous.canSkipNext == m.canSkipNext && previous.canSkipPrevious == m.canSkipPrevious) return
         appliedMedia = m
@@ -226,6 +285,6 @@ class CarUnifiedPanelHost(
             if (m.caliyorMu) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         )
 
-        visualizer?.setPlaying(active && m.caliyorMu)
+        visualizer?.setPlaying(active && showVisualizer && m.caliyorMu)
     }
 }

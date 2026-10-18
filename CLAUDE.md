@@ -6041,3 +6041,5 @@ Equalizer entry points use CarHardwareManager and the persisted car_launcher_equ
 Keep Smart Focus default follow enabled for external sessions. Hardware observation must not depend on which source the UI selected. The HOME forwarder uses a translucent theme and waits for resume; do not restore NoDisplay with an immediate HOME redirect.
 
 MusicSourceDialog is the flat XML-player chooser. Keep automatic and manual modes explicit, never send Play on row selection, and keep technical source filters in settings.
+
+Small music panel: the outlined clock supports turquoise (default), theme, amber, and white outline colors from its menu. Night mode dims the fill independently of the panel background. The external source icon opens the shared source chooser. Track titles wrap to two lines; a 3 dp progress indicator is hidden when duration is unavailable. The visualizer toggle is saved locally.

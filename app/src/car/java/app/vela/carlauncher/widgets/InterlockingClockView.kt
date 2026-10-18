@@ -28,6 +28,9 @@ class InterlockingClockView @JvmOverloads constructor(
         private val CLEAR_XFERMODE: Xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
     }
 
+    var fillColor: Int = android.graphics.Color.TRANSPARENT
+        set(value) { field = value; invalidate() }
+
     init {
         applyClockTypeface()
     }
@@ -83,6 +86,11 @@ class InterlockingClockView @JvmOverloads constructor(
             canvas.drawText(glyph, x, glyphBaseline, p)
 
             p.xfermode = oldXfermode
+            if (fillColor != android.graphics.Color.TRANSPARENT) {
+                p.style = Paint.Style.FILL
+                p.color = fillColor
+                canvas.drawText(glyph, x, glyphBaseline, p)
+            }
             p.style = Paint.Style.STROKE
             p.strokeWidth = outlineWidth
             var outlineColor = currentTextColor

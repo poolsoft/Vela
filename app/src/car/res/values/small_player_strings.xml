@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="car_small_clock_color">Clock color</string>
+    <string name="car_small_clock_turquoise">Turquoise</string>
+    <string name="car_small_clock_theme">Theme color</string>
+    <string name="car_small_clock_amber">Amber</string>
+    <string name="car_small_clock_outline">White outline</string>
+    <string name="car_small_visualizer">Visualizer</string>
+</resources>
