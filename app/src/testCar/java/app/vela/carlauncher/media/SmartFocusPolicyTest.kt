@@ -65,11 +65,12 @@ class SmartFocusPolicyTest {
         choose(p, listOf(s("internal"), s("bluetooth", true)), "bluetooth")
         assertEquals("internal", choose(p, listOf(s("internal"), s("bluetooth", available = false)), "bluetooth", now = 1))
     }
-    @Test fun explicitPausedSelectionDoesNotJumpBackToOldPlayingSession() {
+    @Test fun explicitPausedSelectionHasBoundedBrowsingGrace() {
         val p = SmartFocusPolicy()
         val sources = listOf(s("internal", true), s("session:chosen"))
         p.selected("session:chosen", sources)
-        assertEquals("session:chosen", choose(p, sources, "session:chosen", now = 10000))
+        assertEquals("session:chosen", choose(p, sources, "session:chosen", now = 0))
+        assertEquals("internal", choose(p, sources, "session:chosen", now = 8000))
     }
     @Test fun pausedSelectionIsNotPermanentLockAgainstNewPlayback() {
         val p = SmartFocusPolicy()
@@ -81,8 +82,8 @@ class SmartFocusPolicyTest {
     @Test fun disabledAutomaticTrackingPreservesChosenSource() {
         assertEquals("internal", choose(SmartFocusPolicy(), listOf(s("internal"), s("bluetooth", true)), auto = false))
     }
-    @Test fun bootSnapshotDoesNotTreatExistingSessionsAsNewUserCommands() {
-        assertEquals("internal", choose(SmartFocusPolicy(), listOf(s("internal", true), s("bluetooth", true))))
+    @Test fun bootSnapshotFollowsAlreadyPlayingExternalMusic() {
+        assertEquals("bluetooth", choose(SmartFocusPolicy(), listOf(s("internal", true), s("bluetooth", true))))
     }
     @Test fun projectionAndBluetoothIdentityDoNotDependOnTrackMetadata() {
         assertEquals("projection", MediaSourceIdentity.kind("session:com.zjinnova.zlink", "com.zjinnova.zlink"))
@@ -90,12 +91,12 @@ class SmartFocusPolicyTest {
         assertEquals("bluetooth", MediaSourceIdentity.kind("bluetooth", null))
         assertEquals("internal", MediaSourceIdentity.kind("internal", null))
     }
-    @Test fun pausingAnApplicationKeepsItsResumeControls() {
+    @Test fun pausingAnApplicationReturnsToInternalControls() {
         val p = SmartFocusPolicy()
         choose(p, listOf(s("internal"), s("session:music", true)), "session:music")
         val paused = listOf(s("internal"), s("session:music"))
         choose(p, paused, "session:music", now = 1)
-        assertEquals("session:music", choose(p, paused, "session:music", now = 2001))
+        assertEquals("internal", choose(p, paused, "session:music", now = 2001))
     }
     @Test fun selectThenPlayReleasesTheAudibleOwnerNotTheBrowsedSource() {
         val ownership = PlaybackOwnership()
@@ -128,5 +129,20 @@ class SmartFocusPolicyTest {
             ownership.start("bluetooth", "session:previous") { releases++ }
         }
         assertEquals(1, releases)
+    }
+    @Test fun latestPlayingApplicationIsControlledWithoutStartingInternal() {
+        val p = SmartFocusPolicy()
+        choose(p, listOf(s("internal"), s("session:music")))
+        assertEquals("session:music", choose(p, listOf(s("internal"), s("session:music", true)), now = 1))
+        val stopped = listOf(s("internal"), s("session:music"))
+        choose(p, stopped, "session:music", now = 2)
+        assertEquals("internal", choose(p, stopped, "session:music", now = 2002))
+    }
+    @Test fun pausedProjectionReturnsToInternalWithoutDisconnectingPhone() {
+        val p = SmartFocusPolicy()
+        choose(p, listOf(s("internal"), s("session:projection", true)), "session:projection")
+        val stopped = listOf(s("internal"), s("session:projection"))
+        choose(p, stopped, "session:projection", now = 5)
+        assertEquals("internal", choose(p, stopped, "session:projection", now = 2005))
     }
 }

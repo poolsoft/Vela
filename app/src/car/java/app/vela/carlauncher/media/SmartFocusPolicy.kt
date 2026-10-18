@@ -44,20 +44,21 @@ internal class SmartFocusPolicy {
             if (newest != null && newest.id != current) { stoppedAt = null; selectedWhilePaused = null; return newest.id }
         } else {
             consumed = sequence
-            if (active?.playing != true) return candidates.firstOrNull { it.id == "bluetooth" }?.id
-                ?: candidates.firstOrNull()?.id ?: current
+            return candidates.firstOrNull { it.id != "internal" }?.id
+                ?: candidates.firstOrNull()?.id ?: "internal"
         }
-        if (active?.playing == true || selectedWhilePaused == current) return current
+        if (current == "internal" && candidates.isEmpty()) { stoppedAt = null; return current }
+        if (active?.playing == true) return current
         val since = stoppedAt ?: now.also { stoppedAt = it }
-        val wait = if (active?.preparing == true) 8_000L else 2_000L
+        val wait = if (active?.preparing == true || selectedWhilePaused == current) 8_000L else 2_000L
         if (active?.available == true && now - since < wait) {
             nextCheckInMs = wait - (now - since)
             return current
         }
         stoppedAt = null
-        return candidates.firstOrNull()?.id
-            ?: if (current == "bluetooth" || active?.available != true)
-                sources.firstOrNull { it.id == "internal" }?.id ?: current else current
+        selectedWhilePaused = null
+        return candidates.maxByOrNull { starts[it.id] ?: 0 }?.id
+            ?: sources.firstOrNull { it.id == "internal" }?.id ?: current
     }
 }
 

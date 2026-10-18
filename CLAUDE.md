@@ -6031,9 +6031,11 @@ Downloaded regions are listed from local OBF, basemap and POI inventory before a
 The in-app language picker excludes Hebrew. An existing explicit he or iw preference migrates to English before resource wrapping and navigation localization. Verify the picker and saved-language migration in the next packaged build.
 
 
-Car Smart Focus uses per-source playback edges and explicit app opt-in, with a separate user lock. Bluetooth connection/HFP alone does not qualify as music. Exposed ZLink/Android Auto MediaSessions participate as projection media; undocumented OEM-only playback remains unverified. Pause fallback waits 2 seconds, buffering waits up to 8 seconds, and calls/TTS suspend tracking. Large-player source selection is reused; small panels show external source icons only. Optional READ_PHONE_STATE is requested from the permissions page, never at startup. Verify actual incoming BT, HFP and projection on the target head unit.
+Car Smart Focus uses per-source playback edges and default external tracking with explicit opt-out, with a separate user lock. Bluetooth connection/HFP alone does not qualify as music. Exposed ZLink/Android Auto MediaSessions participate as projection media; undocumented OEM-only playback remains unverified. Pause fallback waits 2 seconds, buffering waits up to 8 seconds, and calls/TTS suspend tracking. Large-player source selection is reused; small panels show external source icons only. Optional READ_PHONE_STATE is requested from the permissions page, never at startup. Verify actual incoming BT, HFP and projection on the target head unit.
 
 
 Smart Focus retains the playback owner separately from a browsed paused source, so Select followed by Play releases only the previous audible or preparing source once. Include this deferred handoff in head-unit acceptance.
 
 Equalizer entry points use CarHardwareManager and the persisted car_launcher_equalizer_app preference. Keep settings as a picker and player buttons as launch-or-pick controls.
+
+Keep Smart Focus default follow enabled for external sessions. Hardware observation must not depend on which source the UI selected. The HOME forwarder uses a translucent theme and waits for resume; do not restore NoDisplay with an immediate HOME redirect.

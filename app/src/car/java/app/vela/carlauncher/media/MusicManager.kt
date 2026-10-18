@@ -40,7 +40,10 @@ class MusicManager private constructor(private val context: Context) : InternalM
                 instance ?: MusicManager(context.applicationContext).also { instance = it }
             }
         }
-        fun refreshIfCreated() { instance?.senkronizeEtMedyaDurumu() }
+        fun refreshIfCreated() { instance?.let { manager ->
+            manager.senkronizeEtMedyaDurumu()
+            MediaNotificationListener.refreshAndReconnect(manager.context)
+        } }
         fun onSpeechStateChanged(speaking: Boolean) { instance?.let { manager ->
             manager.ttsSpeaking = speaking
             manager.senkronizeEtMedyaDurumu()
@@ -123,10 +126,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         AudioManager.MODE_IN_CALL, AudioManager.MODE_IN_COMMUNICATION, AudioManager.MODE_RINGTONE)
 
     fun isSourceTrackingEnabled(key: String): Boolean {
-        val preferred = app.vela.carlauncher.settings.CarLauncherSettings.tercihEdilenMuzikUygulamasi.value
-        return focusState["follow:$key"] as? Boolean ?: (key == "internal" || key == "bluetooth" ||
-            key == "xy_music" || key == "hcn_music" || key.endsWith("radio") ||
-            key == "session:$preferred" || MediaSourceIdentity.isProjection(key.removePrefix("session:")))
+        return focusState["follow:$key"] as? Boolean ?: true
     }
     fun setSourceTracking(key: String, enabled: Boolean) { saveFocus("follow:$key" to enabled); _sourcesRevision.value++; senkronizeEtMedyaDurumu() }
     fun isSourceLocked(): Boolean = manualSelection
@@ -168,8 +168,6 @@ class MusicManager private constructor(private val context: Context) : InternalM
         pinnedSessionPackage = if (source === mediaSessionAdapter) key.removePrefix("session:") else sourcePackage(source)
         mediaSessionAdapter.setController(controllers.firstOrNull { it.packageName == pinnedSessionPackage })
         selectedAdapter = source
-        hcnRadioAdapter.select(source === hcnRadioAdapter)
-        xyRadioAdapter.select(source === xyRadioAdapter)
         aktifKaynak = if (source === internalAdapter) KaynakTipi.INTERNAL else KaynakTipi.EXTERNAL
     }
 
@@ -222,6 +220,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
             if (android.os.Build.VERSION.SDK_INT >= 33) context.registerReceiver(callReceiver, filter, Context.RECEIVER_EXPORTED)
             else context.registerReceiver(callReceiver, filter)
         }
+        MediaNotificationListener.refreshAndReconnect(context)
         internalPlayer.setListener(this)
         senkronizeEtMedyaDurumu()
         focusScope.launch {
@@ -246,14 +245,17 @@ class MusicManager private constructor(private val context: Context) : InternalM
         }
         controllers = sessions.filterNot { LauncherMediaPeers.contains(context, it.packageName) }
         _sourcesRevision.value++
-        app.vela.util.FileLogger.d(TAG, "Oturumlar guncellendi. Paketler: ${controllers.map { it.packageName }}")
+        app.vela.util.FileLogger.i(TAG, "Media sessions: ${controllers.map { it.packageName + ":" + it.playbackState?.state }}")
 
         sessionCallbacks.keys.filter { it !in controllers }.forEach { controller ->
             sessionCallbacks.remove(controller)?.let { controller.unregisterCallback(it) }
         }
         controllers.filter { it !in sessionCallbacks }.forEach { controller ->
             val callback = object : MediaController.Callback() {
-                override fun onPlaybackStateChanged(state: android.media.session.PlaybackState?) { senkronizeEtMedyaDurumu() }
+                override fun onPlaybackStateChanged(state: android.media.session.PlaybackState?) {
+                    app.vela.util.FileLogger.i(TAG, "Media state package=${controller.packageName} state=${state?.state} actions=${state?.actions}")
+                    senkronizeEtMedyaDurumu()
+                }
                 override fun onMetadataChanged(metadata: android.media.MediaMetadata?) { senkronizeEtMedyaDurumu() }
                 override fun onSessionDestroyed() { onOturumlarYenilendi(controllers.filter { it != controller }) }
             }
@@ -323,8 +325,6 @@ class MusicManager private constructor(private val context: Context) : InternalM
         releaseOwnerFor(sourceKey(source))
         selectedAdapter = source
         aktifKaynak = if (source === internalAdapter) KaynakTipi.INTERNAL else KaynakTipi.EXTERNAL
-        hcnRadioAdapter.select(source === hcnRadioAdapter)
-        xyRadioAdapter.select(source === xyRadioAdapter)
         } finally { publishing = wasPublishing }
     }
 
@@ -435,8 +435,6 @@ class MusicManager private constructor(private val context: Context) : InternalM
             else {
                 selectedAdapter = source
                 aktifKaynak = if (source === internalAdapter) KaynakTipi.INTERNAL else KaynakTipi.EXTERNAL
-                hcnRadioAdapter.select(source === hcnRadioAdapter)
-                xyRadioAdapter.select(source === xyRadioAdapter)
             }
         } finally { publishing = false }
         saveFocus("last_source" to key)

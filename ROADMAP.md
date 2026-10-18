@@ -539,3 +539,5 @@ Car Smart Focus uses per-source playback edges and explicit app opt-in, with a s
 Smart Focus retains the playback owner separately from a browsed paused source, so Select followed by Play releases only the previous audible or preparing source once. Include this deferred handoff in head-unit acceptance.
 
 Equalizer acceptance remains open for proprietary head-unit DSP activities and their audio-session requirements.
+
+Validate native radio commands and HOME return on the physical head unit. Confirm whether its projection bridge exposes a MediaSession or a documented vendor playback protocol; app foreground and USB connection alone remain insufficient playback evidence.
