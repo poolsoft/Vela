@@ -58,6 +58,7 @@ class CarUnifiedPanelHost(
 
     private val preferences = context.getSharedPreferences("small_music_panel", Context.MODE_PRIVATE)
     private val scope = MainScope()
+    private var clockColorDialog: android.app.AlertDialog? = null
     private var sourceDialog: android.app.AlertDialog? = null
     private val progress: ProgressBar? = rootView.findViewById(R.id.music_progress)
     private var showVisualizer = preferences.getBoolean("visualizer", true)
@@ -67,13 +68,20 @@ class CarUnifiedPanelHost(
             1 -> androidx.core.content.ContextCompat.getColor(context, R.color.cl_primary)
             2 -> Color.rgb(255, 191, 96)
             3 -> Color.TRANSPARENT
+            4 -> Color.WHITE
+            5 -> preferences.getInt("clock_custom_primary", Color.rgb(63, 217, 202))
             else -> Color.rgb(63, 217, 202)
         }
+        val twoColors = preferences.getBoolean("clock_two_colors", false) && color != Color.TRANSPARENT
+        val secondary = preferences.getInt("clock_custom_secondary", Color.rgb(203, 183, 255))
         clockView?.embossed = preferences.getBoolean("clock_embossed", false)
         val night = context.resources.configuration.uiMode and
             android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
         clockView?.fillColor = if (night && color != Color.TRANSPARENT)
             (color and 0x00FFFFFF) or 0xCC000000.toInt() else color
+        clockView?.minuteFillColor = if (twoColors) {
+            if (night) (secondary and 0x00FFFFFF) or 0xCC000000.toInt() else secondary
+        } else null
     }
 
     private var appliedMedia: MedyaParcasi? = null
@@ -102,7 +110,7 @@ class CarUnifiedPanelHost(
         rootView.removeCallbacks(clockTick)
         if (value) rootView.post(clockTick)
         visualizer?.setPlaying(value && showVisualizer && (appliedMedia?.caliyorMu == true))
-        if (!value) { sourceDialog?.dismiss(); sourceDialog = null }
+        if (!value) { sourceDialog?.dismiss(); sourceDialog = null; clockColorDialog?.dismiss() }
     }
 
     private val clockTick = object : Runnable {
@@ -125,6 +133,7 @@ class CarUnifiedPanelHost(
     }
 
     fun release() {
+        clockColorDialog?.dismiss()
         sourceDialog?.dismiss()
         scope.cancel()
         lifecycle?.removeObserver(observer)
@@ -139,8 +148,8 @@ class CarUnifiedPanelHost(
         val density = context.resources.displayMetrics.density
         val w = width / density
         val h = height / density
-        val clockHeight = (h * 0.26f).coerceIn(32f, 88f)
-        clockView?.textSize = clockHeight * 0.9f
+        val clockHeight = (h * 0.28f).coerceIn(32f, 100f)
+        clockView?.textSize = clockHeight * 0.96f
         clockView?.let { if (it.layoutParams.height != (clockHeight * density).toInt())
             it.layoutParams = it.layoutParams.apply { this.height = (clockHeight * density).toInt() } }
         val size = minOf((w - 48) / 3f, h * 0.25f).coerceIn(40f, 64f)
@@ -201,13 +210,17 @@ class CarUnifiedPanelHost(
 
         val colors = popup.menu.addSubMenu(R.string.car_small_clock_color)
         listOf(R.string.car_small_clock_turquoise, R.string.car_small_clock_theme,
-            R.string.car_small_clock_amber, R.string.car_small_clock_transparent).forEachIndexed { index, label ->
+            R.string.car_small_clock_amber, R.string.car_small_clock_transparent,
+            R.string.car_small_clock_white, R.string.car_small_clock_custom).forEachIndexed { index, label ->
             colors.add(1, 20 + index, index, label).apply {
                 isCheckable = true
                 isChecked = preferences.getInt("clock_color", 0) == index
             }
         }
-        popup.menu.add(0, 31, 7, R.string.car_small_clock_embossed).apply {
+        colors.add(0, 32, 6, R.string.car_small_clock_two_colors).apply {
+            isCheckable = true; isChecked = preferences.getBoolean("clock_two_colors", false)
+        }
+        popup.menu.add(0, 31, 0, R.string.car_small_clock_embossed).apply {
             isCheckable = true; isChecked = preferences.getBoolean("clock_embossed", false)
         }
         popup.menu.add(0, 30, 6, R.string.car_small_visualizer).apply {
@@ -215,7 +228,25 @@ class CarUnifiedPanelHost(
         }
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                in 20..23 -> {
+                25 -> {
+                    clockColorDialog?.dismiss()
+                    clockColorDialog = ClockColorDialog.show(context,
+                        preferences.getInt("clock_custom_primary", Color.rgb(63, 217, 202)),
+                        preferences.getInt("clock_custom_secondary", Color.rgb(203, 183, 255)),
+                        preferences.getBoolean("clock_two_colors", false)) { primary, secondary, twoColors ->
+                        preferences.edit().putInt("clock_color", 5)
+                            .putInt("clock_custom_primary", primary).putInt("clock_custom_secondary", secondary)
+                            .putBoolean("clock_two_colors", twoColors).apply()
+                        applyClockColor()
+                    }
+                    true
+                }
+                32 -> {
+                    preferences.edit().putBoolean("clock_two_colors", !preferences.getBoolean("clock_two_colors", false)).apply()
+                    applyClockColor()
+                    true
+                }
+                in 20..24 -> {
                     preferences.edit().putInt("clock_color", item.itemId - 20).apply()
                     applyClockColor()
                     true

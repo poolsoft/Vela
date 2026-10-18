@@ -31,6 +31,9 @@ class InterlockingClockView @JvmOverloads constructor(
     var fillColor: Int = android.graphics.Color.TRANSPARENT
         set(value) { field = value; invalidate() }
 
+    var minuteFillColor: Int? = null
+        set(value) { field = value; invalidate() }
+
     var embossed: Boolean = false
         set(value) { field = value; invalidate() }
     var fitTextToBounds: Boolean = false
@@ -115,9 +118,10 @@ class InterlockingClockView @JvmOverloads constructor(
                 p.color = 0xA0FFFFFF.toInt()
                 canvas.drawText(glyph, x - depth * 0.7f, glyphBaseline - depth * 0.7f, p)
             }
-            if (fillColor != android.graphics.Color.TRANSPARENT) {
+            val glyphColor = if (value.indexOf(':') in 0 until i) minuteFillColor ?: fillColor else fillColor
+            if (glyphColor != android.graphics.Color.TRANSPARENT) {
                 p.style = Paint.Style.FILL
-                p.color = fillColor
+                p.color = glyphColor
                 canvas.drawText(glyph, x, glyphBaseline, p)
             }
             p.style = Paint.Style.STROKE

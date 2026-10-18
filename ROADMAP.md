@@ -544,4 +544,4 @@ Validate native radio commands and HOME return on the physical head unit. Confir
 
 Validate the flat music-control chooser on the physical head unit, including touch targets, font scaling, radio entries and returning from manual to automatic tracking.
 
-- Verify small-player clock contrast, embossed edges, adaptive sizing, and source chooser touch targets on physical head units in day and night modes.
+- Verify small-player clock contrast, custom hour/minute colors, embossed edges, adaptive sizing, and source chooser touch targets on physical head units in day and night modes.

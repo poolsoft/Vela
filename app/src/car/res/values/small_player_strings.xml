@@ -8,4 +8,11 @@
     <string name="car_small_visualizer">Visualizer</string>
     <string name="car_small_clock_transparent">Transparent (outline only)</string>
     <string name="car_small_clock_embossed">Embossed clock</string>
+    <string name="car_small_clock_white">White</string>
+    <string name="car_small_clock_custom">Custom colors…</string>
+    <string name="car_small_clock_two_colors">Two colors (hours / minutes)</string>
+    <string name="car_small_clock_hours">Hours</string>
+    <string name="car_small_clock_minutes">Minutes</string>
+    <string name="car_small_clock_save">Save</string>
+    <string name="car_small_clock_cancel">Cancel</string>
 </resources>
