@@ -2773,3 +2773,5 @@ Smart Focus tracks playing external music by default and returns to internal con
 The large player uses a flat music-control dialog with automatic tracking, current playback status and icon rows for explicit manual control. Selecting a row never starts playback; returning to automatic tracking immediately follows existing external music.
 
 Small music panel: the outlined clock supports turquoise (default), theme, amber, and white outline colors from its menu. Night mode dims the fill independently of the panel background. The external source icon opens the shared source chooser. Track titles wrap to two lines; a 3 dp progress indicator is hidden when duration is unavailable. The visualizer toggle is saved locally.
+
+The small clock uses 26% of panel height (32-88 dp), reserves 40 dp at each side for source and menu controls, and fits measured glyphs to the remaining bounds without a minimum font size. Transparent mode keeps the outline visible; optional embossed edges use static offset strokes and persist independently of color. Other clock instances retain their existing sizing and flat appearance.

@@ -69,6 +69,7 @@ class CarUnifiedPanelHost(
             3 -> Color.TRANSPARENT
             else -> Color.rgb(63, 217, 202)
         }
+        clockView?.embossed = preferences.getBoolean("clock_embossed", false)
         val night = context.resources.configuration.uiMode and
             android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
         clockView?.fillColor = if (night && color != Color.TRANSPARENT)
@@ -138,8 +139,8 @@ class CarUnifiedPanelHost(
         val density = context.resources.displayMetrics.density
         val w = width / density
         val h = height / density
-        val clockHeight = (h * 0.22f).coerceIn(32f, 60f)
-        clockView?.textSize = minOf(w / 6f, clockHeight * 0.8f).coerceIn(22f, 48f)
+        val clockHeight = (h * 0.26f).coerceIn(32f, 88f)
+        clockView?.textSize = clockHeight * 0.9f
         clockView?.let { if (it.layoutParams.height != (clockHeight * density).toInt())
             it.layoutParams = it.layoutParams.apply { this.height = (clockHeight * density).toInt() } }
         val size = minOf((w - 48) / 3f, h * 0.25f).coerceIn(40f, 64f)
@@ -158,6 +159,7 @@ class CarUnifiedPanelHost(
     }
 
     private fun setupViews() {
+        clockView?.fitTextToBounds = true
         applyClockColor()
         visualizer?.visibility = if (showVisualizer) View.VISIBLE else View.INVISIBLE
         rootView.findViewById<ImageView>(R.id.music_source_icon)?.setOnClickListener {
@@ -199,11 +201,14 @@ class CarUnifiedPanelHost(
 
         val colors = popup.menu.addSubMenu(R.string.car_small_clock_color)
         listOf(R.string.car_small_clock_turquoise, R.string.car_small_clock_theme,
-            R.string.car_small_clock_amber, R.string.car_small_clock_outline).forEachIndexed { index, label ->
+            R.string.car_small_clock_amber, R.string.car_small_clock_transparent).forEachIndexed { index, label ->
             colors.add(1, 20 + index, index, label).apply {
                 isCheckable = true
                 isChecked = preferences.getInt("clock_color", 0) == index
             }
+        }
+        popup.menu.add(0, 31, 7, R.string.car_small_clock_embossed).apply {
+            isCheckable = true; isChecked = preferences.getBoolean("clock_embossed", false)
         }
         popup.menu.add(0, 30, 6, R.string.car_small_visualizer).apply {
             isCheckable = true; isChecked = showVisualizer
@@ -212,6 +217,11 @@ class CarUnifiedPanelHost(
             when (item.itemId) {
                 in 20..23 -> {
                     preferences.edit().putInt("clock_color", item.itemId - 20).apply()
+                    applyClockColor()
+                    true
+                }
+                31 -> {
+                    preferences.edit().putBoolean("clock_embossed", !preferences.getBoolean("clock_embossed", false)).apply()
                     applyClockColor()
                     true
                 }

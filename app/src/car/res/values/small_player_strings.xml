@@ -6,4 +6,6 @@
     <string name="car_small_clock_amber">Amber</string>
     <string name="car_small_clock_outline">White outline</string>
     <string name="car_small_visualizer">Visualizer</string>
+    <string name="car_small_clock_transparent">Transparent (outline only)</string>
+    <string name="car_small_clock_embossed">Embossed clock</string>
 </resources>

@@ -31,6 +31,11 @@ class InterlockingClockView @JvmOverloads constructor(
     var fillColor: Int = android.graphics.Color.TRANSPARENT
         set(value) { field = value; invalidate() }
 
+    var embossed: Boolean = false
+        set(value) { field = value; invalidate() }
+    var fitTextToBounds: Boolean = false
+        set(value) { field = value; invalidate() }
+
     init {
         applyClockTypeface()
     }
@@ -48,9 +53,10 @@ class InterlockingClockView @JvmOverloads constructor(
         if (value.isNullOrEmpty()) return
 
         val p = paint
-        val baseTextSize = p.textSize
-        val overlap = p.textSize * OVERLAP_EM
-        val colonGap = p.textSize * COLON_GAP_EM
+        val originalTextSize = p.textSize
+        var baseTextSize = originalTextSize
+        var overlap = p.textSize * OVERLAP_EM
+        var colonGap = p.textSize * COLON_GAP_EM
         var contentWidth = 0f
 
         for (i in 0 until value.length) {
@@ -63,6 +69,20 @@ class InterlockingClockView @JvmOverloads constructor(
         }
         p.textSize = baseTextSize
 
+        // Measure the actual clock glyphs, including overlap, before fitting the panel.
+        if (fitTextToBounds) {
+            val inset = resources.displayMetrics.density * 3f
+            val availableWidth = (width - paddingLeft - paddingRight - inset * 2).coerceAtLeast(1f)
+            val availableHeight = (height - paddingTop - paddingBottom - inset * 2).coerceAtLeast(1f)
+            val glyphHeight = p.fontMetrics.let { it.bottom - it.top }
+            val scale = minOf(1f, availableWidth / contentWidth.coerceAtLeast(1f),
+                availableHeight / glyphHeight.coerceAtLeast(1f))
+            baseTextSize *= scale
+            overlap *= scale
+            colonGap *= scale
+            contentWidth *= scale
+            p.textSize = baseTextSize
+        }
         val metrics = p.fontMetrics
         var x = paddingLeft + (width - paddingLeft - paddingRight - contentWidth).coerceAtLeast(0f) / 2f
         val baseline = paddingTop + (height - paddingTop - paddingBottom - metrics.bottom - metrics.top) / 2f
@@ -86,6 +106,15 @@ class InterlockingClockView @JvmOverloads constructor(
             canvas.drawText(glyph, x, glyphBaseline, p)
 
             p.xfermode = oldXfermode
+            if (embossed) {
+                val depth = resources.displayMetrics.density
+                p.style = Paint.Style.STROKE
+                p.strokeWidth = outlineWidth * 1.6f
+                p.color = 0xB0000000.toInt()
+                canvas.drawText(glyph, x + depth * 1.4f, glyphBaseline + depth * 1.4f, p)
+                p.color = 0xA0FFFFFF.toInt()
+                canvas.drawText(glyph, x - depth * 0.7f, glyphBaseline - depth * 0.7f, p)
+            }
             if (fillColor != android.graphics.Color.TRANSPARENT) {
                 p.style = Paint.Style.FILL
                 p.color = fillColor
@@ -108,7 +137,7 @@ class InterlockingClockView @JvmOverloads constructor(
         p.style = oldStyle
         p.color = oldColor
         p.strokeWidth = oldStrokeWidth
-        p.textSize = baseTextSize
+        p.textSize = originalTextSize
         p.xfermode = oldXfermode
         canvas.restoreToCount(layer)
     }
