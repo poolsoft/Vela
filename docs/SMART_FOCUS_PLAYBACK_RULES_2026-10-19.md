@@ -19,6 +19,6 @@ Smart Focus separates automatic playback tracking, source locking, and per-sourc
 
 Selection suppression uses source identifiers and Android session last-position update timestamps in the monotonic elapsed-realtime domain. Existing playing/preparing sources are suppressed until a fresh start. Returning to automatic mode clears suppression and follows currently playing eligible sources. Sources with unknown playback state never display a fabricated playing badge. A radio with no supported pause confirmation reports a conflict rather than toggling an unknown playback state while changing owners.
 
-Controls are available through the visible settings icon on the horizontal source strip, the existing source dialog and Smart Focus settings. Follow permissions do not prevent explicit selection. Long press on source icons remains an alternate route to the same dialog.
+Controls are available through the visible settings icon in the player source dock, the existing source dialog and Smart Focus settings. Follow permissions do not prevent explicit selection. Long press on source icons remains an alternate route to the same dialog.
 
 Validation includes SmartFocusPolicy regression tests for stale callbacks, suppressed former owners, fresh phone restarts, unknown and confirmed radio states, unlocking, call interruption, Bluetooth-only connections, buffering and silent fallback. APK compilation does not prove OEM radio protocol compatibility; physical-head-unit acceptance remains required. No connected device was available for this implementation.

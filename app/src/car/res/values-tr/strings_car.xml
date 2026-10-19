@@ -331,4 +331,5 @@
     <string name="car_sources_state_unknown">Oynatma durumu bilinmiyor</string>
     <string name="car_sources_follow_apps">Otomatik devralabilecek oynatıcılar</string>
     <string name="car_sources_tracking_hint">Bluetooth bağlantısı ve telefon görüşmesi müzik kaynağını değiştirmez. Telefon yansıtması gerçek müzik oturumu sunmalıdır. Radyo frekans bilgisi tek başına oynatma kanıtı değildir. Vela Müzik’e dönülmesi müziği başlatmaz.</string>
+    <string name="car_music_equalizer_label">Ekolayzır</string>
 </resources>

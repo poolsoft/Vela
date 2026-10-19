@@ -82,7 +82,7 @@ class CarMusicPlayerHost(
     init {
         playerVisualizer?.setVisualizerContext(false)
         setupPanelsVisibility()
-        setupSourceStrip()
+        setupSourceDock()
         setupListeners()
         setupGestures()
         setupStateFlows()
@@ -99,58 +99,37 @@ class CarMusicPlayerHost(
         lastPlayerSize = width to height
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
-        val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
-        val dockHorizontal = isPortrait && (height > width)
         val dock = rootView.findViewById<android.widget.LinearLayout>(R.id.music_side_dock)
-        dock.orientation = if (dockHorizontal) android.widget.LinearLayout.HORIZONTAL else android.widget.LinearLayout.VERTICAL
-        if (dockHorizontal) {
-            dock.setPadding(dp(4), dp(4), dp(4), dp(4))
-        } else {
-            dock.setPadding(0, dp(8), 0, dp(16))
+        dock.orientation = android.widget.LinearLayout.VERTICAL
+        dock.setPadding(0, dp(4), 0, dp(4))
+        androidx.constraintlayout.widget.ConstraintSet().apply {
+            clone(rootView as androidx.constraintlayout.widget.ConstraintLayout)
+            clear(R.id.music_side_dock)
+            clear(R.id.music_content_column)
+            connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
+            connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
+            connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
+            constrainWidth(R.id.music_side_dock, dp(60))
+            constrainHeight(R.id.music_side_dock, 0)
+            connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.START, R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.END)
+            connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
+            connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
+            connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
+            constrainWidth(R.id.music_content_column, 0)
+            constrainHeight(R.id.music_content_column, 0)
+            applyTo(rootView)
         }
-        val cs = androidx.constraintlayout.widget.ConstraintSet()
-        cs.clone(rootView as androidx.constraintlayout.widget.ConstraintLayout)
-        cs.clear(R.id.music_side_dock)
-        cs.clear(R.id.music_content_column)
-        cs.connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
-        cs.connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
-        if (dockHorizontal) {
-            cs.connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
-            cs.constrainWidth(R.id.music_side_dock, 0)
-            cs.constrainHeight(R.id.music_side_dock, dp(56))
-            cs.connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
-            cs.connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.TOP, R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
-        } else {
-            cs.connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
-            cs.constrainWidth(R.id.music_side_dock, dp(60))
-            cs.constrainHeight(R.id.music_side_dock, 0)
-            cs.connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.START, R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.END)
-            cs.connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
-        }
-        cs.connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.END, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.END)
-        cs.connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
-        cs.constrainWidth(R.id.music_content_column, 0)
-        cs.constrainHeight(R.id.music_content_column, 0)
-        cs.applyTo(rootView)
-        // Source selection is available in both narrow and wide layouts.
         rootView.findViewById<View>(R.id.app_selector_launch).visibility = View.GONE
         for (i in 0 until dock.childCount) {
             val child = dock.getChildAt(i)
-            val lp = child.layoutParams as android.widget.LinearLayout.LayoutParams
-            if (lp.weight > 0) {
-                lp.width = if (dockHorizontal) 0 else dp(1)
-                lp.height = if (dockHorizontal) dp(1) else 0
-            } else {
-                val buttonSize = if (dockHorizontal) (width / 5 - dp(2)).coerceAtLeast(dp(28)) else dp(48)
-                lp.width = buttonSize
-                lp.height = dp(48)
-                lp.gravity = if (dockHorizontal) android.view.Gravity.CENTER_VERTICAL else android.view.Gravity.CENTER_HORIZONTAL
-                val vMargin = if (dockHorizontal) 0 else dp(4)
-                lp.setMargins(0, vMargin, 0, vMargin)
+            child.layoutParams = (child.layoutParams as android.widget.LinearLayout.LayoutParams).apply {
+                this.width = if (weight > 0) android.view.ViewGroup.LayoutParams.MATCH_PARENT else dp(48)
+                this.height = if (weight > 0) 0 else dp(48)
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+                setMargins(0, dp(2), 0, dp(2))
             }
-            child.layoutParams = lp
         }
-        val contentWidth = width / density - if (dockHorizontal) 0 else 60
+        val contentWidth = width / density - 60
         val center = rootView.findViewById<androidx.constraintlayout.widget.ConstraintLayout>(R.id.now_playing_center_panel)
         val artSize = (contentWidth * 0.28f).coerceIn(56f, 130f).toInt()
         androidx.constraintlayout.widget.ConstraintSet().apply {
@@ -172,10 +151,10 @@ class CarMusicPlayerHost(
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
         val controls = rootView.findViewById<androidx.constraintlayout.widget.ConstraintLayout>(R.id.playback_controls_layout)
-        val size = ((width / density - 32) / 5f).coerceIn(32f, 64f).toInt()
+        val size = ((width / density - 16) / 6f).coerceIn(32f, 64f).toInt()
         if (size == lastPlaybackSize) return
         lastPlaybackSize = size
-        for (id in intArrayOf(R.id.btn_shuffle, R.id.btn_prev, R.id.btn_play_container, R.id.btn_next, R.id.btn_repeat)) {
+        for (id in intArrayOf(R.id.btn_shuffle, R.id.btn_prev, R.id.btn_play_container, R.id.btn_next, R.id.btn_repeat, R.id.btn_dock_equalizer)) {
             val button = controls.findViewById<View>(id)
             if (button.layoutParams.width != dp(size) || button.layoutParams.height != dp(size)) {
                 button.layoutParams = button.layoutParams.apply { this.width = dp(size); this.height = dp(size) }
@@ -277,16 +256,11 @@ class CarMusicPlayerHost(
         }
     }
 
-    /** A stable icon strip, refreshed only when sources or their playback state change. */
-    private fun setupSourceStrip() {
+    /** The dock source list refreshes only on source or playback-state changes. */
+    private fun setupSourceDock() {
         fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
-        val row = android.widget.LinearLayout(context).apply { orientation = android.widget.LinearLayout.HORIZONTAL }
-        val strip = android.widget.HorizontalScrollView(context).apply {
-            isHorizontalScrollBarEnabled = false
-            addView(row)
-        }
-        rootView.findViewById<android.widget.LinearLayout>(R.id.music_content_column)
-            .addView(strip, 0, android.widget.LinearLayout.LayoutParams(-1, dp(52)))
+        val row = rootView.findViewById<android.widget.LinearLayout>(R.id.music_source_rows)
+        val scroller = rootView.findViewById<android.widget.ScrollView>(R.id.music_source_scroll)
         var lastOptions: List<MusicManager.SourceOption>? = null
         var lastSelected: String? = null
         fun render() {
@@ -294,6 +268,7 @@ class CarMusicPlayerHost(
             val selected = musicManager.selectedSourceKey()
             if (options == lastOptions && selected == lastSelected) return
             lastOptions = options; lastSelected = selected
+            val scrollY = scroller.scrollY
             row.removeAllViews()
             options.forEach { source ->
                 val button = ImageView(context).apply {
@@ -332,20 +307,11 @@ class CarMusicPlayerHost(
                     if (!source.playbackKnown) R.string.car_sources_state_unknown
                     else if (source.playing) R.string.car_sources_playing else R.string.car_sources_waiting)
                 row.addView(cell, android.widget.LinearLayout.LayoutParams(dp(48), dp(48)).apply {
-                    marginEnd = dp(4)
+                    bottomMargin = dp(4)
                 })
             }
-            row.addView(ImageView(context).apply {
-                setImageResource(android.R.drawable.ic_menu_manage)
-                setColorFilter(0xFFCCD5DD.toInt())
-                setPadding(dp(12), dp(12), dp(12), dp(12))
-                contentDescription = context.getString(R.string.car_sources_title)
-                isFocusable = true
-                setOnClickListener {
-                    sourceDialog?.dismiss()
-                    sourceDialog = MusicSourceDialog.show(context, musicManager, scope)
-                }
-            }, android.widget.LinearLayout.LayoutParams(dp(48), dp(48)))
+
+            row.post { scroller.scrollTo(0, scrollY) }
         }
         render()
         scope.launch {
@@ -355,7 +321,7 @@ class CarMusicPlayerHost(
     }
 
     private fun setupListeners() {
-        rootView.findViewById<View>(R.id.app_selector_launch).apply {
+        rootView.findViewById<View>(R.id.music_source_settings).apply {
             contentDescription = context.getString(R.string.car_music_source)
             setOnClickListener {
                 sourceDialog?.dismiss()

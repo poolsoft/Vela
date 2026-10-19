@@ -555,3 +555,5 @@ Validate the flat music-control chooser on the physical head unit, including tou
 - Validate single-station radio seeking, USB detach/reattach, and source-strip switching on a physical head unit.
 
 - Verify fresh phone restart detection, radio unknown-state behavior and source-lock persistence on the physical head unit.
+
+- Verify the vertical player source dock and six-control playback row at the physical head-unit split-panel sizes.

@@ -35,13 +35,13 @@
     <!-- SOL DİKEY DOCK (Music Side Dock - Asistan Kaldırıldı) -->
     <LinearLayout
         android:id="@+id/music_side_dock"
-        android:layout_width="72dp"
+        android:layout_width="60dp"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:background="@drawable/bg_music_side_dock"
         android:gravity="center_horizontal"
-        android:paddingTop="8dp"
-        android:paddingBottom="20dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent">
@@ -55,10 +55,11 @@
             android:tint="#FFFFFF"
             android:contentDescription="Kapat"
             android:padding="12dp"
-            android:layout_marginBottom="24dp"/>
+            android:layout_marginBottom="4dp"/>
 
         <FrameLayout
             android:id="@+id/app_selector_launch"
+            android:visibility="gone"
             android:layout_width="56dp"
             android:layout_height="56dp"
             android:background="@drawable/bg_circle_translucent_white"
@@ -85,32 +86,36 @@
             android:padding="12dp"
             android:visibility="visible"/>
 
-        <ImageButton
-            android:id="@+id/btn_scan_music"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:src="@android:drawable/ic_menu_rotate"
-            android:tint="#FFFFFF"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/car_music_scan"
-            android:scaleType="centerInside"
-            android:padding="14dp"
-            android:layout_marginTop="8dp"/>
+
 
         <!-- btn_dock_voice KESİNLİKLE YOK! -->
 
-        <View android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
-
+        <ScrollView
+            android:id="@+id/music_source_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true"
+            android:clipToPadding="false"
+            android:scrollbars="vertical">
+            <LinearLayout
+                android:id="@+id/music_source_rows"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
+                android:orientation="vertical" />
+        </ScrollView>
         <ImageButton
-            android:id="@+id/btn_dock_equalizer"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
-            android:src="@drawable/ic_music_equalizer"
-            android:tint="#FFFFFF"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Equalizer"
-            android:scaleType="centerInside"
-            android:padding="12dp"/>
+            android:id="@+id/music_source_settings"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@android:drawable/ic_menu_manage"
+            android:contentDescription="@string/car_sources_title"
+            android:tint="#CCD5DD"
+            android:padding="12dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"/>
+
+
     </LinearLayout>
 
     <!-- SAĞ TARAF: Liste + Bottom Bar -->
@@ -339,6 +344,18 @@
                         android:background="?android:attr/selectableItemBackground"/>
 
                     <View android:layout_width="1dp" android:layout_height="24dp" android:background="#333333"/>
+
+                    <ImageButton
+                        android:id="@+id/btn_scan_music"
+                        android:layout_width="40dp"
+                        android:layout_height="match_parent"
+                        android:src="@android:drawable/ic_menu_rotate"
+                        android:tint="#FFFFFF"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/car_music_scan"
+                        android:scaleType="centerInside"
+                        android:padding="10dp"
+                        />
 
                     <!-- 5. ÜÇ NOKTA TAŞMA MENÜSÜ -->
                     <ImageButton
@@ -657,6 +674,21 @@
                         android:scaleType="fitCenter"
                         android:padding="16dp"
                         app:layout_constraintStart_toEndOf="@+id/btn_next"
+                        app:layout_constraintEnd_toStartOf="@id/btn_dock_equalizer"
+                        app:layout_constraintTop_toTopOf="parent"
+                        app:layout_constraintBottom_toBottomOf="parent"/>
+
+                    <ImageButton
+                        android:id="@+id/btn_dock_equalizer"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:src="@drawable/ic_music_equalizer"
+                        android:tint="#FFFFFF"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/car_music_equalizer_label"
+                        android:scaleType="centerInside"
+                        android:padding="12dp"
+                        app:layout_constraintStart_toEndOf="@id/btn_repeat"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintTop_toTopOf="parent"
                         app:layout_constraintBottom_toBottomOf="parent"/>

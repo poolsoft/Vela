@@ -336,4 +336,5 @@
     <string name="car_sources_state_unknown">Playback state unavailable</string>
     <string name="car_sources_follow_apps">Players allowed to take over automatically</string>
     <string name="car_sources_tracking_hint">Bluetooth connection and phone calls do not change the music source. Phone projection requires a real music session. Radio frequency updates alone do not prove playback. Returning to Vela Music does not start music.</string>
+    <string name="car_music_equalizer_label">Equalizer</string>
 </resources>
