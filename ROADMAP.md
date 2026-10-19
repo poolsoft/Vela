@@ -556,4 +556,4 @@ Validate the flat music-control chooser on the physical head unit, including tou
 
 - Verify fresh phone restart detection, radio unknown-state behavior and source-lock persistence on the physical head unit.
 
-- Verify the vertical player source dock and six-control playback row at the physical head-unit split-panel sizes.
+- Verify player dock icon sizing and the six-control playback row at the physical head-unit split-panel sizes.

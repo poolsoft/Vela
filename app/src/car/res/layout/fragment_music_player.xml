@@ -78,12 +78,12 @@
             android:id="@+id/btn_dock_playlist"
             android:layout_width="56dp"
             android:layout_height="56dp"
-            android:src="@android:drawable/ic_menu_agenda"
+            android:src="@drawable/ic_music_playlist"
             android:tint="#FFFFFF"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Çalma Listesi Görünümü"
-            android:scaleType="centerInside"
-            android:padding="12dp"
+            android:scaleType="fitCenter"
+            android:padding="6dp"
             android:visibility="visible"/>
 
 
@@ -109,10 +109,10 @@
             android:id="@+id/music_source_settings"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:src="@android:drawable/ic_menu_manage"
+            android:src="@drawable/ic_internal_settings"
             android:contentDescription="@string/car_sources_title"
-            android:tint="#CCD5DD"
-            android:padding="12dp"
+            android:scaleType="fitCenter"
+            android:padding="6dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"/>
 
 
@@ -686,7 +686,7 @@
                         android:tint="#FFFFFF"
                         android:background="?android:attr/selectableItemBackgroundBorderless"
                         android:contentDescription="@string/car_music_equalizer_label"
-                        android:scaleType="centerInside"
+                        android:scaleType="fitCenter"
                         android:padding="12dp"
                         app:layout_constraintStart_toEndOf="@id/btn_repeat"
                         app:layout_constraintEnd_toEndOf="parent"
