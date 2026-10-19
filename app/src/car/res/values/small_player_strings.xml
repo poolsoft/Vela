@@ -15,4 +15,6 @@
     <string name="car_small_clock_minutes">Minutes</string>
     <string name="car_small_clock_save">Save</string>
     <string name="car_small_clock_cancel">Cancel</string>
+    <string name="car_small_clock_soft">Soft pastel (Material You)</string>
+    <string name="car_small_clock_background">Match panel background</string>
 </resources>

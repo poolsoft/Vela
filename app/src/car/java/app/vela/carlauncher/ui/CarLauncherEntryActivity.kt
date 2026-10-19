@@ -35,6 +35,6 @@ class CarLauncherEntryActivity : Activity() {
         forwarded = true
         app.vela.util.FileLogger.i("LauncherTask", "Entry forward home=${intent.hasCategory(Intent.CATEGORY_HOME)} task=$taskId")
         MainActivity.returnToApp(this, intent)
-        finish()
+        if (isTaskRoot) finishAndRemoveTask() else finish()
     }
 }

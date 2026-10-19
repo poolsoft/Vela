@@ -79,12 +79,34 @@ object CarIntegration {
     val immersive: StateFlow<Boolean> get() = CarLauncherSettings.tamEkranModu
     val homeScreenRequest: StateFlow<Long> get() = CarLauncherSettings.homeScreenRequest
     fun init(context: Context) = CarLauncherSettings.baslat(context)
+    private val visibilityHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var pendingBackground: Runnable? = null
+
+    private fun cancelPendingBackground() {
+        pendingBackground?.let { visibilityHandler.removeCallbacks(it) }
+        pendingBackground = null
+    }
+
     fun onResume(activity: ComponentActivity) {
+        cancelPendingBackground()
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(true)
         app.vela.carlauncher.media.MusicManager.refreshIfCreated()
     }
-    fun onPause(activity: ComponentActivity) = Unit
+    fun onPause(activity: ComponentActivity) {
+        cancelPendingBackground()
+        val reference = java.lang.ref.WeakReference(activity)
+        val appContext = activity.applicationContext
+        pendingBackground = Runnable {
+            pendingBackground = null
+            val owner = reference.get() ?: return@Runnable
+            if (owner.isFinishing || owner.isChangingConfigurations ||
+                owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) return@Runnable
+            CarFloatingButtonManager.getInstance(appContext).setAppInForeground(false)
+            app.vela.util.FileLogger.i("LauncherTask", "Paused window treated as background task=${owner.taskId}")
+        }.also { visibilityHandler.postDelayed(it, 500L) }
+    }
     fun onStop(activity: ComponentActivity) {
+        cancelPendingBackground()
         CarLauncherSettings.finishInitialMapAttempt()
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(false)
     }
@@ -99,6 +121,7 @@ object CarIntegration {
             ?.activityInfo?.packageName == context.packageName
     }
     fun prepareForExit(activity: ComponentActivity) {
+        cancelPendingBackground()
         app.vela.carlauncher.diag.DiagnosticService.stop(activity)
         CarFloatingButtonManager.getInstance(activity).setSuspended(true)
         val music = app.vela.carlauncher.media.MusicManager.getInstance(activity)

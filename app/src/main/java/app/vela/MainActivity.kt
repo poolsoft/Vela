@@ -48,6 +48,23 @@ class MainActivity : ComponentActivity() {
                 addCategory(Intent.CATEGORY_LAUNCHER)
                 putExtra(RETURN_INTENT, incoming)
             }
+            // Prefer the existing concrete task, including after process reclamation.
+            // OEM HOME/radio windows can otherwise leave a second task card behind.
+            if (CarIntegration.available) {
+                val tasks = context.getSystemService(android.app.ActivityManager::class.java).appTasks
+                val retained = tasks.firstOrNull { it.taskInfo.id == owner?.taskId }
+                    ?: tasks.firstOrNull { it.taskInfo.baseActivity?.className == MainActivity::class.java.name }
+                if (retained != null) {
+                    try {
+                        launch.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        retained.startActivity(context, launch, null)
+                        app.vela.util.FileLogger.i("LauncherTask", "Return reused task=${retained.taskInfo.id} ownerTask=${owner?.taskId}")
+                        return
+                    } catch (error: RuntimeException) {
+                        app.vela.util.FileLogger.w("LauncherTask", "Retained task return failed: ${error.javaClass.simpleName}")
+                    }
+                }
+            }
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             context.startActivity(launch)
             app.vela.util.FileLogger.i("LauncherTask", "Requested return ownerTask=${owner?.taskId} homeTask=${owner?.ownerHomeTask}")

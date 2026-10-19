@@ -64,16 +64,27 @@ class CarUnifiedPanelHost(
     private var showVisualizer = preferences.getBoolean("visualizer", true)
 
     private fun applyClockColor() {
-        val color = when (preferences.getInt("clock_color", 0)) {
+        val mode = preferences.getInt("clock_color", 6)
+        val adaptive = if (mode == 7) backgroundClockColors() else null
+        val soft = if (android.os.Build.VERSION.SDK_INT >= 31) {
+            context.getColor(android.R.color.system_accent1_100) to context.getColor(android.R.color.system_accent2_200)
+        } else Color.rgb(235, 232, 219) to Color.rgb(215, 200, 231)
+        val color = when (mode) {
             1 -> androidx.core.content.ContextCompat.getColor(context, R.color.cl_primary)
-            2 -> Color.rgb(255, 191, 96)
+            2 -> Color.rgb(231, 213, 180)
             3 -> Color.TRANSPARENT
             4 -> Color.WHITE
-            5 -> preferences.getInt("clock_custom_primary", Color.rgb(63, 217, 202))
-            else -> Color.rgb(63, 217, 202)
+            5 -> preferences.getInt("clock_custom_primary", Color.rgb(184, 221, 212))
+            6 -> soft.first
+            7 -> adaptive!!.first
+            else -> Color.rgb(184, 221, 212)
         }
-        val twoColors = preferences.getBoolean("clock_two_colors", false) && color != Color.TRANSPARENT
-        val secondary = preferences.getInt("clock_custom_secondary", Color.rgb(203, 183, 255))
+        val twoColors = preferences.getBoolean("clock_two_colors", mode in 6..7) && color != Color.TRANSPARENT
+        val secondary = when (mode) {
+            6 -> soft.second
+            7 -> adaptive!!.second
+            else -> preferences.getInt("clock_custom_secondary", Color.rgb(216, 205, 228))
+        }
         clockView?.embossed = preferences.getBoolean("clock_embossed", false)
         val night = context.resources.configuration.uiMode and
             android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
@@ -82,6 +93,29 @@ class CarUnifiedPanelHost(
         clockView?.minuteFillColor = if (twoColors) {
             if (night) (secondary and 0x00FFFFFF) or 0xCC000000.toInt() else secondary
         } else null
+    }
+
+    private fun backgroundClockColors(): Pair<Int, Int> {
+        val drawable = rootView.findViewById<ImageView>(R.id.unified_album_art)?.drawable
+            ?: return Color.rgb(235, 232, 219) to Color.rgb(215, 200, 231)
+        val bitmap = android.graphics.Bitmap.createBitmap(12, 12, android.graphics.Bitmap.Config.ARGB_8888)
+        val bounds = android.graphics.Rect(drawable.bounds)
+        try {
+            drawable.setBounds(0, 0, 12, 12)
+            drawable.draw(android.graphics.Canvas(bitmap))
+            var red = 0; var green = 0; var blue = 0
+            for (y in 0 until 12) for (x in 0 until 12) {
+                val pixel = bitmap.getPixel(x, y)
+                red += Color.red(pixel); green += Color.green(pixel); blue += Color.blue(pixel)
+            }
+            val hsv = FloatArray(3)
+            Color.colorToHSV(Color.rgb(red / 144, green / 144, blue / 144), hsv)
+            return Color.HSVToColor(floatArrayOf(hsv[0], 0.12f, 0.94f)) to
+                Color.HSVToColor(floatArrayOf((hsv[0] + 35f) % 360f, 0.18f, 0.87f))
+        } finally {
+            drawable.bounds = bounds
+            bitmap.recycle()
+        }
     }
 
     private var appliedMedia: MedyaParcasi? = null
@@ -211,14 +245,15 @@ class CarUnifiedPanelHost(
         val colors = popup.menu.addSubMenu(R.string.car_small_clock_color)
         listOf(R.string.car_small_clock_turquoise, R.string.car_small_clock_theme,
             R.string.car_small_clock_amber, R.string.car_small_clock_transparent,
-            R.string.car_small_clock_white, R.string.car_small_clock_custom).forEachIndexed { index, label ->
+            R.string.car_small_clock_white, R.string.car_small_clock_custom,
+            R.string.car_small_clock_soft, R.string.car_small_clock_background).forEachIndexed { index, label ->
             colors.add(1, 20 + index, index, label).apply {
                 isCheckable = true
-                isChecked = preferences.getInt("clock_color", 0) == index
+                isChecked = preferences.getInt("clock_color", 6) == index
             }
         }
         colors.add(0, 32, 6, R.string.car_small_clock_two_colors).apply {
-            isCheckable = true; isChecked = preferences.getBoolean("clock_two_colors", false)
+            isCheckable = true; isChecked = preferences.getBoolean("clock_two_colors", preferences.getInt("clock_color", 6) in 6..7)
         }
         popup.menu.add(0, 31, 0, R.string.car_small_clock_embossed).apply {
             isCheckable = true; isChecked = preferences.getBoolean("clock_embossed", false)
@@ -231,9 +266,9 @@ class CarUnifiedPanelHost(
                 25 -> {
                     clockColorDialog?.dismiss()
                     clockColorDialog = ClockColorDialog.show(context,
-                        preferences.getInt("clock_custom_primary", Color.rgb(63, 217, 202)),
-                        preferences.getInt("clock_custom_secondary", Color.rgb(203, 183, 255)),
-                        preferences.getBoolean("clock_two_colors", false)) { primary, secondary, twoColors ->
+                        preferences.getInt("clock_custom_primary", Color.rgb(184, 221, 212)),
+                        preferences.getInt("clock_custom_secondary", Color.rgb(216, 205, 228)),
+                        preferences.getBoolean("clock_two_colors", preferences.getInt("clock_color", 6) in 6..7)) { primary, secondary, twoColors ->
                         preferences.edit().putInt("clock_color", 5)
                             .putInt("clock_custom_primary", primary).putInt("clock_custom_secondary", secondary)
                             .putBoolean("clock_two_colors", twoColors).apply()
@@ -242,11 +277,11 @@ class CarUnifiedPanelHost(
                     true
                 }
                 32 -> {
-                    preferences.edit().putBoolean("clock_two_colors", !preferences.getBoolean("clock_two_colors", false)).apply()
+                    preferences.edit().putBoolean("clock_two_colors", !preferences.getBoolean("clock_two_colors", preferences.getInt("clock_color", 6) in 6..7)).apply()
                     applyClockColor()
                     true
                 }
-                in 20..24 -> {
+                in 20..24, 26, 27 -> {
                     preferences.edit().putInt("clock_color", item.itemId - 20).apply()
                     applyClockColor()
                     true
