@@ -121,6 +121,7 @@ class MusicRepository private constructor(private val context: Context) {
 
         val bulunanParcalar = mutableListOf<SesParcasi>()
         val tarananDosyaYollari = HashSet<String>()
+        val dislananDosyaYollari = HashSet<String>()
 
         try {
             // ==============================================================
@@ -136,7 +137,10 @@ class MusicRepository private constructor(private val context: Context) {
                     MediaStore.Audio.Media.DURATION,
                     MediaStore.Audio.Media.DATA,
                     MediaStore.Audio.Media.DATE_ADDED,
-                    MediaStore.Audio.Media.ALBUM_ID
+                    MediaStore.Audio.Media.ALBUM_ID,
+                    MediaStore.Audio.Media.IS_RINGTONE,
+                    MediaStore.Audio.Media.IS_ALARM,
+                    MediaStore.Audio.Media.IS_NOTIFICATION
                 )
                 val columns = projection.toMutableList()
                 if (android.os.Build.VERSION.SDK_INT >= 29) {
@@ -144,8 +148,11 @@ class MusicRepository private constructor(private val context: Context) {
                     columns.add(MediaStore.Audio.Media.VOLUME_NAME)
                 }
 
-                // Teyplerde IS_MUSIC genelde 0 oldugundan sadece sure kontrolu yapiyoruz
-                val selection = "${MediaStore.Audio.Media.DURATION} >= 10000"
+                // Do not require IS_MUSIC: some head units mark real USB songs as non-music.
+                // Fetch flagged short sounds too, so the file crawler cannot re-add them.
+                val selection = "${MediaStore.Audio.Media.DURATION} >= 10000 OR " +
+                    "${MediaStore.Audio.Media.IS_RINGTONE} = 1 OR ${MediaStore.Audio.Media.IS_ALARM} = 1 OR " +
+                    "${MediaStore.Audio.Media.IS_NOTIFICATION} = 1"
                 val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
 
                 context.contentResolver.query(uri, columns.toTypedArray(), selection, null, sortOrder)?.use { cursor ->
@@ -157,10 +164,21 @@ class MusicRepository private constructor(private val context: Context) {
                     val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
                     val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
                     val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                    val ringtoneCol = cursor.getColumnIndex(MediaStore.Audio.Media.IS_RINGTONE)
+                    val alarmCol = cursor.getColumnIndex(MediaStore.Audio.Media.IS_ALARM)
+                    val notificationCol = cursor.getColumnIndex(MediaStore.Audio.Media.IS_NOTIFICATION)
+                    fun flagged(column: Int) = column >= 0 && !cursor.isNull(column) && cursor.getInt(column) != 0
 
                     while (cursor.moveToNext()) {
                         val path = cursor.getString(dataCol) ?: ""
-                        if (path.isBlank() || karaListedeMi(path)) continue
+                        if (path.isBlank()) continue
+                        if (MusicScanFilter.excludes(path, flagged(ringtoneCol), flagged(alarmCol), flagged(notificationCol))) {
+                            // Reserve excluded identities so direct scanning cannot bypass MediaStore flags.
+                            val identity = musicFileIdentity(File(path))
+                            dislananDosyaYollari.add(identity)
+                            tarananDosyaYollari.add(identity)
+                            continue
+                        }
 
                         val id = cursor.getLong(idCol)
                         val title = cursor.getString(titleCol) ?: File(path).nameWithoutExtension
@@ -218,6 +236,7 @@ class MusicRepository private constructor(private val context: Context) {
             // ==============================================================
             // 3. ADIM: Klasorleri Grupla ve Sirala
             // ==============================================================
+            bulunanParcalar.removeAll { musicFileIdentity(File(it.dosyaYolu)) in dislananDosyaYollari }
             val klasorMap = mutableMapOf<String, MutableList<SesParcasi>>()
             for (p in bulunanParcalar) {
                 if (p.dosyaYolu.isNotBlank()) {
@@ -310,20 +329,17 @@ class MusicRepository private constructor(private val context: Context) {
         bulunanParcalar: MutableList<SesParcasi>,
         retriever: MediaMetadataRetriever
     ) {
-        if (derinlik > 6 || !dir.exists() || !dir.canRead()) return
+        if (derinlik > 6 || !dir.exists() || !dir.canRead() || MusicScanFilter.excludes(dir.absolutePath)) return
+        if (File(dir, ".nomedia").exists()) return
 
         val files = dir.listFiles() ?: return
         for (file in files) {
             val adi = file.name
-            if (adi.startsWith(".")) continue
+            if (adi.startsWith(".") || MusicScanFilter.excludes(file.absolutePath)) continue
 
             if (file.isDirectory) {
                 val adKucuk = adi.lowercase()
-                if (!adKucuk.contains("android") &&
-                    !adKucuk.contains("whatsapp") &&
-                    !adKucuk.contains("telegram") &&
-                    !adKucuk.contains(".cache")
-                ) {
+                if (adKucuk != "android" && adKucuk != ".cache") {
                     diziniTara(file, derinlik + 1, bilinenYollar, bulunanParcalar, retriever)
                 }
             } else if (file.isFile && file.length() > 50 * 1024) { // En az 50 KB
@@ -376,16 +392,6 @@ class MusicRepository private constructor(private val context: Context) {
             (y.startsWith("/storage/") && !y.contains("emulated") && !y.contains("self"))
     }
 
-    private fun karaListedeMi(path: String): Boolean {
-        val p = path.lowercase()
-        return p.contains("/whatsapp") ||
-            p.contains("/telegram") ||
-            p.contains("/notifications") ||
-            p.contains("/ringtones") ||
-            p.contains("/alarms") ||
-            p.contains("/recordings")
-    }
-
     private fun getIndexFile(): File {
         return File(context.filesDir, "car_music_index_v1.json")
     }
@@ -409,7 +415,7 @@ class MusicRepository private constructor(private val context: Context) {
                 if (i % 128 == 0) app.vela.diag.ProcessDiagnostics.checkpoint("music cache: restoring entry $i/${array.length()}")
                 val obj = array.getJSONObject(i)
                 val dosyaYolu = obj.optString("dosyaYolu", "")
-                if (dosyaYolu.isNotBlank()) {
+                if (dosyaYolu.isNotBlank() && !MusicScanFilter.excludes(dosyaYolu)) {
                     val f = File(dosyaYolu)
                     if ((!isUsbYolu(dosyaYolu) || f.isFile) && knownFiles.add(cachedMusicFileIdentity(dosyaYolu))) {
                         yuklenenParcalar.add(

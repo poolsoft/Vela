@@ -557,3 +557,5 @@ Validate the flat music-control chooser on the physical head unit, including tou
 - Verify fresh phone restart detection, radio unknown-state behavior and source-lock persistence on the physical head unit.
 
 - Verify player dock icon sizing and the six-control playback row at the physical head-unit split-panel sizes.
+
+- Confirm MediaStore system-sound flags and messaging-folder exclusion on the physical head unit after a manual music rescan.
