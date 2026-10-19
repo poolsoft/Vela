@@ -24,8 +24,8 @@ import app.vela.R
  * The one list of quick-category chips. The map's chip row, the route chooser's "search along
  * route" and the in-nav search all show these, in this order, so a chip means the same thing
  * wherever it appears (2026-09-16: the three rows had drifted to three different sets). Each
- * chip sends a STABLE English query (Google understands it in any locale, and OfflinePoiStore
- * expands it offline); the label is what localizes.
+ * chip carries a stable category key. Its label is localized independently; the category
+ * browser uses POI tag values rather than address search.
  */
 object QuickCategories {
     data class Chip(val label: Int, val query: String, val icon: ImageVector)

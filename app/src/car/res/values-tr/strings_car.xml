@@ -105,7 +105,7 @@
     <string name="car_internal_settings">Ayarlar</string>
     <string name="car_internal_music">Müzik</string>
     <string name="car_internal_antenna">Anten</string>
-    <string name="car_internal_dashboard">Dashboard</string>
+    <string name="car_internal_dashboard">Gösterge paneli</string>
     <string name="car_internal_neon_dashboard">Dijital Gösterge</string>
     <string name="car_feature_pending">Bu araç henüz Vela’ya aktarılmadı.</string>
     <string name="car_app_launch_failed">Uygulama açılamadı.</string>
@@ -324,4 +324,5 @@
     <string name="car_sources_done">Tamam</string>
     <string name="car_sources_controlled">Kontrol ediliyor</string>
     <string name="car_sources_phone_hint">Telefon müziğini telefondan başlatın. Bluetooth ve uyumlu Android Auto oynatıcıları kullanılabilir olduğunda burada görünür.</string>
+    <string name="car_music_scan">Müzikleri tara</string>
 </resources>

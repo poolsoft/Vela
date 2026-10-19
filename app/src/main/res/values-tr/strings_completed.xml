@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_delete_offline_all">Tüm çevrimdışı verileri sil</string>
+    <string name="settings_delete_offline_all_hint">Kaydedilen tüm alanları, indirilen bölgeleri (rota, yerler, harita), bina ve adres katmanlarını ve gezinme önbelleğini kaldırır; harita veritabanını küçültür. Sesler korunur. Depolama bilgileri listelerde görünenlerle uyuşmuyorsa bunu kullanın.</string>
+    <string name="settings_delete_offline_all_title">Tüm çevrimdışı veriler silinsin mi?</string>
+    <string name="settings_delete_offline_all_body">Yaklaşık %1$s boyutundaki indirilmiş harita, rota ve yer verileri kaldırılacak. Kaydedilen yerler, yolculuklar ve sesler korunur.</string>
+    <string name="settings_region_whole_or_pieces">Tek dosya veya aşağıdaki %1$d parça</string>
+    <string name="settings_downloaded_title">İndirilenler</string>
+    <string name="settings_downloaded_none">Henüz bir şey indirilmedi. Yukarıda görünen alanı kaydedin veya aşağıdan bir bölge ya da ülke seçin.</string>
+    <string name="settings_downloaded_area">Kaydedilen alan</string>
+    <string name="settings_google_free">Vela’yı Google olmadan kullan</string>
+    <string name="settings_google_free_hint">Google’a hiçbir veri gönderilmez. Arama, OpenStreetMap ve indirdiğiniz bölgeleri kullanır; haritadaki yerler Vela’nın kendi verilerinden, rotalar ise canlı trafik bilgisi olmadan açık rota motorundan gelir. Yorumlar, fotoğraflar, çalışma saatleri, canlı varış süreleri, Street View, toplu taşıma rotaları ve yakın uydu görüntüleri kullanılamaz. İndirilen bölgeler tamamen çevrimdışı çalışmaya devam eder.</string>
+    <string name="settings_installer_play">%1$s tarafından yüklendi. Bu kurulum Android Auto için ayarlanmış; uygulama içinden güncellemek bu ayarı bozabilir. Aynı yükleyici üzerinden güncelleyin.</string>
+    <string name="settings_installer_none">Doğrudan APK ile yüklendi (yükleyici kaydı yok). Android Auto bu kurulumu listelemez.</string>
+    <string name="settings_installer_other">%1$s tarafından yüklendi. Android Auto bu kurulumu listelemez.</string>
+    <string name="settings_google_free_links">Paylaşılan Google Maps bağlantılarını aç</string>
+    <string name="settings_google_free_links_hint">Kısa bir Google Maps bağlantısı (maps.app.goo.gl) hedefini doğrudan belirtmez. Bu seçenek açıkken Vela, Google’ın bağlantı kısaltma hizmetine bir kez ve çerez göndermeden sorar; yeri açık veri kaynaklarıyla açar. Tam google.com/maps bağlantıları sorgulamadan açılır. Paylaşılan listeler yine Google gerektirir.</string>
+    <string name="mapvm_offline_all_deleted">Çevrimdışı veriler silindi</string>
+    <string name="place_origin_checking">Kaynak: %1$s · Google’da kontrol ediliyor</string>
+    <string name="place_origin_unlinked">Kaynak: %1$s · Google’da eşleştirilemedi</string>
+    <string name="place_origin_plain">Kaynak: %1$s</string>
+    <string name="search_fill_cd">Arama kutusuna yaz</string>
+    <string name="place_transit_cached">Son kontrol: %1$s. Bağlantı olmadığından saatler değişmiş olabilir.</string>
+    <string name="car_pause">Duraklat</string>
+    <string name="car_resume">Sürdür</string>
+    <string name="car_paused">Duraklatıldı</string>
+    <string name="car_along_route">Rota boyunca ara</string>
+    <string name="car_along_none">Yakında sonuç bulunamadı</string>
+    <string name="car_stop_added">%1$s bir sonraki durak olarak eklendi</string>
+    <string name="car_continue_on">%1$s üzerinde devam edin</string>
+    <string name="map_import_needs_google">Vela Google olmadan çalışırken paylaşılan Google Maps listeleri açılamaz.</string>
+    <string name="map_link_needs_google">Ayarlar → Gizlilik bölümünde “Paylaşılan Google Maps bağlantılarını aç” kapalı.</string>
+    <string name="map_link_unreadable">Bağlantı açılamadı.</string>
+    <string name="place_source_overture">Overture</string>
+    <string name="place_source_atp">AllThePlaces (%1$s)</string>
+    <string name="place_source_osm">OpenStreetMap</string>
+    <plurals name="place_review_count">
+        <item quantity="one">%1$d yorum</item>
+        <item quantity="other">%1$d yorum</item>
+    </plurals>
+    <plurals name="place_transit_stops">
+        <item quantity="one">%1$d durak</item>
+        <item quantity="other">%1$d durak</item>
+    </plurals>
+    <plurals name="topcard_more_stops">
+        <item quantity="one">+%d durak daha</item>
+        <item quantity="other">+%d durak daha</item>
+    </plurals>
+    <plurals name="exp_chooser_alts">
+        <item quantity="one">%1$d diğer rota</item>
+        <item quantity="other">%1$d diğer rota</item>
+    </plurals>
+    <string name="car_backup_count_items">%1$d öğe</string>
+    <string name="car_backup_success">Yedekleme başarıyla tamamlandı.</string>
+    <string name="car_backup_restore_success">Seçilen öğeler başarıyla geri yüklendi.</string>
+</resources>

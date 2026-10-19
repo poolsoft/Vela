@@ -76,6 +76,8 @@ fun SearchBar(
     offline: Boolean = false,
     dpadMode: Boolean = false,
     inputEnabled: Boolean = true,
+    placeholderText: String? = null,
+    forceClear: Boolean = false,
     // Voice search: shown only when there's a way to service it (a voice-input app, and later an
     // on-device model). Null = no mic. Sits at the right when the field is empty, Google-style.
     onMic: (() -> Unit)? = null,
@@ -171,7 +173,7 @@ fun SearchBar(
             ) {
                 if (query.isEmpty()) {
                     Text(
-                        stringResource(R.string.search_placeholder),
+                        placeholderText ?: stringResource(R.string.search_placeholder),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -246,7 +248,7 @@ fun SearchBar(
                         },
                 )
             }
-            if (query.isNotEmpty()) {
+            if (query.isNotEmpty() || forceClear) {
                 IconButton(onClick = onClear, modifier = Modifier.size(40.dp)) {
                     Icon(
                         Icons.Default.Close,

@@ -155,6 +155,12 @@ data class MapUiState(
     // satellite-optimized in the manifest, so it also has to behave like it - photos and the
     // fat ambient fan-out step aside while this is true.
     val lowData: Boolean = false,
+    val categoryId: String? = null,
+    val categoryLabel: String? = null,
+    val categoryFilter: String = "",
+    val categoryCenter: LatLng? = null,
+    val categoryRadiusMeters: Double = 10_000.0,
+    val categoryPlaces: List<Place> = emptyList(),
     val query: String = "",
     val results: List<Place> = emptyList(),
     // The query whose results can page further ("More results" row at the end of the list);
@@ -1016,6 +1022,11 @@ class MapViewModel @Inject constructor(
      *  (the calibrated search endpoint plus Photon and the local address pack).
      *  Best-effort, and a stale response is dropped if the query moved on. */
     fun onQueryChange(q: String) {
+        if (_state.value.categoryId != null) {
+            _state.update { it.copy(categoryFilter = q,
+                results = app.vela.core.data.NearbyCategories.filterLoaded(it.categoryPlaces, q), resultsCollapsed = false) }
+            return
+        }
         _state.update { it.copy(query = q) }
         suggestJob?.cancel()
         val term = q.trim()
@@ -1282,7 +1293,16 @@ class MapViewModel @Inject constructor(
     /** The X in the search bar: wipe the query, results and selection. Closing an ALONG-ROUTE
      *  browse instead returns to the trip it belongs to (restore the destination + panel) —
      *  the user was hunting for a stop, not abandoning the drive. */
+    private var categoryGeneration = 0L
+
     fun clearSearch() {
+        categoryGeneration++
+        searchJob?.cancel()
+        moreJob?.cancel()
+        moreSearch = null
+        _state.update { it.copy(categoryId = null, categoryLabel = null, categoryFilter = "",
+            categoryPlaces = emptyList(), categoryCenter = null, searching = false, status = null,
+            resultsMoreQuery = null, resultsLoadingMore = false) }
         openDirectionsOnResult = false
         suggestJob?.cancel()
         val backToTrip = _state.value.alongRouteDest
@@ -1645,6 +1665,7 @@ class MapViewModel @Inject constructor(
     // panning to another area returns results THERE, not back at your GPS location. Falls back to GPS
     // before the map has settled a center.
     fun search() {
+        if (_state.value.categoryId != null) return
         val q = _state.value.query.trim()
         val near = plausibleBias(mapCenter) ?: plausibleBias(_state.value.myLocation)
         if (handleQueryIntent(q, near)) return
@@ -1794,7 +1815,13 @@ class MapViewModel @Inject constructor(
     }
 
     /** Re-run the current query biased to the area the user has panned to. */
-    fun searchThisArea() = runSearch(_state.value.query.trim(), plausibleBias(mapCenter))
+    fun searchThisArea() {
+        val state = _state.value
+        if (state.categoryId != null) {
+            loadCategory(state.categoryId, state.categoryLabel.orEmpty(),
+                plausibleBias(mapCenter) ?: state.categoryCenter, state.categoryRadiusMeters, state.categoryFilter)
+        } else runSearch(state.query.trim(), plausibleBias(mapCenter))
+    }
 
     // "More results" (2026-09-13): the search fetches three pages; this pulls the next three of
     // the SAME request (query, window, ranking point) and appends what is new. The row disappears
@@ -1832,7 +1859,7 @@ class MapViewModel @Inject constructor(
     fun onCameraIdle(center: LatLng) {
         mapCenter = center
         maybeOfferRouting()
-        if (_state.value.results.isNotEmpty() && _state.value.selected == null) {
+        if ((_state.value.results.isNotEmpty() || _state.value.categoryId != null) && _state.value.selected == null) {
             _state.update { it.copy(showSearchThisArea = true) }
         }
         warmWebViewsWhenQuiet()
@@ -1980,6 +2007,9 @@ class MapViewModel @Inject constructor(
     }
 
     private fun runSearch(q: String, near: LatLng?) {
+        searchJob?.cancel()
+        categoryGeneration++
+        _state.update { it.copy(categoryId = null, categoryLabel = null, categoryFilter = "", categoryPlaces = emptyList(), categoryCenter = null) }
         if (q.isEmpty()) return
         // Pasted coordinates ("37.77, -122.42" or a geo: string) drop a reverse-geocoded pin
         // there instead of going to the search endpoint as text - same handling a bare external
@@ -4046,8 +4076,52 @@ class MapViewModel @Inject constructor(
     }
 
     fun quickSearch(category: String) {
-        _state.update { it.copy(query = category) }
-        search()
+        val chip = app.vela.ui.QuickCategories.all().firstOrNull { it.query.equals(category, ignoreCase = true) }
+        val display = chip?.let { app.vela.ui.AppLocale.wrap(appContext).getString(it.label) } ?: category
+        val current = _state.value
+        if (current.categoryId == category && current.categoryPlaces.isNotEmpty()) {
+            onQueryChange("")
+            return
+        }
+        loadCategory(category, display, plausibleBias(mapCenter) ?: plausibleBias(current.myLocation), 10_000.0, "")
+    }
+
+    fun expandCategoryArea() {
+        val state = _state.value
+        state.categoryId?.let { loadCategory(it, state.categoryLabel.orEmpty(), state.categoryCenter, 20_000.0, state.categoryFilter) }
+    }
+
+    private fun loadCategory(category: String, label: String, center: LatLng?, radius: Double, filter: String) {
+        searchJob?.cancel()
+        suggestJob?.cancel()
+        moreJob?.cancel()
+        moreSearch = null
+        val generation = ++categoryGeneration
+        _state.update { it.copy(categoryId = category, categoryLabel = label, categoryFilter = filter,
+            categoryCenter = center, categoryRadiusMeters = radius, categoryPlaces = emptyList(),
+            query = "", results = emptyList(), suggestions = emptyList(), querySuggestions = emptyList(), localSuggestions = emptyList(),
+            selected = null, status = null, searching = center != null, resultsCollapsed = false,
+            resultsMoreQuery = null, resultsLoadingMore = false, openListId = null, pendingImport = null) }
+        if (center == null) {
+            _state.update { it.copy(status = appContext.getString(R.string.search_category_location_required)) }
+            return
+        }
+        searchJob = viewModelScope.launch {
+            val categories = app.vela.core.data.NearbyCategories.values(category)
+            val hits = withContext(Dispatchers.IO) {
+                val local = runCatching { offlinePoiStore.near(center, radius, 500, categories) }
+                    .onFailure { app.vela.util.FileLogger.w("CategorySearch", "Local category lookup failed", it) }.getOrDefault(emptyList())
+                val pool = if (local.isNotEmpty() || offlineNow()) local else
+                    app.vela.core.data.OverpassPois.nearbyCategory(http, category, center, radius)
+                app.vela.core.data.CategoryFilter.applyIfEnabled(
+                    app.vela.core.data.NearbyCategories.nearby(pool, center, categories, radiusMeters = radius))
+            }
+            coroutineContext.ensureActive()
+            if (generation != categoryGeneration) return@launch
+            _state.update { it.copy(categoryPlaces = hits, searching = false,
+                results = app.vela.core.data.NearbyCategories.filterLoaded(hits, it.categoryFilter)) }
+            app.vela.util.FileLogger.i("CategorySearch", "category=$category radius=$radius pool=${hits.size} generation=$generation")
+        }
     }
 
     /**

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_category_location_required">Yakındaki yerleri aramak için konumunuzu bekleyin veya haritayı istediğiniz bölgeye taşıyın.</string>
+    <string name="search_category_no_nearby">%1$s için 10 km içinde sonuç bulunamadı. Başka bir bölge deneyin veya bölgenin arama verilerini indirin.</string>
+    <string name="search_result_address">Adres</string>
+    <string name="search_address_hint">Adres ara</string>
+    <string name="search_category_filter_hint">%1$s içinde ara</string>
+    <string name="search_category_filter_empty">Bu kategoride eşleşme yok. Yazıyı değiştirin veya tam liste için silin.</string>
+    <string name="search_category_area_empty">Yakında bu kategoride yer bulunamadı. Bölgenin arama verilerini indirin veya arama alanını genişletin.</string>
+    <string name="search_category_expand">20 km çevresine genişlet</string>
+    <string name="search_category_loading">Yakındaki yerler yükleniyor…</string>
+    <string name="search_results_filters_empty">Etkin filtrelere uyan yer yok. Filtreleri değiştirin veya temizleyin.</string>
+</resources>

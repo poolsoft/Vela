@@ -491,7 +491,7 @@ fun MapScreen(
     // overlay there (blur must not close it); BACK clears both and closes as before.
     val gates = SearchGates.of(state, searchExpanded, searchFocused)
     val mapInputReady = app.vela.variant.CarIntegration.mapInputReady()
-    val searchOpen = mapInputReady && gates.searchOpen
+    val searchOpen = mapInputReady && gates.searchOpen && state.categoryId == null
     // The results panel is open (not collapsed to the "N results" pill) → hide the bottom map
     // chrome (scale bar / locate FAB / Search this area) so it never draws on top of the list at
     // ANY size, not just full screen. The panel and the chrome are siblings in the same Box and the
@@ -1470,7 +1470,11 @@ fun MapScreen(
                     val searchBar: @Composable () -> Unit = {
                     SearchBar(
                         inputEnabled = mapInputReady,
-                        query = state.query,
+                        query = if (state.categoryId != null) state.categoryFilter else state.query,
+                        forceClear = state.categoryId != null,
+                        placeholderText = if (state.categoryId != null)
+                            stringResource(R.string.search_category_filter_hint, state.categoryLabel.orEmpty())
+                            else stringResource(R.string.search_address_hint),
                         searching = state.searching,
                         onQueryChange = vm::onQueryChange,
                         fillTick = state.queryEdits,
@@ -1513,6 +1517,7 @@ fun MapScreen(
                                 Spacer(Modifier.width(10.dp))
                                 CategoryChips(
                                     onPick = vm::quickSearch,
+                                    selectedQuery = state.categoryId,
                                     modifier = Modifier.weight(1f),
                                 )
                             }
@@ -1549,8 +1554,9 @@ fun MapScreen(
                         // surfaces below, Google-style); the top bar keeps only the category
                         // chips, and only on the bare map (in landscape they already rendered
                         // beside the bar above).
-                        !landscapeOneLine && state.selected == null && state.results.isEmpty() -> CategoryChips(
+                        !landscapeOneLine && state.selected == null && (state.results.isEmpty() || state.categoryId != null) -> CategoryChips(
                             onPick = vm::quickSearch,
+                                    selectedQuery = state.categoryId,
                             modifier = Modifier.padding(top = 8.dp),
                         )
                     }
@@ -2247,7 +2253,7 @@ fun MapScreen(
             // gates it too: opening the viewer clears `selected`, which used to fall through to
             // THIS branch and draw the results list over the bottom-half mini map (user
             // 2026-07-18); the sheet returns when the viewer closes.
-            state.results.isNotEmpty() && (!searchOpen || pickingResults) && state.pickOnMap == null &&
+            (state.results.isNotEmpty() || state.categoryId != null) && (!searchOpen || pickingResults) && state.pickOnMap == null &&
                 state.streetView == null && !state.streetViewLoading -> {
               SearchResults(
                 results = state.results,
@@ -2263,7 +2269,14 @@ fun MapScreen(
                 onExpand = vm::expandResults,
                 onClose = vm::clearSearch,
                 listName = state.openListId?.let { id -> state.lists.firstOrNull { it.id == id }?.name },
-                query = state.query,
+                query = state.categoryLabel ?: state.query,
+                emptyMessage = if (state.categoryId != null) {
+                    if (state.searching) stringResource(R.string.search_category_loading)
+                    else if (state.categoryFilter.isNotBlank()) stringResource(R.string.search_category_filter_empty)
+                    else stringResource(R.string.search_category_area_empty)
+                } else null,
+                onExpandCategory = if (state.categoryId != null && state.categoryRadiusMeters < 20_000.0 && state.categoryCenter != null &&
+                    !state.searching && state.categoryFilter.isBlank()) vm::expandCategoryArea else null,
                 minimizeTick = resultsPanTick,
                 moreAvailable = state.resultsMoreQuery != null && state.resultsMoreQuery == state.query && state.openListId == null && state.pendingImport == null,
                 loadingMore = state.resultsLoadingMore,
@@ -3067,6 +3080,8 @@ private fun SearchResults(
     moreAvailable: Boolean = false, // a "More results" row at the end of the list (next pages of the same search)
     loadingMore: Boolean = false,
     onMore: () -> Unit = {},
+    emptyMessage: String? = null,
+    onExpandCategory: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     // A BOTTOM sheet, Google-style, sharing the place sheet's detent grammar:
@@ -3470,6 +3485,14 @@ private fun SearchResults(
                     },
                 state = listState,
             ) {
+                if (shown.isEmpty() && emptyMessage != null) item {
+                    Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                        Text(if (results.isNotEmpty()) stringResource(R.string.search_results_filters_empty) else emptyMessage, color = SheetPalette.dim(dark))
+                        if (results.isEmpty()) onExpandCategory?.let { expand ->
+                            TextButton(onClick = expand) { Text(stringResource(R.string.search_category_expand)) }
+                        }
+                    }
+                }
                 items(shown) { place ->
                 Column(
                     Modifier
@@ -3504,7 +3527,7 @@ private fun SearchResults(
                     }
                     val sub = listOfNotNull(
                         place.priceText,
-                        place.category,
+                        if (place.category.equals("Address", ignoreCase = true)) stringResource(R.string.search_result_address) else place.category,
                         place.distanceMeters?.let { formatDistance(it) },
                     ).joinToString(" · ")
                     if (sub.isNotEmpty()) {
@@ -4135,7 +4158,7 @@ private fun SearchEntryHost(state: MapUiState, vm: MapViewModel, focusManager: a
 }
 
 @Composable
-private fun CategoryChips(onPick: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun CategoryChips(onPick: (String) -> Unit, modifier: Modifier = Modifier, selectedQuery: String? = null) {
     // (localized label, STABLE English search query, icon) — the query is the logic key sent to Google
     // search (works in any locale), the label is what the user sees, so the chips localize without
     // changing what's searched.
@@ -4161,6 +4184,7 @@ private fun CategoryChips(onPick: (String) -> Unit, modifier: Modifier = Modifie
                 // read DARKER than the label. onSurfaceVariant matches the glyph weight to
                 // the text, like Google's rows.
                 colors = androidx.compose.material3.AssistChipDefaults.elevatedAssistChipColors(
+                    containerColor = if (query == selectedQuery) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
                     leadingIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
             )

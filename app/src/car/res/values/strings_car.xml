@@ -122,7 +122,7 @@
     <string name="car_music_internal">Vela player</string>
 
     <string name="car_music_now_playing">♫ NOW PLAYING</string>
-    <string name="car_music_scan">Müzikleri Tara</string>
+    <string name="car_music_scan">Scan music</string>
     <string name="car_pref_title_online_album_art">Online album artwork</string>
     <string-array name="online_album_art_entries">
         <item>Off</item>

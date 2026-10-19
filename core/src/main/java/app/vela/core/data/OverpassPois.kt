@@ -70,6 +70,16 @@ object OverpassPois {
         emptyList()
     }
 
+    /** Category-filtered nearby POIs; never substitute named addresses when the category is empty. */
+    @OptIn(ExperimentalSerializationApi::class)
+    fun nearbyCategory(http: OkHttpClient, category: String, center: LatLng, radiusMeters: Double = NearbyCategories.RADIUS_METERS): List<Place> {
+        val query = NearbyCategories.overpassQuery(category, center, radiusMeters) ?: return emptyList()
+        val places = OverpassEndpoints.run(http, query) { body ->
+            json.decodeFromStream<OvResp>(body.byteStream()).elements.mapNotNull { toPlace(it) }
+        }.orEmpty()
+        return NearbyCategories.nearby(places, center, NearbyCategories.values(category), radiusMeters = radiusMeters)
+    }
+
     /** Every addressed point (`addr:housenumber`) in the bbox — nodes AND ways (`out center` gives a
      *  way a representative point) — for the offline [OfflineAddressStore] geocoder. Capped high because
      *  a residential download area holds thousands of houses; use a long-timeout client for the body. */

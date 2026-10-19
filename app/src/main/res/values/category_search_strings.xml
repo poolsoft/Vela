@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_category_location_required">Wait for your location or move the map to search nearby places.</string>
+    <string name="search_category_no_nearby">No places found within 10 km for %1$s. Try another area or download its search data.</string>
+    <string name="search_result_address">Address</string>
+    <string name="search_address_hint">Search address</string>
+    <string name="search_category_filter_hint">Search within %1$s</string>
+    <string name="search_category_filter_empty">No matches in this category. Change the text or delete it to show the full list.</string>
+    <string name="search_category_area_empty">No places in this category nearby. Download search data for this area or expand the search.</string>
+    <string name="search_category_expand">Expand to 20 km</string>
+    <string name="search_category_loading">Loading nearby places…</string>
+    <string name="search_results_filters_empty">No places match the active filters. Change or clear the filters.</string>
+</resources>
