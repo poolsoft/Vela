@@ -553,3 +553,5 @@ Validate the flat music-control chooser on the physical head unit, including tou
 - Keep the existing CI translation gate in release validation alongside the Turkish resource audit.
 
 - Validate single-station radio seeking, USB detach/reattach, and source-strip switching on a physical head unit.
+
+- Verify fresh phone restart detection, radio unknown-state behavior and source-lock persistence on the physical head unit.

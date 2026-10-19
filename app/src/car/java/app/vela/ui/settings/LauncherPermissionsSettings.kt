@@ -446,21 +446,21 @@ private fun ActionRow(
 fun SmartFocusPreferences() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("vela_music_focus", Context.MODE_PRIVATE) }
-    var follow by remember { mutableStateOf(prefs.getBoolean("auto_follow", true)) }
+    val manager = remember { app.vela.carlauncher.media.MusicManager.getInstance(context) }
+    val media by manager.medyaDurumu.collectAsState()
+    val sourcesRevision by manager.sourcesRevision.collectAsState()
+    val follow = remember(media.sourceId, sourcesRevision) { manager.isAutomaticTracking() }
     var source by remember { mutableStateOf(prefs.getString("startup_source", "last") ?: "last") }
     var seconds by remember { mutableIntStateOf(prefs.getInt("bt_wait_seconds", 8).coerceIn(3, 15)) }
     Column(Modifier.fillMaxWidth().padding(14.dp)) {
         Text(stringResource(R.string.car_smart_focus))
         Text(stringResource(R.string.car_smart_focus_desc))
         Switch(checked = follow, onCheckedChange = {
-            follow = it
-            prefs.edit().putBoolean("auto_follow", it).apply()
-            if (it) app.vela.carlauncher.media.MusicManager.getInstance(context).allowAutomaticSourceTracking()
+            if (it) manager.allowAutomaticSourceTracking() else manager.setSourceLocked(true)
         })
-        Text("Kaynaklar: Otomatik takibe dahil edilecek oynatıcılar")
-        val manager = remember { app.vela.carlauncher.media.MusicManager.getInstance(context) }
-        val media by manager.medyaDurumu.collectAsState()
-        val sourcesRevision by manager.sourcesRevision.collectAsState()
+        Text(stringResource(R.string.car_sources_lock))
+        Switch(checked = !follow, onCheckedChange = { manager.setSourceLocked(it) })
+        Text(stringResource(R.string.car_sources_follow_apps))
         manager.availableSources().forEach { (key, label) ->
             var enabled by remember(key, media.sourceId, sourcesRevision) { mutableStateOf(manager.isSourceTrackingEnabled(key)) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -468,7 +468,7 @@ fun SmartFocusPreferences() {
                 Switch(checked = enabled, onCheckedChange = { enabled = it; manager.setSourceTracking(key, it) })
             }
         }
-        Text("BT yalnız medya oynatmasını takip eder; görüşme veya yalnız bağlantı kaynak değiştirmez. ZLink/Android Auto gerçek medya oturumu sunuyorsa takip edilir.")
+        Text(stringResource(R.string.car_sources_tracking_hint))
         val startupSources = listOf(
             "last" to stringResource(R.string.car_source_last),
             "internal" to stringResource(R.string.car_source_internal),

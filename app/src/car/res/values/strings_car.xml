@@ -188,7 +188,7 @@
     <string name="car_permission_granted">Granted</string>
     <string name="car_permission_required">Not granted</string>
     <string name="car_smart_focus">Smart Focus</string>
-    <string name="car_smart_focus_desc">Follow actual playback while idle. Manual source selection stays locked until automatic tracking is enabled again. A Bluetooth connection alone never changes the source.</string>
+    <string name="car_smart_focus_desc">Follow actual music playback. Selecting a player does not disable tracking; use Keep current source to lock it. Bluetooth connection alone never changes the source.</string>
     <string name="car_source_last">Last source</string>
     <string name="car_startup_source">Source for automatic resume (enable automatic playback below)</string>
     <string name="car_bt_wait">Startup connection wait: %1$d seconds</string>
@@ -321,8 +321,8 @@
     <string name="car_sources_current">Controlling: %1$s</string>
     <string name="car_sources_playing">Playing</string>
     <string name="car_sources_waiting">Waiting for music</string>
-    <string name="car_sources_manual">Choose a player manually</string>
-    <string name="car_sources_manual_hint">This turns off automatic tracking. Selection does not start music; use Play in the player.</string>
+    <string name="car_sources_manual">Choose a player</string>
+    <string name="car_sources_manual_hint">Selecting a player requests playback without changing the tracking mode. Use Keep current source for a permanent lock.</string>
     <string name="car_sources_manual_selected">Controlling %1$s. Automatic tracking is off.</string>
     <string name="car_sources_auto_selected">Automatic tracking is on</string>
     <string name="car_sources_access">Allow notification access to detect and control other music apps.</string>
@@ -330,4 +330,10 @@
     <string name="car_sources_done">Done</string>
     <string name="car_sources_controlled">Current player</string>
     <string name="car_sources_phone_hint">Start phone music on the phone. Bluetooth and compatible Android Auto players appear when available.</string>
+    <string name="car_sources_lock">Keep current source</string>
+    <string name="car_sources_lock_hint">Keep controlling the selected player until automatic tracking is enabled.</string>
+    <string name="car_sources_allow_follow">Allow automatic takeover</string>
+    <string name="car_sources_state_unknown">Playback state unavailable</string>
+    <string name="car_sources_follow_apps">Players allowed to take over automatically</string>
+    <string name="car_sources_tracking_hint">Bluetooth connection and phone calls do not change the music source. Phone projection requires a real music session. Radio frequency updates alone do not prove playback. Returning to Vela Music does not start music.</string>
 </resources>

@@ -3,11 +3,14 @@ package app.vela.carlauncher.media
 /** Source tracking never sends playback commands. Media connection alone is not playback. */
 internal class SmartFocusPolicy {
     data class Source(val id: String, val playing: Boolean, val eligible: Boolean = true,
-        val available: Boolean = true, val preparing: Boolean = false)
+        val available: Boolean = true, val preparing: Boolean = false,
+        val playbackKnown: Boolean = true, val updatedAt: Long? = null)
     private var previous = emptyMap<String, Source>()
     private val starts = mutableMapOf<String, Long>()
     private var sequence = 0L
     private var consumed = 0L
+    private var selectedAt = -1L
+    private val blockedUntilRestart = mutableSetOf<String>()
     private var initialized = false
     private var stoppedAt: Long? = null
     private var selectedWhilePaused: String? = null
@@ -16,20 +19,30 @@ internal class SmartFocusPolicy {
 
     fun resumeAutomatic() {
         initialized = false
+        selectedAt = -1L
+        blockedUntilRestart.clear()
         selectedWhilePaused = null
         stoppedAt = null
     }
 
-    fun selected(id: String, sources: List<Source>) {
+    fun selected(id: String, sources: List<Source>, now: Long = 0L) {
         observe(sources)
         initialized = true
         consumed = sequence
+        selectedAt = now
+        blockedUntilRestart.clear()
+        blockedUntilRestart.addAll(sources.filter { it.id != id && (it.playing || it.preparing) }.map { it.id })
         selectedWhilePaused = id
         stoppedAt = null
     }
 
     private fun observe(sources: List<Source>) {
-        sources.filter { it.playing && previous[it.id]?.playing != true }.forEach { starts[it.id] = ++sequence }
+        sources.filter { it.playing && previous[it.id]?.playing != true }.forEach {
+            if (it.updatedAt == null || it.updatedAt > selectedAt) {
+                blockedUntilRestart.remove(it.id)
+                starts[it.id] = ++sequence
+            } else blockedUntilRestart.add(it.id)
+        }
         previous = sources.associateBy { it.id }
         starts.keys.retainAll(previous.keys)
     }
@@ -43,7 +56,7 @@ internal class SmartFocusPolicy {
         val active = sources.firstOrNull { it.id == current }
         if (active?.playing == true) { stoppedAt = null; selectedWhilePaused = null }
         if (!automatic || pinned || interrupted) { consumed = sequence; return current }
-        val candidates = sources.filter { it.eligible && it.available && it.playing }
+        val candidates = sources.filter { it.eligible && it.available && it.playbackKnown && it.playing && it.id !in blockedUntilRestart }
         if (!first) {
             val newest = candidates.filter { (starts[it.id] ?: 0) > consumed }.maxByOrNull { starts[it.id] ?: 0 }
             consumed = sequence
@@ -55,6 +68,7 @@ internal class SmartFocusPolicy {
         }
         if (current == "internal" && candidates.isEmpty()) { stoppedAt = null; return current }
         if (active?.playing == true) return current
+        if (active?.playbackKnown == false && selectedWhilePaused == current && active.available) return current
         if (current == "internal" && active?.preparing == true) return current
         val since = stoppedAt ?: now.also { stoppedAt = it }
         val wait = if (active?.preparing == true || selectedWhilePaused == current) 8_000L else 2_000L

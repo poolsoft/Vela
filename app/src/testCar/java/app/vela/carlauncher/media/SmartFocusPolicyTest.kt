@@ -10,6 +10,55 @@ class SmartFocusPolicyTest {
         now: Long = 0, pin: Boolean = false, call: Boolean = false, auto: Boolean = true) =
         p.choose(sources, current, auto, pin, call, now)
 
+    @Test fun manualTrackSelectionSuppressesThePreviousContinuousPlaybackEvenAfterPauseGrace() {
+        val policy = SmartFocusPolicy()
+        val before = listOf(s("internal"), s("bluetooth", true))
+        policy.selected("internal", before, now = 100)
+        choose(policy, listOf(s("internal", true), s("bluetooth", true)), now = 101)
+        val paused = listOf(s("internal"), s("bluetooth", true))
+        assertEquals("internal", choose(policy, paused, now = 102))
+        assertEquals("internal", choose(policy, paused, now = 10_000))
+    }
+    @Test fun latePlaybackSnapshotFromBeforeSelectionCannotTakeOver() {
+        val policy = SmartFocusPolicy()
+        policy.selected("internal", listOf(s("internal"), s("bluetooth")), now = 100)
+        val stale = listOf(s("internal", true), SmartFocusPolicy.Source("bluetooth", true, updatedAt = 99))
+        assertEquals("internal", choose(policy, stale, now = 101))
+        assertEquals("internal", choose(policy, stale, now = 10_000))
+    }
+    @Test fun actualPhoneRestartAfterManualTrackSelectionCanTakeOver() {
+        val policy = SmartFocusPolicy()
+        policy.selected("internal", listOf(s("internal"), s("bluetooth", true)), now = 100)
+        choose(policy, listOf(s("internal", true), s("bluetooth")), now = 110)
+        val resumed = listOf(s("internal", true), SmartFocusPolicy.Source("bluetooth", true, updatedAt = 120))
+        assertEquals("bluetooth", choose(policy, resumed, now = 121))
+    }
+    @Test fun radioMetadataWithoutPlaybackProofCannotTakeOverAtStartup() {
+        val radio = SmartFocusPolicy.Source("xy_radio", true, playbackKnown = false)
+        assertEquals("internal", choose(SmartFocusPolicy(), listOf(s("internal"), radio)))
+    }
+    @Test fun manualUnknownRadioSelectionStaysUntilRealMusicStarts() {
+        val policy = SmartFocusPolicy()
+        val sources = listOf(s("internal"), SmartFocusPolicy.Source("xy_radio", false, playbackKnown = false), s("bluetooth"))
+        policy.selected("xy_radio", sources, now = 100)
+        assertEquals("xy_radio", choose(policy, sources, current = "xy_radio", now = 101))
+        assertEquals("xy_radio", choose(policy, sources, current = "xy_radio", now = 20_000))
+        assertEquals("bluetooth", choose(policy, sources.dropLast(1) + s("bluetooth", true), current = "xy_radio", now = 20_001))
+    }
+    @Test fun realRadioPlaybackSessionCanTakeOver() {
+        val policy = SmartFocusPolicy()
+        choose(policy, listOf(s("internal", true), s("xy_radio")))
+        assertEquals("xy_radio", choose(policy, listOf(s("internal", true), s("xy_radio", true)), now = 1))
+    }
+    @Test fun unlockDiscardsSuppressionAndFollowsAlreadyPlayingMusic() {
+        val policy = SmartFocusPolicy()
+        val sources = listOf(s("internal", true), s("bluetooth", true))
+        policy.selected("internal", sources, now = 100)
+        assertEquals("internal", choose(policy, sources, pin = true, now = 101))
+        policy.resumeAutomatic()
+        assertEquals("bluetooth", choose(policy, sources, now = 102))
+    }
+
     @Test fun selectedInternalTrackStaysSelectedWhileSlowStoragePrepares() {
         val policy = SmartFocusPolicy()
         val sources = listOf(s("internal", preparing = true), s("xy_radio", playing = true))

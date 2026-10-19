@@ -129,7 +129,15 @@ class MusicManager private constructor(private val context: Context) : InternalM
         return focusState["follow:$key"] as? Boolean ?: true
     }
     fun setSourceTracking(key: String, enabled: Boolean) { saveFocus("follow:$key" to enabled); _sourcesRevision.value++; senkronizeEtMedyaDurumu() }
-    fun isSourceLocked(): Boolean = manualSelection
+    fun setSourceLocked(locked: Boolean) {
+        userCommandVersion++
+        manualSelection = locked
+        saveFocus("auto_follow" to !locked)
+        if (!locked) focusPolicy.resumeAutomatic()
+        _sourcesRevision.value++
+        senkronizeEtMedyaDurumu()
+    }
+    fun isSourceLocked(): Boolean = manualSelection || focusState["auto_follow"] == false
     fun isAutomaticTracking(): Boolean = !manualSelection && focusState["auto_follow"] != false
     private val _sourcesRevision = MutableStateFlow(0)
     val sourcesRevision = _sourcesRevision.asStateFlow()
@@ -141,9 +149,11 @@ class MusicManager private constructor(private val context: Context) : InternalM
             val linked = sourcePackage(adapter)?.let { pkg -> controllers.firstOrNull { it.packageName == pkg } }
             val state = linked?.playbackState?.state
             add(SmartFocusPolicy.Source(key, if (linked != null) state == android.media.session.PlaybackState.STATE_PLAYING else adapter.caliyorMu(),
-                isSourceTrackingEnabled(key), adapter === internalAdapter || adapter.aktifMi() || linked != null,
+                isSourceTrackingEnabled(key) && (adapter !is app.vela.carlauncher.media.adapters.HeadUnitRadioAdapter || linked?.playbackState != null), adapter === internalAdapter || adapter.aktifMi() || linked != null,
                 (adapter === internalAdapter && internalPlayer.isPreparing) ||
-                    state == android.media.session.PlaybackState.STATE_BUFFERING || state == android.media.session.PlaybackState.STATE_CONNECTING))
+                    state == android.media.session.PlaybackState.STATE_BUFFERING || state == android.media.session.PlaybackState.STATE_CONNECTING,
+                playbackKnown = adapter !is app.vela.carlauncher.media.adapters.HeadUnitRadioAdapter || linked?.playbackState != null,
+                updatedAt = linked?.playbackState?.lastPositionUpdateTime?.takeIf { it > 0L }))
         }
         val dedicated = adapters.filter { it !== mediaSessionAdapter }.mapNotNull { sourcePackage(it) }.toSet()
         controllers.filter { it.packageName !in dedicated }.forEach { controller ->
@@ -151,7 +161,8 @@ class MusicManager private constructor(private val context: Context) : InternalM
             val key = "session:${controller.packageName}"
             add(SmartFocusPolicy.Source(key, state == android.media.session.PlaybackState.STATE_PLAYING,
                 isSourceTrackingEnabled(key), true,
-                state == android.media.session.PlaybackState.STATE_BUFFERING || state == android.media.session.PlaybackState.STATE_CONNECTING))
+                state == android.media.session.PlaybackState.STATE_BUFFERING || state == android.media.session.PlaybackState.STATE_CONNECTING,
+                updatedAt = controller.playbackState?.lastPositionUpdateTime?.takeIf { it > 0L }))
         }
     }
 
@@ -314,6 +325,8 @@ class MusicManager private constructor(private val context: Context) : InternalM
                             android.media.session.PlaybackState.ACTION_PLAY_PAUSE)) != 0L) controller.transportControls.pause()
                     else _sourceStatus.value = context.getString(app.vela.R.string.car_source_conflict)
                 } else if (adapter?.caliyorMu() == true) adapter.duraklat()
+                else if (adapter is app.vela.carlauncher.media.adapters.HeadUnitRadioAdapter && adapter.manuallyRequested)
+                    _sourceStatus.value = context.getString(app.vela.R.string.car_source_conflict)
             }
         }
     }
@@ -344,6 +357,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         saveFocus("auto_follow" to true)
         manualSelection = false
         focusPolicy.resumeAutomatic()
+        _sourcesRevision.value++
         onOturumlarYenilendi(controllers)
     }
 
@@ -351,7 +365,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         userCommand()
         manualSelection = false
         anaHandler.removeCallbacks(focusRecheck)
-        focusPolicy.selected("internal", sourceSnapshots())
+        focusPolicy.selected("internal", sourceSnapshots(), android.os.SystemClock.elapsedRealtime())
         pinnedSessionPackage = null
         requestSmartFocus(internalAdapter)
         internalPlayer.parcaAtaVeOynat(parca, liste)
@@ -380,14 +394,14 @@ class MusicManager private constructor(private val context: Context) : InternalM
         return restored
     }
 
-    data class SourceOption(val key: String, val label: String, val packageName: String?, val kind: String, val playing: Boolean)
+    data class SourceOption(val key: String, val label: String, val packageName: String?, val kind: String, val playing: Boolean, val playbackKnown: Boolean = true)
 
     fun sourceOptions(): List<SourceOption> {
         val states = sourceSnapshots().associateBy { it.id }
         return availableSources().map { (key, label) ->
             val adapter = adapters.firstOrNull { sourceKey(it) == key }
             val pkg = if (key.startsWith("session:")) key.removePrefix("session:") else adapter?.let { sourcePackage(it) }
-            SourceOption(key, label, pkg, MediaSourceIdentity.kind(key, pkg), states[key]?.playing == true && !isCallActive())
+            SourceOption(key, label, pkg, MediaSourceIdentity.kind(key, pkg), states[key]?.playing == true && !isCallActive(), states[key]?.playbackKnown != false)
         }
     }
 
@@ -431,26 +445,21 @@ class MusicManager private constructor(private val context: Context) : InternalM
             return
         }
         // A normal selection is not a permanent lock. Consume already-playing stale events.
-        focusPolicy.selected(key, sourceSnapshots())
+        focusPolicy.selected(key, sourceSnapshots(), android.os.SystemClock.elapsedRealtime())
         manualSelection = lock
         if (lock) saveFocus("auto_follow" to false)
         publishing = true
-        if (play) releaseOwnerFor(key)
-        if (source === mediaSessionAdapter) {
-            pinnedSessionPackage = controller?.packageName
-            mediaSessionAdapter.setController(controller)
-        } else {
-            pinnedSessionPackage = sourcePackage(source)
-            if (pinnedSessionPackage != null)
-                mediaSessionAdapter.setController(controllers.firstOrNull { it.packageName == pinnedSessionPackage })
-        }
-        publishing = true
         try {
-            if (play) requestSmartFocus(source)
-            else {
-                selectedAdapter = source
-                aktifKaynak = if (source === internalAdapter) KaynakTipi.INTERNAL else KaynakTipi.EXTERNAL
+            if (play) releaseOwnerFor(key)
+            if (source === mediaSessionAdapter) {
+                pinnedSessionPackage = controller?.packageName
+                mediaSessionAdapter.setController(controller)
+            } else {
+                pinnedSessionPackage = sourcePackage(source)
+                mediaSessionAdapter.setController(controllers.firstOrNull { it.packageName == pinnedSessionPackage })
             }
+            selectedAdapter = source
+            aktifKaynak = if (source === internalAdapter) KaynakTipi.INTERNAL else KaynakTipi.EXTERNAL
         } finally { publishing = false }
         saveFocus("last_source" to key)
         if (play && !playbackAdapter().caliyorMu()) {
@@ -472,7 +481,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         userCommand()
         manualSelection = false
         anaHandler.removeCallbacks(focusRecheck)
-        focusPolicy.selected("internal", sourceSnapshots())
+        focusPolicy.selected("internal", sourceSnapshots(), android.os.SystemClock.elapsedRealtime())
         pinnedSessionPackage = null
         requestSmartFocus(internalAdapter)
         internalPlayer.indexeGoreOynat(index)

@@ -311,7 +311,7 @@ class CarMusicPlayerHost(
                         if (source.key == "internal" && musicManager.internalPlayer.anlikParca.value == null) {
                             musicManager.selectSource(source.key)
                             setPlaylistVisible(true, openPlaylistTab = true)
-                        } else musicManager.selectSource(source.key, play = true)
+                        } else musicManager.selectSource(source.key, play = true, lock = musicManager.isSourceLocked())
                     }
                     setOnLongClickListener {
                         sourceDialog?.dismiss()
@@ -319,10 +319,33 @@ class CarMusicPlayerHost(
                         true
                     }
                 }
-                row.addView(button, android.widget.LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+                val cell = android.widget.FrameLayout(context).apply {
+                    addView(button, android.widget.FrameLayout.LayoutParams(-1, -1))
+                    if (source.playing) addView(TextView(context).apply {
+                        text = "▶"
+                        textSize = 10f
+                        setTextColor(0xFF4DD0E1.toInt())
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }, android.widget.FrameLayout.LayoutParams(dp(14), dp(14), android.view.Gravity.BOTTOM or android.view.Gravity.END))
+                }
+                button.contentDescription = source.label + ". " + context.getString(
+                    if (!source.playbackKnown) R.string.car_sources_state_unknown
+                    else if (source.playing) R.string.car_sources_playing else R.string.car_sources_waiting)
+                row.addView(cell, android.widget.LinearLayout.LayoutParams(dp(48), dp(48)).apply {
                     marginEnd = dp(4)
                 })
             }
+            row.addView(ImageView(context).apply {
+                setImageResource(android.R.drawable.ic_menu_manage)
+                setColorFilter(0xFFCCD5DD.toInt())
+                setPadding(dp(12), dp(12), dp(12), dp(12))
+                contentDescription = context.getString(R.string.car_sources_title)
+                isFocusable = true
+                setOnClickListener {
+                    sourceDialog?.dismiss()
+                    sourceDialog = MusicSourceDialog.show(context, musicManager, scope)
+                }
+            }, android.widget.LinearLayout.LayoutParams(dp(48), dp(48)))
         }
         render()
         scope.launch {

@@ -21,6 +21,8 @@ class HeadUnitRadioAdapter(
         runCatching { context.packageManager.getPackageInfo(it, 0) }.isSuccess
     }
     private var playing = false
+    var manuallyRequested = false
+        private set
     private var frequency = ""
     private var band = ""
     private var registered = false
@@ -34,9 +36,7 @@ class HeadUnitRadioAdapter(
             frequency = if (band.startsWith("AM", true)) "$value kHz"
                 else String.format(Locale.getDefault(), "%.1f MHz",
                     value / if (xyAuto && band.equals("FM1", true)) 1000.0 else 100.0)
-            // A fresh hardware tuning event is the legacy radio playback signal.
-            // Sticky metadata is not a new playback event.
-            if (!isInitialStickyBroadcast) playing = true
+            // Frequency metadata does not prove audible playback; only a real MediaSession can.
             app.vela.util.FileLogger.i("RadioSource", "Tuning event backend=${if (xyAuto) "legacy-a" else "legacy-b"} sticky=$isInitialStickyBroadcast playing=$playing")
             changed()
         }
@@ -76,11 +76,13 @@ class HeadUnitRadioAdapter(
         }
     }
     override fun oynat() {
+        manuallyRequested = true
         if (!playing) open()
     }
     override fun duraklat() {
         if (playing) command("xy.android.playpause", KeyEvent.KEYCODE_MEDIA_PAUSE)
         playing = false
+        manuallyRequested = false
         changed()
     }
     override fun sonraki() = command("xy.android.seek_next", KeyEvent.KEYCODE_MEDIA_NEXT)

@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-/** One flat chooser: automatic tracking or an explicit manual player, never implicit playback. */
+/** Tracking mode, explicit source selection, and automatic-takeover permissions are separate. */
 internal object MusicSourceDialog {
     fun show(context: Context, manager: MusicManager, scope: CoroutineScope): AlertDialog {
         fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
@@ -72,7 +72,7 @@ internal object MusicSourceDialog {
             val options = manager.sourceOptions()
             val current = options.firstOrNull { it.key == manager.selectedSourceKey() }
             body.removeAllViews()
-            val status = context.getString(if (current?.playing == true) R.string.car_sources_playing else R.string.car_sources_waiting)
+            val status = if (current?.playbackKnown == false) context.getString(R.string.car_sources_state_unknown) else context.getString(if (current?.playing == true) R.string.car_sources_playing else R.string.car_sources_waiting)
             body.addView(text(context.getString(R.string.car_sources_current, current?.label.orEmpty()) + " · " + status, true).apply {
                 setPadding(0, 0, 0, dp(12))
             })
@@ -84,25 +84,35 @@ internal object MusicSourceDialog {
                 Toast.makeText(context, R.string.car_sources_auto_selected, Toast.LENGTH_SHORT).show()
                 dialog.dismiss()
             }
+            card(ImageView(context).apply {
+                setImageResource(android.R.drawable.ic_lock_lock)
+                setColorFilter(accent)
+            }, context.getString(R.string.car_sources_lock), context.getString(R.string.car_sources_lock_hint), manager.isSourceLocked()) {
+                manager.setSourceLocked(true)
+            }
             body.addView(text(context.getString(R.string.car_sources_manual), true))
             options.forEach { source ->
                 val selected = source.key == manager.selectedSourceKey()
                 val status = listOfNotNull(
                     context.getString(R.string.car_sources_controlled).takeIf { selected },
                     context.getString(if (source.playing) R.string.car_sources_playing else R.string.car_sources_waiting)
-                ).joinToString(" · ")
+                ).joinToString(" · ").let { if (source.playbackKnown) it else context.getString(R.string.car_sources_state_unknown) }
                 val icon = ImageView(context).apply {
                     scaleType = ImageView.ScaleType.FIT_CENTER
                     MediaSourceIcon.bind(this, MedyaParcasi(paketAdi = source.packageName.orEmpty(),
                         sourceId = source.key, sourceKind = source.kind, sourceLabel = source.label))
                 }
-                card(icon, source.label, status, selected && !manager.isAutomaticTracking()) {
-                    manager.selectSource(source.key, play = false, lock = true)
-                    if (manager.selectedSourceKey() == source.key && !manager.isAutomaticTracking()) {
-                        Toast.makeText(context, context.getString(R.string.car_sources_manual_selected, source.label), Toast.LENGTH_SHORT).show()
-                    }
+                card(icon, source.label, status, selected) {
+                    manager.selectSource(source.key, play = source.key != "internal" || manager.internalPlayer.anlikParca.value != null, lock = manager.isSourceLocked())
                     dialog.dismiss()
                 }
+                if (source.key != "internal") body.addView(android.widget.Switch(context).apply {
+                    text = context.getString(R.string.car_sources_allow_follow)
+                    setTextColor(Color.WHITE)
+                    isChecked = manager.isSourceTrackingEnabled(source.key)
+                    contentDescription = source.label + ". " + text
+                    setOnCheckedChangeListener { _, checked -> manager.setSourceTracking(source.key, checked) }
+                })
             }
             note(context.getString(R.string.car_sources_manual_hint))
             note(context.getString(R.string.car_sources_phone_hint))

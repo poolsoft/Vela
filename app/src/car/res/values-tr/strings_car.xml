@@ -182,7 +182,7 @@
     <string name="car_permission_granted">Verildi</string>
     <string name="car_permission_required">Verilmedi</string>
     <string name="car_smart_focus">Smart Focus</string>
-    <string name="car_smart_focus_desc">Boştayken gerçek oynatmayı izle. Elle seçilen kaynak, otomatik izleme yeniden açılana kadar korunur. Yalnızca BT bağlanması kaynağı değiştirmez.</string>
+    <string name="car_smart_focus_desc">Gerçek müzik oynatmasını takip eder. Oynatıcı seçimi takibi kapatmaz; sabitlemek için Kaynağı sabitle seçeneğini kullanın. Bluetooth bağlantısı tek başına kaynağı değiştirmez.</string>
     <string name="car_source_last">Son kaynak</string>
     <string name="car_startup_source">Otomatik devam kaynağı (aşağıdaki otomatik oynatmayı etkinleştirin)</string>
     <string name="car_bt_wait">Açılışta bağlantı bekleme: %1$d saniye</string>
@@ -315,8 +315,8 @@
     <string name="car_sources_current">Kontrol edilen: %1$s</string>
     <string name="car_sources_playing">Çalıyor</string>
     <string name="car_sources_waiting">Müzik bekleniyor</string>
-    <string name="car_sources_manual">Elle seç (otomatik takip kapanır)</string>
-    <string name="car_sources_manual_hint">Elle seçim otomatik takibi kapatır. Seçim müzik başlatmaz; oynatmak için ▶ düğmesine basın.</string>
+    <string name="car_sources_manual">Oynatıcı seçin</string>
+    <string name="car_sources_manual_hint">Oynatıcı seçimi takip modunu değiştirmeden oynatma ister. Kalıcı seçim için Kaynağı sabitle seçeneğini kullanın.</string>
     <string name="car_sources_manual_selected">%1$s seçildi. Otomatik takip kapalı.</string>
     <string name="car_sources_auto_selected">Otomatik takip açık</string>
     <string name="car_sources_access">Diğer müzik uygulamalarını algılamak ve kontrol etmek için bildirim erişimine izin verin.</string>
@@ -325,4 +325,10 @@
     <string name="car_sources_controlled">Kontrol ediliyor</string>
     <string name="car_sources_phone_hint">Telefon müziğini telefondan başlatın. Bluetooth ve uyumlu Android Auto oynatıcıları kullanılabilir olduğunda burada görünür.</string>
     <string name="car_music_scan">Müzikleri tara</string>
+    <string name="car_sources_lock">Kaynağı sabitle</string>
+    <string name="car_sources_lock_hint">Otomatik takip açılana kadar seçili oynatıcıyı kontrol etmeye devam eder.</string>
+    <string name="car_sources_allow_follow">Otomatik devralmaya izin ver</string>
+    <string name="car_sources_state_unknown">Oynatma durumu bilinmiyor</string>
+    <string name="car_sources_follow_apps">Otomatik devralabilecek oynatıcılar</string>
+    <string name="car_sources_tracking_hint">Bluetooth bağlantısı ve telefon görüşmesi müzik kaynağını değiştirmez. Telefon yansıtması gerçek müzik oturumu sunmalıdır. Radyo frekans bilgisi tek başına oynatma kanıtı değildir. Vela Müzik’e dönülmesi müziği başlatmaz.</string>
 </resources>
