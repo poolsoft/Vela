@@ -551,3 +551,5 @@ Validate the flat music-control chooser on the physical head unit, including tou
 - Validate category filtering, empty results, 20 km expansion and Turkish text fit on the API 27 head unit with downloaded POI packs.
 
 - Keep the existing CI translation gate in release validation alongside the Turkish resource audit.
+
+- Validate single-station radio seeking, USB detach/reattach, and source-strip switching on a physical head unit.

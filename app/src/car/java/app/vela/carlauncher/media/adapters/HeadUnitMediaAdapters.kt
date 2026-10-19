@@ -83,8 +83,8 @@ class HeadUnitRadioAdapter(
         playing = false
         changed()
     }
-    override fun sonraki() = command("xy.android.fm_scan_next", KeyEvent.KEYCODE_MEDIA_NEXT)
-    override fun onceki() = command("xy.android.fm_scan_prev", KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+    override fun sonraki() = command("xy.android.seek_next", KeyEvent.KEYCODE_MEDIA_NEXT)
+    override fun onceki() = command("xy.android.seek_prev", KeyEvent.KEYCODE_MEDIA_PREVIOUS)
     override fun konumaGit(konumMs: Long) {}
     override fun aktifMi() = packageName != null
     override fun kaynakAdi() = "Radyo"

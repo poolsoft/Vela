@@ -82,6 +82,10 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     private var lastSavedPosition = -1L
     private var pendingPlay = false
     private var recordNextStart = false
+    val isPreparing: Boolean get() = pendingPlay && !hazirMi && mediaPlayer != null
+    private val failedTracks = mutableSetOf<String>()
+    private var playbackGeneration = 0L
+    private var failedAdvance: Runnable? = null
     private var hazirMi = false
     private var odakGeriGelinceCal = false
     private var bekleyenSeekKonumu = 0L
@@ -193,6 +197,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     fun parcaAtaVeOynat(parca: SesParcasi, liste: List<SesParcasi> = emptyList()) {
+        failedTracks.clear()
         val oynatmaListesi = if (liste.isNotEmpty()) {
             liste
         } else if (_calismaListesi.isNotEmpty()) {
@@ -254,6 +259,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     fun indexeGoreOynat(index: Int) {
+        failedTracks.clear()
         if (index in 0 until _calmaKuyrugu.size) {
             suAnkiIndex = index
             calParca(_calmaKuyrugu[index], otomatikOynat = true)
@@ -320,6 +326,9 @@ class InternalMusicPlayer private constructor(private val context: Context) :
 
     private fun calParca(parca: SesParcasi, otomatikOynat: Boolean, startPosition: Long = 0L) {
         if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) return
+        failedAdvance?.let(anaHandler::removeCallbacks)
+        failedAdvance = null
+        playbackGeneration++
         _playbackError.value = null
         anaHandler.removeCallbacks(ilerlemeGorevi)
         app.vela.diag.ProcessDiagnostics.checkpoint("music player: create")
@@ -347,6 +356,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
             durdurVeSifirlaPlayer()
             _playbackError.value = context.getString(app.vela.R.string.car_music_play_failed)
             _caliyorMu.value = false
+            advanceAfterFailure()
             listener?.onCalmaDurumuDegisti(false)
         }
 
@@ -378,6 +388,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         try {
             if (hazirMi && mediaPlayer?.isPlaying == false) {
                 mediaPlayer?.start()
+                failedTracks.clear()
                 _caliyorMu.value = true
                 if (recordNextStart) {
                     _anlikParca.value?.let { MusicPlaylistStore.getInstance(context).recordPlay(it) }
@@ -396,6 +407,9 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     fun duraklat(releaseFocus: Boolean = true) {
+        failedAdvance?.let(anaHandler::removeCallbacks)
+        failedAdvance = null
+        playbackGeneration++
         odakGeriGelinceCal = false
         pendingPlay = false
         if (releaseFocus) odagiBirak()
@@ -596,13 +610,26 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         durdurVeSifirlaPlayer()
         _playbackError.value = context.getString(app.vela.R.string.car_music_play_failed)
         _caliyorMu.value = false
-        listener?.onCalmaDurumuDegisti(false)
         hazirMi = false
-        // Bozuk veya calinamayan dosyada takilip kalmak yerine bir sonraki sarkiya atla (Auto-skip)
-        if (_calmaKuyrugu.size > 1) {
-            anaHandler.postDelayed({ sonraki() }, 500)
-        }
+        advanceAfterFailure()
+        listener?.onCalmaDurumuDegisti(false)
         return true
+    }
+
+    /** Each failed queue entry is tried once; repeat mode cannot loop over a detached USB. */
+    private fun advanceAfterFailure() {
+        _anlikParca.value?.let { failedTracks.add(it.libraryKey()) }
+        val next = (1.._calmaKuyrugu.size).map { (suAnkiIndex + it).mod(_calmaKuyrugu.size) }
+            .firstOrNull { _calmaKuyrugu[it].libraryKey() !in failedTracks }
+        if (next == null) { pendingPlay = false; return }
+        val generation = playbackGeneration
+        failedAdvance = Runnable {
+            failedAdvance = null
+            if (generation == playbackGeneration) {
+                suAnkiIndex = next
+                calParca(_calmaKuyrugu[next], otomatikOynat = true)
+            }
+        }.also { anaHandler.postDelayed(it, 500L) }
     }
 
     private fun odakTalepEt(): Boolean {

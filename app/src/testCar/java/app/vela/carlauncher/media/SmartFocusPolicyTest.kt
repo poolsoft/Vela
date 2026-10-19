@@ -10,6 +10,15 @@ class SmartFocusPolicyTest {
         now: Long = 0, pin: Boolean = false, call: Boolean = false, auto: Boolean = true) =
         p.choose(sources, current, auto, pin, call, now)
 
+    @Test fun selectedInternalTrackStaysSelectedWhileSlowStoragePrepares() {
+        val policy = SmartFocusPolicy()
+        val sources = listOf(s("internal", preparing = true), s("xy_radio", playing = true))
+        policy.selected("internal", sources)
+        assertEquals("internal", choose(policy, sources, now = 0))
+        assertEquals("internal", choose(policy, sources, now = 20_000))
+        assertEquals("internal", choose(policy, listOf(s("internal", true), s("xy_radio", true)), now = 20_001))
+    }
+
     @Test fun bluetoothConnectionWithoutMusicDoesNotTakeOver() {
         assertEquals("internal", choose(SmartFocusPolicy(), listOf(s("internal", true), s("bluetooth"))))
     }

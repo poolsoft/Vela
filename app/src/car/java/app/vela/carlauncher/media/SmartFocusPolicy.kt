@@ -55,6 +55,7 @@ internal class SmartFocusPolicy {
         }
         if (current == "internal" && candidates.isEmpty()) { stoppedAt = null; return current }
         if (active?.playing == true) return current
+        if (current == "internal" && active?.preparing == true) return current
         val since = stoppedAt ?: now.also { stoppedAt = it }
         val wait = if (active?.preparing == true || selectedWhilePaused == current) 8_000L else 2_000L
         if (active?.available == true && now - since < wait) {

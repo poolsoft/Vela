@@ -62,7 +62,12 @@ class MusicRepository private constructor(private val context: Context) {
                     player.duraklat()
                 }
             }
-            FileLogger.i(TAG, "Storage changed; rescan only on user request: $action")
+            scanScope.launch {
+                kotlinx.coroutines.delay(500L)
+                scanMutex.lock()
+                try { loadCachedIndex() } finally { scanMutex.unlock() }
+            }
+            FileLogger.i(TAG, "Storage changed; refresh cached availability without scanning: $action")
         }
     }
 
@@ -406,7 +411,7 @@ class MusicRepository private constructor(private val context: Context) {
                 val dosyaYolu = obj.optString("dosyaYolu", "")
                 if (dosyaYolu.isNotBlank()) {
                     val f = File(dosyaYolu)
-                    if (knownFiles.add(cachedMusicFileIdentity(dosyaYolu))) {
+                    if ((!isUsbYolu(dosyaYolu) || f.isFile) && knownFiles.add(cachedMusicFileIdentity(dosyaYolu))) {
                         yuklenenParcalar.add(
                             SesParcasi(
                                 id = obj.optLong("id", i.toLong()),
@@ -427,7 +432,7 @@ class MusicRepository private constructor(private val context: Context) {
             }
 
             app.vela.diag.ProcessDiagnostics.checkpoint("music cache: metadata restored in ${android.os.SystemClock.elapsedRealtime() - started} ms")
-            if (yuklenenParcalar.isNotEmpty()) {
+            run {
                 val klasorMap = mutableMapOf<String, MutableList<SesParcasi>>()
                 for (p in yuklenenParcalar) {
                     val parent = File(p.dosyaYolu).parent ?: "Dahili Depolama"

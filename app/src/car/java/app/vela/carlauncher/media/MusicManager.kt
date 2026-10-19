@@ -142,7 +142,8 @@ class MusicManager private constructor(private val context: Context) : InternalM
             val state = linked?.playbackState?.state
             add(SmartFocusPolicy.Source(key, if (linked != null) state == android.media.session.PlaybackState.STATE_PLAYING else adapter.caliyorMu(),
                 isSourceTrackingEnabled(key), adapter === internalAdapter || adapter.aktifMi() || linked != null,
-                state == android.media.session.PlaybackState.STATE_BUFFERING || state == android.media.session.PlaybackState.STATE_CONNECTING))
+                (adapter === internalAdapter && internalPlayer.isPreparing) ||
+                    state == android.media.session.PlaybackState.STATE_BUFFERING || state == android.media.session.PlaybackState.STATE_CONNECTING))
         }
         val dedicated = adapters.filter { it !== mediaSessionAdapter }.mapNotNull { sourcePackage(it) }.toSet()
         controllers.filter { it.packageName !in dedicated }.forEach { controller ->
@@ -349,6 +350,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
     fun oynatDahiliParca(parca: SesParcasi, liste: List<SesParcasi> = emptyList()) {
         userCommand()
         manualSelection = false
+        anaHandler.removeCallbacks(focusRecheck)
         focusPolicy.selected("internal", sourceSnapshots())
         pinnedSessionPackage = null
         requestSmartFocus(internalAdapter)
@@ -469,6 +471,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         if (index < 0) return
         userCommand()
         manualSelection = false
+        anaHandler.removeCallbacks(focusRecheck)
         focusPolicy.selected("internal", sourceSnapshots())
         pinnedSessionPackage = null
         requestSmartFocus(internalAdapter)

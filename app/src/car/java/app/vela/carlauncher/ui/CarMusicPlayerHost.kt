@@ -16,6 +16,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -79,6 +82,7 @@ class CarMusicPlayerHost(
     init {
         playerVisualizer?.setVisualizerContext(false)
         setupPanelsVisibility()
+        setupSourceStrip()
         setupListeners()
         setupGestures()
         setupStateFlows()
@@ -129,7 +133,7 @@ class CarMusicPlayerHost(
         cs.constrainHeight(R.id.music_content_column, 0)
         cs.applyTo(rootView)
         // Source selection is available in both narrow and wide layouts.
-        rootView.findViewById<View>(R.id.app_selector_launch).visibility = View.VISIBLE
+        rootView.findViewById<View>(R.id.app_selector_launch).visibility = View.GONE
         for (i in 0 until dock.childCount) {
             val child = dock.getChildAt(i)
             val lp = child.layoutParams as android.widget.LinearLayout.LayoutParams
@@ -270,6 +274,60 @@ class CarMusicPlayerHost(
                 v.performClick()
                 false
             }
+        }
+    }
+
+    /** A stable icon strip, refreshed only when sources or their playback state change. */
+    private fun setupSourceStrip() {
+        fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
+        val row = android.widget.LinearLayout(context).apply { orientation = android.widget.LinearLayout.HORIZONTAL }
+        val strip = android.widget.HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(row)
+        }
+        rootView.findViewById<android.widget.LinearLayout>(R.id.music_content_column)
+            .addView(strip, 0, android.widget.LinearLayout.LayoutParams(-1, dp(52)))
+        var lastOptions: List<MusicManager.SourceOption>? = null
+        var lastSelected: String? = null
+        fun render() {
+            val options = musicManager.sourceOptions()
+            val selected = musicManager.selectedSourceKey()
+            if (options == lastOptions && selected == lastSelected) return
+            lastOptions = options; lastSelected = selected
+            row.removeAllViews()
+            options.forEach { source ->
+                val button = ImageView(context).apply {
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    setPadding(dp(8), dp(8), dp(8), dp(8))
+                    MediaSourceIcon.bind(this, MedyaParcasi(paketAdi = source.packageName.orEmpty(),
+                        sourceId = source.key, sourceKind = source.kind, sourceLabel = source.label))
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.OVAL
+                        setColor(if (source.key == selected) 0x554DD0E1 else 0x22222222)
+                        if (source.key == selected) setStroke(dp(2), 0xFF4DD0E1.toInt())
+                    }
+                    isFocusable = true
+                    setOnClickListener {
+                        if (source.key == "internal" && musicManager.internalPlayer.anlikParca.value == null) {
+                            musicManager.selectSource(source.key)
+                            setPlaylistVisible(true, openPlaylistTab = true)
+                        } else musicManager.selectSource(source.key, play = true)
+                    }
+                    setOnLongClickListener {
+                        sourceDialog?.dismiss()
+                        sourceDialog = MusicSourceDialog.show(context, musicManager, scope)
+                        true
+                    }
+                }
+                row.addView(button, android.widget.LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+                    marginEnd = dp(4)
+                })
+            }
+        }
+        render()
+        scope.launch {
+            combine(musicManager.medyaDurumu.map { it.sourceId to it.caliyorMu }.distinctUntilChanged(),
+                musicManager.sourcesRevision) { _, _ -> Unit }.collectLatest { render() }
         }
     }
 

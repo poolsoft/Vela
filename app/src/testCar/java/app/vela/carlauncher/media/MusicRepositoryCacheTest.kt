@@ -27,6 +27,9 @@ class MusicRepositoryCacheTest {
             ).put(
                 org.json.JSONObject().put("id", 43L).put("baslik", "Duplicate cached track")
                     .put("dosyaYolu", File(dir, "./test.mp3").path).put("contentUri", "file://${track.absolutePath}")
+            ).put(
+                org.json.JSONObject().put("id", 44L).put("baslik", "Detached USB track")
+                    .put("dosyaYolu", File(dir, "usb-detached/missing.mp3").absolutePath)
             ).toString())
             val context = object : ContextWrapper(null) {
                 override fun getFilesDir(): File {
