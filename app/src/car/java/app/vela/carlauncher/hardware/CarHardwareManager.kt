@@ -139,7 +139,7 @@ class CarHardwareManager private constructor(private val context: Context) {
             .setAdapter(adapter) { _, index -> CarLauncherSettings.setEkolayzirPaketi(apps[index].activityInfo.packageName) }
             .setNeutralButton("Seçimi temizle") { _, _ -> CarLauncherSettings.setEkolayzirPaketi(null) }
             .setNegativeButton("İptal", null)
-            .show()
+            .show().window?.let { app.vela.ui.bindVelaSystemBars(it) }
     }
 
     /**

@@ -12,7 +12,7 @@ import android.widget.EditText
 import android.net.Uri
 import android.widget.ImageButton
 import android.widget.ImageView
-import android.widget.PopupMenu
+import app.vela.carlauncher.ui.VelaPopupMenu as PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -399,7 +399,7 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         dialogs.add(dialog)
         dialog.setOnDismissListener { dialogs.remove(dialog) }
         dialog.show()
-        dialog.window?.let { app.vela.ui.applyVelaSystemBars(it) }
+        dialog.window?.let { app.vela.ui.bindVelaSystemBars(it) }
     }
     fun release() {
         scope.cancel()

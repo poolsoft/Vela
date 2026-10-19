@@ -134,6 +134,7 @@ internal object MusicSourceDialog {
         }
         dialog.setOnDismissListener { updates.cancel() }
         dialog.show()
+        dialog.window?.let { app.vela.ui.bindVelaSystemBars(it) }
         val visible = android.graphics.Rect()
         dialog.window?.decorView?.getWindowVisibleDisplayFrame(visible)
         val height = visible.height().takeIf { it > 0 } ?: context.resources.displayMetrics.heightPixels

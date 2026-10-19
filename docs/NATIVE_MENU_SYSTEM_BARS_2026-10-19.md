@@ -1,0 +1,9 @@
+# Native menu and dialog system bars
+
+The emulator screenshot reproduced the issue with the music-library overflow popup open: the Android navigation bar appeared below the launcher and reduced its height. The activity already applied the immersive preference, but platform popup menus owned a separate focused window without that policy. Activity focus restoration only repaired visibility after the popup closed.
+
+Native launcher popups apply system-bar preferences to their own focused window, including submenu levels. Music, dock, drawer and compact-panel menus use one focusable list-popup implementation backed by MenuBuilder, preserving item callbacks, disabled/checked items and submenus. Classic music/library/color dialogs bind the same preferences on window focus and clean up listeners on detach. Immersive mode hides both bars; non-immersive mode preserves navigation and honors the independent status-bar setting.
+
+Native popups bind their actual root view controller on API 30+ and use immersive-sticky view flags on API 26-29. Dialogs bind their actual Window through the existing activity/Compose system-bar policy. Preferences are read when applying, rather than permanently forcing fullscreen. No polling, private Android reflection, non-focusable-menu workaround or system-wide emulator setting is used. List-popup keyboard focus and submenu navigation remain available; Left returns to the parent submenu level.
+
+Car release assembly passed and APK 2270 installed over existing emulator data. Before/after emulator screenshots confirm hidden navigation bars with the library popup, sorting submenu, native input dialog and source dialog open. DPAD Left/back and dialog cancellation return to the full-height activity. The hardware equalizer picker uses the same native dialog binding. Physical older-API head-unit acceptance remains open. Screenshot files are stored under .logs and are not shipped with source.

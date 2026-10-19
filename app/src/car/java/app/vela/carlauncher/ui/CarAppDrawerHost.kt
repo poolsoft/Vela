@@ -107,7 +107,7 @@ class CarAppDrawerHost(
     }
 
     private fun showAppMenu(app: AracUygulamasi, anchor: View) {
-        android.widget.PopupMenu(context, anchor).apply {
+        VelaPopupMenu(context, anchor).apply {
             menu.add(0, 1, 0, R.string.car_app_add_dock)
             if (!app.paketAdi.startsWith("internal://")) {
                 menu.add(0, 4, 1, R.string.car_app_dock_split)

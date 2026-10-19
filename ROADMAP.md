@@ -559,3 +559,5 @@ Validate the flat music-control chooser on the physical head unit, including tou
 - Verify player dock icon sizing and the six-control playback row at the physical head-unit split-panel sizes.
 
 - Confirm MediaStore system-sound flags and messaging-folder exclusion on the physical head unit after a manual music rescan.
+
+- Confirm native popup/dialog system-bar behavior on API 26-28 head-unit firmware and with each system-bar preference combination.

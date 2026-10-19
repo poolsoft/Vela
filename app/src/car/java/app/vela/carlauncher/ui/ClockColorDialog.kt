@@ -96,6 +96,7 @@ internal object ClockColorDialog {
             .setPositiveButton(R.string.car_small_clock_save) { _, _ -> save(colors[0], colors[1], dual.isChecked) }
             .create()
         dialog.show()
+        dialog.window?.let { app.vela.ui.bindVelaSystemBars(it) }
         val frame = android.graphics.Rect()
         dialog.window?.decorView?.getWindowVisibleDisplayFrame(frame)
         val height = if (frame.height() > 0) frame.height() else context.resources.displayMetrics.heightPixels

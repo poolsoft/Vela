@@ -5,7 +5,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
-import android.widget.PopupMenu
+import app.vela.carlauncher.ui.VelaPopupMenu as PopupMenu
 import android.widget.TextView
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
