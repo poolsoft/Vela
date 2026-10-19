@@ -549,3 +549,5 @@ Validate the flat music-control chooser on the physical head unit, including tou
 - Validate retained-task HOME returns and paused-only radio windows on the API 27 head unit; supplied version 2256 logs also show process loss without an Android exit reason.
 
 - Validate category filtering, empty results, 20 km expansion and Turkish text fit on the API 27 head unit with downloaded POI packs.
+
+- Keep the existing CI translation gate in release validation alongside the Turkish resource audit.

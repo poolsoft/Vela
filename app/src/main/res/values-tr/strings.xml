@@ -1031,7 +1031,7 @@
     <string name="settings_map_auto_standard">Standart: cihaz kapasitesi normal çizime uygun. Sürekli yavaş çizimde bu oturum için Hafif seçilir.</string>
     <string name="settings_map_auto_details">Cihaz bellek sınırı: %1$d MB; GLES: 0x%2$s. Özel FPS, eğim ve katman tercihleriniz kayıtlı kalır.</string>
     <plurals name="mapscreen_results_count">
-        <item quantity="one">%d sonuç</item>
-        <item quantity="other">%d sonuç</item>
+        <item quantity="one">%1$d sonuç</item>
+        <item quantity="other">%1$d sonuç</item>
     </plurals>
 </resources>
