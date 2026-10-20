@@ -19,6 +19,7 @@ fun applyVelaSystemBars(window: Window, darkIcons: Boolean = false) {
     val showStatus = !immersive && CarIntegration.statusBarVisible.value
     val fullscreenFlag = android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN
     val decor = window.decorView
+    applyLegacySystemBarVisibility(decor, immersive, showStatus)
     if (showStatus || decor.hasWindowFocus()) window.clearFlags(fullscreenFlag)
     else if (!decor.isAttachedToWindow) window.addFlags(fullscreenFlag)
     // Once focus is available the controller owns visibility. Do not retain FLAG_FULLSCREEN:
@@ -35,6 +36,21 @@ fun applyVelaSystemBars(window: Window, darkIcons: Boolean = false) {
         else controller.hide(WindowInsetsCompat.Type.statusBars())
     }
     androidx.core.view.ViewCompat.requestApplyInsets(window.decorView)
+}
+
+/** Android 11 and older OEM windows can retain visible bars despite an insets hide request. */
+@Suppress("DEPRECATION")
+internal fun applyLegacySystemBarVisibility(view: android.view.View, immersive: Boolean, showStatus: Boolean) {
+    if (android.os.Build.VERSION.SDK_INT > 30) return
+    val mask = android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
+        android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+    val flags = when {
+        immersive -> mask
+        !showStatus -> android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+        else -> 0
+    }
+    val next = (view.systemUiVisibility and mask.inv()) or flags
+    if (view.systemUiVisibility != next) view.systemUiVisibility = next
 }
 
 @Composable

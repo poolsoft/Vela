@@ -63,9 +63,28 @@ internal class VelaPopupMenu(private val context: Context, private val anchor: V
             it.setContentWidth(minOf((320 * density).toInt(), (anchor.rootView.width - 32 * density).toInt()).coerceAtLeast(1))
             popup = it
         }
+        // Ignore-bottom-decoration measurement can put the last row behind the API-30
+        // navigation inset even after the bar is hidden. Bound the list to stable space.
+        val frame = android.graphics.Rect()
+        anchor.getWindowVisibleDisplayFrame(frame)
+        val rootLocation = IntArray(2).also { anchor.rootView.getLocationOnScreen(it) }
+        val anchorLocation = IntArray(2).also { anchor.getLocationOnScreen(it) }
+        @Suppress("DEPRECATION")
+        val stableBottom = anchor.rootWindowInsets?.stableInsetBottom ?: 0
+        frame.bottom = minOf(frame.bottom, rootLocation[1] + anchor.rootView.height - stableBottom)
+        val available = maxOf(anchorLocation[1] - frame.top,
+            frame.bottom - anchorLocation[1] - anchor.height).coerceAtLeast(1)
+        val backgroundPadding = android.graphics.Rect()
+        listPopup.background?.getPadding(backgroundPadding)
+        listPopup.height = minOf(items.size * (48 * density).toInt() +
+            backgroundPadding.top + backgroundPadding.bottom, available)
         listPopup.setAdapter(adapter)
-        listPopup.setOnItemClickListener { _, _, position, _ ->
-            val item = items[position]
+        listPopup.setOnItemClickListener { parent, _, position, _ ->
+            // AppCompat retains this listener when the open popup changes levels.
+            // Resolve from the displayed adapter, never a captured parent menu.
+            if (position !in 0 until parent.count) return@setOnItemClickListener
+            val item = parent.getItemAtPosition(position) as? MenuItem ?: return@setOnItemClickListener
+            if (!item.isEnabled || !item.isVisible) return@setOnItemClickListener
             if (item.hasSubMenu()) {
                 item.subMenu?.let { levels.add(it); showLevel(it) }
             } else {

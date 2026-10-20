@@ -30,6 +30,16 @@ class PmtilesTileSourceTest {
         assertTrue(calls.none { it.second == archive.size })
     }
 
+    @Test fun unchangedLocalArchivesDoNotExpireButRemoteArchivesStillDo() {
+        val header = ByteArray(127)
+        "PMTiles".toByteArray().copyInto(header); header[7] = 3
+        header[97] = 1; header[98] = 1
+        val source = PmtilesTileSource { _, _ -> header }
+        assertFalse(source.expired(local = true, nowNanos = Long.MAX_VALUE))
+        assertTrue(source.expired(local = false, nowNanos = Long.MAX_VALUE))
+        assertFalse(source.expired(local = false))
+    }
+
     @Test fun malformedDirectoryCountCannotAllocateUnboundedArrays() {
         assertNull(PmtilesReader.decodeDirectory(byteArrayOf(127), 1))
     }

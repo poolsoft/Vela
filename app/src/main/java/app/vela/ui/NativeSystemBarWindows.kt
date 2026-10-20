@@ -11,6 +11,7 @@ import app.vela.variant.CarIntegration
 private fun applyPopupSystemBars(view: View) {
     val immersive = CarIntegration.immersive.value
     val showStatus = !immersive && CarIntegration.statusBarVisible.value
+    applyLegacySystemBarVisibility(view, immersive, showStatus)
     if (Build.VERSION.SDK_INT >= 30) {
         view.windowInsetsController?.apply {
             systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -20,13 +21,6 @@ private fun applyPopupSystemBars(view: View) {
                 if (showStatus) show(android.view.WindowInsets.Type.statusBars())
                 else hide(android.view.WindowInsets.Type.statusBars())
             }
-        }
-    } else {
-        val mask = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        view.systemUiVisibility = (view.systemUiVisibility and mask.inv()) or when {
-            immersive -> mask
-            !showStatus -> View.SYSTEM_UI_FLAG_FULLSCREEN
-            else -> 0
         }
     }
 }

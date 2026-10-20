@@ -561,3 +561,9 @@ Validate the flat music-control chooser on the physical head unit, including tou
 - Confirm MediaStore system-sound flags and messaging-folder exclusion on the physical head unit after a manual music rescan.
 
 - Confirm native popup/dialog system-bar behavior on API 26-28 head-unit firmware and with each system-bar preference combination.
+
+## Car head-unit performance verification
+
+- Measure the new cache stage timings on the API-27 head unit, then optimize the measured bottleneck. Emulator timings do not establish head-unit performance.
+- Verify notification access on the head unit before assessing external MediaSession control; this special access requires a user grant.
+- Recheck OEM radio/Home task returns after the popup crash fix; a failed retained-task return alone does not prove a duplicate live launcher.

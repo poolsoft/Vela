@@ -93,3 +93,7 @@ updates [SPEC](../../SPEC.md) and [FEATURES](../../FEATURES.md). A number in thi
 a bug, and it is a worse bug than a stale changelog line, because someone will trust it. If a
 change has no chapter yet, either write the chapter or add a line to the planned list above
 saying what is missing.
+
+Car launcher native popup and dock startup contracts are documented in SPEC under "Car startup and native popup stability". The offline chapter covers local archive reuse and stage timings.
+
+The planned platform/window chapter also covers the shared legacy visibility mask on API 30 and older and its companion insets requests, as specified in SPEC.

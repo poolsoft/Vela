@@ -6065,3 +6065,11 @@ The player dock uses the existing playlist vector with fit-center scaling and 6 
 Music scanning shares messaging-folder and system-sound exclusions across MediaStore, direct file crawling and cached-library restoration. MediaStore ringtone/alarm/notification flags exclude audio regardless of folder, and excluded file identities prevent the crawler from re-adding those rows. The crawler prunes excluded folders and .nomedia directories before metadata reads. Matching uses folder boundaries and Locale.ROOT so ordinary album names remain eligible; IS_MUSIC is not required for head-unit USB compatibility.
 
 Native launcher popups apply system-bar preferences to their own focused window, including submenu levels. Music, dock, drawer and compact-panel menus use one focusable list-popup implementation backed by MenuBuilder, preserving item callbacks, disabled/checked items and submenus. Classic music/library/color dialogs bind the same preferences on window focus and clean up listeners on detach. Immersive mode hides both bars; non-immersive mode preserves navigation and honors the independent status-bar setting.
+
+## Native submenu and startup regression checks
+
+Popup listeners read the live ListView adapter because AppCompat keeps the initial listener across submenu adapter changes. Test a child menu with more entries than its parent and select its last entry. Dock preference reads stay on the I/O dispatcher; edit revisions invalidate pending reads without discarding metadata enrichment. Local PMTiles expiry is based on size/mtime cache keys, while remote sources retain the five-minute TTL.
+
+API 30 also needs the shared legacy system-bar visibility mask alongside controller requests. Keep legacy and insets requests consistent across activity, dialog and popup windows; do not add per-frame reapplication.
+
+Native popup height is bounded by the visible frame and stable bottom inset, including background padding. Larger submenus scroll within that bound so the last row remains reachable on API 30.

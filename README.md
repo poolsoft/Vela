@@ -400,3 +400,9 @@ The player dock uses the existing playlist vector with fit-center scaling and 6 
 Music scanning shares messaging-folder and system-sound exclusions across MediaStore, direct file crawling and cached-library restoration. MediaStore ringtone/alarm/notification flags exclude audio regardless of folder, and excluded file identities prevent the crawler from re-adding those rows. The crawler prunes excluded folders and .nomedia directories before metadata reads. Matching uses folder boundaries and Locale.ROOT so ordinary album names remain eligible; IS_MUSIC is not required for head-unit USB compatibility.
 
 Native launcher popups apply system-bar preferences to their own focused window, including submenu levels. Music, dock, drawer and compact-panel menus use one focusable list-popup implementation backed by MenuBuilder, preserving item callbacks, disabled/checked items and submenus. Classic music/library/color dialogs bind the same preferences on window focus and clean up listeners on detach. Immersive mode hides both bars; non-immersive mode preserves navigation and honors the independent status-bar setting.
+
+### Car launcher stability
+
+Native popup submenus dispatch the displayed item, including larger child menus. Dock preferences load off the UI thread. Unchanged local PMTiles archives retain their bounded directory cache instead of expiring after five minutes.
+
+Android 11 and older windows synchronize legacy visibility flags with insets requests so settings and menus honor the immersive preference.

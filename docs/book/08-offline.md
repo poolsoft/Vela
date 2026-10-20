@@ -360,3 +360,7 @@ Indexes and revision JSON files are written to a unique sibling staging file, sy
 
 
 Downloaded regions are listed from local OBF, basemap and POI inventory before a server catalog request. A validated per-source catalog cache supplies display names when available; a restored region without cache uses its local ID and cannot initiate a download without a catalog URL. Missing network access does not hide installed packages. Target head-unit restore remains an acceptance check.
+
+## Local archive reuse and slow-resource timing
+
+The car renderer retains up to eight PMTiles sources. A local source is keyed by URI, size and modification time and remains cached until eviction or a changed key. Remote archives expire after five minutes. Each source keeps up to eight decoded directories. Operations taking at least 250 ms log range-read, directory-fetch and decompression durations; request logs separately include archive-lookup time. These timings distinguish local resource delays from remote network access.

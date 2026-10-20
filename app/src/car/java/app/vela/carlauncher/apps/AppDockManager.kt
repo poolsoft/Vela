@@ -39,12 +39,13 @@ class AppDockManager private constructor(private val context: Context) {
         }
     }
 
-    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences by lazy { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
     private val _kisayollar = MutableStateFlow<List<AppShortcut>>(emptyList())
     val kisayollar: StateFlow<List<AppShortcut>> = _kisayollar.asStateFlow()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var loadGeneration = 0
+    private var editGeneration = 0
 
     init {
         yukleKisayollar()
@@ -52,37 +53,47 @@ class AppDockManager private constructor(private val context: Context) {
 
     fun yukleKisayollar() {
         loadGeneration++
-        val json = prefs.getString(KEY_SHORTCUTS, null)
-        val liste = mutableListOf<AppShortcut>()
+        val generation = loadGeneration
+        val edits = editGeneration
+        scope.launch {
+            val started = android.os.SystemClock.elapsedRealtime()
+            val (items, defaults) = withContext(Dispatchers.IO) {
+                val json = prefs.getString(KEY_SHORTCUTS, null)
+                val liste = mutableListOf<AppShortcut>()
 
-        if (!json.isNullOrBlank()) {
-            try {
-                val array = JSONArray(json)
+                if (!json.isNullOrBlank()) {
+                    try {
+                        val array = JSONArray(json)
 
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    val pkg = obj.getString("package")
-                    val order = obj.optInt("order", i)
-                    val launchModeStr = obj.optString("launchMode", LaunchMode.FULL_SCREEN.name)
-                    val launchMode = try {
-                        LaunchMode.valueOf(launchModeStr)
+                        for (i in 0 until array.length()) {
+                            val obj = array.getJSONObject(i)
+                            val pkg = obj.getString("package")
+                            val order = obj.optInt("order", i)
+                            val launchModeStr = obj.optString("launchMode", LaunchMode.FULL_SCREEN.name)
+                            val launchMode = try {
+                                LaunchMode.valueOf(launchModeStr)
+                            } catch (e: Exception) {
+                                LaunchMode.FULL_SCREEN
+                            }
+
+                            liste.add(placeholder(pkg, order, launchMode))
+                        }
                     } catch (e: Exception) {
-                        LaunchMode.FULL_SCREEN
+                        liste.clear()
                     }
-
-                    liste.add(placeholder(pkg, order, launchMode))
                 }
-            } catch (e: Exception) {
-                liste.clear()
+
+                if (json.isNullOrBlank()) {
+                    liste.addAll(varsayilanKisayollariOlustur())
+                }
+
+                liste.sortedBy { it.sira } to json.isNullOrBlank()
             }
+            if (generation != loadGeneration || edits != editGeneration) return@launch
+            _kisayollar.value = items
+            app.vela.util.FileLogger.i("AppDockManager", "Preferences ready count=${items.size} elapsedMs=${android.os.SystemClock.elapsedRealtime() - started}")
+            resolveMetadata(items, persistDefaults = defaults)
         }
-
-        if (json.isNullOrBlank()) {
-            liste.addAll(varsayilanKisayollariOlustur())
-        }
-
-        _kisayollar.value = liste.sortedBy { it.sira }
-        resolveMetadata(_kisayollar.value, persistDefaults = json.isNullOrBlank())
     }
 
     private fun placeholder(pkg: String, order: Int, mode: LaunchMode) =
@@ -160,6 +171,7 @@ class AppDockManager private constructor(private val context: Context) {
     }
 
     private fun kaydetJson(liste: List<AppShortcut>) {
+        editGeneration++ // An outstanding startup read cannot overwrite a newer edit.
         try {
             val array = JSONArray()
             for (s in liste) {

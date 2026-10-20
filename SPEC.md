@@ -2811,3 +2811,15 @@ The player dock uses the existing playlist vector with fit-center scaling and 6 
 Music scanning shares messaging-folder and system-sound exclusions across MediaStore, direct file crawling and cached-library restoration. MediaStore ringtone/alarm/notification flags exclude audio regardless of folder, and excluded file identities prevent the crawler from re-adding those rows. The crawler prunes excluded folders and .nomedia directories before metadata reads. Matching uses folder boundaries and Locale.ROOT so ordinary album names remain eligible; IS_MUSIC is not required for head-unit USB compatibility.
 
 Native launcher popups apply system-bar preferences to their own focused window, including submenu levels. Music, dock, drawer and compact-panel menus use one focusable list-popup implementation backed by MenuBuilder, preserving item callbacks, disabled/checked items and submenus. Classic music/library/color dialogs bind the same preferences on window focus and clean up listeners on detach. Immersive mode hides both bars; non-immersive mode preserves navigation and honors the independent status-bar setting.
+
+## Car startup and native popup stability
+
+Native popup clicks resolve `MenuItem` from the displayed ListView adapter. Positions outside the live item count and invisible or disabled items do not dispatch. AppCompat retains the first item-click listener while a popup changes adapters; callbacks therefore do not capture a menu-level item list.
+
+Dock preference opening, reads and JSON parsing execute on `Dispatchers.IO`; publication executes on the main dispatcher. Reload generations reject obsolete loads. A separate edit generation rejects startup reads after user edits without canceling metadata enrichment of current shortcuts.
+
+The PMTiles archive LRU retains at most eight sources. Local cache keys contain the URI, file size and modification time. Unchanged local sources do not expire by elapsed time; remote sources retain the five-minute lifetime. Directory caches retain at most eight entries per source. Slow range reads, directory retrieval and decompression are logged at 250 ms or more; total request timing also reports archive lookup time. Music cache timing separates file reading, JSON parsing, metadata restoration, USB file checks and folder grouping. Timing records do not alter availability filtering or start a library scan.
+
+On API 30 and older, main, dialog and native popup windows set the legacy fullscreen, hide-navigation and immersive-sticky visibility bits alongside WindowInsetsController requests. The shared legacy helper preserves unrelated flags and writes only when the mask changes. Non-immersive mode restores navigation visibility and honors the separate status-bar preference.
+
+Native popup height is bounded by the visible frame and stable bottom inset, including background padding. Larger submenus scroll within that bound so the last row remains reachable on API 30.

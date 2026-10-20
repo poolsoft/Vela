@@ -48,13 +48,15 @@ object PmtilesMapBridge {
                 val stamp = if (uri.startsWith("file:")) File(URI(uri)).let { "${it.length()}:${it.lastModified()}" } else "remote"
                 val key = "$uri|$stamp"
                 val source = synchronized(archives) {
-                    archives[key]?.takeUnless { it.expired() } ?: PmtilesTileSource { offset, length ->
+                    // Size and modification time invalidate local files; only remote archives use TTL.
+                    archives[key]?.takeUnless { it.expired(local = uri.startsWith("file:")) } ?: PmtilesTileSource { offset, length ->
                         readRange(uri, offset, length)
                     }.also {
                         archives[key] = it
                         app.vela.util.FileLogger.i("PmtilesBridge", "Archive opened: $uri bytes=$stamp zoom=${it.header.minZoom}..${it.header.maxZoom}")
                     }
                 }
+                val archiveLookupMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
                 val body: ByteArray?
                 val type: String
                 if (parts.size == 1) {
@@ -70,7 +72,7 @@ object PmtilesMapBridge {
                 }
                 val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
                 if (elapsedMs >= 250) app.vela.util.FileLogger.w("PmtilesBridge",
-                    "Slow local resource: ${elapsedMs}ms bytes=${body?.size ?: 0} path=${request.url.encodedPath}")
+                    "Slow local resource: ${elapsedMs}ms archiveLookupMs=$archiveLookupMs bytes=${body?.size ?: 0} path=${request.url.encodedPath}")
                 Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
                     .code(if (body == null) 404 else 200).message(if (body == null) "Not Found" else "OK")
                     .header("Cache-Control", "max-age=300")
@@ -127,7 +129,8 @@ internal class PmtilesTileSource(private val range: (Long, Int) -> ByteArray) {
     private val directories = object : LinkedHashMap<Pair<Long, Long>, List<PmtilesReader.Entry>>(8, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Pair<Long, Long>, List<PmtilesReader.Entry>>?) = size > 8
     }
-    fun expired() = System.nanoTime() - created > TimeUnit.MINUTES.toNanos(5)
+    fun expired(local: Boolean, nowNanos: Long = System.nanoTime()) =
+        !local && nowNanos - created > TimeUnit.MINUTES.toNanos(5)
     fun metadata() = inflate(read(header.metaOffset, header.metaLength), header.internalCompression)
 
     fun tile(z: Int, x: Int, y: Int): ByteArray? {
@@ -148,7 +151,7 @@ internal class PmtilesTileSource(private val range: (Long, Int) -> ByteArray) {
     // Share a miss for the same directory without holding the LRU lock during disk I/O.
     private val pendingDirectories = HashMap<Pair<Long, Long>, java.util.concurrent.FutureTask<List<PmtilesReader.Entry>>>()
 
-    private fun directory(offset: Long, length: Long): List<PmtilesReader.Entry> {
+    private fun directory(offset: Long, length: Long): List<PmtilesReader.Entry> = timed("directory") {
         val key = offset to length
         val task = synchronized(directories) {
             directories[key]?.let { return it }
@@ -179,21 +182,32 @@ internal class PmtilesTileSource(private val range: (Long, Int) -> ByteArray) {
 
     private fun read(offset: Long, length: Long): ByteArray {
         require(offset >= 0 && length in 1..MAX_BYTES.toLong() && offset <= Long.MAX_VALUE - length)
-        return range(offset, length.toInt())
+        return timed("range bytes=$length") { range(offset, length.toInt()) }
     }
-    private fun inflate(raw: ByteArray, compression: Int): ByteArray = when (compression) {
-        1 -> raw
-        2 -> GZIPInputStream(raw.inputStream()).use { input ->
-            val out = java.io.ByteArrayOutputStream()
-            val buffer = ByteArray(8192)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                if (out.size() + count > MAX_BYTES) throw IOException("PMTiles decoded data exceeds limit")
-                out.write(buffer, 0, count)
+    private fun inflate(raw: ByteArray, compression: Int): ByteArray = timed("decode bytes=${raw.size}") {
+        when (compression) {
+            1 -> raw
+            2 -> GZIPInputStream(raw.inputStream()).use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    if (out.size() + count > MAX_BYTES) throw IOException("PMTiles decoded data exceeds limit")
+                    out.write(buffer, 0, count)
+                }
+                out.toByteArray()
             }
-            out.toByteArray()
+            else -> throw IOException("Unsupported PMTiles compression $compression")
         }
-        else -> throw IOException("Unsupported PMTiles compression $compression")
     }
+
+    private inline fun <T> timed(stage: String, block: () -> T): T {
+        val started = System.nanoTime()
+        try { return block() } finally {
+            val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
+            if (elapsedMs >= 250) app.vela.util.FileLogger.w("PmtilesBridge", "Slow $stage elapsedMs=$elapsedMs")
+        }
+    }
+
 }
