@@ -39,11 +39,24 @@ class InterlockingClockView @JvmOverloads constructor(
     var fitTextToBounds: Boolean = false
         set(value) { field = value; invalidate() }
 
+    var digitSpacingEm: Float = -OVERLAP_EM
+        set(value) { field = value.coerceIn(-0.26f, 0.12f); invalidate() }
+    var colonSpacingEm: Float = COLON_GAP_EM
+        set(value) { field = value.coerceIn(0f, 0.2f); invalidate() }
+    var outlineWidthDp: Float = 1.15f
+        set(value) { field = value.coerceIn(0.5f, 3f); invalidate() }
+    var clockFont: Int = 0
+        set(value) { if (field != value) { field = value; applyClockTypeface(); invalidate() } }
+
     init {
         applyClockTypeface()
     }
 
     private fun applyClockTypeface() {
+        if (clockFont != 0) {
+            typeface = Typeface.create(if (clockFont == 1) "sans-serif-rounded" else "monospace", Typeface.BOLD)
+            return
+        }
         try {
             typeface = Typeface.createFromAsset(context.assets, "fonts/Cross Boxed.ttf")
         } catch (e: Exception) {
@@ -58,8 +71,8 @@ class InterlockingClockView @JvmOverloads constructor(
         val p = paint
         val originalTextSize = p.textSize
         var baseTextSize = originalTextSize
-        var overlap = p.textSize * OVERLAP_EM
-        var colonGap = p.textSize * COLON_GAP_EM
+        var overlap = -p.textSize * digitSpacingEm
+        var colonGap = p.textSize * colonSpacingEm
         var contentWidth = 0f
 
         for (i in 0 until value.length) {
@@ -94,7 +107,7 @@ class InterlockingClockView @JvmOverloads constructor(
         val oldColor = p.color
         val oldStrokeWidth = p.strokeWidth
         val oldXfermode = p.xfermode
-        val outlineWidth = (resources.displayMetrics.density * 1.15f).coerceAtLeast(1f)
+        val outlineWidth = (resources.displayMetrics.density * outlineWidthDp).coerceAtLeast(0.5f)
         val layer = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
 
         for (i in 0 until value.length) {

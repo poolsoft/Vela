@@ -6073,3 +6073,7 @@ Popup listeners read the live ListView adapter because AppCompat keeps the initi
 API 30 also needs the shared legacy system-bar visibility mask alongside controller requests. Keep legacy and insets requests consistent across activity, dialog and popup windows; do not add per-frame reapplication.
 
 Native popup height is bounded by the visible frame and stable bottom inset, including background padding. Larger submenus scroll within that bound so the last row remains reachable on API 30.
+
+## Clock appearance
+
+SmallClockAppearance owns validation, preference keys and drawing configuration for the small player and full-page preview. Avoid a second preview renderer or a separate clock color dialog. Keep preference listeners scoped to attached views/compositions, coalesce the real panel callbacks, and preserve small_music_panel in the typed launcher backup schema. New clock appearance controls need matching base/Turkish resources and bounds tests.

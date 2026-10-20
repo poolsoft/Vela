@@ -97,3 +97,5 @@ saying what is missing.
 Car launcher native popup and dock startup contracts are documented in SPEC under "Car startup and native popup stability". The offline chapter covers local archive reuse and stage timings.
 
 The planned platform/window chapter also covers the shared legacy visibility mask on API 30 and older and its companion insets requests, as specified in SPEC.
+
+[11. Car launcher clock](11-car-launcher-clock.md) covers the live clock editor and responsive panel drawing.

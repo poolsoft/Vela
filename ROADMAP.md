@@ -567,3 +567,5 @@ Validate the flat music-control chooser on the physical head unit, including tou
 - Measure the new cache stage timings on the API-27 head unit, then optimize the measured bottleneck. Emulator timings do not establish head-unit performance.
 - Verify notification access on the head unit before assessing external MediaSession control; this special access requires a user grant.
 - Recheck OEM radio/Home task returns after the popup crash fix; a failed retained-task return alone does not prove a duplicate live launcher.
+
+- Verify live clock editing and responsive geometry on the API-27 head unit, especially during repeated slider gestures and in narrow split panels.

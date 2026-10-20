@@ -86,6 +86,7 @@ import kotlin.math.roundToInt
 private enum class CarSettingsSection {
     HUB,
     APPEARANCE,
+    CLOCK,
     DOCK_PANEL,
     WIDGETS,
     MUSIC,
@@ -101,7 +102,7 @@ fun CarLauncherSettingsView(
     onBackup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var section by rememberSaveable { mutableStateOf(CarSettingsSection.HUB) }
+    var section by rememberSaveable { mutableStateOf(if (CarLauncherSettings.consumeClockSettingsRequest()) CarSettingsSection.CLOCK else CarSettingsSection.HUB) }
 
     BackHandler {
         if (section == CarSettingsSection.HUB) {
@@ -121,6 +122,7 @@ fun CarLauncherSettingsView(
             onBack = { section = CarSettingsSection.HUB },
             modifier = modifier
         )
+        CarSettingsSection.CLOCK -> ClockCustomizationScreen(onBack = { section = CarSettingsSection.HUB })
         CarSettingsSection.DOCK_PANEL -> CarDockPanelSettingsScreen(
             onBack = { section = CarSettingsSection.HUB },
             modifier = modifier
@@ -191,6 +193,13 @@ private fun CarSettingsHubScreen(
                 title = "Görünüm ve Ekran",
                 description = "Tam ekran (Immersive), durum çubuğu, tema, ekran yönü, yüzen buton",
                 onClick = { onOpenSection(CarSettingsSection.APPEARANCE) }
+            )
+
+            HubCategoryRow(
+                icon = Icons.Default.Tune,
+                title = stringResource(R.string.car_clock_customize),
+                description = stringResource(R.string.car_clock_settings_hint),
+                onClick = { onOpenSection(CarSettingsSection.CLOCK) }
             )
 
             HubCategoryRow(

@@ -406,3 +406,7 @@ Native launcher popups apply system-bar preferences to their own focused window,
 Native popup submenus dispatch the displayed item, including larger child menus. Dock preferences load off the UI thread. Unchanged local PMTiles archives retain their bounded directory cache instead of expiring after five minutes.
 
 Android 11 and older windows synchronize legacy visibility flags with insets requests so settings and menus honor the immersive preference.
+
+### Live clock customization
+
+The small player clock opens a full settings page with a live preview from its menu or Car settings. Appearance, Colors and Time format tabs apply changes immediately and save them automatically; launcher backups include the clock appearance.

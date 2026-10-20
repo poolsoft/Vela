@@ -11,6 +11,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * Kod icerisinde Turkce karakter kullanilmamistir (identifier ve degiskenlerde).
  */
 object CarLauncherSettings {
+    private var clockSettingsRequested = false
+    fun requestClockSettings() { clockSettingsRequested = true }
+    fun consumeClockSettingsRequest(): Boolean = clockSettingsRequested.also { clockSettingsRequested = false }
+
 
     private const val PREFS_NAME = "vela_car_launcher_prefs"
 

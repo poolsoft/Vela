@@ -2823,3 +2823,28 @@ The PMTiles archive LRU retains at most eight sources. Local cache keys contain 
 On API 30 and older, main, dialog and native popup windows set the legacy fullscreen, hide-navigation and immersive-sticky visibility bits alongside WindowInsetsController requests. The shared legacy helper preserves unrelated flags and writes only when the mask changes. Non-immersive mode restores navigation visibility and honors the separate status-bar preference.
 
 Native popup height is bounded by the visible frame and stable bottom inset, including background padding. Larger submenus scroll within that bound so the last row remains reachable on API 30.
+
+## Small player clock appearance
+
+The clock menu and Car settings hub open one full settings page. The preview uses the same InterlockingClockView and SmallClockAppearance renderer as the real small player. At widths of 600 dp or more the preview and controls are side by side; narrower screens place the preview above the controls. Appearance, Colors and Time format tabs keep controls separate. Changes save immediately without a confirmation dialog; the panel coalesces preference callbacks into one posted style update and removes its listener on detach/release. The clock and preview tick once per second.
+
+Appearance lives in small_music_panel preferences. Existing palette, custom color, dual-color and embossed keys retain their meaning. The launcher backup category includes this preference file with a typed allowlist, including legacy JSON and ZIP inspection/restore.
+
+| Key | Default | Valid values |
+| --- | --- | --- |
+| clock_color | 6 | 0..7: turquoise, theme, amber, outline-only, white, custom, pastel, panel background |
+| clock_custom_primary | 0xFFB8DDD4 | ARGB int |
+| clock_custom_secondary | 0xFFD8CDE4 | ARGB int |
+| clock_two_colors | true for palette 6/7 when missing | Boolean |
+| clock_embossed | false | Boolean |
+| clock_scale | 1.0 | 0.6..1.5 |
+| clock_spacing | -0.16 | -0.26..0.12 em; negative values overlap digits |
+| clock_colon_spacing | 0.06 | 0..0.20 em |
+| clock_outline | 1.15 | 0.5..3.0 dp |
+| clock_outline_color | white | ARGB int |
+| clock_opacity | 100 | 0..100 percent, fill only |
+| clock_font | 0 | 0 boxed asset, 1 rounded sans serif, 2 monospace |
+| clock_format | system | system, 24, 12 |
+| clock_seconds | false | Boolean |
+
+Non-finite geometry values fall back to defaults; restored numeric values are clamped before drawing. The real panel scales its existing 28-percent-height clock slot, whose base is clamped to 32..100 dp, by clock_scale and caps it at 40 percent of panel height. Glyphs then fit within the actual width and height, retaining the space reserved for the menu button. Fill opacity does not fade outlines or other player content. Night fill alpha is 204/255 of the selected opacity. Pastel colors use system accent colors on API 31+ and muted fallback colors on older devices. Panel-background colors use the same 12-by-12 drawable sample in both preview and panel. Reset writes only clock appearance keys and preserves unrelated player settings.

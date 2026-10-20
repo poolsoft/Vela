@@ -57,66 +57,32 @@ class CarUnifiedPanelHost(
     private val musicControls: View? = rootView.findViewById(R.id.music_controls)
 
     private val preferences = context.getSharedPreferences("small_music_panel", Context.MODE_PRIVATE)
+    private var clockStyle = SmallClockAppearance.read(preferences)
     private val scope = MainScope()
-    private var clockColorDialog: android.app.AlertDialog? = null
     private var sourceDialog: android.app.AlertDialog? = null
     private val progress: ProgressBar? = rootView.findViewById(R.id.music_progress)
     private var showVisualizer = preferences.getBoolean("visualizer", true)
 
-    private fun applyClockColor() {
-        val mode = preferences.getInt("clock_color", 6)
-        val adaptive = if (mode == 7) backgroundClockColors() else null
-        val soft = if (android.os.Build.VERSION.SDK_INT >= 31) {
-            context.getColor(android.R.color.system_accent1_100) to context.getColor(android.R.color.system_accent2_200)
-        } else Color.rgb(235, 232, 219) to Color.rgb(215, 200, 231)
-        val color = when (mode) {
-            1 -> androidx.core.content.ContextCompat.getColor(context, R.color.cl_primary)
-            2 -> Color.rgb(231, 213, 180)
-            3 -> Color.TRANSPARENT
-            4 -> Color.WHITE
-            5 -> preferences.getInt("clock_custom_primary", Color.rgb(184, 221, 212))
-            6 -> soft.first
-            7 -> adaptive!!.first
-            else -> Color.rgb(184, 221, 212)
+    private val styleUpdate = Runnable {
+        applyClockColor()
+        resizeContents(rootView.width, rootView.height)
+        rootView.removeCallbacks(clockTick)
+        if (active) rootView.post(clockTick)
+    }
+    private val appearanceListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key?.startsWith("clock_") == true) {
+            rootView.removeCallbacks(styleUpdate)
+            rootView.post(styleUpdate)
         }
-        val twoColors = preferences.getBoolean("clock_two_colors", mode in 6..7) && color != Color.TRANSPARENT
-        val secondary = when (mode) {
-            6 -> soft.second
-            7 -> adaptive!!.second
-            else -> preferences.getInt("clock_custom_secondary", Color.rgb(216, 205, 228))
-        }
-        clockView?.embossed = preferences.getBoolean("clock_embossed", false)
-        val night = context.resources.configuration.uiMode and
-            android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
-        clockView?.fillColor = if (night && color != Color.TRANSPARENT)
-            (color and 0x00FFFFFF) or 0xCC000000.toInt() else color
-        clockView?.minuteFillColor = if (twoColors) {
-            if (night) (secondary and 0x00FFFFFF) or 0xCC000000.toInt() else secondary
-        } else null
     }
 
-    private fun backgroundClockColors(): Pair<Int, Int> {
-        val drawable = rootView.findViewById<ImageView>(R.id.unified_album_art)?.drawable
-            ?: return Color.rgb(235, 232, 219) to Color.rgb(215, 200, 231)
-        val bitmap = android.graphics.Bitmap.createBitmap(12, 12, android.graphics.Bitmap.Config.ARGB_8888)
-        val bounds = android.graphics.Rect(drawable.bounds)
-        try {
-            drawable.setBounds(0, 0, 12, 12)
-            drawable.draw(android.graphics.Canvas(bitmap))
-            var red = 0; var green = 0; var blue = 0
-            for (y in 0 until 12) for (x in 0 until 12) {
-                val pixel = bitmap.getPixel(x, y)
-                red += Color.red(pixel); green += Color.green(pixel); blue += Color.blue(pixel)
-            }
-            val hsv = FloatArray(3)
-            Color.colorToHSV(Color.rgb(red / 144, green / 144, blue / 144), hsv)
-            return Color.HSVToColor(floatArrayOf(hsv[0], 0.12f, 0.94f)) to
-                Color.HSVToColor(floatArrayOf((hsv[0] + 35f) % 360f, 0.18f, 0.87f))
-        } finally {
-            drawable.bounds = bounds
-            bitmap.recycle()
-        }
+    private fun applyClockColor() {
+        clockStyle = SmallClockAppearance.read(preferences)
+        clockView?.let { clockStyle.apply(it, context, backgroundClockColors()) }
     }
+
+    private fun backgroundClockColors() = SmallClockAppearance.backgroundColors(
+        rootView.findViewById<ImageView>(R.id.unified_album_art)?.drawable)
 
     private var appliedMedia: MedyaParcasi? = null
     private var lifecycle: Lifecycle? = null
@@ -124,11 +90,15 @@ class CarUnifiedPanelHost(
     private val observer = LifecycleEventObserver { _, _ -> syncLifecycle() }
     private val attachment = object : View.OnAttachStateChangeListener {
         override fun onViewAttachedToWindow(view: View) {
+            preferences.registerOnSharedPreferenceChangeListener(appearanceListener)
+            rootView.post(styleUpdate)
             lifecycle = view.findViewTreeLifecycleOwner()?.lifecycle
             lifecycle?.addObserver(observer)
             syncLifecycle()
         }
         override fun onViewDetachedFromWindow(view: View) {
+            preferences.unregisterOnSharedPreferenceChangeListener(appearanceListener)
+            rootView.removeCallbacks(styleUpdate)
             lifecycle?.removeObserver(observer)
             lifecycle = null
             setActive(false)
@@ -144,13 +114,13 @@ class CarUnifiedPanelHost(
         rootView.removeCallbacks(clockTick)
         if (value) rootView.post(clockTick)
         visualizer?.setPlaying(value && showVisualizer && (appliedMedia?.caliyorMu == true))
-        if (!value) { sourceDialog?.dismiss(); sourceDialog = null; clockColorDialog?.dismiss() }
+        if (!value) { sourceDialog?.dismiss(); sourceDialog = null }
     }
 
     private val clockTick = object : Runnable {
         override fun run() {
             val value = android.text.format.DateFormat.format(
-                if (android.text.format.DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm",
+                clockStyle.timePattern(context),
                 java.util.Date())
             if (clockView?.text?.toString() != value.toString()) clockView?.text = value
             rootView.postDelayed(this, 1000)
@@ -167,7 +137,8 @@ class CarUnifiedPanelHost(
     }
 
     fun release() {
-        clockColorDialog?.dismiss()
+        preferences.unregisterOnSharedPreferenceChangeListener(appearanceListener)
+        rootView.removeCallbacks(styleUpdate)
         sourceDialog?.dismiss()
         scope.cancel()
         lifecycle?.removeObserver(observer)
@@ -182,7 +153,7 @@ class CarUnifiedPanelHost(
         val density = context.resources.displayMetrics.density
         val w = width / density
         val h = height / density
-        val clockHeight = (h * 0.28f).coerceIn(32f, 100f)
+        val clockHeight = ((h * 0.28f).coerceIn(32f, 100f) * clockStyle.scale).coerceAtMost(h * 0.4f)
         clockView?.textSize = clockHeight * 0.96f
         clockView?.let { if (it.layoutParams.height != (clockHeight * density).toInt())
             it.layoutParams = it.layoutParams.apply { this.height = (clockHeight * density).toInt() } }
@@ -242,53 +213,15 @@ class CarUnifiedPanelHost(
         popup.menu.add(0, 4, 3, "Ayarlar")
         popup.menu.add(0, 5, 4, "Bellek Temizle")
 
-        val colors = popup.menu.addSubMenu(R.string.car_small_clock_color)
-        listOf(R.string.car_small_clock_turquoise, R.string.car_small_clock_theme,
-            R.string.car_small_clock_amber, R.string.car_small_clock_transparent,
-            R.string.car_small_clock_white, R.string.car_small_clock_custom,
-            R.string.car_small_clock_soft, R.string.car_small_clock_background).forEachIndexed { index, label ->
-            colors.add(1, 20 + index, index, label).apply {
-                isCheckable = true
-                isChecked = preferences.getInt("clock_color", 6) == index
-            }
-        }
-        colors.add(0, 32, 6, R.string.car_small_clock_two_colors).apply {
-            isCheckable = true; isChecked = preferences.getBoolean("clock_two_colors", preferences.getInt("clock_color", 6) in 6..7)
-        }
-        popup.menu.add(0, 31, 0, R.string.car_small_clock_embossed).apply {
-            isCheckable = true; isChecked = preferences.getBoolean("clock_embossed", false)
-        }
+        popup.menu.add(0, 33, 5, R.string.car_clock_customize)
         popup.menu.add(0, 30, 6, R.string.car_small_visualizer).apply {
             isCheckable = true; isChecked = showVisualizer
         }
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                25 -> {
-                    clockColorDialog?.dismiss()
-                    clockColorDialog = ClockColorDialog.show(context,
-                        preferences.getInt("clock_custom_primary", Color.rgb(184, 221, 212)),
-                        preferences.getInt("clock_custom_secondary", Color.rgb(216, 205, 228)),
-                        preferences.getBoolean("clock_two_colors", preferences.getInt("clock_color", 6) in 6..7)) { primary, secondary, twoColors ->
-                        preferences.edit().putInt("clock_color", 5)
-                            .putInt("clock_custom_primary", primary).putInt("clock_custom_secondary", secondary)
-                            .putBoolean("clock_two_colors", twoColors).apply()
-                        applyClockColor()
-                    }
-                    true
-                }
-                32 -> {
-                    preferences.edit().putBoolean("clock_two_colors", !preferences.getBoolean("clock_two_colors", preferences.getInt("clock_color", 6) in 6..7)).apply()
-                    applyClockColor()
-                    true
-                }
-                in 20..24, 26, 27 -> {
-                    preferences.edit().putInt("clock_color", item.itemId - 20).apply()
-                    applyClockColor()
-                    true
-                }
-                31 -> {
-                    preferences.edit().putBoolean("clock_embossed", !preferences.getBoolean("clock_embossed", false)).apply()
-                    applyClockColor()
+                33 -> {
+                    app.vela.carlauncher.settings.CarLauncherSettings.requestClockSettings()
+                    onAyarlarAc()
                     true
                 }
                 30 -> {

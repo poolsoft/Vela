@@ -77,6 +77,13 @@ object LauncherBackup {
 
     // Tercih dosyalari ve anahtarlarinin semasi (Sadece Launcher bilesenleri)
     val schema: Map<String, Map<String, String>> = mapOf(
+        "small_music_panel" to mapOf(
+            "clock_color" to "Int", "clock_custom_primary" to "Int", "clock_custom_secondary" to "Int",
+            "clock_two_colors" to "Boolean", "clock_embossed" to "Boolean", "clock_scale" to "Float",
+            "clock_spacing" to "Float", "clock_colon_spacing" to "Float", "clock_outline" to "Float",
+            "clock_outline_color" to "Int", "clock_opacity" to "Int", "clock_font" to "Int",
+            "clock_format" to "String", "clock_seconds" to "Boolean", "visualizer" to "Boolean"
+        ),
         "vela_car_launcher_prefs" to mapOf(
             "car_launcher_enabled" to "Boolean", "car_launcher_immersive_mode" to "Boolean",
             "car_launcher_mapless_main" to "String", "car_launcher_mapless_mode" to "Boolean", "car_launcher_mapless_screen" to "String",
@@ -110,7 +117,7 @@ object LauncherBackup {
     )
 
     private fun getCategoryPrefFiles(category: BackupCategory): List<String> = when (category) {
-        BackupCategory.LAUNCHER -> listOf("vela_car_launcher_prefs")
+        BackupCategory.LAUNCHER -> listOf("vela_car_launcher_prefs", "small_music_panel")
         BackupCategory.DOCK -> listOf("car_launcher_app_dock")
         BackupCategory.WIDGETS -> listOf("vela_car_launcher_widgets", "vela_desktop_widget_layout")
         BackupCategory.MUSIC -> listOf("vela_music_playlists", "vela_music_focus")
@@ -372,7 +379,7 @@ object LauncherBackup {
                     } else if (name.startsWith("preferences/") && name.endsWith(".json")) {
                         val prefName = name.removePrefix("preferences/").removeSuffix(".json")
                         val cat = when (prefName) {
-                            "vela_car_launcher_prefs" -> BackupCategory.LAUNCHER
+                            "vela_car_launcher_prefs", "small_music_panel" -> BackupCategory.LAUNCHER
                             "car_launcher_app_dock" -> BackupCategory.DOCK
                             "vela_car_launcher_widgets", "vela_desktop_widget_layout" -> BackupCategory.WIDGETS
                             "vela_music_playlists", "vela_music_focus" -> BackupCategory.MUSIC
@@ -412,7 +419,7 @@ object LauncherBackup {
             val groups = jsonRoot.optJSONObject("groups") ?: JSONObject()
             val categoriesInJson = mutableSetOf<BackupCategory>()
 
-            if (groups.has("vela_car_launcher_prefs")) categoriesInJson.add(BackupCategory.LAUNCHER)
+            if (groups.has("vela_car_launcher_prefs") || groups.has("small_music_panel")) categoriesInJson.add(BackupCategory.LAUNCHER)
             if (groups.has("car_launcher_app_dock")) categoriesInJson.add(BackupCategory.DOCK)
             if (groups.has("vela_car_launcher_widgets") || groups.has("vela_desktop_widget_layout")) categoriesInJson.add(BackupCategory.WIDGETS)
             if (groups.has("vela_music_playlists") || groups.has("vela_music_focus")) categoriesInJson.add(BackupCategory.MUSIC)
@@ -468,7 +475,7 @@ object LauncherBackup {
                 } else if (name.startsWith("preferences/") && name.endsWith(".json")) {
                     val prefName = name.removePrefix("preferences/").removeSuffix(".json")
                     val cat = when (prefName) {
-                        "vela_car_launcher_prefs" -> BackupCategory.LAUNCHER
+                        "vela_car_launcher_prefs", "small_music_panel" -> BackupCategory.LAUNCHER
                         "car_launcher_app_dock" -> BackupCategory.DOCK
                         "vela_car_launcher_widgets", "vela_desktop_widget_layout" -> BackupCategory.WIDGETS
                         "vela_music_playlists", "vela_music_focus" -> BackupCategory.MUSIC

@@ -2804,3 +2804,10 @@ Native launcher popups apply system-bar preferences to their own focused window,
 - ✅ Music cache and slow PMTiles operations report separate timing stages.
 
 - ✅ Main, dialog and popup windows synchronize immersive visibility on Android 11 and older without overriding saved settings.
+
+### Small player clock editor
+
+- ✅ Full settings page with a fixed live preview, responsive landscape/portrait layout and Appearance/Colors/Time format tabs.
+- ✅ Palette and custom hour/minute/outline colors, dual colors, fill opacity and embossed rendering.
+- ✅ Responsive size, digit and colon spacing, outline thickness, three typefaces, system/12-hour/24-hour format and optional seconds.
+- ✅ Immediate preference updates and portable launcher backup/restore; reset affects clock appearance only.
