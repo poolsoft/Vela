@@ -15,21 +15,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import app.vela.R
-import app.vela.carlauncher.widgets.InterlockingClockView
 import app.vela.ui.settings.ToggleRow
-import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-/** Full settings page; the real panel and preview share saved appearance and drawing code. */
+/** Side-panel controls update the attached small player clock through saved preferences. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun ClockCustomizationScreen(onBack: () -> Unit) {
@@ -38,7 +34,6 @@ internal fun ClockCustomizationScreen(onBack: () -> Unit) {
     var style by remember(prefs) { mutableStateOf(SmallClockAppearance.read(prefs)) }
     var target by remember { mutableIntStateOf(0) }
     var section by rememberSaveable { mutableIntStateOf(0) }
-    var now by remember { mutableStateOf(java.util.Date()) }
     DisposableEffect(prefs) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key?.startsWith("clock_") == true) style = SmallClockAppearance.read(prefs)
@@ -46,29 +41,9 @@ internal fun ClockCustomizationScreen(onBack: () -> Unit) {
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
-    LaunchedEffect(Unit) {
-        while (true) { now = java.util.Date(); delay(1000) }
-    }
     fun change(value: SmallClockAppearance) {
         style = value.normalized()
         style.save(prefs)
-    }
-    val background = remember(context) { SmallClockAppearance.backgroundColors(context.getDrawable(R.drawable.bg_default_music_art)) }
-    val preview: @Composable () -> Unit = {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF55452B), Color(0xFF44212E), Color(0xFF1A213B))))
-            .padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(stringResource(R.string.car_clock_preview), color = Color.White.copy(alpha = .7f))
-            AndroidView(factory = { InterlockingClockView(it) }, modifier = Modifier.fillMaxWidth().height(150.dp),
-                update = { view ->
-                    style.apply(view, context, background)
-                    view.textSize = 76f * style.scale
-                    view.text = android.text.format.DateFormat.format(style.timePattern(context), now)
-                    view.contentDescription = context.getString(R.string.car_clock_preview) + ": " + view.text
-                })
-            Text(stringResource(R.string.car_clock_live_hint), color = Color.White.copy(alpha = .8f),
-                style = MaterialTheme.typography.bodySmall)
-        }
     }
     val controls: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth().fillMaxHeight()) {
@@ -166,18 +141,10 @@ internal fun ClockCustomizationScreen(onBack: () -> Unit) {
             }
         }
     }
-    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.car_clock_customize)) },
-        navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack,
+    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0), topBar = { TopAppBar(title = { Text(stringResource(R.string.car_clock_customize)) },
+        windowInsets = WindowInsets(0, 0, 0, 0), navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack,
             contentDescription = stringResource(R.string.car_clock_back)) } }) }) { padding ->
-        BoxWithConstraints(Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
-            if (maxWidth >= 600.dp) Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Box(Modifier.weight(.38f)) { preview() }
-                Box(Modifier.weight(.62f)) { controls() }
-            } else Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                preview()
-                Box(Modifier.weight(1f)) { controls() }
-            }
-        }
+        Box(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) { controls() }
     }
 }
 

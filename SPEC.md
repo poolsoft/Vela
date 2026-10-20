@@ -2826,7 +2826,7 @@ Native popup height is bounded by the visible frame and stable bottom inset, inc
 
 ## Small player clock appearance
 
-The clock menu and Car settings hub open one full settings page. The preview uses the same InterlockingClockView and SmallClockAppearance renderer as the real small player. At widths of 600 dp or more the preview and controls are side by side; narrower screens place the preview above the controls. Appearance, Colors and Time format tabs keep controls separate. Changes save immediately without a confirmation dialog; the panel coalesces preference callbacks into one posted style update and removes its listener on detach/release. The clock and preview tick once per second.
+The clock menu and Car settings hub open CLOCK mode in the existing launcher window. Controls occupy the large right panel and the real CarUnifiedPanelHost occupies the small left panel; portrait places the player above the controls. The same attached host is reparented when opening and closing the editor, rather than creating a duplicate preview. The map composition remains attached beneath it. The temporary panel order does not overwrite saved panel placement. Appearance, Colors and Time format tabs keep controls separate. Changes save immediately without a confirmation dialog; the panel coalesces preference callbacks into one posted style update and removes its listener on detach/release. Only the real clock ticks once per second.
 
 Appearance lives in small_music_panel preferences. Existing palette, custom color, dual-color and embossed keys retain their meaning. The launcher backup category includes this preference file with a typed allowlist, including legacy JSON and ZIP inspection/restore.
 

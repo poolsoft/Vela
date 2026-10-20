@@ -409,4 +409,4 @@ Android 11 and older windows synchronize legacy visibility flags with insets req
 
 ### Live clock customization
 
-The small player clock opens a full settings page with a live preview from its menu or Car settings. Appearance, Colors and Time format tabs apply changes immediately and save them automatically; launcher backups include the clock appearance.
+Clock customization opens controls in the large side panel from the small player menu or Car settings. The real small player stays visible on the left and updates live; there is no duplicate preview clock. Appearance, Colors and Time format tabs apply changes immediately and save them automatically; launcher backups include the clock appearance.

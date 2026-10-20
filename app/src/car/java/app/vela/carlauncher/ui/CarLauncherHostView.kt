@@ -168,7 +168,8 @@ fun CarLauncherHostView(
                 when (maplessMain) { "dashboard" -> "DASHBOARD"; "speedometer" -> "NEON_DASHBOARD"; else -> "MUSIC" }
             } else contentMode
             if (panelReady && binding.contentMode != effectiveMode) {
-                binding.releasePanel()
+                binding.releasePanel(keepUnified = effectiveMode == "CLOCK" ||
+                    (binding.contentMode == "CLOCK" && effectiveMode == "UNIFIED"))
                 binding.contentMode = effectiveMode
                 when (effectiveMode) {
                     "DESKTOP" -> {
@@ -225,28 +226,49 @@ fun CarLauncherHostView(
                             root.context, { latestPanel("UNIFIED") }, { latestLaunch(it.paketAdi) }
                         ).also { panel.addView(it.rootView) }
                     }
-                    else -> {
-                        binding.unifiedHost = CarUnifiedPanelHost(
+                    "CLOCK" -> {
+                        val clock = binding.unifiedHost ?: CarUnifiedPanelHost(
                             root.context, telemetri, medya,
                             { latestPlay() }, { latestNext() }, { latestPrevious() },
                             { latestPanel("MUSIC") }, { latestPanel("NEON_DASHBOARD") },
                             { latestSettings() }
-                        ).also { panel.addView(it.rootView) }
+                        ).also { binding.unifiedHost = it }
+                        // Keep the real player alive above the retained map, with no duplicate clock.
+                        map.addView(clock.rootView, FrameLayout.LayoutParams(-1, -1))
+                        binding.panelCompose = ComposeView(root.context).apply {
+                            setParentCompositionContext(parentComposition)
+                            setContent {
+                                androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme()) {
+                                    ClockCustomizationScreen(onBack = { latestPanel("UNIFIED") })
+                                }
+                            }
+                        }.also { panel.addView(it) }
+                    }
+                    else -> {
+                        val clock = binding.unifiedHost ?: CarUnifiedPanelHost(
+                            root.context, telemetri, medya,
+                            { latestPlay() }, { latestNext() }, { latestPrevious() },
+                            { latestPanel("MUSIC") }, { latestPanel("NEON_DASHBOARD") },
+                            { latestSettings() }
+                        ).also { binding.unifiedHost = it }
+                        panel.addView(clock.rootView)
                     }
                 }
             }
+            binding.setMapContentVisible(effectiveMode != "CLOCK")
             binding.musicHost?.updateMediaState(medya)
             binding.musicHost?.updateVisualizerType(largeVisualizer, visualizerFps)
             binding.dashboardHost?.updateTelemetri(telemetri)
             binding.unifiedHost?.updateMedia(medya)
             binding.unifiedHost?.updateVisualizerType(visualizerType, visualizerFps)
-            map.setInterceptTouch(!mapless && contentMode != "UNIFIED" && !fullScreenMap) { latestPanel("UNIFIED") }
+            map.setInterceptTouch(!mapless && contentMode != "UNIFIED" && contentMode != "CLOCK" && !fullScreenMap) { latestPanel("UNIFIED") }
 
             root.findViewById<View>(R.id.night_dim_overlay).apply {
                 visibility = if (dimEnabled) View.VISIBLE else View.GONE
                 alpha = dimLevel
             }
             binding.fullScreenMap = fullScreenMap && !mapless
+            manager.clockEditor = contentMode == "CLOCK"
             manager.setDesktopModeState(desktop)
             manager.setContentFullScreen(mapless || contentMode != "UNIFIED")
             val inputs = listOf(
@@ -282,18 +304,23 @@ private class LauncherHostBinding(
     var layoutInputs: List<Any>? = null
     private var released = false
 
+    fun setMapContentVisible(visible: Boolean) {
+        mapCompose.visibility = if (visible) View.VISIBLE else View.INVISIBLE
+    }
+
     fun applyLayout() {
         if (!released) manager.applyLayout(isWidgetPanelOpen = !fullScreenMap)
     }
 
-    fun releasePanel() {
+    fun releasePanel(keepUnified: Boolean = false) {
         musicHost?.release()
         drawerHost?.release()
-        unifiedHost?.release()
+        unifiedHost?.rootView?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        if (!keepUnified) unifiedHost?.release()
         panelCompose?.disposeComposition()
         musicHost = null
         dashboardHost = null
-        unifiedHost = null
+        if (!keepUnified) unifiedHost = null
         drawerHost = null
         panelCompose = null
         panel.removeAllViews()

@@ -102,7 +102,7 @@ fun CarLauncherSettingsView(
     onBackup: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var section by rememberSaveable { mutableStateOf(if (CarLauncherSettings.consumeClockSettingsRequest()) CarSettingsSection.CLOCK else CarSettingsSection.HUB) }
+    var section by rememberSaveable { mutableStateOf(CarSettingsSection.HUB) }
 
     BackHandler {
         if (section == CarSettingsSection.HUB) {
@@ -114,7 +114,10 @@ fun CarLauncherSettingsView(
 
     when (section) {
         CarSettingsSection.HUB -> CarSettingsHubScreen(
-            onOpenSection = { section = it },
+            onOpenSection = {
+                if (it == CarSettingsSection.CLOCK) CarLauncherSettings.requestClockSettings()
+                else section = it
+            },
             onBack = onKapat,
             modifier = modifier
         )
@@ -122,7 +125,7 @@ fun CarLauncherSettingsView(
             onBack = { section = CarSettingsSection.HUB },
             modifier = modifier
         )
-        CarSettingsSection.CLOCK -> ClockCustomizationScreen(onBack = { section = CarSettingsSection.HUB })
+        CarSettingsSection.CLOCK -> androidx.compose.runtime.LaunchedEffect(Unit) { CarLauncherSettings.requestClockSettings() }
         CarSettingsSection.DOCK_PANEL -> CarDockPanelSettingsScreen(
             onBack = { section = CarSettingsSection.HUB },
             modifier = modifier

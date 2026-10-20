@@ -88,9 +88,10 @@ fun CarLauncherLayout(
     var fullMap by rememberSaveable { mutableStateOf(CarLauncherSettings.getStartupScreen() == "map_only") }
     val homeScreenRequest by CarLauncherSettings.homeScreenRequest.collectAsState()
     LaunchedEffect(homeScreenRequest) {
-        CarLauncherSettings.setDesktopModu(CarLauncherSettings.getStartupScreen() == "desktop")
-        contentMode = "UNIFIED"
-        fullMap = CarLauncherSettings.getStartupScreen() == "map_only"
+        val clockEditor = CarLauncherSettings.consumeClockSettingsRequest()
+        CarLauncherSettings.setDesktopModu(!clockEditor && CarLauncherSettings.getStartupScreen() == "desktop")
+        contentMode = if (clockEditor) "CLOCK" else "UNIFIED"
+        fullMap = !clockEditor && CarLauncherSettings.getStartupScreen() == "map_only"
     }
 
     LaunchedEffect(Unit) {

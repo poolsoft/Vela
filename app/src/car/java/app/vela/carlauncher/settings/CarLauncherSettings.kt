@@ -12,7 +12,10 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 object CarLauncherSettings {
     private var clockSettingsRequested = false
-    fun requestClockSettings() { clockSettingsRequested = true }
+    fun requestClockSettings() {
+        clockSettingsRequested = true
+        requestHomeScreen()
+    }
     fun consumeClockSettingsRequest(): Boolean = clockSettingsRequested.also { clockSettingsRequested = false }
 
 

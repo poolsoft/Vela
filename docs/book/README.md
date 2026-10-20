@@ -98,4 +98,4 @@ Car launcher native popup and dock startup contracts are documented in SPEC unde
 
 The planned platform/window chapter also covers the shared legacy visibility mask on API 30 and older and its companion insets requests, as specified in SPEC.
 
-[11. Car launcher clock](11-car-launcher-clock.md) covers the live clock editor and responsive panel drawing.
+[11. Car launcher clock](11-car-launcher-clock.md) covers side-panel clock controls, the visible real player and responsive panel drawing.

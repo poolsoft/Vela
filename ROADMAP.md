@@ -568,4 +568,4 @@ Validate the flat music-control chooser on the physical head unit, including tou
 - Verify notification access on the head unit before assessing external MediaSession control; this special access requires a user grant.
 - Recheck OEM radio/Home task returns after the popup crash fix; a failed retained-task return alone does not prove a duplicate live launcher.
 
-- Verify live clock editing and responsive geometry on the API-27 head unit, especially during repeated slider gestures and in narrow split panels.
+- Verify real-clock side-panel editing and responsive geometry on the API-27 head unit, especially during repeated slider gestures and in narrow split panels.

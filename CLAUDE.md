@@ -6076,4 +6076,4 @@ Native popup height is bounded by the visible frame and stable bottom inset, inc
 
 ## Clock appearance
 
-SmallClockAppearance owns validation, preference keys and drawing configuration for the small player and full-page preview. Avoid a second preview renderer or a separate clock color dialog. Keep preference listeners scoped to attached views/compositions, coalesce the real panel callbacks, and preserve small_music_panel in the typed launcher backup schema. New clock appearance controls need matching base/Turkish resources and bounds tests.
+SmallClockAppearance owns validation, preference keys and drawing configuration for the small player. CLOCK mode retains the real small player at the left of side-panel controls and restores normal panel placement on exit. Do not add a duplicate preview clock or a separate clock color dialog. Keep preference listeners scoped to attached views/compositions, coalesce the real panel callbacks, and preserve small_music_panel in the typed launcher backup schema. New clock appearance controls need matching base/Turkish resources and bounds tests.

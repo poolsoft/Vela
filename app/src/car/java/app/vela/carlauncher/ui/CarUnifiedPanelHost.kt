@@ -221,7 +221,6 @@ class CarUnifiedPanelHost(
             when (item.itemId) {
                 33 -> {
                     app.vela.carlauncher.settings.CarLauncherSettings.requestClockSettings()
-                    onAyarlarAc()
                     true
                 }
                 30 -> {
