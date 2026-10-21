@@ -53,14 +53,27 @@ class InterlockingClockView @JvmOverloads constructor(
     }
 
     private fun applyClockTypeface() {
-        if (clockFont != 0) {
-            typeface = Typeface.create(if (clockFont == 1) "sans-serif-rounded" else "monospace", Typeface.BOLD)
-            return
-        }
-        try {
-            typeface = Typeface.createFromAsset(context.assets, "fonts/Cross Boxed.ttf")
-        } catch (e: Exception) {
-            typeface = Typeface.DEFAULT_BOLD
+        when (clockFont) {
+            1 -> {
+                typeface = Typeface.create("sans-serif-rounded", Typeface.BOLD)
+            }
+            2 -> {
+                typeface = Typeface.create("monospace", Typeface.BOLD)
+            }
+            3 -> {
+                try {
+                    typeface = Typeface.createFromAsset(context.assets, "fonts/condensed_clock.ttf")
+                } catch (e: Exception) {
+                    typeface = Typeface.DEFAULT_BOLD
+                }
+            }
+            else -> {
+                try {
+                    typeface = Typeface.createFromAsset(context.assets, "fonts/Cross Boxed.ttf")
+                } catch (e: Exception) {
+                    typeface = Typeface.DEFAULT_BOLD
+                }
+            }
         }
     }
 
@@ -131,7 +144,7 @@ class InterlockingClockView @JvmOverloads constructor(
                 p.color = 0xA0FFFFFF.toInt()
                 canvas.drawText(glyph, x - depth * 0.7f, glyphBaseline - depth * 0.7f, p)
             }
-            val glyphColor = if (value.indexOf(':') in 0 until i) minuteFillColor ?: fillColor else fillColor
+            val glyphColor = if (isMinute(value, i)) minuteFillColor ?: fillColor else fillColor
             if (glyphColor != android.graphics.Color.TRANSPARENT) {
                 p.style = Paint.Style.FILL
                 p.color = glyphColor
@@ -157,6 +170,15 @@ class InterlockingClockView @JvmOverloads constructor(
         p.textSize = originalTextSize
         p.xfermode = oldXfermode
         canvas.restoreToCount(layer)
+    }
+
+    private fun isMinute(value: CharSequence, index: Int): Boolean {
+        val colonIdx = value.indexOf(':')
+        return if (colonIdx >= 0) {
+            index > colonIdx
+        } else {
+            index >= (value.length / 2)
+        }
     }
 
     private fun spacingAfter(value: CharSequence, index: Int, overlap: Float, colonGap: Float): Float {

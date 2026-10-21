@@ -17,4 +17,5 @@
     <string name="car_small_clock_cancel">Cancel</string>
     <string name="car_small_clock_soft">Soft pastel (Material You)</string>
     <string name="car_small_clock_background">Match panel background</string>
+    <string name="car_small_clock_solid_outline">Solid hour / Outline minute</string>
 </resources>

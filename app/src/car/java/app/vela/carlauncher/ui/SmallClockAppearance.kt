@@ -21,19 +21,24 @@ internal data class SmallClockAppearance(
     val font: Int = 0,
     val format: String = "system",
     val seconds: Boolean = false,
+    val showColon: Boolean = true,
+    val showDate: Boolean = false,
 ) {
-    fun normalized() = copy(palette = palette.coerceIn(0, 7),
+    fun normalized() = copy(palette = palette.coerceIn(0, 8),
         scale = (if (scale.isFinite()) scale else 1f).coerceIn(0.6f, 1.5f),
         spacing = (if (spacing.isFinite()) spacing else -0.16f).coerceIn(-0.26f, 0.12f),
         colonSpacing = (if (colonSpacing.isFinite()) colonSpacing else 0.06f).coerceIn(0f, 0.2f),
         outline = (if (outline.isFinite()) outline else 1.15f).coerceIn(0.5f, 3f),
-        opacity = opacity.coerceIn(0, 100), font = font.coerceIn(0, 2),
+        opacity = opacity.coerceIn(0, 100), font = font.coerceIn(0, 3),
         format = format.takeIf { it in setOf("system", "24", "12") } ?: "system")
 
     fun timePattern(context: Context): String {
         val use24 = format == "24" || (format == "system" && android.text.format.DateFormat.is24HourFormat(context))
-        return (if (use24) "HH:mm" else "h:mm") + if (seconds) ":ss" else ""
+        val sep = if (showColon) ":" else ""
+        return (if (use24) "HH${sep}mm" else "h${sep}mm") + if (seconds) "${sep}ss" else ""
     }
+
+    fun datePattern(): String = "dd/MM EEE"
 
     fun apply(view: InterlockingClockView, context: Context, background: Pair<Int, Int>) {
         val soft = if (android.os.Build.VERSION.SDK_INT >= 31)
@@ -47,6 +52,7 @@ internal data class SmallClockAppearance(
             5 -> primary to secondary
             6 -> soft
             7 -> background
+            8 -> (if (primary != 0xFFB8DDD4.toInt()) primary else Color.WHITE) to Color.TRANSPARENT
             else -> 0xFFB8DDD4.toInt() to secondary
         }
         val night = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
@@ -54,7 +60,7 @@ internal data class SmallClockAppearance(
         fun fill(color: Int): Int = if (color == Color.TRANSPARENT) color else
             (color and 0xFFFFFF) or ((opacity * (if (night) 204 else 255) / 100) shl 24)
         view.fillColor = fill(colors.first)
-        view.minuteFillColor = if (dual && palette != 3) fill(colors.second) else null
+        view.minuteFillColor = if ((dual || palette == 8) && palette != 3) fill(colors.second) else null
         view.embossed = embossed
         view.digitSpacingEm = spacing
         view.colonSpacingEm = colonSpacing
@@ -71,7 +77,8 @@ internal data class SmallClockAppearance(
             .putFloat("clock_spacing", spacing).putFloat("clock_colon_spacing", colonSpacing)
             .putFloat("clock_outline", outline).putInt("clock_outline_color", outlineColor)
             .putInt("clock_opacity", opacity).putInt("clock_font", font)
-            .putString("clock_format", format).putBoolean("clock_seconds", seconds).apply()
+            .putString("clock_format", format).putBoolean("clock_seconds", seconds)
+            .putBoolean("clock_show_colon", showColon).putBoolean("clock_show_date", showDate).apply()
     }
 
     companion object {
@@ -101,12 +108,13 @@ internal data class SmallClockAppearance(
         fun read(p: SharedPreferences): SmallClockAppearance {
             val mode = p.getInt("clock_color", 6)
             return SmallClockAppearance(mode, p.getInt("clock_custom_primary", 0xFFB8DDD4.toInt()),
-                p.getInt("clock_custom_secondary", 0xFFD8CDE4.toInt()), p.getBoolean("clock_two_colors", mode in 6..7),
+                p.getInt("clock_custom_secondary", 0xFFD8CDE4.toInt()), p.getBoolean("clock_two_colors", mode in setOf(6, 7, 8)),
                 p.getBoolean("clock_embossed", false), p.getFloat("clock_scale", 1f),
                 p.getFloat("clock_spacing", -0.16f), p.getFloat("clock_colon_spacing", 0.06f),
                 p.getFloat("clock_outline", 1.15f), p.getInt("clock_outline_color", Color.WHITE),
                 p.getInt("clock_opacity", 100), p.getInt("clock_font", 0),
-                p.getString("clock_format", "system") ?: "system", p.getBoolean("clock_seconds", false)).normalized()
+                p.getString("clock_format", "system") ?: "system", p.getBoolean("clock_seconds", false),
+                p.getBoolean("clock_show_colon", true), p.getBoolean("clock_show_date", false)).normalized()
         }
     }
 }

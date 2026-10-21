@@ -19,6 +19,9 @@
     <string name="car_clock_font_boxed">Fütüristik</string>
     <string name="car_clock_font_rounded">Yuvarlak</string>
     <string name="car_clock_font_classic">Klasik</string>
+    <string name="car_clock_font_condensed">Kondans (Spor)</string>
+    <string name="car_clock_show_colon">İki noktayı göster (:)</string>
+    <string name="car_clock_show_date">Tarihi göster</string>
     <string name="car_clock_format">Saat biçimi</string>
     <string name="car_clock_format_system">Sistem</string>
     <string name="car_clock_format_24">24 saat</string>

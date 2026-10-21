@@ -19,6 +19,9 @@
     <string name="car_clock_font_boxed">Futuristic</string>
     <string name="car_clock_font_rounded">Rounded</string>
     <string name="car_clock_font_classic">Classic</string>
+    <string name="car_clock_font_condensed">Condensed</string>
+    <string name="car_clock_show_colon">Show colon (:)</string>
+    <string name="car_clock_show_date">Show date</string>
     <string name="car_clock_format">Time format</string>
     <string name="car_clock_format_system">System</string>
     <string name="car_clock_format_24">24 hours</string>

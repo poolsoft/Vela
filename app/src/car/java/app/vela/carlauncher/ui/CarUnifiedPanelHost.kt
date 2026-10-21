@@ -47,6 +47,7 @@ class CarUnifiedPanelHost(
     private val panelMenuBtn: ImageButton? = rootView.findViewById(R.id.panel_menu_btn)
     private val musicArea: View? = rootView.findViewById(R.id.music_area)
     private val clockView: InterlockingClockView? = rootView.findViewById(R.id.music_panel_clock)
+    private val dateView: TextView? = rootView.findViewById(R.id.music_panel_date)
     private val trackTitle: TextView? = rootView.findViewById(R.id.music_track_title)
     private val trackArtist: TextView? = rootView.findViewById(R.id.music_track_artist)
     private val btnPlay: ImageButton? = rootView.findViewById(R.id.music_btn_play)
@@ -79,6 +80,7 @@ class CarUnifiedPanelHost(
     private fun applyClockColor() {
         clockStyle = SmallClockAppearance.read(preferences)
         clockView?.let { clockStyle.apply(it, context, backgroundClockColors()) }
+        dateView?.visibility = if (clockStyle.showDate) View.VISIBLE else View.GONE
     }
 
     private fun backgroundClockColors() = SmallClockAppearance.backgroundColors(
@@ -119,10 +121,17 @@ class CarUnifiedPanelHost(
 
     private val clockTick = object : Runnable {
         override fun run() {
+            val now = java.util.Date()
             val value = android.text.format.DateFormat.format(
                 clockStyle.timePattern(context),
-                java.util.Date())
+                now)
             if (clockView?.text?.toString() != value.toString()) clockView?.text = value
+            if (clockStyle.showDate && dateView != null) {
+                val dateValue = android.text.format.DateFormat.format(
+                    clockStyle.datePattern(),
+                    now)
+                if (dateView.text?.toString() != dateValue.toString()) dateView.text = dateValue
+            }
             rootView.postDelayed(this, 1000)
         }
     }
@@ -182,6 +191,7 @@ class CarUnifiedPanelHost(
         }
         musicArea?.setOnClickListener { onMuzikPaneliAc() }
         clockView?.setOnClickListener { onMuzikPaneliAc() }
+        dateView?.setOnClickListener { onMuzikPaneliAc() }
         trackTitle?.setOnClickListener { onMuzikPaneliAc() }
         trackArtist?.setOnClickListener { onMuzikPaneliAc() }
         visualizer?.setOnClickListener { onMuzikPaneliAc() }

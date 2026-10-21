@@ -17,4 +17,5 @@
     <string name="car_small_clock_cancel">Vazgeç</string>
     <string name="car_small_clock_soft">Yumuşak pastel (Material You)</string>
     <string name="car_small_clock_background">Panel arka planına uyumlu</string>
+    <string name="car_small_clock_solid_outline">Dolu saat / Boş dakika</string>
 </resources>

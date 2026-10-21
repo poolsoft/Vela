@@ -174,6 +174,22 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
+        <!-- Date Subtitle (Resimdeki gibi tarih gosterimi) -->
+        <TextView
+            android:id="@+id/music_panel_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="0dp"
+            android:gravity="center"
+            android:text="20/10 Sal"
+            android:textColor="#DDFFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/music_panel_clock" />
+
         <!-- Track Title -->
         <TextView
             android:id="@+id/music_track_title"
@@ -189,7 +205,7 @@
             android:maxLines="1"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/music_panel_clock"/>
+            app:layout_constraintTop_toBottomOf="@id/music_panel_date"/>
 
         <!-- Artist -->
         <TextView

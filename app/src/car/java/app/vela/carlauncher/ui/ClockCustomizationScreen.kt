@@ -70,10 +70,14 @@ internal fun ClockCustomizationScreen(onBack: () -> Unit) {
                             style.opacity.toString() + "%") { change(style.copy(opacity = it.roundToInt())) }
                         Text(stringResource(R.string.car_clock_font), style = MaterialTheme.typography.titleMedium)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(R.string.car_clock_font_boxed, R.string.car_clock_font_rounded, R.string.car_clock_font_classic)
+                            listOf(R.string.car_clock_font_boxed, R.string.car_clock_font_rounded, R.string.car_clock_font_classic, R.string.car_clock_font_condensed)
                                 .forEachIndexed { index, label -> FilterChip(style.font == index, { change(style.copy(font = index)) },
                                     label = { Text(stringResource(label)) }) }
                         }
+                        ToggleRow(label = stringResource(R.string.car_clock_show_colon), checked = style.showColon,
+                            onCheckedChange = { change(style.copy(showColon = it)) })
+                        ToggleRow(label = stringResource(R.string.car_clock_show_date), checked = style.showDate,
+                            onCheckedChange = { change(style.copy(showDate = it)) })
                         ToggleRow(label = stringResource(R.string.car_small_clock_embossed), checked = style.embossed,
                             onCheckedChange = { change(style.copy(embossed = it)) })
                     }
@@ -82,7 +86,8 @@ internal fun ClockCustomizationScreen(onBack: () -> Unit) {
                         val labels = listOf(R.string.car_small_clock_turquoise, R.string.car_small_clock_theme,
                             R.string.car_small_clock_amber, R.string.car_small_clock_transparent,
                             R.string.car_small_clock_white, R.string.car_small_clock_custom,
-                            R.string.car_small_clock_soft, R.string.car_small_clock_background)
+                            R.string.car_small_clock_soft, R.string.car_small_clock_background,
+                            R.string.car_small_clock_solid_outline)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             labels.forEachIndexed { index, label ->
                                 FilterChip(style.palette == index, { change(style.copy(palette = index)) },
