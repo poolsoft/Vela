@@ -82,7 +82,7 @@ object LauncherBackup {
             "clock_two_colors" to "Boolean", "clock_embossed" to "Boolean", "clock_scale" to "Float",
             "clock_spacing" to "Float", "clock_colon_spacing" to "Float", "clock_outline" to "Float",
             "clock_outline_color" to "Int", "clock_opacity" to "Int", "clock_font" to "Int",
-            "clock_format" to "String", "clock_seconds" to "Boolean", "visualizer" to "Boolean"
+            "clock_format" to "String", "clock_seconds" to "Boolean", "visualizer" to "Boolean", "clock_show_colon" to "Boolean", "clock_show_date" to "Boolean"
         ),
         "vela_car_launcher_prefs" to mapOf(
             "car_launcher_enabled" to "Boolean", "car_launcher_immersive_mode" to "Boolean",

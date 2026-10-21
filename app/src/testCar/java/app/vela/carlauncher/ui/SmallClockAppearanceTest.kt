@@ -18,13 +18,13 @@ class SmallClockAppearanceTest {
     @Test fun restoredValuesStayWithinResponsiveDrawingBounds() {
         val style = SmallClockAppearance(palette = 99, scale = 5f, spacing = -2f,
             colonSpacing = 4f, outline = 10f, opacity = -5, font = 22, format = "unknown").normalized()
-        assertEquals(7, style.palette)
+        assertEquals(8, style.palette)
         assertEquals(1.5f, style.scale, 0f)
         assertEquals(-0.26f, style.spacing, 0f)
         assertEquals(0.2f, style.colonSpacing, 0f)
         assertEquals(3f, style.outline, 0f)
         assertEquals(0, style.opacity)
-        assertEquals(2, style.font)
+        assertEquals(3, style.font)
         assertEquals("system", style.format)
     }
 
@@ -40,6 +40,8 @@ class SmallClockAppearanceTest {
         assertEquals("Int", schema["clock_custom_secondary"])
         assertEquals("String", schema["clock_format"])
         assertEquals("Boolean", schema["clock_seconds"])
+        assertEquals("Boolean", schema["clock_show_colon"])
+        assertEquals("Boolean", schema["clock_show_date"])
     }
 
 }
