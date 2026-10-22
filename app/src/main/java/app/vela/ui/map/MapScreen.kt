@@ -4162,7 +4162,7 @@ private fun CategoryChips(onPick: (String) -> Unit, modifier: Modifier = Modifie
     // (localized label, STABLE English search query, icon) — the query is the logic key sent to Google
     // search (works in any locale), the label is what the user sees, so the chips localize without
     // changing what's searched.
-    val categories = app.vela.ui.QuickCategories.all().map { Triple(it.label, it.query, it.icon) }
+    val categories = remember { app.vela.ui.QuickCategories.all().map { Triple(it.label, it.query, it.icon) } }
     Row(
         modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

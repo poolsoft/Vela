@@ -49,6 +49,7 @@ class MusicRepository private constructor(private val context: Context) {
     private val scanScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
     private var sonTaramaZamaniMs = 0L
     private val MIN_TARAMA_ARALIGI_MS = 60_000L // 1 dakika icinde tekrar tam disk taramasi yapma
+    private var storageDebounceJob: kotlinx.coroutines.Job? = null
     private val storageReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: android.content.Intent?) {
             val action = intent?.action
@@ -62,12 +63,13 @@ class MusicRepository private constructor(private val context: Context) {
                     player.duraklat()
                 }
             }
-            scanScope.launch {
-                kotlinx.coroutines.delay(500L)
+            storageDebounceJob?.cancel()
+            storageDebounceJob = scanScope.launch {
+                kotlinx.coroutines.delay(1000L)
                 scanMutex.lock()
                 try { loadCachedIndex() } finally { scanMutex.unlock() }
             }
-            FileLogger.i(TAG, "Storage changed; refresh cached availability without scanning: $action")
+            FileLogger.i(TAG, "Storage changed; refresh cached availability scheduled: $action")
         }
     }
 

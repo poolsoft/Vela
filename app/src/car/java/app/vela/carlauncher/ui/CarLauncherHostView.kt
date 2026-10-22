@@ -160,7 +160,12 @@ fun CarLauncherHostView(
                 ).also { dock.addView(it.rootView) }
             }
             binding.dockHost?.updateShortcuts(shortcuts)
-            binding.dockHost?.updateMedia(medya)
+            if (binding.lastMedia != medya) {
+                binding.lastMedia = medya
+                binding.dockHost?.updateMedia(medya)
+                binding.musicHost?.updateMediaState(medya)
+                binding.unifiedHost?.updateMedia(medya)
+            }
             binding.dockHost?.updateModeButton(desktop, fullScreenMap)
             binding.dockHost?.setVoiceListening(isVoiceListening, voiceAudioLevel)
 
@@ -256,10 +261,11 @@ fun CarLauncherHostView(
                 }
             }
             binding.setMapContentVisible(effectiveMode != "CLOCK")
-            binding.musicHost?.updateMediaState(medya)
             binding.musicHost?.updateVisualizerType(largeVisualizer, visualizerFps)
-            binding.dashboardHost?.updateTelemetri(telemetri)
-            binding.unifiedHost?.updateMedia(medya)
+            if (binding.dashboardHost != null && binding.lastTelemetry != telemetri) {
+                binding.lastTelemetry = telemetri
+                binding.dashboardHost?.updateTelemetri(telemetri)
+            }
             binding.unifiedHost?.updateVisualizerType(visualizerType, visualizerFps)
             map.setInterceptTouch(!mapless && contentMode != "UNIFIED" && contentMode != "CLOCK" && !fullScreenMap) { latestPanel("UNIFIED") }
 
@@ -303,6 +309,8 @@ private class LauncherHostBinding(
     var fullScreenMap = false
     var layoutInputs: List<Any>? = null
     private var released = false
+    var lastMedia: MedyaParcasi? = null
+    var lastTelemetry: HizTelemetrisi? = null
 
     fun setMapContentVisible(visible: Boolean) {
         mapCompose.visibility = if (visible) View.VISIBLE else View.INVISIBLE
