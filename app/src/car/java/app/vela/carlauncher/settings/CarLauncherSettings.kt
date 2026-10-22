@@ -276,7 +276,7 @@ object CarLauncherSettings {
         _maplessPreference.value = enabled
         // Disabling is immediate; enabling the renderer is deferred until a fresh app process.
         if (enabled) _maplessMode.value = true
-        if (::prefs.isInitialized) prefs.edit().putBoolean("car_launcher_mapless_mode", enabled).commit()
+        if (::prefs.isInitialized) prefs.edit().putBoolean("car_launcher_mapless_mode", enabled).apply()
     }
     fun setMaplessScreen(screen: String) {
         require(screen in setOf("speedometer", "dashboard"))

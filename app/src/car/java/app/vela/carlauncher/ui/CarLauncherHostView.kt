@@ -126,7 +126,12 @@ fun CarLauncherHostView(
                 root.findViewById<ImageButton>(R.id.widget_handle),
                 root.findViewById<FrameLayout>(R.id.app_drawer_container)
             )
-            val binding = LauncherHostBinding(manager, panel, mapCompose)
+            val binding = LauncherHostBinding(
+                manager = manager,
+                panel = panel,
+                mapCompose = mapCompose,
+                nightDimOverlay = root.findViewById(R.id.night_dim_overlay)
+            )
             root.tag = binding
             root.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
                 if (r - l > 0 && b - t > 0) measuredPortrait = b - t > r - l
@@ -269,9 +274,10 @@ fun CarLauncherHostView(
             binding.unifiedHost?.updateVisualizerType(visualizerType, visualizerFps)
             map.setInterceptTouch(!mapless && contentMode != "UNIFIED" && contentMode != "CLOCK" && !fullScreenMap) { latestPanel("UNIFIED") }
 
-            root.findViewById<View>(R.id.night_dim_overlay).apply {
-                visibility = if (dimEnabled) View.VISIBLE else View.GONE
-                alpha = dimLevel
+            binding.nightDimOverlay?.let { overlay ->
+                val targetVis = if (dimEnabled) View.VISIBLE else View.GONE
+                if (overlay.visibility != targetVis) overlay.visibility = targetVis
+                if (dimEnabled && overlay.alpha != dimLevel) overlay.alpha = dimLevel
             }
             binding.fullScreenMap = fullScreenMap && !mapless
             manager.clockEditor = contentMode == "CLOCK"
@@ -297,7 +303,8 @@ fun CarLauncherHostView(
 private class LauncherHostBinding(
     val manager: CarLayoutManager,
     val panel: FrameLayout,
-    private val mapCompose: ComposeView
+    private val mapCompose: ComposeView,
+    val nightDimOverlay: View?
 ) {
     var dockHost: CarAppDockHost? = null
     var musicHost: CarMusicPlayerHost? = null

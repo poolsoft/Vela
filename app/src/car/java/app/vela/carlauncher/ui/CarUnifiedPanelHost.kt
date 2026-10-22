@@ -54,6 +54,7 @@ class CarUnifiedPanelHost(
     private val btnPrev: ImageButton? = rootView.findViewById(R.id.music_btn_prev)
     private val btnNext: ImageButton? = rootView.findViewById(R.id.music_btn_next)
     private val visualizer: MusicVisualizerView? = rootView.findViewById(R.id.music_visualizer)
+    private val albumArtView: ImageView? = rootView.findViewById(R.id.unified_album_art)
 
     private val musicControls: View? = rootView.findViewById(R.id.music_controls)
 
@@ -84,7 +85,7 @@ class CarUnifiedPanelHost(
     }
 
     private fun backgroundClockColors() = SmallClockAppearance.backgroundColors(
-        rootView.findViewById<ImageView>(R.id.unified_album_art)?.drawable)
+        albumArtView?.drawable)
 
     private var appliedMedia: MedyaParcasi? = null
     private var lifecycle: Lifecycle? = null
