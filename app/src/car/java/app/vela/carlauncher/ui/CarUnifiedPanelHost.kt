@@ -6,6 +6,11 @@ import android.widget.ProgressBar
 import app.vela.carlauncher.media.MusicManager
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageButton
@@ -68,8 +73,9 @@ class CarUnifiedPanelHost(
     private val styleUpdate = Runnable {
         applyClockColor()
         resizeContents(rootView.width, rootView.height)
-        rootView.removeCallbacks(clockTick)
-        if (active) rootView.post(clockTick)
+        updateClockNow()
+        mainHandler.removeCallbacks(clockTick)
+        if (active) mainHandler.post(clockTick)
     }
     private val appearanceListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key?.startsWith("clock_") == true) {
@@ -95,9 +101,11 @@ class CarUnifiedPanelHost(
         override fun onViewAttachedToWindow(view: View) {
             preferences.registerOnSharedPreferenceChangeListener(appearanceListener)
             rootView.post(styleUpdate)
+            lifecycle?.removeObserver(observer)
             lifecycle = view.findViewTreeLifecycleOwner()?.lifecycle
             lifecycle?.addObserver(observer)
             syncLifecycle()
+            updateClockNow()
         }
         override fun onViewDetachedFromWindow(view: View) {
             preferences.unregisterOnSharedPreferenceChangeListener(appearanceListener)
@@ -108,32 +116,99 @@ class CarUnifiedPanelHost(
         }
     }
 
-    private fun syncLifecycle() = setActive(rootView.isAttachedToWindow &&
-        (lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) != false))
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private val timeTickReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, intent: Intent?) {
+            updateClockNow()
+        }
+    }
+    private var isTimeReceiverRegistered = false
+
+    private fun registerTimeReceiver() {
+        if (!isTimeReceiverRegistered) {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_TIME_TICK)
+                addAction(Intent.ACTION_TIME_CHANGED)
+                addAction(Intent.ACTION_TIMEZONE_CHANGED)
+            }
+            try {
+                context.registerReceiver(timeTickReceiver, filter)
+                isTimeReceiverRegistered = true
+            } catch (e: Exception) {
+                // Ignore receiver registration error
+            }
+        }
+    }
+
+    private fun unregisterTimeReceiver() {
+        if (isTimeReceiverRegistered) {
+            try {
+                context.unregisterReceiver(timeTickReceiver)
+            } catch (e: Exception) {
+                // Ignore receiver unregistration error
+            }
+            isTimeReceiverRegistered = false
+        }
+    }
+
+    private fun updateClockNow() {
+        val now = java.util.Date()
+        val value = android.text.format.DateFormat.format(
+            clockStyle.timePattern(context),
+            now)
+        if (clockView?.text?.toString() != value.toString()) {
+            clockView?.text = value
+        }
+        if (clockStyle.showDate && dateView != null) {
+            val dateValue = android.text.format.DateFormat.format(
+                clockStyle.datePattern(),
+                now)
+            if (dateView.text?.toString() != dateValue.toString()) {
+                dateView.text = dateValue
+            }
+        }
+    }
+
+    private fun syncLifecycle() {
+        if (lifecycle == null && rootView.isAttachedToWindow) {
+            lifecycle = rootView.findViewTreeLifecycleOwner()?.lifecycle
+            lifecycle?.addObserver(observer)
+        }
+        val isStarted = lifecycle?.currentState?.isAtLeast(Lifecycle.State.STARTED) ?: true
+        setActive(rootView.isAttachedToWindow && isStarted)
+    }
 
     private fun setActive(value: Boolean) {
-        if (active == value) return
+        if (active == value) {
+            if (value) {
+                updateClockNow()
+                mainHandler.removeCallbacks(clockTick)
+                mainHandler.post(clockTick)
+            }
+            return
+        }
         active = value
+        mainHandler.removeCallbacks(clockTick)
         rootView.removeCallbacks(clockTick)
-        if (value) rootView.post(clockTick)
+        if (value) {
+            registerTimeReceiver()
+            updateClockNow()
+            mainHandler.post(clockTick)
+        } else {
+            unregisterTimeReceiver()
+        }
         visualizer?.setPlaying(value && showVisualizer && (appliedMedia?.caliyorMu == true))
         if (!value) { sourceDialog?.dismiss(); sourceDialog = null }
     }
 
     private val clockTick = object : Runnable {
         override fun run() {
-            val now = java.util.Date()
-            val value = android.text.format.DateFormat.format(
-                clockStyle.timePattern(context),
-                now)
-            if (clockView?.text?.toString() != value.toString()) clockView?.text = value
-            if (clockStyle.showDate && dateView != null) {
-                val dateValue = android.text.format.DateFormat.format(
-                    clockStyle.datePattern(),
-                    now)
-                if (dateView.text?.toString() != dateValue.toString()) dateView.text = dateValue
+            updateClockNow()
+            mainHandler.removeCallbacks(this)
+            if (active) {
+                mainHandler.postDelayed(this, 1000L)
             }
-            rootView.postDelayed(this, 1000)
         }
     }
 
@@ -144,10 +219,16 @@ class CarUnifiedPanelHost(
             if (r - l != or - ol || b - t != ob - ot) resizeContents(r - l, b - t)
         }
         rootView.addOnAttachStateChangeListener(attachment)
+        if (rootView.isAttachedToWindow) {
+            attachment.onViewAttachedToWindow(rootView)
+        }
+        updateClockNow()
         rootView.post {
             if (rootView.width > 0 && rootView.height > 0) {
                 resizeContents(rootView.width, rootView.height)
             }
+            syncLifecycle()
+            updateClockNow()
         }
     }
 
@@ -157,8 +238,11 @@ class CarUnifiedPanelHost(
         sourceDialog?.dismiss()
         scope.cancel()
         lifecycle?.removeObserver(observer)
+        lifecycle = null
         rootView.removeOnAttachStateChangeListener(attachment)
         setActive(false)
+        unregisterTimeReceiver()
+        mainHandler.removeCallbacks(clockTick)
         rootView.removeCallbacks(clockTick)
         visualizer?.setPlaying(false)
     }
