@@ -37,6 +37,8 @@ import app.vela.ui.settings.ToggleRow
 import app.vela.ui.map.MapUiState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /** Variant-owned seam: the map and activity never import launcher implementation types. */
 object CarIntegration {
@@ -155,10 +157,13 @@ object CarIntegration {
             }
         }
         activity.lifecycleScope.launch {
-            CarTelemetryManager.getInstance(activity).telemetriDurumu.collect { tel ->
-                CarFloatingButtonManager.getInstance(activity)
-                    .updateSpeed(tel.anlikHizKmh.toFloat(), tel.hizSiniriKmh.toFloat())
-            }
+            CarTelemetryManager.getInstance(activity).telemetriDurumu
+                .map { it.anlikHizKmh to it.hizSiniriKmh }
+                .distinctUntilChanged()
+                .collect { (hiz, sinir) ->
+                    CarFloatingButtonManager.getInstance(activity)
+                        .updateSpeed(hiz.toFloat(), sinir.toFloat())
+                }
         }
         CarFloatingButtonManager.getInstance(activity).updateButtonState()
         HeadUnitManager.getInstance(activity)

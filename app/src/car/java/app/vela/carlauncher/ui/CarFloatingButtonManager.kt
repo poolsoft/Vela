@@ -86,6 +86,9 @@ class CarFloatingButtonManager private constructor(private val context: Context)
 
     private var lastSpeedKmh = 0f
     private var lastMaxSpeedKmh = 0f
+    private var lastRenderedSpeedText: String? = null
+    private var lastStrokeColor: Int? = null
+    private var lastStrokeWidth: Int? = null
 
     fun setAppInForeground(foreground: Boolean) {
         this.isAppInForeground = foreground
@@ -96,23 +99,51 @@ class CarFloatingButtonManager private constructor(private val context: Context)
         this.lastSpeedKmh = speedKmh
         this.lastMaxSpeedKmh = maxSpeedKmh
 
+        if (!isAdded || floatingView == null) return
+
+        val displaySpeed = if (speedKmh <= 3f) 0 else speedKmh.roundToInt()
+        val speedStr = if (displaySpeed > 0) displaySpeed.toString() else "--"
+
+        val targetColor: Int
+        val targetWidth: Int
+        if (maxSpeedKmh > 0) {
+            val fark = speedKmh - maxSpeedKmh
+            when {
+                fark > 5f -> {
+                    targetColor = Color.parseColor("#FF3B30") // Kirmizi (Asiri Hiz)
+                    targetWidth = dpToPx(4)
+                }
+                fark > 0f -> {
+                    targetColor = Color.parseColor("#FF9500") // Turuncu (Limit Siniri)
+                    targetWidth = dpToPx(3)
+                }
+                else -> {
+                    targetColor = Color.parseColor("#0A84FF") // Normal Neon Mavi
+                    targetWidth = dpToPx(2)
+                }
+            }
+        } else {
+            targetColor = Color.parseColor("#0A84FF")
+            targetWidth = dpToPx(2)
+        }
+
+        if (speedStr == lastRenderedSpeedText && targetColor == lastStrokeColor && targetWidth == lastStrokeWidth) {
+            return
+        }
+
         mainHandler.post {
             val text = speedText ?: return@post
             val bg = buttonBg ?: return@post
 
-            val displaySpeed = if (speedKmh <= 3f) 0 else speedKmh.roundToInt()
-            text.text = if (displaySpeed > 0) displaySpeed.toString() else "--"
+            if (speedStr != lastRenderedSpeedText) {
+                lastRenderedSpeedText = speedStr
+                text.text = speedStr
+            }
 
-            // Hiz Limiti Renk Yonetimi (Turkce karakter yok)
-            if (maxSpeedKmh > 0) {
-                val fark = speedKmh - maxSpeedKmh
-                when {
-                    fark > 5f -> bg.setStroke(dpToPx(4), Color.parseColor("#FF3B30")) // Kirmizi (Asiri Hiz)
-                    fark > 0f -> bg.setStroke(dpToPx(3), Color.parseColor("#FF9500")) // Turuncu (Limit Siniri)
-                    else -> bg.setStroke(dpToPx(2), Color.parseColor("#0A84FF"))      // Normal Neon Mavi
-                }
-            } else {
-                bg.setStroke(dpToPx(2), Color.parseColor("#0A84FF"))
+            if (targetColor != lastStrokeColor || targetWidth != lastStrokeWidth) {
+                lastStrokeColor = targetColor
+                lastStrokeWidth = targetWidth
+                bg.setStroke(targetWidth, targetColor)
             }
         }
     }
@@ -240,6 +271,10 @@ class CarFloatingButtonManager private constructor(private val context: Context)
         floatingView = null
         params = null
         speedText = null
+        buttonBg = null
+        lastRenderedSpeedText = null
+        lastStrokeColor = null
+        lastStrokeWidth = null
     }
 
     private fun createFloatingView() {
