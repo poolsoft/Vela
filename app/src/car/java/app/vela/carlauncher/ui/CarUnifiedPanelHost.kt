@@ -159,6 +159,7 @@ class CarUnifiedPanelHost(
             now)
         if (clockView?.text?.toString() != value.toString()) {
             clockView?.text = value
+            clockView?.postInvalidate()
         }
         if (clockStyle.showDate && dateView != null) {
             val dateValue = android.text.format.DateFormat.format(

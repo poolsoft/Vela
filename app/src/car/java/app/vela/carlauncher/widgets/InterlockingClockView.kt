@@ -8,6 +8,7 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.Typeface
 import android.graphics.Xfermode
 import android.util.AttributeSet
+import android.view.View
 import androidx.appcompat.widget.AppCompatTextView
 
 /**
@@ -49,6 +50,7 @@ class InterlockingClockView @JvmOverloads constructor(
         set(value) { if (field != value) { field = value; applyClockTypeface(); invalidate() } }
 
     init {
+        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         applyClockTypeface()
     }
 
@@ -127,6 +129,11 @@ class InterlockingClockView @JvmOverloads constructor(
         if (w != oldw || h != oldh) {
             invalidate()
         }
+    }
+
+    override fun onTextChanged(text: CharSequence?, start: Int, lengthBefore: Int, lengthAfter: Int) {
+        super.onTextChanged(text, start, lengthBefore, lengthAfter)
+        invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
