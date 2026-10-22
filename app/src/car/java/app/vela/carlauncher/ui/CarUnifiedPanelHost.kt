@@ -143,6 +143,11 @@ class CarUnifiedPanelHost(
             if (r - l != or - ol || b - t != ob - ot) resizeContents(r - l, b - t)
         }
         rootView.addOnAttachStateChangeListener(attachment)
+        rootView.post {
+            if (rootView.width > 0 && rootView.height > 0) {
+                resizeContents(rootView.width, rootView.height)
+            }
+        }
     }
 
     fun release() {
@@ -162,10 +167,17 @@ class CarUnifiedPanelHost(
         val density = context.resources.displayMetrics.density
         val w = width / density
         val h = height / density
-        val clockHeight = ((h * 0.28f).coerceIn(32f, 100f) * clockStyle.scale).coerceAtMost(h * 0.4f)
-        clockView?.textSize = clockHeight * 0.96f
-        clockView?.let { if (it.layoutParams.height != (clockHeight * density).toInt())
-            it.layoutParams = it.layoutParams.apply { this.height = (clockHeight * density).toInt() } }
+        val clockHeight = ((h * 0.28f).coerceIn(36f, 100f) * clockStyle.scale).coerceAtMost(h * 0.45f)
+        val targetPx = clockHeight * density * 0.94f
+        clockView?.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, targetPx)
+        val targetH = (clockHeight * density).toInt()
+        clockView?.let {
+            if (it.layoutParams.height != targetH) {
+                it.layoutParams = it.layoutParams.apply { this.height = targetH }
+                it.requestLayout()
+                musicArea?.requestLayout()
+            }
+        }
         val size = minOf((w - 48) / 3f, h * 0.25f).coerceIn(40f, 64f)
         listOf(btnPrev, btnPlay, btnNext).forEach { button ->
             button ?: return@forEach

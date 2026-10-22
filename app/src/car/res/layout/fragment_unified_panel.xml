@@ -158,10 +158,11 @@
         <!-- Track Title -->
         <app.vela.carlauncher.widgets.InterlockingClockView
             android:id="@+id/music_panel_clock"
-            android:paddingStart="32dp"
-            android:paddingEnd="32dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
             android:layout_width="0dp"
-            android:layout_height="56dp"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
             android:layout_marginTop="0dp"
             android:text="00:00"
             android:textColor="#FFFFFF"

@@ -251,7 +251,7 @@ fun CarLauncherHostView(
                             { latestPanel("MUSIC") }, { latestPanel("NEON_DASHBOARD") },
                             { latestSettings() }
                         ).also { binding.unifiedHost = it }
-                        panel.addView(clock.rootView)
+                        panel.addView(clock.rootView, FrameLayout.LayoutParams(-1, -1))
                     }
                 }
             }

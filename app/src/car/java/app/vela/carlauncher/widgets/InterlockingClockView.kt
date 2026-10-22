@@ -77,6 +77,58 @@ class InterlockingClockView @JvmOverloads constructor(
         }
     }
 
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val widthMode = MeasureSpec.getMode(widthMeasureSpec)
+        val widthSize = MeasureSpec.getSize(widthMeasureSpec)
+        val heightMode = MeasureSpec.getMode(heightMeasureSpec)
+        val heightSize = MeasureSpec.getSize(heightMeasureSpec)
+
+        val value = text
+        val p = paint
+        val metrics = p.fontMetrics
+        val textH = (metrics.bottom - metrics.top).coerceAtLeast(1f)
+        val density = resources.displayMetrics.density
+        val minH = (36f * density).toInt()
+
+        val desiredHeight = (textH + paddingTop + paddingBottom + density * 4f).toInt().coerceAtLeast(minH)
+        val measuredHeight = when (heightMode) {
+            MeasureSpec.EXACTLY -> heightSize
+            MeasureSpec.AT_MOST -> minOf(desiredHeight, heightSize)
+            else -> desiredHeight
+        }
+
+        val measuredWidth = if (widthMode == MeasureSpec.EXACTLY) {
+            widthSize
+        } else {
+            var w = 0f
+            if (!value.isNullOrEmpty()) {
+                val baseTextSize = p.textSize
+                val overlap = -baseTextSize * digitSpacingEm
+                val colonGap = baseTextSize * colonSpacingEm
+                for (i in 0 until value.length) {
+                    val isColon = value[i] == ':'
+                    p.textSize = if (isColon) baseTextSize * COLON_SCALE else baseTextSize
+                    w += p.measureText(value, i, i + 1)
+                    if (i < value.length - 1) {
+                        w += spacingAfter(value, i, overlap, colonGap)
+                    }
+                }
+                p.textSize = baseTextSize
+            }
+            val desiredWidth = (w + paddingLeft + paddingRight + density * 4f).toInt()
+            if (widthMode == MeasureSpec.AT_MOST) minOf(desiredWidth, widthSize) else desiredWidth
+        }
+
+        setMeasuredDimension(measuredWidth, measuredHeight)
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w != oldw || h != oldh) {
+            invalidate()
+        }
+    }
+
     override fun onDraw(canvas: Canvas) {
         val value = text
         if (value.isNullOrEmpty()) return
