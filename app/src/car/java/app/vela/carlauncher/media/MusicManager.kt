@@ -113,6 +113,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
     private val playbackOwnership = PlaybackOwnership()
     private val focusPolicy = SmartFocusPolicy()
     private val focusRecheck = Runnable { senkronizeEtMedyaDurumu() }
+    private var previousPlaying = false
     private var ttsSpeaking = runCatching { (context.applicationContext as? app.vela.VelaApp)?.voiceGuide?.get()?.isSpeaking == true }.getOrDefault(false)
     private var phoneCall = false
     private val callReceiver = object : android.content.BroadcastReceiver() {
@@ -357,6 +358,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
         saveFocus("auto_follow" to true)
         manualSelection = false
         focusPolicy.resumeAutomatic()
+        previousPlaying = false
         _sourcesRevision.value++
         onOturumlarYenilendi(controllers)
     }
@@ -621,6 +623,13 @@ class MusicManager private constructor(private val context: Context) : InternalM
             sourceLabel = sourceLabel(selectedAdapter),
             canControl = canControl(), canSkipNext = canSkipNext(), canSkipPrevious = canSkipPrevious()
         )
+
+        // Track playback stop for SmartFocusPolicy
+        val nowPlaying = yeniMedya.caliyorMu
+        if (previousPlaying && !nowPlaying) {
+            focusPolicy.onPlaybackStopped(android.os.SystemClock.elapsedRealtime())
+        }
+        previousPlaying = nowPlaying
 
         if (yeniMedya.caliyorMu) playbackOwnership.observedPlaying(yeniMedya.sourceId)
         val mediaChanged = _medyaDurumu.value != yeniMedya

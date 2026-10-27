@@ -25,11 +25,16 @@ internal class SmartFocusPolicy {
         stoppedAt = null
     }
 
+    /** Called when the currently playing source stops (playing -> not playing). */
+    fun onPlaybackStopped(now: Long) {
+        stoppedAt = now
+    }
+
     fun selected(id: String, sources: List<Source>, now: Long = 0L) {
-        observe(sources)
         initialized = true
         consumed = sequence
         selectedAt = now
+        observe(sources)
         blockedUntilRestart.clear()
         blockedUntilRestart.addAll(sources.filter { it.id != id && (it.playing || it.preparing) }.map { it.id })
         selectedWhilePaused = id
@@ -54,23 +59,33 @@ internal class SmartFocusPolicy {
         initialized = true
         nextCheckInMs = null
         val active = sources.firstOrNull { it.id == current }
-        if (active?.playing == true) { stoppedAt = null; selectedWhilePaused = null }
-        if (!automatic || pinned || interrupted) { consumed = sequence; return current }
+        if (active?.playing == true) {
+            stoppedAt = null
+            selectedWhilePaused = null
+        }
+        if (!automatic || pinned || interrupted) return current
         val candidates = sources.filter { it.eligible && it.available && it.playbackKnown && it.playing && it.id !in blockedUntilRestart }
         if (!first) {
             val newest = candidates.filter { (starts[it.id] ?: 0) > consumed }.maxByOrNull { starts[it.id] ?: 0 }
-            consumed = sequence
-            if (newest != null && newest.id != current) { stoppedAt = null; selectedWhilePaused = null; return newest.id }
+            if (newest != null && newest.id != current) {
+                stoppedAt = null
+                selectedWhilePaused = null
+                return newest.id
+            }
+            // consumed NOT reset here - only on first or user command
         } else {
             consumed = sequence
             return candidates.firstOrNull { it.id != "internal" }?.id
                 ?: candidates.firstOrNull()?.id ?: "internal"
         }
-        if (current == "internal" && candidates.isEmpty()) { stoppedAt = null; return current }
-        if (active?.playing == true) return current
+        if (current == "internal" && candidates.isEmpty()) {
+            stoppedAt = null
+            return current
+        }
+        // active?.playing already handled above
         if (active?.playbackKnown == false && selectedWhilePaused == current && active.available) return current
         if (current == "internal" && active?.preparing == true) return current
-        val since = stoppedAt ?: now.also { stoppedAt = it }
+        val since = stoppedAt ?: return current // if no stoppedAt, no wait - return current
         val wait = if (active?.preparing == true || selectedWhilePaused == current) 8_000L else 2_000L
         if (active?.available == true && now - since < wait) {
             nextCheckInMs = wait - (now - since)
