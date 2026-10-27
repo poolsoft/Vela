@@ -30,7 +30,17 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
     val applicationContext = context.applicationContext
     val client = remember(applicationContext) { IsolatedMapClient(applicationContext) { name, args -> latestCallbacks.dispatch(name, args) } }
     val state by client.state.collectAsState()
-    val settings = rendererSettings(context)
+    // prefs.all walks the whole preferences map; cache it until the settings file changes.
+    val settingsPrefs = remember(context) {
+        context.getSharedPreferences("vela_settings", Context.MODE_PRIVATE)
+    }
+    var settingsRevision by remember { mutableIntStateOf(0) }
+    DisposableEffect(settingsPrefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> settingsRevision++ }
+        settingsPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { settingsPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    val settings = remember(settingsPrefs, settingsRevision) { rendererSettings(context) }
     SideEffect { client.update(scene.copy(settings = settings, density = density.density, fontScale = density.fontScale,
         tuning = app.vela.core.config.CalibrationStore.latest.tuning,
         mapPalette = app.vela.ui.MapColors.current(), pipActive = app.vela.ui.PipMode.active.value,

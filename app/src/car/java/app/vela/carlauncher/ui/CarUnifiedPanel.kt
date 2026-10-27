@@ -69,11 +69,17 @@ fun CarUnifiedPanel(
     }
 
     LaunchedEffect(clockStyle) {
+        var sonSaat = ""
+        var sonTarih = ""
         while (true) {
             val now = Date()
-            saatMetni = android.text.format.DateFormat.format(clockStyle.timePattern(context), now).toString()
+            // Saniye gosterimi aciksa her saniye yazi degisir; kapaliysa format karsilastirmasi
+            // sayesinde ayni dakika icinde state yazilmaz (recompose baskisi kalkar).
+            val saat = android.text.format.DateFormat.format(clockStyle.timePattern(context), now).toString()
+            if (saat != sonSaat) { sonSaat = saat; saatMetni = saat }
             if (clockStyle.showDate) {
-                tarihMetni = android.text.format.DateFormat.format(clockStyle.datePattern(), now).toString()
+                val tarih = android.text.format.DateFormat.format(clockStyle.datePattern(), now).toString()
+                if (tarih != sonTarih) { sonTarih = tarih; tarihMetni = tarih }
             }
             delay(1000L)
         }

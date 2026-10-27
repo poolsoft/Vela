@@ -129,6 +129,8 @@ fun CarLauncherHostView(
             val binding = LauncherHostBinding(
                 manager = manager,
                 panel = panel,
+                mapContainer = map,
+                dockContainer = dock,
                 mapCompose = mapCompose,
                 nightDimOverlay = root.findViewById(R.id.night_dim_overlay)
             )
@@ -143,8 +145,9 @@ fun CarLauncherHostView(
             val binding = root.tag as LauncherHostBinding
             val manager = binding.manager
             val panel = binding.panel
-            val map = root.findViewById<ExactFrameLayout>(R.id.map_container)
-            val dock = root.findViewById<FrameLayout>(R.id.app_dock)
+            // Perf: update her recomposition'da (medya dahil) calisir; findViewById cache'lendi.
+            val map = binding.mapContainer
+            val dock = binding.dockContainer
             val portrait = measuredPortrait
             val vertical = !portrait && dockKonumu != "bottom"
 
@@ -303,6 +306,8 @@ fun CarLauncherHostView(
 private class LauncherHostBinding(
     val manager: CarLayoutManager,
     val panel: FrameLayout,
+    val mapContainer: ExactFrameLayout,
+    val dockContainer: FrameLayout,
     private val mapCompose: ComposeView,
     val nightDimOverlay: View?
 ) {

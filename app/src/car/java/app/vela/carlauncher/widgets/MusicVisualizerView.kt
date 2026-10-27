@@ -59,6 +59,8 @@ class MusicVisualizerView @JvmOverloads constructor(
     private var capturedSession = 0
     private var failedSession = 0
     private var mBytes: ByteArray? = null
+    // Perf: FFT callback'i saniyede onlarca kez gelir; her seferinde ByteArray allocate edilmez.
+    private var spectrumBuffer: ByteArray? = null
 
     private val mRect = RectF()
     private val mForePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -218,7 +220,11 @@ class MusicVisualizerView @JvmOverloads constructor(
     fun updateVisualizer(fft: ByteArray?) {
         if (fft == null || fft.size < 2) return
         val count = max(1, min(mSpectrumNum, fft.size / 2 + 1))
-        val model = ByteArray(count)
+        var model = spectrumBuffer
+        if (model == null || model.size != count) {
+            model = ByteArray(count)
+            spectrumBuffer = model
+        }
         model[0] = abs(fft[0].toInt()).coerceAtMost(127).toByte()
         var i = 2
         var j = 1
@@ -345,10 +351,13 @@ class MusicVisualizerView @JvmOverloads constructor(
                     val magnitude = abs(safeBytes[i].toInt()) * 4f
                     val h = (magnitude / 128f) * min(centerX, centerY) * 0.86f
                     val angle = (i * 2 * Math.PI / spectrumNum).toFloat()
-                    val startX = centerX + cos(angle.toDouble()).toFloat() * baseRadius
-                    val startY = centerY + sin(angle.toDouble()).toFloat() * baseRadius
-                    val endX = centerX + cos(angle.toDouble()).toFloat() * (baseRadius + h)
-                    val endY = centerY + sin(angle.toDouble()).toFloat() * (baseRadius + h)
+                    // cos/sin bir kez hesaplanir; aci basina 4 yerine 2 trig cagrisi.
+                    val dx = cos(angle.toDouble()).toFloat()
+                    val dy = sin(angle.toDouble()).toFloat()
+                    val startX = centerX + dx * baseRadius
+                    val startY = centerY + dy * baseRadius
+                    val endX = centerX + dx * (baseRadius + h)
+                    val endY = centerY + dy * (baseRadius + h)
                     mForePaint.strokeWidth = effectiveBarWidth * 1.2f
                     mForePaint.style = Paint.Style.STROKE
                     mForePaint.strokeCap = Paint.Cap.ROUND

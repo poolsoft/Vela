@@ -50,6 +50,11 @@ class MusicLibraryController(private val context: Context, private val root: Vie
     private var folder: String? = null
     private var playlistId: String? = null
     private var tracks = repository.parcalar.value
+    // Perf: sortedTracks her render'da tum listeyi O(n log n) sortluyordu; sadece veri degisince hesaplanir.
+    private var sortedCache: List<SesParcasi> = emptyList()
+    private var sortedCacheTracks: List<SesParcasi>? = null
+    private var sortedCacheOrder: String? = null
+    private var sortedCacheHistory: List<Pair<String, Int>>? = null
     private val dialogs = mutableSetOf<AlertDialog>()
     private val searchWatcher = object : TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -89,11 +94,12 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         root.findViewById<View>(R.id.btn_folder_play_all).setOnClickListener { playGroup(false) }
         root.findViewById<View>(R.id.btn_folder_shuffle_all).setOnClickListener { playGroup(true) }
         root.findViewById<View>(R.id.tab_btn_menu).setOnClickListener { anchor -> libraryMenu(anchor) }
-        scope.launch { repository.parcalar.collectLatest { tracks = it; render() } }
+        scope.launch { repository.parcalar.collectLatest { tracks = it; invalidateSortedCache(); render() } }
         scope.launch { repository.taraniyorMu.collectLatest { render() } }
         scope.launch { repository.lastError.collectLatest { render() } }
         scope.launch { store.playlists.collectLatest { render() } }
-        scope.launch { store.history.collectLatest { render() } }
+        // "plays" siralamasi dinleme gecmisine bagli; gecmis degisince cache gecersiz kilinir.
+        scope.launch { store.history.collectLatest { if (sortOrder == "plays") invalidateSortedCache(); render() } }
         scope.launch { manager.internalPlayer.kuyruk.collectLatest { render() } }
         scope.launch { manager.internalPlayer.anlikParca.collectLatest { render() } }
         scope.launch {
@@ -109,11 +115,13 @@ class MusicLibraryController(private val context: Context, private val root: Vie
 
     fun refresh() {
         tracks = repository.parcalar.value
+        invalidateSortedCache()
         render()
     }
 
     fun openPlaylists() {
         tracks = repository.parcalar.value
+        invalidateSortedCache()
         val hasQueue = manager.internalPlayer.kuyruk.value.isNotEmpty()
         tab = if (hasQueue) Tab.QUEUE else Tab.TRACKS
         folder = null
@@ -143,6 +151,19 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         item.id == MusicPlaylistStore.RECENTLY_ADDED
 
     private fun folderOf(track: SesParcasi): String = track.folderPath.ifBlank { File(track.dosyaYolu).parent.orEmpty() }
+    private fun invalidateSortedCache() { sortedCacheTracks = null }
+    private fun sortedTracksCached(items: List<SesParcasi>): List<SesParcasi> {
+        // Liste icerik karsilastirmasi O(n) olurdu; referans + sira + gecmis referansi yeterli.
+        // tracks/history StateFlow'lari degisince yeni liste instance'i gelir.
+        val history = if (sortOrder == "plays") store.history.value else null
+        if (sortedCacheTracks !== items || sortedCacheOrder != sortOrder || sortedCacheHistory !== history) {
+            sortedCacheTracks = items
+            sortedCacheOrder = sortOrder
+            sortedCacheHistory = history
+            sortedCache = sortedTracks(items)
+        }
+        return sortedCache
+    }
     private fun sortedTracks(items: List<SesParcasi>): List<SesParcasi> = when (sortOrder) {
         "artist" -> items.map { it.sanatci.lowercase(java.util.Locale.ROOT) to it }.sortedBy { it.first }.map { it.second }
         "album" -> items.map { it.album.lowercase(java.util.Locale.ROOT) to it }.sortedBy { it.first }.map { it.second }
@@ -155,12 +176,12 @@ class MusicLibraryController(private val context: Context, private val root: Vie
     }
     private fun sourceTracks(): List<SesParcasi> = when (tab) {
         Tab.QUEUE -> manager.internalPlayer.kuyruk.value
-        Tab.TRACKS -> sortedTracks(tracks)
-        Tab.FOLDERS -> sortedTracks(tracks.filter { folderOf(it) == folder })
+        Tab.TRACKS -> sortedTracksCached(tracks)
+        Tab.FOLDERS -> sortedTracksCached(tracks.filter { folderOf(it) == folder })
         Tab.PLAYLISTS -> {
             val pl = playlist()
             when (pl?.id) {
-                MusicPlaylistStore.RECENTLY_ADDED -> sortedTracks(tracks).sortedByDescending { it.eklenmeTarihi }
+                MusicPlaylistStore.RECENTLY_ADDED -> sortedTracksCached(tracks).sortedByDescending { it.eklenmeTarihi }
                 MusicPlaylistStore.MOST_PLAYED -> {
                     val counts = store.history.value.toMap()
                     tracks.sortedByDescending { counts[it.libraryKey()] ?: 0 }

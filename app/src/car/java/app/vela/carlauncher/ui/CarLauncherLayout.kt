@@ -20,6 +20,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.zIndex
@@ -74,7 +76,13 @@ fun CarLauncherLayout(
         else scanLauncher.launch(audioPermission)
     }
     val libraryRepository = remember { app.vela.carlauncher.media.MusicRepository.getInstance(context) }
-    val libraryTracks by libraryRepository.parcalar.collectAsState()
+    // Perf: binlerce parcalik liste state olarak tutulmuyor; restore icin bos/dolu bayragi yeterli.
+    // Liste degisince tum layout recompose oluyordu.
+    val libraryReady by remember {
+        libraryRepository.parcalar
+            .map { it.isNotEmpty() }
+            .distinctUntilChanged()
+    }.collectAsState(false)
     var playbackRestored by remember { mutableStateOf(false) }
     val mediaManager = remember { CarMediaManager.getInstance(context) }
     val telemetry = remember { CarTelemetryManager.getInstance(context) }
@@ -115,10 +123,10 @@ fun CarLauncherLayout(
             app.vela.diag.ProcessDiagnostics.checkpoint("launcher: startup tools complete")
         }
     }
-    LaunchedEffect(libraryTracks, autoPlay) {
-        if (!playbackRestored && libraryTracks.isNotEmpty()) {
+    LaunchedEffect(libraryReady, autoPlay) {
+        if (!playbackRestored && libraryReady) {
             app.vela.diag.ProcessDiagnostics.checkpoint("music playback: restore begin")
-            playbackRestored = mediaManager.getMusicManager().restoreSavedPlayback(libraryTracks, autoPlay)
+            playbackRestored = mediaManager.getMusicManager().restoreSavedPlayback(libraryRepository.parcalar.value, autoPlay)
             app.vela.diag.ProcessDiagnostics.checkpoint("music playback: restore complete")
         }
     }

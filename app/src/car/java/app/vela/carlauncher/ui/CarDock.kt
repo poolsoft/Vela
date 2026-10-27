@@ -61,8 +61,11 @@ fun CarDock(
 
     LaunchedEffect(isVertical) {
         val format = if (isVertical) SimpleDateFormat("HH\nmm", Locale.getDefault()) else SimpleDateFormat("HH:mm", Locale.getDefault())
+        var sonSaat = ""
         while (true) {
-            saatMetni = format.format(Date())
+            // Ayni dakika icinde state yazma: her saniye dock kompozisyonunu recompose ederdi.
+            val saat = format.format(Date())
+            if (saat != sonSaat) { sonSaat = saat; saatMetni = saat }
             delay(1000L)
         }
     }
