@@ -1,6 +1,7 @@
 package app.vela.carlauncher.ui
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageButton
@@ -76,6 +77,15 @@ class CarMusicPlayerHost(
     private val seekbar: SeekBar? = rootView.findViewById(R.id.seekbar)
     private val timeCurrent: TextView? = rootView.findViewById(R.id.time_current)
     private val timeTotal: TextView? = rootView.findViewById(R.id.time_total)
+    // Perf: polling dongusu her turda findViewById yapiyordu; view'lar bir kez cozumlendi.
+    private val appIconView: ImageView? = rootView.findViewById(R.id.app_icon)
+    private val appSelectorLaunchView: View? = rootView.findViewById(R.id.app_selector_launch)
+    private val artBlurView: ImageView? = rootView.findViewById(R.id.now_playing_art_blur)
+    private var appliedCover: Bitmap? = null
+    private var appliedCoverPlaceholder = false
+    private var lastMetadataKey: String? = null
+    private var lastProgressSecond = -1L
+    private var lastDurationMs = -1L
 
     private var isPlaylistVisible = false
 
@@ -472,10 +482,14 @@ class CarMusicPlayerHost(
                 }
             }
         }
+        // Kapak/metin/kontroller medya degisiminde; dongude sadece seekbar/sure kaldi.
+        scope.launch {
+            musicManager.medyaDurumu.collectLatest { updateMediaState(it) }
+        }
         scope.launch {
             while (true) {
-                updateMediaState(musicManager.currentPlayback())
-                kotlinx.coroutines.delay(250)
+                updateProgress(musicManager.currentPlayback())
+                kotlinx.coroutines.delay(500)
             }
         }
     }
@@ -484,7 +498,13 @@ class CarMusicPlayerHost(
         val toplamSaniye = ms / 1000
         val dakika = toplamSaniye / 60
         val saniye = toplamSaniye % 60
-        return String.format("%02d:%02d", dakika, saniye)
+        // String.format yerine elle pad: polling yolunda locale/format yukunden kacinir.
+        return StringBuilder(5).apply {
+            if (dakika < 10) append('0')
+            append(dakika).append(':')
+            if (saniye < 10) append('0')
+            append(saniye)
+        }.toString()
     }
 
     fun release() {
@@ -505,23 +525,44 @@ class CarMusicPlayerHost(
         }
     }
 
-    fun updateMediaState(ignoredSnapshot: MedyaParcasi) {
-        val medya = musicManager.currentPlayback()
-        MediaSourceIcon.bind(rootView.findViewById(R.id.app_icon), medya)
-        rootView.findViewById<View>(R.id.app_selector_launch).contentDescription =
+    fun updateMediaState(snapshot: MedyaParcasi) {
+        updateMetadata(snapshot)
+        updateProgress(snapshot)
+    }
+
+    /** Kapak/metin/kontroller: sadece meta veri degisince calisir, polling dongusunden cikarildi. */
+    private fun updateMetadata(medya: MedyaParcasi) {
+        val key = StringBuilder(medya.baslik.length + medya.sanatci.length + 64)
+            .append(medya.baslik).append('|').append(medya.sanatci).append('|')
+            .append(medya.sourceId).append('|').append(medya.sourceKind).append('|')
+            .append(medya.paketAdi).append('|').append(medya.sourceLabel).append('|')
+            .append(medya.caliyorMu).append('|')
+            .append(medya.canControl).append('|').append(medya.canSkipNext).append('|')
+            .append(medya.canSkipPrevious).toString()
+        // Kapak async yuklenebilir (null -> bitmap); referans karsilastirmasi ayri yapilir.
+        val kapak = medya.albumKapagi
+        val kapakDegisti = kapak !== appliedCover || (kapak == null && !appliedCoverPlaceholder)
+        if (key == lastMetadataKey && !kapakDegisti) return
+        lastMetadataKey = key
+        if (kapakDegisti) {
+            if (kapak != null) {
+                appliedCover = kapak
+                appliedCoverPlaceholder = false
+                nowPlayingCenterArt?.setImageBitmap(kapak)
+                artBlurView?.setImageBitmap(kapak)
+            } else {
+                appliedCover = null
+                appliedCoverPlaceholder = true
+                nowPlayingCenterArt?.setImageResource(R.drawable.bg_playlist_default_art)
+                artBlurView?.setImageResource(R.drawable.bg_default_music_art)
+            }
+            nowPlayingCenterArt?.visibility = View.VISIBLE
+        }
+        MediaSourceIcon.bind(appIconView, medya)
+        appSelectorLaunchView?.contentDescription =
             "${medya.sourceLabel}: " + context.getString(R.string.car_music_source)
         nowPlayingCenterTitle?.text = if (medya.baslik.isNotBlank()) medya.baslik else "Parça Adı"
         nowPlayingCenterArtist?.text = if (medya.sanatci.isNotBlank()) medya.sanatci else "Sanatçı"
-
-        if (medya.albumKapagi != null) {
-            nowPlayingCenterArt?.setImageBitmap(medya.albumKapagi)
-            rootView.findViewById<ImageView>(R.id.now_playing_art_blur).setImageBitmap(medya.albumKapagi)
-            nowPlayingCenterArt?.visibility = View.VISIBLE
-        } else {
-            nowPlayingCenterArt?.setImageResource(R.drawable.bg_playlist_default_art)
-            rootView.findViewById<ImageView>(R.id.now_playing_art_blur).setImageResource(R.drawable.bg_default_music_art)
-            nowPlayingCenterArt?.visibility = View.VISIBLE
-        }
 
         btnPlay?.setImageResource(
             if (medya.caliyorMu) android.R.drawable.ic_media_pause else R.drawable.ic_music_play
@@ -529,18 +570,30 @@ class CarMusicPlayerHost(
 
         playerVisualizer?.setPlaying(medya.caliyorMu)
 
-        btnPlay?.isEnabled = musicManager.canControl()
-        btnPrev?.isEnabled = musicManager.canSkipPrevious()
-        btnNext?.isEnabled = musicManager.canSkipNext()
+        btnPlay?.isEnabled = medya.canControl
+        btnPrev?.isEnabled = medya.canSkipPrevious
+        btnNext?.isEnabled = medya.canSkipNext
         btnShuffle?.isEnabled = musicManager.isInternalPlayback()
         btnRepeat?.isEnabled = musicManager.isInternalPlayback()
+        seekbar?.isEnabled = medya.toplamSureMs > 0 && musicManager.canSeek()
+    }
+
+    /** Seekbar/sure: hafif polling yolu, goruntu baglama yok, ayni saniye tekrar yazilmaz. */
+    private fun updateProgress(medya: MedyaParcasi) {
         val duration = medya.toplamSureMs.coerceIn(0L, Int.MAX_VALUE.toLong())
-        seekbar?.isEnabled = duration > 0 && musicManager.canSeek()
-        if (!isSeeking) {
+        if (duration != lastDurationMs) {
+            lastDurationMs = duration
             seekbar?.max = duration.toInt()
-            seekbar?.progress = medya.anlikKonumMs.coerceIn(0L, duration).toInt()
-            timeCurrent?.text = formatSure(medya.anlikKonumMs.coerceIn(0L, duration))
+            timeTotal?.text = formatSure(duration)
         }
-        timeTotal?.text = formatSure(duration)
+        if (!isSeeking) {
+            val pos = medya.anlikKonumMs.coerceIn(0L, duration)
+            seekbar?.progress = pos.toInt()
+            val second = pos / 1000
+            if (second != lastProgressSecond) {
+                lastProgressSecond = second
+                timeCurrent?.text = formatSure(pos)
+            }
+        }
     }
 }

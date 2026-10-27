@@ -63,7 +63,7 @@ internal class SmartFocusPolicy {
             stoppedAt = null
             selectedWhilePaused = null
         }
-        if (!automatic || pinned || interrupted) return current
+        if (!automatic || pinned || interrupted) { consumed = sequence; return current }
         val candidates = sources.filter { it.eligible && it.available && it.playbackKnown && it.playing && it.id !in blockedUntilRestart }
         if (!first) {
             val newest = candidates.filter { (starts[it.id] ?: 0) > consumed }.maxByOrNull { starts[it.id] ?: 0 }
@@ -72,7 +72,7 @@ internal class SmartFocusPolicy {
                 selectedWhilePaused = null
                 return newest.id
             }
-            // consumed NOT reset here - only on first or user command
+            consumed = sequence
         } else {
             consumed = sequence
             return candidates.firstOrNull { it.id != "internal" }?.id
@@ -85,7 +85,7 @@ internal class SmartFocusPolicy {
         // active?.playing already handled above
         if (active?.playbackKnown == false && selectedWhilePaused == current && active.available) return current
         if (current == "internal" && active?.preparing == true) return current
-        val since = stoppedAt ?: return current // if no stoppedAt, no wait - return current
+        val since = stoppedAt ?: now.also { stoppedAt = it }
         val wait = if (active?.preparing == true || selectedWhilePaused == current) 8_000L else 2_000L
         if (active?.available == true && now - since < wait) {
             nextCheckInMs = wait - (now - since)
