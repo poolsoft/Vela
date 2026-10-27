@@ -602,6 +602,22 @@
                     android:layout_marginTop="8dp">
 
                     <ImageButton
+                        android:id="@+id/btn_dock_equalizer"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:src="@drawable/ic_music_equalizer"
+                        android:tint="#FFFFFF"
+                        android:background="?android:attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/car_music_equalizer_label"
+                        android:scaleType="fitCenter"
+                        android:padding="12dp"
+                        app:layout_constraintHorizontal_chainStyle="spread_inside"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintEnd_toStartOf="@+id/btn_shuffle"
+                        app:layout_constraintTop_toTopOf="parent"
+                        app:layout_constraintBottom_toBottomOf="parent"/>
+
+                    <ImageButton
                         android:id="@+id/btn_shuffle"
                         android:layout_width="56dp"
                         android:layout_height="56dp"
@@ -610,8 +626,7 @@
                         android:tint="#FFFFFF"
                         android:scaleType="fitCenter"
                         android:padding="16dp"
-                        app:layout_constraintHorizontal_chainStyle="spread_inside"
-                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintStart_toEndOf="@id/btn_dock_equalizer"
                         app:layout_constraintEnd_toStartOf="@+id/btn_prev"
                         app:layout_constraintTop_toTopOf="parent"
                         app:layout_constraintBottom_toBottomOf="parent"/>
@@ -674,21 +689,6 @@
                         android:scaleType="fitCenter"
                         android:padding="16dp"
                         app:layout_constraintStart_toEndOf="@+id/btn_next"
-                        app:layout_constraintEnd_toStartOf="@id/btn_dock_equalizer"
-                        app:layout_constraintTop_toTopOf="parent"
-                        app:layout_constraintBottom_toBottomOf="parent"/>
-
-                    <ImageButton
-                        android:id="@+id/btn_dock_equalizer"
-                        android:layout_width="56dp"
-                        android:layout_height="56dp"
-                        android:src="@drawable/ic_music_equalizer"
-                        android:tint="#FFFFFF"
-                        android:background="?android:attr/selectableItemBackgroundBorderless"
-                        android:contentDescription="@string/car_music_equalizer_label"
-                        android:scaleType="fitCenter"
-                        android:padding="12dp"
-                        app:layout_constraintStart_toEndOf="@id/btn_repeat"
                         app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintTop_toTopOf="parent"
                         app:layout_constraintBottom_toBottomOf="parent"/>

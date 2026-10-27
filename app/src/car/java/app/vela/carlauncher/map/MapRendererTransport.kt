@@ -75,7 +75,7 @@ internal object MapRendererTransport {
         out.write((value ushr 24) and 0xFF)
     }
 
-    /** 1f 8b 08 00 00000000 04 ff — deflate stream with no optional fields. */
+    /** 1f 8b 08 00 00000000 04 ff: deflate stream with no optional fields. */
     private val GZIP_HEADER = byteArrayOf(
         0x1f.toByte(), 0x8b.toByte(), 0x08.toByte(), 0x00.toByte(),
         0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(),
