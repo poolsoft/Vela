@@ -103,12 +103,17 @@ class CarMusicPlayerHost(
     }
 
     private var lastPlayerSize: Pair<Int, Int>? = null
+    private var lastDockPercent: Int? = null
 
     private fun resizePlayer(width: Int, height: Int) {
-        if (width <= 0 || height <= 0 || lastPlayerSize == (width to height)) return
+        val dockPercent = app.vela.carlauncher.settings.CarLauncherSettings.dockBoyutu.value
+        if (width <= 0 || height <= 0 || (lastPlayerSize == (width to height) && lastDockPercent == dockPercent)) return
         lastPlayerSize = width to height
+        lastDockPercent = dockPercent
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
+        val dockWidth = dockSidebarWidth(dockPercent, density)
+        val buttonSize = dockShortcutSize(dockWidth, density, true)
         val dock = rootView.findViewById<android.widget.LinearLayout>(R.id.music_side_dock)
         dock.orientation = android.widget.LinearLayout.VERTICAL
         dock.setPadding(0, dp(4), 0, dp(4))
@@ -119,7 +124,7 @@ class CarMusicPlayerHost(
             connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.START, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.START)
             connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
             connect(R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.BOTTOM, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.BOTTOM)
-            constrainWidth(R.id.music_side_dock, dp(60))
+            constrainWidth(R.id.music_side_dock, dockWidth)
             constrainHeight(R.id.music_side_dock, 0)
             connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.START, R.id.music_side_dock, androidx.constraintlayout.widget.ConstraintSet.END)
             connect(R.id.music_content_column, androidx.constraintlayout.widget.ConstraintSet.TOP, androidx.constraintlayout.widget.ConstraintSet.PARENT_ID, androidx.constraintlayout.widget.ConstraintSet.TOP)
@@ -133,13 +138,23 @@ class CarMusicPlayerHost(
         for (i in 0 until dock.childCount) {
             val child = dock.getChildAt(i)
             child.layoutParams = (child.layoutParams as android.widget.LinearLayout.LayoutParams).apply {
-                this.width = if (weight > 0) android.view.ViewGroup.LayoutParams.MATCH_PARENT else dp(48)
-                this.height = if (weight > 0) 0 else dp(48)
+                this.width = if (weight > 0) android.view.ViewGroup.LayoutParams.MATCH_PARENT else buttonSize
+                this.height = if (weight > 0) 0 else buttonSize
                 gravity = android.view.Gravity.CENTER_HORIZONTAL
                 setMargins(0, dp(2), 0, dp(2))
             }
         }
-        val contentWidth = width / density - 60
+        val sourceRows = rootView.findViewById<android.widget.LinearLayout>(R.id.music_source_rows)
+        for (i in 0 until sourceRows.childCount) {
+            val child = sourceRows.getChildAt(i)
+            child.layoutParams = (child.layoutParams as android.widget.LinearLayout.LayoutParams).apply {
+                this.width = buttonSize
+                this.height = buttonSize
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+                bottomMargin = dp(4)
+            }
+        }
+        val contentWidth = (width - dockWidth) / density
         val center = rootView.findViewById<androidx.constraintlayout.widget.ConstraintLayout>(R.id.now_playing_center_panel)
         val artSize = (contentWidth * 0.28f).coerceIn(56f, 130f).toInt()
         androidx.constraintlayout.widget.ConstraintSet().apply {
@@ -316,7 +331,10 @@ class CarMusicPlayerHost(
                 button.contentDescription = source.label + ". " + context.getString(
                     if (!source.playbackKnown) R.string.car_sources_state_unknown
                     else if (source.playing) R.string.car_sources_playing else R.string.car_sources_waiting)
-                row.addView(cell, android.widget.LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+                val dockWidth = dockSidebarWidth(app.vela.carlauncher.settings.CarLauncherSettings.dockBoyutu.value, context.resources.displayMetrics.density)
+                val buttonSize = dockShortcutSize(dockWidth, context.resources.displayMetrics.density, true)
+                row.addView(cell, android.widget.LinearLayout.LayoutParams(buttonSize, buttonSize).apply {
+                    gravity = android.view.Gravity.CENTER_HORIZONTAL
                     bottomMargin = dp(4)
                 })
             }
@@ -480,6 +498,13 @@ class CarMusicPlayerHost(
                     android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
                     musicManager.internalPlayer.clearPlaybackError()
                 }
+            }
+        }
+        scope.launch {
+            app.vela.carlauncher.settings.CarLauncherSettings.dockBoyutu.collectLatest {
+                lastDockPercent = null
+                resizePlayer(rootView.width, rootView.height)
+                setupSourceDock()
             }
         }
         // Kapak/metin/kontroller medya degisiminde; dongude sadece seekbar/sure kaldi.

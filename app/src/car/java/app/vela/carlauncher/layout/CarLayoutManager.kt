@@ -147,10 +147,13 @@ class CarLayoutManager(
 
     private fun dockExtent(portrait: Boolean): Int {
         val density = context.resources.displayMetrics.density
-        val scale = 0.3f + carSettings.getEffectiveDockSize(portrait) / 100f * 1.4f
-        val base = if (carSettings.getEffectiveDockPosition(portrait) == "bottom")
-            context.resources.getDimension(R.dimen.dock_height) else 64f * density
-        return (base * scale).toInt().coerceIn((64 * density).toInt(), (104 * density).toInt())
+        return if (carSettings.getEffectiveDockPosition(portrait) == "bottom") {
+            val scale = 0.3f + carSettings.getEffectiveDockSize(portrait) / 100f * 1.4f
+            val base = context.resources.getDimension(R.dimen.dock_height)
+            (base * scale).toInt().coerceIn((64 * density).toInt(), (104 * density).toInt())
+        } else {
+            app.vela.carlauncher.ui.dockSidebarWidth(carSettings.getEffectiveDockSize(portrait), density)
+        }
     }
     private fun getAvailablePanelWidth(portrait: Boolean): Int {
         val size = rootLayout.width.takeIf { it > 0 } ?: context.resources.displayMetrics.widthPixels
