@@ -21,18 +21,15 @@ object AppLocale {
     val language = mutableStateOf("")
 
     /** The languages Vela's generated nav voice is translated into (and, rolling out, the UI chrome).
-     *  This is the source of truth for the in-app language picker — keep it in sync with the NavStrings
+     *  This is the source of truth for the in-app language picker; keep its supported entries in the NavStrings
      *  table in :core. */
-    // "he" is the modern Hebrew code the picker + NavStrings use; the Android RESOURCES live in the
-    // legacy-qualifier folder res/values-iw (AAPT's Hebrew qualifier), and the platform maps a "he"
-    // locale onto values-iw, so the two agree. (Same legacy-pair handling as id/in, yi/ji.)
-    val SUPPORTED = listOf("en", "fr", "de", "es", "it", "pt", "nl", "ru", "pl", "sv", "uk", "hu", "zh", "zh-TW", "ja", "he", "tr")
+    val SUPPORTED = listOf("en", "fr", "de", "es", "it", "pt", "nl", "ru", "pl", "sv", "uk", "hu", "zh", "zh-TW", "ja", "tr")
 
     private val ENDONYMS = mapOf(
         "en" to "English", "fr" to "Français", "de" to "Deutsch", "es" to "Español",
         "it" to "Italiano", "pt" to "Português", "nl" to "Nederlands", "ru" to "Русский",
         "pl" to "Polski", "sv" to "Svenska", "uk" to "Українська", "hu" to "Magyar",
-        "zh" to "简体中文", "zh-TW" to "繁體中文（台灣）", "ja" to "日本語", "he" to "עברית",
+        "zh" to "简体中文", "zh-TW" to "繁體中文（台灣）", "ja" to "日本語",
         "tr" to "Türkçe",
     )
 
@@ -52,7 +49,9 @@ object AppLocale {
     }
 
     fun init(context: Context) {
-        language.value = prefs(context).getString(KEY, "") ?: ""
+        val stored = prefs(context).getString(KEY, "").orEmpty()
+        language.value = normalizePreference(stored)
+        if (language.value != stored) prefs(context).edit().putString(KEY, language.value).apply()
         apply()
     }
 
@@ -61,9 +60,10 @@ object AppLocale {
     var onLocaleChanged: (() -> Unit)? = null
 
     fun set(context: Context, langCode: String) {
-        val changed = langCode != language.value
-        language.value = langCode
-        prefs(context).edit().putString(KEY, langCode).apply()
+        val supported = normalizePreference(langCode)
+        val changed = supported != language.value
+        language.value = supported
+        prefs(context).edit().putString(KEY, supported).apply()
         apply()
         // Re-create the Activity so `stringResource`/`getString` re-resolve in the new language
         // (the nav voice already switched via apply()); no-op when nothing actually changed.
@@ -88,7 +88,7 @@ object AppLocale {
      *  (user 2026-07-10). */
     fun wrap(base: Context): Context {
         if (systemDefault == null) systemDefault = Locale.getDefault()
-        val lang = prefs(base).getString(KEY, "").orEmpty()
+        val lang = normalizePreference(prefs(base).getString(KEY, "").orEmpty())
         if (lang.isBlank()) {
             systemDefault?.let { if (Locale.getDefault() != it) Locale.setDefault(it) }
             return base
@@ -109,6 +109,8 @@ object AppLocale {
     private fun apply() {
         NavStringsRegistry.setLocale(effective())
     }
+
+    private fun normalizePreference(code: String): String = if (code == "he" || code == "iw") "en" else code
 
     private fun prefs(c: Context) = c.getSharedPreferences("vela_settings", Context.MODE_PRIVATE)
     private const val KEY = "app_language"

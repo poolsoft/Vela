@@ -25,6 +25,7 @@ public class FuturisticSpeedometerView extends View {
     private Paint pulsePaint;
     private Paint innerHudPaint;
     private Paint dotGlowPaint;
+    private Paint dotCorePaint;
 
     private RectF arcBounds;
     private RectF outerBounds;
@@ -86,6 +87,10 @@ public class FuturisticSpeedometerView extends View {
         dotGlowPaint.setStyle(Paint.Style.FILL);
         dotGlowPaint.setMaskFilter(new BlurMaskFilter(dpToPx(12), BlurMaskFilter.Blur.NORMAL));
 
+        dotCorePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        dotCorePaint.setStyle(Paint.Style.FILL);
+        dotCorePaint.setColor(Color.WHITE);
+
         textSpeedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         textSpeedPaint.setColor(Color.WHITE);
         textSpeedPaint.setTextAlign(Paint.Align.CENTER);
@@ -111,7 +116,50 @@ public class FuturisticSpeedometerView extends View {
             pulsePhase = (float) animation.getAnimatedValue();
             invalidate();
         });
-        pulseAnimator.start();
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        syncAnimation();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        stopAnimation();
+    }
+
+    @Override
+    protected void onVisibilityChanged(View changedView, int visibility) {
+        super.onVisibilityChanged(changedView, visibility);
+        syncAnimation();
+    }
+
+    @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        super.onWindowVisibilityChanged(visibility);
+        syncAnimation();
+    }
+
+    private void syncAnimation() {
+        boolean shouldAnimate = isAttachedToWindow() && getVisibility() == VISIBLE && getWindowVisibility() == VISIBLE;
+        if (shouldAnimate) {
+            if (pulseAnimator != null && !pulseAnimator.isRunning()) {
+                pulseAnimator.start();
+            }
+        } else {
+            stopAnimation();
+        }
+    }
+
+    private void stopAnimation() {
+        if (pulseAnimator != null && pulseAnimator.isRunning()) {
+            pulseAnimator.cancel();
+        }
+        if (speedAnimator != null && speedAnimator.isRunning()) {
+            speedAnimator.cancel();
+        }
     }
 
     @Override
@@ -210,11 +258,7 @@ public class FuturisticSpeedometerView extends View {
 
             dotGlowPaint.setColor(Color.parseColor("#00FFFF"));
             canvas.drawCircle(dotX, dotY, dpToPx(8), dotGlowPaint); // Glowlu top
-
-            Paint dotCore = new Paint(Paint.ANTI_ALIAS_FLAG);
-            dotCore.setStyle(Paint.Style.FILL);
-            dotCore.setColor(Color.WHITE);
-            canvas.drawCircle(dotX, dotY, dpToPx(4), dotCore); // Beyaz merkez
+            canvas.drawCircle(dotX, dotY, dpToPx(4), dotCorePaint); // Beyaz merkez
         } else {
             if (progressSweep > sweepAngle) progressSweep = sweepAngle;
             // Parlama efekti ve Ana hat
@@ -227,10 +271,7 @@ public class FuturisticSpeedometerView extends View {
             float endDotY = cy + (float) Math.sin(endRad) * arcRadius;
             dotGlowPaint.setColor(Color.parseColor("#FF007F")); // Hiza gore pembe uclu glow
             canvas.drawCircle(endDotX, endDotY, dpToPx(10), dotGlowPaint);
-            Paint dotCore = new Paint(Paint.ANTI_ALIAS_FLAG);
-            dotCore.setStyle(Paint.Style.FILL);
-            dotCore.setColor(Color.WHITE);
-            canvas.drawCircle(endDotX, endDotY, dpToPx(5), dotCore);
+            canvas.drawCircle(endDotX, endDotY, dpToPx(5), dotCorePaint);
         }
 
         // 6. Devasa İnce Tipografi Hız Metni

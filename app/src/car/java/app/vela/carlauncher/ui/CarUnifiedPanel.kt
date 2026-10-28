@@ -5,7 +5,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
-import android.widget.PopupMenu
+import app.vela.carlauncher.ui.VelaPopupMenu as PopupMenu
 import android.widget.TextView
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,12 +54,33 @@ fun CarUnifiedPanel(
     onPaneliKapat: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember(context) { SmallClockAppearance.preferences(context) }
+    var clockStyle by remember(prefs) { mutableStateOf(SmallClockAppearance.read(prefs)) }
     var saatMetni by remember { mutableStateOf("12:00") }
+    var tarihMetni by remember { mutableStateOf("") }
 
-    LaunchedEffect(Unit) {
-        val saatFormati = SimpleDateFormat("HH:mm", Locale.getDefault())
+    androidx.compose.runtime.DisposableEffect(prefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key?.startsWith("clock_") == true) clockStyle = SmallClockAppearance.read(prefs)
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    LaunchedEffect(clockStyle) {
+        var sonSaat = ""
+        var sonTarih = ""
         while (true) {
-            saatMetni = saatFormati.format(Date())
+            val now = Date()
+            // Saniye gosterimi aciksa her saniye yazi degisir; kapaliysa format karsilastirmasi
+            // sayesinde ayni dakika icinde state yazilmaz (recompose baskisi kalkar).
+            val saat = android.text.format.DateFormat.format(clockStyle.timePattern(context), now).toString()
+            if (saat != sonSaat) { sonSaat = saat; saatMetni = saat }
+            if (clockStyle.showDate) {
+                val tarih = android.text.format.DateFormat.format(clockStyle.datePattern(), now).toString()
+                if (tarih != sonTarih) { sonTarih = tarih; tarihMetni = tarih }
+            }
             delay(1000L)
         }
     }
@@ -127,6 +148,15 @@ fun CarUnifiedPanel(
                 albumArt?.setImageResource(R.drawable.bg_track_art_placeholder)
             }
 
+            MediaSourceIcon.bind(view.findViewById(R.id.music_source_icon), medya, externalOnly = true)
+            btnPlay?.isEnabled = medya.canControl
+            view.findViewById<ImageButton>(R.id.music_btn_prev)?.isEnabled = medya.canSkipPrevious
+            val panelDate = view.findViewById<TextView>(R.id.music_panel_date)
+            panelDate?.visibility = if (clockStyle.showDate) View.VISIBLE else View.GONE
+            if (clockStyle.showDate) {
+                panelDate?.text = tarihMetni
+            }
+            panelClock?.let { clockStyle.apply(it, view.context, SmallClockAppearance.backgroundColors(albumArt?.drawable)) }
             panelClock?.text = saatMetni
 
             trackTitle?.text = if (medya.baslik.isNotBlank() && medya.baslik != "Müzik Seçilmedi") {

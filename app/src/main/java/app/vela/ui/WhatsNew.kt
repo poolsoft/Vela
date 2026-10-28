@@ -54,6 +54,8 @@ object WhatsNew {
     /** Fetch this build's notes and arm the prompt. [force] (the About row) shows even when
      *  already seen. */
     fun show(context: Context, force: Boolean) {
+        // Offline-only: the notes live on GitHub; only the About row (force) asks explicitly.
+        if (!force && !app.vela.ui.OfflineMode.networkAllowed) return
         scope.launch {
             val body = withContext(Dispatchers.IO) { fetchNotes() } ?: return@launch
             val plain = plainReleaseNotes(body)

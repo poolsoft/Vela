@@ -75,6 +75,9 @@ fun SearchBar(
     onBack: (() -> Unit)? = null,
     offline: Boolean = false,
     dpadMode: Boolean = false,
+    inputEnabled: Boolean = true,
+    placeholderText: String? = null,
+    forceClear: Boolean = false,
     // Voice search: shown only when there's a way to service it (a voice-input app, and later an
     // on-device model). Null = no mic. Sits at the right when the field is empty, Google-style.
     onMic: (() -> Unit)? = null,
@@ -157,20 +160,20 @@ fun SearchBar(
                         if (dpadMode) {
                             Modifier
                                 .dpadHighlight(DpadRoundedCornerShape(20.dp))
-                                .clickable { fieldArmed = true }
+                                .clickable(enabled = inputEnabled) { fieldArmed = true }
                                 // Inset the text INSIDE the focus ring - with none, the first
                                 // letter started at the Box edge and the 2dp ring stroke drew
                                 // straight through it (keypad phones see this on every search).
                                 .padding(horizontal = 10.dp)
                         } else {
-                            Modifier
+                            Modifier.clickable(enabled = inputEnabled) { fieldArmed = true }
                         },
                     ),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 if (query.isEmpty()) {
                     Text(
-                        stringResource(R.string.search_placeholder),
+                        placeholderText ?: stringResource(R.string.search_placeholder),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -193,12 +196,12 @@ fun SearchBar(
                         field = v
                         if (v.text != query) onQueryChange(v.text)
                     },
-                    // Until armed in dpadMode the field is DISABLED, so it doesn't swallow a TOUCH tap
+                    // Until explicitly armed the field is DISABLED, so it doesn't swallow a TOUCH tap
                     // (a live but unfocusable field ate the tap and did nothing — the "can't tap the
                     // search bar" bug on hybrid touch+keypad phones, Qin F21). Disabled lets the tap
                     // reach the Box's arm-clickable, which arms it; the field stays MOUNTED (only the
                     // enabled flag flips), so arming focuses it cleanly with no remount race.
-                    enabled = !dpadMode || fieldArmed,
+                    enabled = inputEnabled && fieldArmed,
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -207,8 +210,8 @@ fun SearchBar(
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(fieldFocus)
-                        // Unfocusable until armed in dpadMode; untouched otherwise.
-                        .focusProperties { canFocus = !dpadMode || fieldArmed }
+                        // Only an explicit tap/OK may focus the field, including on cold start.
+                        .focusProperties { canFocus = inputEnabled && fieldArmed }
                         // Deterministic escape (docs/dpad.md): catch BACK on the focused
                         // field via onPreviewKeyEvent (root→leaf) + KeyDown, so it fires
                         // BEFORE BasicTextField's built-in "BACK clears focus" — which
@@ -245,7 +248,7 @@ fun SearchBar(
                         },
                 )
             }
-            if (query.isNotEmpty()) {
+            if (query.isNotEmpty() || forceClear) {
                 IconButton(onClick = onClear, modifier = Modifier.size(40.dp)) {
                     Icon(
                         Icons.Default.Close,
@@ -254,21 +257,13 @@ fun SearchBar(
                     )
                 }
             }
-            // Quiet offline indicator: a grayed globe-with-a-slash + "Offline", shown when there's no
-            // connection (replaces the old banner). Hidden while typing so it doesn't crowd the clear "X".
+            // Keep the offline state accessible without shrinking the search hit area.
             if (offline && query.isEmpty() && onBack == null) {
                 Icon(
                     Icons.Default.PublicOff,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
+                    contentDescription = stringResource(R.string.search_offline),
+                    modifier = Modifier.padding(end = 4.dp).size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    stringResource(R.string.search_offline),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    modifier = Modifier.padding(end = 4.dp),
                 )
             }
             // Your lists, moved here from the head of the category-chip row (issue #290): there it

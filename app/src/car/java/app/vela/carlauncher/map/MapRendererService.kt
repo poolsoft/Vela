@@ -1,6 +1,6 @@
 package app.vela.carlauncher.map
 
-import android.app.Presentation
+import android.app.Dialog
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -34,6 +34,7 @@ open class MapRendererService : Service() {
     private var displayWidth = 0
     private var displayHeight = 0
     private var displayDpi = 0
+    private var outputGeneration = 0
     private var scene by mutableStateOf<MapRenderScene?>(null)
     private val sceneQueue = kotlinx.coroutines.channels.Channel<Pair<Int, ParcelFileDescriptor>>(
         kotlinx.coroutines.channels.Channel.CONFLATED, onUndeliveredElement = { it.second.close() },
@@ -58,6 +59,7 @@ open class MapRendererService : Service() {
                 val height = data.getInt("height").coerceIn(1, 4096)
                 val dpi = data.getInt("dpi").coerceIn(72, 640)
                 stage("display")
+                FileLogger.i("MapRenderer", "session=$session surface=${width}x$height dpi=$dpi retained=${display != null}")
                 if (display == null) {
                     output = surface
                     display = getSystemService(DisplayManager::class.java).createVirtualDisplay(
@@ -68,18 +70,33 @@ open class MapRendererService : Service() {
                 } else {
                     val resized = displayWidth != width || displayHeight != height || displayDpi != dpi
                     if (resized) {
-                        // Presentation cancels itself when its display metrics change. Replace its
-                        // lifecycle/Compose/MapView tree explicitly instead of retaining a dead window.
-                        presentation?.dismiss()
-                        presentation = null
+                        // Rebind the output after resizing. On API 30, resizing an attached
+                        // Surface keeps SurfaceFlinger's destination clip at the old width
+                        // even though the display, window and GL buffers have the new size.
+                        // The display/window/MapView stay alive; only the output is detached.
+                        display!!.surface = null
+                        // Keep the same window/MapView/style. Presentation on API 27 cancels
+                        // itself on a metrics change; our display-bound Dialog can relayout.
                         display!!.resize(width, height, dpi)
                     }
-                    display!!.surface = surface
                     output?.release()
                     output = surface
-                    if (resized) presentation = MapPresentation(this, display!!.display).also { it.show() }
+                    if (resized) presentation?.window?.setLayout(width, height)
+                    // DisplayManager applies the new output projection during traversal.
+                    // A synchronous detach/attach can be coalesced into one transaction,
+                    // retaining the old clip. Let a traversal finish before reconnecting.
+                    val binding = ++outputGeneration
+                    Choreographer.getInstance().postFrameCallback {
+                        Choreographer.getInstance().postFrameCallback {
+                            if (binding == outputGeneration && output === surface && surface.isValid) {
+                                try { display?.surface = surface }
+                                catch (error: Exception) { fail("display", error) }
+                            }
+                        }
+                    }
                 }
                 displayWidth = width; displayHeight = height; displayDpi = dpi
+                presentation?.setRenderingActive(true)
             } catch (error: Exception) { fd?.close(); fail("display", error); return@Handler true }
         }
         if (data.getString("session") != session || session.isEmpty()) { fd?.close(); return@Handler true }
@@ -97,6 +114,13 @@ open class MapRendererService : Service() {
                 "zoom" -> dpad.zoomBy(data.getDouble("delta"))
                 "select" -> dpad.selectAtCenter()
                 "long" -> dpad.longPressAtCenter()
+            }
+            MapRendererTransport.SUSPEND -> {
+                outputGeneration++
+                presentation?.setRenderingActive(false)
+                display?.surface = null
+                output?.release(); output = null
+                FileLogger.i("MapRenderer", "session=$session suspended; retaining map and style")
             }
             MapRendererTransport.HEARTBEAT -> stage("heartbeat")
             MapRendererTransport.CLOSE -> shutdown()
@@ -117,9 +141,16 @@ open class MapRendererService : Service() {
                     val value = withContext(Dispatchers.IO) { MapRendererTransport.read(fd) }
                     if (next != generation || session.isEmpty()) continue
                     if (!graphicsCaptured) {
-                        stage("graphics-probe")
-                        val compatible = withContext(Dispatchers.IO) { RendererGraphicsDiagnostics.capture(applicationContext) }
-                        check(compatible != false) { getString(app.vela.R.string.car_map_gles_incompatible) }
+                        // The native ES2 pbuffer probe can itself hang on old drivers. It belongs
+                        // to the explicit diagnostic test, never to ordinary map startup.
+                        val advertised = getSystemService(android.app.ActivityManager::class.java)
+                            .deviceConfigurationInfo.glEsVersion
+                        FileLogger.i("MapRenderer", "Starting MapLibre GLES2; advertised=$advertised; no synthetic GL context")
+                        if (value.styleUri == "asset://styles/renderer-empty.json") {
+                            stage("graphics-probe")
+                            val compatible = withContext(Dispatchers.IO) { RendererGraphicsDiagnostics.capture(applicationContext) }
+                            check(compatible != false) { getString(app.vela.R.string.car_map_gles_incompatible) }
+                        }
                         graphicsCaptured = true
                     }
                     applySettings(value.settings)
@@ -170,7 +201,9 @@ open class MapRendererService : Service() {
         }
         edit.apply()
         app.vela.ui.AppLocale.init(applicationContext)
+        app.vela.ui.OfflineMode.init(applicationContext)
         app.vela.ui.Buildings3d.init(applicationContext)
+        app.vela.ui.MapRenderProfile.init(applicationContext)
         app.vela.ui.GoogleFree.init(applicationContext)
         app.vela.ui.HouseNumbers.init(applicationContext)
         app.vela.ui.LayersButton.init(applicationContext)
@@ -226,7 +259,9 @@ open class MapRendererService : Service() {
     }
 
     private inner class MapPresentation(context: Context, display: Display) :
-        Presentation(context, display), LifecycleOwner, SavedStateRegistryOwner {
+        Dialog(context.createDisplayContext(display).let {
+            if (Build.VERSION.SDK_INT >= 30) it.createWindowContext(WindowManager.LayoutParams.TYPE_PRIVATE_PRESENTATION, null) else it
+        }, android.R.style.Theme_Material_NoActionBar), LifecycleOwner, SavedStateRegistryOwner {
         private val life = LifecycleRegistry(this)
         private val saved = SavedStateRegistryController.create(this)
         override val lifecycle: Lifecycle get() = life
@@ -236,13 +271,19 @@ open class MapRendererService : Service() {
             saved.performAttach(); saved.performRestore(null)
             super.onCreate(bundle)
             window?.apply {
+                // Public presentation window type for our own private display, without the
+                // API-27 display-metrics listener which destroys the map on every panel resize.
+                setType(WindowManager.LayoutParams.TYPE_PRIVATE_PRESENTATION)
+                attributes = attributes.apply { token = Binder(); gravity = Gravity.FILL }
                 setBackgroundDrawableResource(android.R.color.transparent)
-                addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+                // Input is forwarded explicitly over IPC; this off-screen window must not take launcher/IME focus.
+                addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
                 setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN)
             }
             life.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
             // Presentation/Service ContextImpl would otherwise bypass Application's prefs override.
-            val renderContext = object : android.content.ContextWrapper(context) {
+            val renderContext = object : android.content.ContextWrapper(this.context) {
                 override fun getSharedPreferences(name: String, mode: Int) =
                     applicationContext.getSharedPreferences(name, mode)
             }
@@ -286,8 +327,13 @@ open class MapRendererService : Service() {
                 }
             }
         }
+        fun setRenderingActive(active: Boolean) {
+            if (life.currentState == Lifecycle.State.DESTROYED) return
+            life.currentState = if (active) Lifecycle.State.RESUMED else Lifecycle.State.CREATED
+        }
         override fun onStart() {
             super.onStart()
+            window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
             life.handleLifecycleEvent(Lifecycle.Event.ON_START)
             life.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
         }

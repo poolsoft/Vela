@@ -20,6 +20,7 @@ import javax.inject.Inject
 @HiltAndroidApp
 class VelaApp : Application(), coil.ImageLoaderFactory {
     @Inject lateinit var diag: javax.inject.Provider<DiagLog>
+    @Inject lateinit var voiceGuide: javax.inject.Provider<app.vela.core.voice.VoiceGuide>
 
     /** Coil with a HARD memory-cache cap. The default budget is ~25% of the app's heap CLASS,
      *  and largeHeap makes that class huge - on a 512 MB large heap Coil happily retains up to
@@ -48,7 +49,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         app.vela.diag.ProcessDiagnostics.checkpoint("memory trim: $level")
-        if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(this)) {
+        if (!app.vela.util.ProcessIdentity.isMain(this)) {
             app.vela.ui.MemoryPressure.dispatch(level)
             return
         }
@@ -65,7 +66,7 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
     }
 
     override fun attachBaseContext(base: Context) {
-        if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(base)) {
+        if (!app.vela.util.ProcessIdentity.isMain(base)) {
             super.attachBaseContext(base)
         } else {
             app.vela.backup.BackupRestore.recover(base)
@@ -77,10 +78,22 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.util.FileLogger.init(this)
         super.onCreate()
         app.vela.diag.ProcessDiagnostics.install(this)
-        if (app.vela.variant.CarIntegration.available && !app.vela.util.ProcessIdentity.isMain(this)) {
+        if (BuildConfig.DIAGNOSTIC_BUILD && !app.vela.variant.CarIntegration.available)
+            app.vela.diag.LocalLogcatRecorder.start(this)
+        if (!app.vela.util.ProcessIdentity.isMain(this)) {
             CrashCatcher.install(this) { emptyList() }
             app.vela.util.FileLogger.i("VelaApp", "Lightweight process startup: no launcher, music, location or downloads")
             return
+        }
+        app.vela.backup.BackupRestore.logRecovery(this)
+        // The same lazy system-only policy covers the phone UI and drives started by Android Auto.
+        voiceGuide.get().apply {
+            useSystemEngineLazily("com.google.android.tts")
+            onPlaybackInterruptionChanged = { app.vela.variant.CarIntegration.onSpeechStateChanged(it) }
+            onFailure = { error ->
+                app.vela.util.FileLogger.e("VoiceGuide", "System TTS failed", error)
+                app.vela.diag.ProcessDiagnostics.checkpoint("tts: failure ${error.javaClass.simpleName}")
+            }
         }
         val applicationDiag = diag.get()
         // Device memory class first: the Coil cap and the eager-warm decisions read it.
@@ -121,7 +134,11 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
             // fall back to their boxes, which is what they always were.
             app.vela.offline.RegionPolys.ensureLoaded(this@VelaApp)
             app.vela.data.FlockCameras.ensureLoaded(this@VelaApp)
-            app.vela.data.FlockCameras.refresh(this@VelaApp, app.vela.BuildConfig.FLOCK_MANIFEST_URL)
+            // Offline-only: the bundled camera file is all we need, and this refresh is a plain
+            // network call the head unit cannot afford at launch.
+            if (app.vela.ui.OfflineMode.networkAllowed) {
+                app.vela.data.FlockCameras.refresh(this@VelaApp, app.vela.BuildConfig.FLOCK_MANIFEST_URL)
+            }
         }
         app.vela.ui.SimLocation.init(this)
         app.vela.ui.UiScale.init(this)
@@ -134,7 +151,9 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.ui.HideAdult.init(this)
         app.vela.ui.HideExternalLinks.init(this)
         app.vela.ui.GoogleFree.init(this) // "Use Vela without Google": mirrors into the :core NoGoogle flag
+        app.vela.ui.OfflineMode.init(this) // "Sadece cevrimdisi calis": every remote path checks this
         app.vela.ui.Buildings3d.init(this)
+        app.vela.ui.MapRenderProfile.init(this)
         app.vela.ui.RouteTrail.init(this)
         app.vela.ui.RoadLabel.init(this)
         app.vela.ui.PuckStyle.init(this)
@@ -154,6 +173,15 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.ui.ContactsSearch.init(this) // contacts-in-search toggle (issue #243)
         app.vela.diag.NavTrace.init(this) // opt-in nav smoothness trace (issue #251)
         app.vela.ui.map.MapFonts.init(this) // Roboto basemap glyphs (cached patched style + async refresh)
+        // The head-unit media service builds the internal player on ITS main thread, and the first
+        // getSharedPreferences() there parsed the XML synchronously (measured 3404 ms stall on the
+        // teyp, 2026-10-10). Read the four files it touches here, on an IO thread, so launch never
+        // pays that cost and the service restart is cheap.
+        CoroutineScope(Dispatchers.IO).launch {
+            for (name in listOf("vela_internal_player_prefs", "vela_music_focus", "vela_music_playlists", "vela_car_launcher_prefs")) {
+                runCatching { getSharedPreferences(name, MODE_PRIVATE).all.size }
+            }
+        }
         Onboarding.init(this)
         app.vela.ui.WhatsNew.init(this)
         // Persist any fatal crash (stack trace + breadcrumbs) so it survives the

@@ -37,12 +37,18 @@ import app.vela.ui.settings.ToggleRow
 import app.vela.ui.map.MapUiState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /** Variant-owned seam: the map and activity never import launcher implementation types. */
 object CarIntegration {
+    fun onSpeechStateChanged(speaking: Boolean) = app.vela.carlauncher.media.MusicManager.onSpeechStateChanged(speaking)
+    fun mapStorageAvailable(): Boolean = !CarLauncherSettings.maplessMode.value
     const val available = true
     private val mapRenderLevel = androidx.compose.runtime.mutableIntStateOf(3)
     fun isolatedAutoSurface(context: Context): app.vela.ui.map.SurfaceMapController? = app.vela.carlauncher.map.AutoSurfaceMap(context)
+    @Composable fun mapInputReady(): Boolean =
+        app.vela.carlauncher.map.LocalMapRendererFailureHost.current?.state?.ready ?: true
     @Composable fun RenderIsolatedMap(
         scene: app.vela.ui.map.MapRenderScene,
         callbacks: app.vela.ui.map.MapRenderCallbacks,
@@ -75,16 +81,50 @@ object CarIntegration {
     val immersive: StateFlow<Boolean> get() = CarLauncherSettings.tamEkranModu
     val homeScreenRequest: StateFlow<Long> get() = CarLauncherSettings.homeScreenRequest
     fun init(context: Context) = CarLauncherSettings.baslat(context)
-    fun onResume(activity: ComponentActivity) =
+    private val visibilityHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var pendingBackground: Runnable? = null
+
+    private fun cancelPendingBackground() {
+        pendingBackground?.let { visibilityHandler.removeCallbacks(it) }
+        pendingBackground = null
+    }
+
+    fun onResume(activity: ComponentActivity) {
+        cancelPendingBackground()
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(true)
-    fun onPause(activity: ComponentActivity) =
+        app.vela.carlauncher.media.MusicManager.refreshIfCreated()
+    }
+    fun onPause(activity: ComponentActivity) {
+        cancelPendingBackground()
+        val reference = java.lang.ref.WeakReference(activity)
+        val appContext = activity.applicationContext
+        pendingBackground = Runnable {
+            pendingBackground = null
+            val owner = reference.get() ?: return@Runnable
+            if (owner.isFinishing || owner.isChangingConfigurations ||
+                owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) return@Runnable
+            CarFloatingButtonManager.getInstance(appContext).setAppInForeground(false)
+            app.vela.util.FileLogger.i("LauncherTask", "Paused window treated as background task=${owner.taskId}")
+        }.also { visibilityHandler.postDelayed(it, 500L) }
+    }
+    fun onStop(activity: ComponentActivity) {
+        cancelPendingBackground()
+        CarLauncherSettings.finishInitialMapAttempt()
         CarFloatingButtonManager.getInstance(activity).setAppInForeground(false)
+    }
     fun isDefaultHome(context: Context): Boolean {
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            val roles = context.getSystemService(android.app.role.RoleManager::class.java)
+            if (roles?.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME) == true &&
+                roles.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) return true
+        }
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
         return context.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
             ?.activityInfo?.packageName == context.packageName
     }
     fun prepareForExit(activity: ComponentActivity) {
+        cancelPendingBackground()
+        app.vela.carlauncher.diag.DiagnosticService.stop(activity)
         CarFloatingButtonManager.getInstance(activity).setSuspended(true)
         val music = app.vela.carlauncher.media.MusicManager.getInstance(activity)
         music.duraklat()
@@ -95,15 +135,39 @@ object CarIntegration {
     }
     @Composable fun ExitControl() = app.vela.carlauncher.ui.LauncherExitControl()
     fun onCreated(activity: ComponentActivity) {
+        val home = activity.packageManager.resolveActivity(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+            android.content.pm.PackageManager.MATCH_DEFAULT_ONLY,
+        )?.activityInfo
+        app.vela.util.FileLogger.i("HomeRole", "default=${isDefaultHome(activity)} resolved=${home?.packageName}/${home?.name}")
+        app.vela.carlauncher.diag.DiagnosticService.start(activity)
+        activity.lifecycleScope.launch {
+            CarLauncherSettings.ekranYonu.collect { orientation ->
+                activity.requestedOrientation = when (orientation) {
+                    "portrait" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    "sensor" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+                    else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                }
+            }
+        }
         CarFloatingButtonManager.getInstance(activity).setSuspended(false)
         activity.lifecycleScope.launch {
-            CarTelemetryManager.getInstance(activity).telemetriDurumu.collect { tel ->
-                CarFloatingButtonManager.getInstance(activity)
-                    .updateSpeed(tel.anlikHizKmh.toFloat(), tel.hizSiniriKmh.toFloat())
+            CarLauncherSettings.floatingButtonModu.collect {
+                CarFloatingButtonManager.getInstance(activity).updateButtonState()
             }
+        }
+        activity.lifecycleScope.launch {
+            CarTelemetryManager.getInstance(activity).telemetriDurumu
+                .map { it.anlikHizKmh to it.hizSiniriKmh }
+                .distinctUntilChanged()
+                .collect { (hiz, sinir) ->
+                    CarFloatingButtonManager.getInstance(activity)
+                        .updateSpeed(hiz.toFloat(), sinir.toFloat())
+                }
         }
         CarFloatingButtonManager.getInstance(activity).updateButtonState()
         HeadUnitManager.getInstance(activity)
+        app.vela.diag.ProcessDiagnostics.checkpoint("launcher: hardware ready")
     }
     fun onHomeIntent(intent: Intent?) {
         if (intent?.hasCategory(Intent.CATEGORY_HOME) == true) {
@@ -127,48 +191,50 @@ object CarIntegration {
         voiceAudioLevel: Float = 0f,
         content: @Composable () -> Unit
     ) {
-        // Session-only opt-in: never restore map initialization after a process/Activity restart.
-        // Gate the whole MapScreen, not just its visibility, so no hidden EGL surface is created.
+        // Mapless mode replaces the whole map composition, so no renderer or EGL surface starts.
+        val mapless by CarLauncherSettings.maplessMode.collectAsState()
         val context = androidx.compose.ui.platform.LocalContext.current
-        var mapOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
+        var testsOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
+        val homeRequest by CarLauncherSettings.homeScreenRequest.collectAsState()
+        androidx.compose.runtime.LaunchedEffect(homeRequest) { testsOpen = false }
+        if (testsOpen) {
+            app.vela.carlauncher.diag.DiagnosticTestScreen(
+                onClose = { testsOpen = false },
+                onSettings = onOpenSettings,
+                setMapLevel = { mapRenderLevel.intValue = it },
+                mapContent = content,
+            )
+            return
+        }
         val failureHost = remember { app.vela.carlauncher.map.MapRendererFailureHost() }
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
         val configuration = androidx.compose.ui.platform.LocalConfiguration.current
         val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT ||
             (configuration.screenWidthDp < configuration.screenHeightDp)
         CarLauncherLayout(
-            passthrough = !enabled || isPortrait,
+            passthrough = !enabled || (isPortrait && !mapless),
             onOpenSettings = onOpenSettings,
             onAsistanTiklandi = onVoiceClick,
             isVoiceListening = isVoiceListening,
             voiceAudioLevel = voiceAudioLevel,
             haritaIcerigi = {
-                if (mapOpen) {
+                if (mapless) {
+                    app.vela.carlauncher.ui.CarMaplessContent(onOpenSettings, onDiagnostics = { testsOpen = true })
+                } else {
                     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
                         androidx.compose.runtime.CompositionLocalProvider(
                             app.vela.carlauncher.map.LocalMapRendererFailureHost provides failureHost,
                         ) { content() }
-                        failureHost.failure?.let {
-                            app.vela.carlauncher.map.MapRendererStatusPanel(it, failureHost.retry)
+                        androidx.compose.runtime.LaunchedEffect(failureHost.state.ready) {
+                            if (failureHost.state.ready) CarLauncherSettings.finishInitialMapAttempt()
                         }
-                        androidx.compose.material3.TextButton(
-                            onClick = { mapOpen = false },
-                            modifier = Modifier.align(Alignment.BottomCenter),
-                        ) { Text(stringResource(app.vela.R.string.car_map_renderer_close)) }
-                    }
-                } else Surface(modifier = Modifier.fillMaxSize()) {
-                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-                        horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(stringResource(app.vela.R.string.car_map_manual_start_detail))
-                        Button(onClick = { mapRenderLevel.intValue = 3; mapOpen = true }) { Text(stringResource(app.vela.R.string.car_map_manual_start)) }
-                        OutlinedButton(onClick = { mapRenderLevel.intValue = 1; mapOpen = true }) {
-                            Text(stringResource(app.vela.R.string.car_map_empty_test))
+                        androidx.compose.runtime.LaunchedEffect(failureHost.failure) {
+                            failureHost.failure?.let {
+                                if (CarLauncherSettings.disableFailedMap(it.stage)) {
+                                    android.widget.Toast.makeText(context, "Harita açılamadı. Müzik ve gösterge ekranına geçildi.", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            }
                         }
-                        OutlinedButton(onClick = { mapRenderLevel.intValue = 2; mapOpen = true }) {
-                            Text(stringResource(app.vela.R.string.car_map_style_test))
-                        }
-                        OutlinedButton(onClick = onOpenSettings) { Text(stringResource(app.vela.R.string.car_map_open_settings)) }
                     }
                 }
             }

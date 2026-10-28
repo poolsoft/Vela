@@ -68,11 +68,13 @@ internal fun LauncherPermissionsSettings(onBack: () -> Unit) {
 
     // İzin durumları
     val audioPermission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
+    val phonePermission = Manifest.permission.READ_PHONE_STATE
     val micPermission = Manifest.permission.RECORD_AUDIO
     val btPermission = if (Build.VERSION.SDK_INT >= 31) Manifest.permission.BLUETOOTH_CONNECT else null
     val notifPermission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.POST_NOTIFICATIONS else null
 
     val isAudioGranted = remember(revision) { ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED }
+    val isPhoneGranted = remember(revision) { ContextCompat.checkSelfPermission(context, phonePermission) == PackageManager.PERMISSION_GRANTED }
     val isMicGranted = remember(revision) { ContextCompat.checkSelfPermission(context, micPermission) == PackageManager.PERMISSION_GRANTED }
     val isBtGranted = remember(revision) { btPermission == null || ContextCompat.checkSelfPermission(context, btPermission) == PackageManager.PERMISSION_GRANTED }
     val isNotifGranted = remember(revision) { notifPermission == null || ContextCompat.checkSelfPermission(context, notifPermission) == PackageManager.PERMISSION_GRANTED }
@@ -86,8 +88,9 @@ internal fun LauncherPermissionsSettings(onBack: () -> Unit) {
     val isHomeRoleHeld = remember(revision) {
         if (Build.VERSION.SDK_INT >= 29) {
             val roles = context.getSystemService(RoleManager::class.java)
-            roles?.isRoleAvailable(RoleManager.ROLE_HOME) == true && roles.isRoleHeld(RoleManager.ROLE_HOME)
-        } else false
+            if (roles?.isRoleAvailable(RoleManager.ROLE_HOME) == true) roles.isRoleHeld(RoleManager.ROLE_HOME)
+            else app.vela.variant.CarIntegration.isDefaultHome(context)
+        } else app.vela.variant.CarIntegration.isDefaultHome(context)
     }
 
     SettingsScaffold(title = stringResource(R.string.car_permissions_title), onBack = onBack) { topRow ->
@@ -101,6 +104,13 @@ internal fun LauncherPermissionsSettings(onBack: () -> Unit) {
             icon = Icons.Default.MusicNote,
             modifier = topRow
         ) {
+            PermissionRow(
+                title = "Telefon görüşmesini algıla",
+                desc = "Smart Focus'un görüşmeyi BT müziği saymaması için kullanılır. Arama geçmişi veya telefon numarası okunmaz.",
+                icon = Icons.Default.Phone,
+                granted = isPhoneGranted,
+                onClick = { permission.launch(phonePermission) },
+            )
             // Müzik Kütüphanesi
             PermissionRow(
                 title = stringResource(R.string.car_permission_audio),
@@ -436,23 +446,38 @@ private fun ActionRow(
 fun SmartFocusPreferences() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("vela_music_focus", Context.MODE_PRIVATE) }
-    var follow by remember { mutableStateOf(prefs.getBoolean("auto_follow", true)) }
+    val manager = remember { app.vela.carlauncher.media.MusicManager.getInstance(context) }
+    val media by manager.medyaDurumu.collectAsState()
+    val sourcesRevision by manager.sourcesRevision.collectAsState()
+    val follow = remember(media.sourceId, sourcesRevision) { manager.isAutomaticTracking() }
     var source by remember { mutableStateOf(prefs.getString("startup_source", "last") ?: "last") }
     var seconds by remember { mutableIntStateOf(prefs.getInt("bt_wait_seconds", 8).coerceIn(3, 15)) }
     Column(Modifier.fillMaxWidth().padding(14.dp)) {
         Text(stringResource(R.string.car_smart_focus))
         Text(stringResource(R.string.car_smart_focus_desc))
         Switch(checked = follow, onCheckedChange = {
-            follow = it
-            prefs.edit().putBoolean("auto_follow", it).apply()
-            if (it) app.vela.carlauncher.media.MusicManager.getInstance(context).allowAutomaticSourceTracking()
+            if (it) manager.allowAutomaticSourceTracking() else manager.setSourceLocked(true)
         })
-        val keys = listOf("last", "internal", "bluetooth", "hcn_radio", "xy_radio")
-        val labels = listOf(stringResource(R.string.car_source_last), stringResource(R.string.car_source_internal), "Bluetooth", "HCN Radio", "XYAuto Radio")
+        Text(stringResource(R.string.car_sources_lock))
+        Switch(checked = !follow, onCheckedChange = { manager.setSourceLocked(it) })
+        Text(stringResource(R.string.car_sources_follow_apps))
+        manager.availableSources().forEach { (key, label) ->
+            var enabled by remember(key, media.sourceId, sourcesRevision) { mutableStateOf(manager.isSourceTrackingEnabled(key)) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, Modifier.weight(1f))
+                Switch(checked = enabled, onCheckedChange = { enabled = it; manager.setSourceTracking(key, it) })
+            }
+        }
+        Text(stringResource(R.string.car_sources_tracking_hint))
+        val startupSources = listOf(
+            "last" to stringResource(R.string.car_source_last),
+            "internal" to stringResource(R.string.car_source_internal),
+            "bluetooth" to "Bluetooth"
+        ) + manager.availableSources().filter { it.first !in setOf("internal", "bluetooth") }
         Text(stringResource(R.string.car_startup_source))
-        keys.forEachIndexed { index, key ->
+        startupSources.forEach { (key, label) ->
             Button(onClick = { source = key; prefs.edit().putString("startup_source", key).apply() }, modifier = Modifier.fillMaxWidth()) {
-                Text((if (source == key) "✓ " else "") + labels[index])
+                Text((if (source == key) "✓ " else "") + label)
             }
         }
         Text(stringResource(R.string.car_bt_wait, seconds))

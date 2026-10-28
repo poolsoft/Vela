@@ -17,17 +17,18 @@ class HeadUnitRadioAdapter(
 ) : BaseMediaAdapter() {
     private val packages = if (xyAuto) listOf("com.acloud.stub.extradio", "com.acloud.stub.localradio")
         else listOf("com.hcn.autoradio")
-    val packageName: String? get() = packages.firstOrNull {
+    val packageName: String? = packages.firstOrNull {
         runCatching { context.packageManager.getPackageInfo(it, 0) }.isSuccess
     }
-    private var selected = false
     private var playing = false
+    var manuallyRequested = false
+        private set
     private var frequency = ""
     private var band = ""
     private var registered = false
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
-            if (!selected || packageName == null || intent == null) return
+            if (packageName == null || intent == null) return
             val value = runCatching { intent.getIntExtra("freq", 0) }.getOrDefault(0)
             val incomingBand = runCatching { intent.getStringExtra("fmoram") }.getOrNull().orEmpty()
             if (value <= 0 || incomingBand.isBlank()) return
@@ -35,7 +36,8 @@ class HeadUnitRadioAdapter(
             frequency = if (band.startsWith("AM", true)) "$value kHz"
                 else String.format(Locale.getDefault(), "%.1f MHz",
                     value / if (xyAuto && band.equals("FM1", true)) 1000.0 else 100.0)
-            playing = true
+            // Frequency metadata does not prove audible playback; only a real MediaSession can.
+            app.vela.util.FileLogger.i("RadioSource", "Tuning event backend=${if (xyAuto) "legacy-a" else "legacy-b"} sticky=$isInitialStickyBroadcast playing=$playing")
             changed()
         }
     }
@@ -53,10 +55,6 @@ class HeadUnitRadioAdapter(
         }
     }
 
-    fun select(value: Boolean) {
-        selected = value
-        if (!value) playing = false
-    }
     fun open() {
         val pkg = packageName ?: return
         context.packageManager.getLaunchIntentForPackage(pkg)?.let {
@@ -78,24 +76,26 @@ class HeadUnitRadioAdapter(
         }
     }
     override fun oynat() {
+        manuallyRequested = true
         if (!playing) open()
     }
     override fun duraklat() {
         if (playing) command("xy.android.playpause", KeyEvent.KEYCODE_MEDIA_PAUSE)
         playing = false
+        manuallyRequested = false
         changed()
     }
-    override fun sonraki() = command("xy.android.fm_scan_next", KeyEvent.KEYCODE_MEDIA_NEXT)
-    override fun onceki() = command("xy.android.fm_scan_prev", KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+    override fun sonraki() = command("xy.android.seek_next", KeyEvent.KEYCODE_MEDIA_NEXT)
+    override fun onceki() = command("xy.android.seek_prev", KeyEvent.KEYCODE_MEDIA_PREVIOUS)
     override fun konumaGit(konumMs: Long) {}
-    override fun aktifMi() = selected && packageName != null
-    override fun kaynakAdi() = if (xyAuto) "XYAuto Radio" else "HCN Radio"
+    override fun aktifMi() = packageName != null
+    override fun kaynakAdi() = "Radyo"
     override fun baslik() = frequency.ifBlank { kaynakAdi() }
     override fun sanatci() = band
     override fun albumKapagi(): Bitmap? = null
     override fun toplamSureMs() = 0L
     override fun anlikKonumMs() = 0L
-    override fun caliyorMu() = selected && playing
+    override fun caliyorMu() = playing
     override fun serbestBirak() {
         if (registered) runCatching { context.unregisterReceiver(receiver) }
         registered = false
@@ -121,7 +121,7 @@ class HcnMusicAdapter(private val context: Context) : BaseMediaAdapter() {
     override fun onceki() = command("PREV")
     override fun konumaGit(konumMs: Long) {}
     override fun aktifMi() = installed()
-    override fun kaynakAdi() = "HCN Music"
+    override fun kaynakAdi() = "Yerel müzik"
     override fun baslik() = kaynakAdi()
     override fun sanatci() = ""
     override fun albumKapagi(): Bitmap? = null

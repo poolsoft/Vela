@@ -19,12 +19,14 @@ import androidx.recyclerview.widget.RecyclerView
 import app.vela.R
 import app.vela.carlauncher.apps.CarAppManager
 import app.vela.carlauncher.model.AracUygulamasi
+import app.vela.carlauncher.model.LaunchMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.collect
 
 /**
  * OsmAnd fragment_app_drawer.xml layoutunu buyuk panelde sisen ve yoneten host sinif.
@@ -39,7 +41,7 @@ class CarAppDrawerHost(
     private val onAppClick: (AracUygulamasi) -> Unit
 ) {
 
-    val rootView: View = LayoutInflater.from(context).inflate(R.layout.fragment_app_drawer, null, false)
+    val rootView: View = LayoutInflater.from(androidx.appcompat.view.ContextThemeWrapper(context, androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)).inflate(R.layout.fragment_app_drawer, null, false)
 
     private val recyclerView: RecyclerView? = rootView.findViewById(R.id.apps_recycler_view)
     private val loadingProgress: ProgressBar? = rootView.findViewById(R.id.loading_progress)
@@ -48,12 +50,12 @@ class CarAppDrawerHost(
 
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private var tumUygulamalar: List<AracUygulamasi> = emptyList()
+    private val appManager = CarAppManager.getInstance(context)
     private val adapter = DrawerAppAdapter(
         onItemClick = onAppClick,
-        onLongClick = { app ->
-            val added = AppDockManager.getInstance(context).kisayolEkle(app.paketAdi)
-            Toast.makeText(context, if (added) R.string.car_dock_added else R.string.car_dock_already_added, Toast.LENGTH_SHORT).show()
-        }
+        onLongClick = { app, anchor -> showAppMenu(app, anchor) },
+        scope = scope,
+        appManager = appManager,
     )
 
     init {
@@ -67,13 +69,16 @@ class CarAppDrawerHost(
     }
 
     private fun setupViews() {
-        val grid = GridLayoutManager(context, 2)
-        recyclerView?.layoutManager = grid
-        recyclerView?.addOnLayoutChangeListener { view, l, _, r, _, _, _, _, _ ->
-            val usable = r - l - view.paddingLeft - view.paddingRight
-            val columns = (usable / (88 * context.resources.displayMetrics.density)).toInt().coerceIn(2, 8)
-            if (grid.spanCount != columns) grid.spanCount = columns
+        val grid = object : GridLayoutManager(context, 2) {
+            override fun onMeasure(recycler: RecyclerView.Recycler, state: RecyclerView.State,
+                widthSpec: Int, heightSpec: Int) {
+                val usable = View.MeasureSpec.getSize(widthSpec) - paddingLeft - paddingRight
+                val columns = drawerColumns(usable, context.resources.displayMetrics.density)
+                if (spanCount != columns) spanCount = columns
+                super.onMeasure(recycler, state, widthSpec, heightSpec)
+            }
         }
+        recyclerView?.layoutManager = grid
         recyclerView?.adapter = adapter
 
         btnClose?.setOnClickListener {
@@ -90,15 +95,44 @@ class CarAppDrawerHost(
     }
 
     private fun uygulamalariYukle() {
-        loadingProgress?.visibility = View.VISIBLE
-        scope.launch {
-            val appManager = CarAppManager.getInstance(context)
-            val liste = appManager.yukluUygulamalariGetir()
-            tumUygulamalar = liste
-            withContext(Dispatchers.Main) {
+        loadingProgress?.visibility = if (appManager.apps.value == null) View.VISIBLE else View.GONE
+        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            appManager.apps.collect { liste ->
+                if (liste == null) return@collect
+                tumUygulamalar = liste.items
                 loadingProgress?.visibility = View.GONE
                 filtrele(searchInput?.text?.toString().orEmpty())
             }
+        }
+    }
+
+    private fun showAppMenu(app: AracUygulamasi, anchor: View) {
+        VelaPopupMenu(context, anchor).apply {
+            menu.add(0, 1, 0, R.string.car_app_add_dock)
+            if (!app.paketAdi.startsWith("internal://")) {
+                menu.add(0, 4, 1, R.string.car_app_dock_split)
+                menu.add(0, 5, 2, R.string.car_app_dock_freeform).isEnabled = appManager.supportsFreeform()
+                menu.add(0, 2, 1, R.string.car_app_info)
+                menu.add(0, 3, 2, R.string.car_app_uninstall)
+            }
+            setOnMenuItemClickListener { item ->
+                if (item.itemId == 1 || item.itemId == 4 || item.itemId == 5) {
+                    val mode = when (item.itemId) {
+                        4 -> LaunchMode.SPLIT_SCREEN
+                        5 -> LaunchMode.OVERLAY
+                        else -> LaunchMode.FULL_SCREEN
+                    }
+                    val manager = AppDockManager.getInstance(context)
+                    if (!manager.kisayolEkle(app.paketAdi, mode)) manager.setLaunchMode(app.paketAdi, mode)
+                    Toast.makeText(context, R.string.car_app_mode_saved, Toast.LENGTH_SHORT).show()
+                } else {
+                    val action = if (item.itemId == 2) android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS else android.content.Intent.ACTION_DELETE
+                    runCatching { context.startActivity(android.content.Intent(action, android.net.Uri.parse("package:${app.paketAdi}")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                        .onFailure { Toast.makeText(context, R.string.car_app_launch_failed, Toast.LENGTH_SHORT).show() }
+                }
+                true
+            }
+            show()
         }
     }
 
@@ -114,12 +148,15 @@ class CarAppDrawerHost(
 
     private class DrawerAppAdapter(
         private val onItemClick: (AracUygulamasi) -> Unit,
-        private val onLongClick: (AracUygulamasi) -> Unit
+        private val onLongClick: (AracUygulamasi, View) -> Unit,
+        private val scope: CoroutineScope,
+        private val appManager: CarAppManager,
     ) : RecyclerView.Adapter<DrawerAppAdapter.ViewHolder>() {
 
         private val items = mutableListOf<AracUygulamasi>()
 
         fun guncelle(yeniListe: List<AracUygulamasi>) {
+            if (items == yeniListe) return
             items.clear()
             items.addAll(yeniListe)
             notifyDataSetChanged()
@@ -132,21 +169,45 @@ class CarAppDrawerHost(
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val item = items[position]
-            holder.bind(item, onItemClick)
-            holder.itemView.setOnLongClickListener { onLongClick(item); true }
+            val cached = item.ikon ?: appManager.peekIcon(item.paketAdi)
+            holder.bind(item, cached, onItemClick)
+            holder.iconJob?.cancel()
+            holder.iconJob = null
+            if (cached == null) holder.iconJob = scope.launch {
+                val icon = appManager.loadIcon(item.paketAdi)
+                if (holder.boundPackage == item.paketAdi && icon != null) holder.setIcon(icon)
+            }
+            holder.itemView.setOnLongClickListener { onLongClick(item, it); true }
+        }
+
+        override fun onViewRecycled(holder: ViewHolder) {
+            holder.iconJob?.cancel()
+            holder.boundPackage = null
+            holder.hasIcon = false
+            super.onViewRecycled(holder)
         }
 
         override fun getItemCount(): Int = items.size
 
         class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            var iconJob: Job? = null
+            var boundPackage: String? = null
+            var hasIcon = false
             private val appIcon: ImageView? = itemView.findViewById(R.id.app_icon)
             private val appLabel: TextView? = itemView.findViewById(R.id.app_label)
 
-            fun bind(app: AracUygulamasi, onClick: (AracUygulamasi) -> Unit) {
+            fun bind(app: AracUygulamasi, icon: android.graphics.drawable.Drawable?, onClick: (AracUygulamasi) -> Unit) {
+                val samePackage = boundPackage == app.paketAdi
+                boundPackage = app.paketAdi
                 appLabel?.text = app.ad
-                appIcon?.setImageDrawable(app.ikon)
+                if (icon != null) setIcon(icon)
+                else if (!samePackage || !hasIcon) {
+                    hasIcon = false
+                    appIcon?.setImageResource(android.R.drawable.sym_def_app_icon)
+                }
                 itemView.setOnClickListener { onClick(app) }
             }
+            fun setIcon(icon: android.graphics.drawable.Drawable) { hasIcon = true; appIcon?.setImageDrawable(icon) }
         }
     }
 }

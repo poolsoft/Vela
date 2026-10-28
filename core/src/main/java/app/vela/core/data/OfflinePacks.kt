@@ -17,16 +17,21 @@ import android.database.sqlite.SQLiteDatabase
 object OfflinePacks {
     @Volatile private var open: List<SQLiteDatabase> = emptyList()
 
+    @Volatile var failures: Map<String, String> = emptyMap()
+        private set
+
     /** The open pack databases, for the stores to query. */
     val dbs: List<SQLiteDatabase> get() = open
 
     /** (Re)open the packs at [paths]; anything unreadable is skipped. Call after install/delete. */
     fun reload(paths: List<String>) {
+        val errors = linkedMapOf<String, String>()
         val fresh = paths.mapNotNull { p ->
             runCatching {
                 SQLiteDatabase.openDatabase(p, null, SQLiteDatabase.OPEN_READONLY)
-            }.getOrNull()
+            }.onFailure { errors[p] = it.message ?: it.javaClass.simpleName }.getOrNull()
         }
+        failures = errors
         val old = open
         open = fresh
         // Close the handles we replaced (not the ones we just opened for the same path — openDatabase

@@ -128,6 +128,17 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
+        <ImageView
+            android:id="@+id/music_source_icon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginTop="8dp"
+            android:scaleType="fitCenter"
+            android:visibility="gone"
+            android:importantForAccessibility="yes"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
         <!-- Mini Album Cover inside panel -->
         <ImageView
             android:id="@+id/music_mini_art"
@@ -147,8 +158,11 @@
         <!-- Track Title -->
         <app.vela.carlauncher.widgets.InterlockingClockView
             android:id="@+id/music_panel_clock"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
             android:layout_width="0dp"
-            android:layout_height="56dp"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
             android:layout_marginTop="0dp"
             android:text="00:00"
             android:textColor="#FFFFFF"
@@ -160,6 +174,22 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
+
+        <!-- Date Subtitle (Resimdeki gibi tarih gosterimi) -->
+        <TextView
+            android:id="@+id/music_panel_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="0dp"
+            android:gravity="center"
+            android:text="20/10 Sal"
+            android:textColor="#DDFFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/music_panel_clock" />
 
         <!-- Track Title -->
         <TextView
@@ -176,7 +206,7 @@
             android:maxLines="1"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/music_panel_clock"/>
+            app:layout_constraintTop_toBottomOf="@id/music_panel_date"/>
 
         <!-- Artist -->
         <TextView
@@ -203,7 +233,22 @@
             app:layout_constraintTop_toBottomOf="@id/music_track_artist"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintBottom_toTopOf="@id/music_controls"/>
+            app:layout_constraintBottom_toTopOf="@id/music_progress"/>
+
+        <ProgressBar
+            android:id="@+id/music_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="3dp"
+            android:layout_marginBottom="8dp"
+            android:max="1000"
+            android:indeterminate="false"
+            android:progressTint="#3FD9CA"
+            android:progressBackgroundTint="#33FFFFFF"
+            android:importantForAccessibility="no"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/music_controls" />
 
         <!-- Controls -->
         <LinearLayout
@@ -224,7 +269,7 @@
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_previous"
+                android:src="@drawable/ic_music_prev"
                 android:padding="8dp"
                 android:scaleType="fitCenter"
                 app:tint="#FFFFFF" />
@@ -246,7 +291,7 @@
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:src="@android:drawable/ic_media_next"
+                android:src="@drawable/ic_music_next"
                 android:padding="8dp"
                 android:scaleType="fitCenter"
                 app:tint="#FFFFFF" />

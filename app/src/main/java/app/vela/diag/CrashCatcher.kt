@@ -75,16 +75,32 @@ object CrashCatcher {
         val suffix = ProcessIdentity.fileSuffix(context)
         val name = "crash-${System.currentTimeMillis()}${suffix}-${System.nanoTime()}.txt"
         val report = "Diagnostic type: $kind\n$text"
-        File(dir(context), name).writeText(report)
+        writeCompleteReport(File(dir(context), name), report)
         runCatching {
             val extLogsDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "logs").apply { mkdirs() }
-            File(extLogsDir, name).writeText(report)
+            writeCompleteReport(File(extLogsDir, name), report)
             extLogsDir.listFiles { f -> f.name.startsWith("crash-") &&
-                (if (suffix.isEmpty()) !f.name.contains("-map_renderer") else f.name.contains("$suffix-")) }?.sortedByDescending { it.name }
+                (if (suffix.isEmpty()) f.name.matches(Regex("crash-\\d+-\\d+\\.txt")) else f.name.contains("$suffix-")) }?.sortedByDescending { it.name }
                 ?.drop(5)?.forEach { it.delete() }
             FileLogger.i("CrashCatcher", "Diagnostic report saved: $kind ($name)")
         }
         prune(context)
+    }
+
+    /** Publish only fully-written reports; a kill during writing must not leave an empty .txt. */
+    private fun writeCompleteReport(target: File, text: String) {
+        val pending = File(target.parentFile, ".pending-${target.name}")
+        try {
+            java.io.FileOutputStream(pending).use { output ->
+                output.write(text.toByteArray(Charsets.UTF_8))
+                output.flush()
+                output.fd.sync()
+            }
+            check(pending.renameTo(target)) { "Cannot publish diagnostic report: ${target.name}" }
+        } finally { pending.delete() }
+        target.parentFile?.listFiles { file ->
+            file.name.startsWith(".pending-crash-") && System.currentTimeMillis() - file.lastModified() > 86_400_000L
+        }?.forEach { it.delete() }
     }
 
     /** Keep only the few most recent reports so this can't grow unbounded. */

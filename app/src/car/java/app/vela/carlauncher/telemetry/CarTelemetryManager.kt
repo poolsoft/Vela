@@ -54,16 +54,19 @@ class CarTelemetryManager private constructor(private val context: Context) {
                 val gecenSaniye = (simdi - surusBaslangicZamaniMs) / 1000L
 
                 // GPS verisi 3 saniyeden eskiyse hizi sifirla
+                val guncel = _telemetriDurumu.value
                 val sonHiz = if (simdi - sonKonumZamaniMs > 3000L && sonKonumZamaniMs > 0L) {
                     0
                 } else {
-                    _telemetriDurumu.value.anlikHizKmh
+                    guncel.anlikHizKmh
                 }
 
-                _telemetriDurumu.value = _telemetriDurumu.value.copy(
-                    anlikHizKmh = sonHiz,
-                    surusSuresiSaniye = gecenSaniye
-                )
+                if (guncel.anlikHizKmh != sonHiz || guncel.surusSuresiSaniye != gecenSaniye) {
+                    _telemetriDurumu.value = guncel.copy(
+                        anlikHizKmh = sonHiz,
+                        surusSuresiSaniye = gecenSaniye
+                    )
+                }
             }
         }
     }
@@ -99,14 +102,28 @@ class CarTelemetryManager private constructor(private val context: Context) {
             0
         }
 
+        val yuvarlanmisIrtifa = irtifaMetre.roundToInt().toDouble()
+        val yuvarlanmisPusula = pusulaYonu.roundToInt().toFloat()
+
+        val guncel = _telemetriDurumu.value
+        if (guncel.anlikHizKmh == anlikKmh &&
+            guncel.hizSiniriKmh == limitKmh &&
+            guncel.hizSiniriAsildiMi == asildiMi &&
+            guncel.ortalamaHizKmh == ortalamaHiz &&
+            guncel.irtifaMetre == yuvarlanmisIrtifa &&
+            guncel.pusulaYonu == yuvarlanmisPusula
+        ) {
+            return
+        }
+
         _telemetriDurumu.value = HizTelemetrisi(
             anlikHizKmh = anlikKmh,
             hizSiniriKmh = limitKmh,
             hizSiniriAsildiMi = asildiMi,
             ortalamaHizKmh = ortalamaHiz,
-            surusSuresiSaniye = _telemetriDurumu.value.surusSuresiSaniye,
-            irtifaMetre = irtifaMetre,
-            pusulaYonu = pusulaYonu
+            surusSuresiSaniye = guncel.surusSuresiSaniye,
+            irtifaMetre = yuvarlanmisIrtifa,
+            pusulaYonu = yuvarlanmisPusula
         )
     }
 
@@ -130,7 +147,15 @@ class CarTelemetryManager private constructor(private val context: Context) {
             0
         }
 
-        _telemetriDurumu.value = _telemetriDurumu.value.copy(
+        val guncel = _telemetriDurumu.value
+        if (guncel.anlikHizKmh == anlikKmh &&
+            guncel.hizSiniriAsildiMi == asildiMi &&
+            guncel.ortalamaHizKmh == ortalamaHiz
+        ) {
+            return
+        }
+
+        _telemetriDurumu.value = guncel.copy(
             anlikHizKmh = anlikKmh,
             hizSiniriAsildiMi = asildiMi,
             ortalamaHizKmh = ortalamaHiz

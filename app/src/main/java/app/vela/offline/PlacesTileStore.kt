@@ -107,7 +107,7 @@ class BasemapTileStore @Inject constructor(
         var unreadable = false
         for ((_, f) in covering) {
             when (coverage(f, tx, ty)) {
-                true -> if (ringCovered(f, tx, ty) && cornersCovered(f, view)) return f
+                true -> if (keepMounted || (ringCovered(f, tx, ty) && cornersCovered(f, view))) return f
                 null -> unreadable = true
                 false -> Unit
             }
@@ -277,6 +277,8 @@ abstract class PmtilesRegionStore(
         // A missing or unreachable manifest is remembered for a while: this runs on every camera
         // idle, and without the memo each pan retried the fetch.
         if (SystemClock.elapsedRealtime() - lastMissMs < MISS_MEMO_MS) return emptyList()
+        // Offline-only: serve the memo if a catalog was already fetched this process, else nothing.
+        if (!app.vela.ui.OfflineMode.networkAllowed) return cached.orEmpty()
         val fetched = withContext(Dispatchers.IO) {
             val urls = if (folderName == "basemap") {
                 OfflineServerConfig.getBasemapManifestUrls(context)
@@ -329,6 +331,7 @@ abstract class PmtilesRegionStore(
      *  is renamed over the old one only when complete and verified, so a failed or canceled update
      *  leaves the region as it was (the Update button used to delete first, 2026-09-22). */
     suspend fun download(region: Region, replace: Boolean = false, onProgress: (Int) -> Unit): Boolean = withContext(Dispatchers.IO) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext false
         downloadMutex.withLock {
             if (!replace && fileFor(region.id).exists()) { onProgress(100); return@withLock true }
             root.mkdirs()
@@ -505,12 +508,12 @@ abstract class PmtilesRegionStore(
 
     private fun writeDead(id: String, bytes: Long) {
         root.mkdirs()
-        File(root, "dead.json").writeText(readDead().put(id, bytes).toString())
+        File(root, "dead.json").writeAtomicText(readDead().put(id, bytes).toString())
     }
 
     private fun writeRev(id: String, rev: Int) {
         root.mkdirs()
-        File(root, "revs.json").writeText(readRevs().put(id, rev).toString())
+        File(root, "revs.json").writeAtomicText(readRevs().put(id, rev).toString())
     }
 
     /** Installed archives whose bbox center falls inside [s],[w],[n],[e]: the ones that belong to
@@ -533,7 +536,7 @@ abstract class PmtilesRegionStore(
         root.mkdirs()
         val arr = JSONArray()
         index.forEach { (id, b) -> arr.put(JSONObject().put("id", id).put("bbox", JSONArray(b.toList()))) }
-        indexFile.writeText(arr.toString())
+        indexFile.writeAtomicText(arr.toString())
     }
 
     private companion object {

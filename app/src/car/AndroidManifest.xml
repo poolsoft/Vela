@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BIND_APPWIDGET" tools:ignore="ProtectedPermissions" />
@@ -23,7 +24,14 @@
             <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
         </intent>
     </queries>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <application>
+        <service android:name="app.vela.carlauncher.diag.DiagnosticService"
+            android:process=":diagnostics" android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local diagnostic recording during user-initiated launcher testing" />
+        </service>
         <!-- Native map rendering is always outside the launcher process. -->
         <service android:name="app.vela.carlauncher.map.MapRendererService"
             android:process=":map_renderer" android:exported="false" />
@@ -37,18 +45,24 @@
         <!-- All launcher aliases and the media notification reuse the same task. -->
         <activity android:name=".MainActivity"
             android:launchMode="singleTask"
-            tools:replace="android:launchMode" />
-        <activity-alias
-            android:name=".CarHome"
-            android:targetActivity=".MainActivity"
-            android:label="@string/car_settings_hub"
-            android:exported="true">
+            android:supportsPictureInPicture="false"
+            tools:replace="android:launchMode,android:supportsPictureInPicture">
+        </activity>
+        <activity android:name="app.vela.carlauncher.ui.CarLauncherEntryActivity"
+            android:exported="true" android:excludeFromRecents="true" android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </activity-alias>
+        </activity>
+        <activity-alias android:name=".Launcher"
+            android:targetActivity="app.vela.carlauncher.ui.CarLauncherEntryActivity"
+            tools:replace="android:targetActivity" />
+        <activity-alias android:name=".LauncherMaps"
+            android:targetActivity="app.vela.carlauncher.ui.CarLauncherEntryActivity"
+            tools:replace="android:targetActivity" />
         <service
             android:name="app.vela.carlauncher.media.MediaNotificationListener"
             android:label="@string/app_name"

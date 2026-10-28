@@ -24,7 +24,7 @@ object GlyphPackStore {
     private const val PACK_URL = "https://github.com/PimpinPumpkin/Vela/releases/download/map-fonts/map-fonts.zip"
     private val mutex = Mutex()
 
-    private fun glyphRoot(context: Context) = File(context.filesDir, "glyphs")
+    private fun glyphRoot(context: Context) = File(context.filesDir, "glyphs").also { recoverGlyphDirectory(it) }
     private fun spriteRoot(context: Context) = File(context.filesDir, "sprites")
 
     /** The bundled Liberty asset asks for Roboto stacks; the pack (and the live style) carry the
@@ -36,26 +36,43 @@ object GlyphPackStore {
         else -> font
     }
 
-    fun installed(context: Context): Boolean = File(glyphRoot(context), "Noto Sans Regular/0-255.pbf").isFile
+    fun installed(context: Context): Boolean = missingRequiredFiles(context).isEmpty()
+
+    /** Latin and Latin Extended cover Turkish labels; check all stacks used by Liberty. */
+    fun missingRequiredFiles(context: Context): List<String> = missingRequiredFiles(glyphRoot(context))
+    private fun missingRequiredFiles(root: File): List<String> = buildList {
+        for (stack in listOf("Noto Sans Regular", "Noto Sans Italic", "Noto Sans Bold")) {
+            for (range in listOf("0-255", "256-511")) {
+                val path = "$stack/$range.pbf"
+                if (File(root, path).let { !it.isFile || it.length() == 0L }) add(path)
+            }
+        }
+    }
+
+    fun localGlyphUrl(context: Context) = "file://${glyphRoot(context).absolutePath}/{fontstack}/{range}.pbf"
 
     /** The style `glyphs` template for the installed pack, or null when it is not on disk. */
     fun glyphUrl(context: Context): String? =
-        if (installed(context)) "file://${glyphRoot(context).absolutePath}/{fontstack}/{range}.pbf" else null
+        if (installed(context)) localGlyphUrl(context) else null
 
     /** The style `sprite` base for the copied sprite, or null if the copy failed. */
     fun spriteUrl(context: Context): String? {
         ensureSprite(context)
-        return if (File(spriteRoot(context), "ofm.json").isFile) "file://${spriteRoot(context).absolutePath}/ofm" else null
+        val required = listOf("ofm.json", "ofm.png", "ofm@2x.json", "ofm@2x.png")
+        return if (required.all { File(spriteRoot(context), it).let { f -> f.isFile && f.length() > 0L } })
+            "file://${spriteRoot(context).absolutePath}/ofm" else null
     }
 
     /** Copy the bundled sprite (OpenFreeMap's, 4 files, ~230 KB) into files/ once. */
     fun ensureSprite(context: Context) {
         val root = spriteRoot(context)
-        if (File(root, "ofm@2x.png").isFile) return
+        if (listOf("ofm.json", "ofm.png", "ofm@2x.json", "ofm@2x.png").all {
+                File(root, it).let { f -> f.isFile && f.length() > 0L }
+            }) return
         runCatching {
             root.mkdirs()
             for (name in listOf("ofm.json", "ofm.png", "ofm@2x.json", "ofm@2x.png")) {
-                context.assets.open("sprites/$name").use { input -> File(root, name).outputStream().use { input.copyTo(it) } }
+                context.assets.open("sprites/$name").use { input -> File(root, name).writeAtomically { input.copyTo(it) } }
             }
         }
     }
@@ -63,7 +80,11 @@ object GlyphPackStore {
     /** Download and unzip the glyph pack if it is not installed. True when installed afterwards. */
     suspend fun ensureInstalled(context: Context, http: OkHttpClient): Boolean = withContext(Dispatchers.IO) {
         mutex.withLock {
-            if (installed(context)) return@withLock true
+            if (installed(context)) {
+                File(context.filesDir, "glyphs.previous").deleteRecursively()
+                return@withLock true
+            }
+            if (!app.vela.ui.OfflineMode.networkAllowed) return@withLock false
             val root = glyphRoot(context)
             val tmp = File(context.cacheDir, "map-fonts.zip.tmp")
             val client = http.newBuilder().callTimeout(0, java.util.concurrent.TimeUnit.SECONDS).readTimeout(60, java.util.concurrent.TimeUnit.SECONDS).build()
@@ -72,7 +93,7 @@ object GlyphPackStore {
                     if (!resp.isSuccessful) error("HTTP ${resp.code}")
                     resp.body!!.byteStream().use { input -> tmp.outputStream().use { input.copyTo(it) } }
                 }
-                val staging = File(context.cacheDir, "glyphs-staging").apply { deleteRecursively(); mkdirs() }
+                val staging = File(context.filesDir, "glyphs-staging").apply { deleteRecursively(); mkdirs() }
                 ZipInputStream(tmp.inputStream().buffered()).use { zip ->
                     while (true) {
                         val e = zip.nextEntry ?: break
@@ -81,14 +102,15 @@ object GlyphPackStore {
                         val parts = e.name.split('/').filter { it.isNotBlank() }
                         if (parts.size < 2) { zip.closeEntry(); continue }
                         val out = File(staging, "${parts[parts.size - 2]}/${parts.last()}")
+                        check(out.canonicalPath.startsWith(staging.canonicalPath + File.separator)) { "Invalid glyph path" }
                         out.parentFile?.mkdirs()
                         out.outputStream().use { zip.copyTo(it) }
                         zip.closeEntry()
                     }
                 }
-                check(File(staging, "Noto Sans Regular/0-255.pbf").isFile) { "pack has no Noto Sans Regular" }
-                root.deleteRecursively()
-                check(staging.renameTo(root)) { "rename failed" }
+                val missing = missingRequiredFiles(staging)
+                check(missing.isEmpty()) { "Incomplete glyph pack: $missing" }
+                installGlyphDirectory(staging, root)
                 tmp.delete()
                 android.util.Log.i("VelaBasemap", "glyph pack installed")
                 true
@@ -97,6 +119,7 @@ object GlyphPackStore {
     }
 
     fun delete(context: Context) {
+        File(context.filesDir, "glyphs.previous").deleteRecursively()
         glyphRoot(context).deleteRecursively()
     }
 }

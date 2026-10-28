@@ -19,6 +19,11 @@ import org.json.JSONArray
 import java.io.File
 import java.io.RandomAccessFile
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
+import net.osmand.router.RouteCalculationProgress
 
 /**
  * On-device routing from OsmAnd `.obf` region files - the successor to [GraphHopperRouteEngine]
@@ -29,18 +34,10 @@ import java.util.concurrent.ConcurrentHashMap
  * routes DYNAMICALLY from attributes in the file - so avoid-tolls / avoid-motorways work offline
  * with no precomputed profiles, and bicycle/pedestrian come free from the same file.
  *
- * [obfRoot] holds `<regionId>.obf` files plus an `index.json` (`[{id, bbox:[S,W,N,E]}]`) written by
- * the app-side store on install; per trip the engine picks the smallest region covering BOTH
- * endpoints, same rule as GraphHopper (an obf routes only within itself; cross-region falls back
- * online). Readers are opened once per region and cached; the actual route calc is serialized on
- * one lock - the routing context is single-use and offline routing is one-at-a-time in practice.
- *
- * The trade against GraphHopper CH is calc time: no precomputed shortcuts, so a cross-city route
- * costs seconds instead of ~200 ms. Offline is Vela's FALLBACK router (online OSRM is primary), so
- * download size wins over calc speed here (user call, 2026-07-23). OsmAnd's HH precomputed mode is
- * a prerequisite for long offline routes, not an optimization: without it a long route can exceed
- * [MEMORY_MB] and fail outright, so until the bake generates HH, offline obf routing is a
- * city/metro feature.
+ * Installed region readers are cached and route searches are serialized. New requests cancel
+ * older searches through RouteCalculationProgress; memory and deadline guards apply inside the
+ * blocking engine. Car routes use HH when present and the base-road two-phase path when present.
+ * Files without either hierarchy keep the bounded classic fallback and may not finish long trips.
  */
 class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
 
@@ -50,7 +47,8 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
 
     private val readers = ConcurrentHashMap<String, BinaryMapIndexReader>()
     private val failed = ConcurrentHashMap.newKeySet<String>()
-    private val routeLock = Any()
+    private val routeLock = ReentrantLock()
+    private val activeRequest = AtomicReference<RouteControl?>()
 
     init {
         // OsmAnd logs through commons-logging, whose runtime DISCOVERY NPEs on Android (it probes
@@ -65,13 +63,53 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
         // EROFS killed every route. Pre-seed the holder with the no-file constructor and keep the
         // feature off so the empty index is never consulted.
         RoutePlannerFrontEnd.CALCULATE_MISSING_MAPS = false
-        runCatching { net.osmand.PlatformUtil.setOsmandRegions(net.osmand.map.OsmandRegions(false)) }
+        runCatching {
+            net.osmand.PlatformUtil.setOsmandRegions(object : net.osmand.map.OsmandRegions(false) {
+                // HH asks for downloadable-region hints even with missing-map suggestions disabled.
+                // Installed reader coverage is checked by this adapter; no world-regions file is needed.
+                override fun getRegionsToDownload(lat: Double, lon: Double): List<net.osmand.binary.BinaryMapDataObject> = emptyList()
+            })
+        }
     }
 
     override fun isReady(mode: TravelMode): Boolean =
         profileFor(mode) != null && regions().any { it.id !in failed && hasObf(it.id) }
 
     override fun route(origin: LatLng, destination: LatLng, mode: TravelMode, avoidTolls: Boolean, avoidHighways: Boolean, avoidFerries: Boolean, departBearingDeg: Double?): List<Route> {
+        return routeControlled(origin, destination, mode, avoidTolls, avoidHighways,
+            avoidFerries, departBearingDeg, RouteControl())
+    }
+
+    override fun routeControlled(
+        origin: LatLng, destination: LatLng, mode: TravelMode,
+        avoidTolls: Boolean, avoidHighways: Boolean, avoidFerries: Boolean,
+        departBearingDeg: Double?, control: RouteControl,
+    ): List<Route> {
+        if (control.isCanceled) return emptyList()
+        activeRequest.getAndSet(control)?.cancel("superseded")
+        var acquired = false
+        try {
+            while (!control.isCanceled) {
+                if (routeLock.tryLock(100, TimeUnit.MILLISECONDS)) { acquired = true; break }
+            }
+            if (!acquired || control.isCanceled) return emptyList()
+            return routeLocked(origin, destination, mode, avoidTolls, avoidHighways,
+                avoidFerries, departBearingDeg, control)
+        } catch (_: InterruptedException) {
+            control.cancel("interrupted")
+            Thread.currentThread().interrupt()
+            return emptyList()
+        } finally {
+            if (acquired) routeLock.unlock()
+            activeRequest.compareAndSet(control, null)
+        }
+    }
+
+    private fun routeLocked(
+        origin: LatLng, destination: LatLng, mode: TravelMode,
+        avoidTolls: Boolean, avoidHighways: Boolean, avoidFerries: Boolean,
+        departBearingDeg: Double?, control: RouteControl,
+    ): List<Route> {
         val profile = profileFor(mode) ?: return emptyList()
         val all = regions()
         // MULTI-FILE routing (2026-08-03): OsmAnd's router reads across obf files natively - the
@@ -98,6 +136,18 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
             android.util.Log.d(TAG, "route $mode: endpoint outside installed data (origin in=$originIn, destination in=$destIn; origin ${"%.4f".format(origin.lat)},${"%.4f".format(origin.lng)})")
             return emptyList()
         }
+        limitCtx?.unloadAllData()
+        limitCtx = null
+        limitCtxKey = ""
+        val runtime = Runtime.getRuntime()
+        val used = runtime.totalMemory() - runtime.freeMemory()
+        val memoryMb = RoutingHeapBudget.routeMb(runtime.maxMemory(), used)
+        android.util.Log.i(TAG, "route begin heapUsedMb=${used / 1048576} heapMaxMb=${runtime.maxMemory() / 1048576} budgetMb=$memoryMb")
+        if (memoryMb == 0) {
+            control.cancel("insufficient heap headroom")
+            android.util.Log.w(TAG, "route rejected: insufficient heap headroom")
+            return emptyList()
+        }
         val readers = cands.mapNotNull { reader(it) }
         if (readers.isEmpty()) {
             android.util.Log.w(TAG, "route $mode: no readable file among ${cands.map { it.id }} (failed=${failed})")
@@ -106,7 +156,7 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
         run {
             try {
                 val startMs = System.currentTimeMillis()
-                val segments = synchronized(routeLock) {
+                val segments = routeLock.withLock {
                     val params = buildMap {
                         // routing.xml parameter ids - the router excludes matching roads at
                         // calc time, no baked profiles needed (unlike the GraphHopper CH pair).
@@ -118,7 +168,7 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
                     }
                     val config = builder().build(
                         profile,
-                        RoutingConfiguration.RoutingMemoryLimits(MEMORY_MB, NATIVE_MEMORY_MB),
+                        RoutingConfiguration.RoutingMemoryLimits(memoryMb, NATIVE_MEMORY_MB),
                         params,
                     )
                     // A reroute starts the way the car is pointing (issue #557 fallback). OsmAnd's
@@ -127,16 +177,42 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
                     // (checked in the vendored bytecode). A soft preference, not a hard filter.
                     if (departBearingDeg != null) config.initialDirection = departBearingDeg / 180.0 * Math.PI
                     val fe = RoutePlannerFrontEnd()
-                    val ctx = fe.buildRoutingContext(
-                        config, null, readers.toTypedArray(),
-                        RoutePlannerFrontEnd.RouteCalculationMode.NORMAL,
-                    )
-                    fe.searchRoute(ctx, LatLon(origin.lat, origin.lng), LatLon(destination.lat, destination.lng), null)
-                        ?.list.orEmpty()
+                    val hh = mode == TravelMode.DRIVE && readers.any { it.hhRoutingIndexes.isNotEmpty() }
+                    val base = mode == TravelMode.DRIVE && readers.any { r -> r.routingIndexes.any { it.baseSubregions.isNotEmpty() } }
+                    if (hh) { fe.setDefaultHHRoutingConfig(); fe.setHHRouteCpp(false) }
+                    val calculationMode = if (base) RoutePlannerFrontEnd.RouteCalculationMode.COMPLEX
+                        else RoutePlannerFrontEnd.RouteCalculationMode.NORMAL
+                    android.util.Log.i(TAG, "route backend=java hh=$hh base=$base mode=$calculationMode")
+                    val ctx = fe.buildRoutingContext(config, null, readers.toTypedArray(), calculationMode)
+                    val progress = RouteCalculationProgress()
+                    ctx.calculationProgress = progress
+                    control.onCancel = { progress.isCancelled = true }
+                    if (control.isCanceled) progress.isCancelled = true
+                    val watch = routeWatch.scheduleWithFixedDelay({
+                        if (RoutingHeapBudget.pressure(runtime.maxMemory(), runtime.totalMemory() - runtime.freeMemory()))
+                            control.cancel("heap pressure")
+                        if (control.isCanceled) progress.isCancelled = true
+                    }, 0, 100, TimeUnit.MILLISECONDS)
+                    try {
+                        if (control.isCanceled) emptyList() else
+                            fe.searchRoute(ctx, LatLon(origin.lat, origin.lng), LatLon(destination.lat, destination.lng), null)
+                                ?.list.orEmpty().takeUnless { control.isCanceled }.orEmpty()
+                    } finally {
+                        watch.cancel(false)
+                        control.onCancel = null
+                        ctx.unloadAllData()
+                        android.util.Log.i(TAG, "route end reason=${control.reason ?: "complete"} elapsedMs=${System.currentTimeMillis() - startMs} heapUsedMb=${(runtime.totalMemory() - runtime.freeMemory()) / 1048576}")
+                    }
                 }
                 android.util.Log.d(TAG, "route over ${readers.size} file(s): ${segments.size} segments in ${System.currentTimeMillis() - startMs} ms")
                 if (segments.isNotEmpty()) return listOf(toRoute(segments))
+            } catch (_: InterruptedException) {
+                android.util.Log.i(TAG, "route canceled: ${control.reason ?: "engine"}")
+            } catch (_: OutOfMemoryError) {
+                control.cancel("heap allocation failed")
+                android.util.Log.w(TAG, "route exceeded heap reserve")
             } catch (e: Throwable) {
+                control.cancel("engine ${e.javaClass.simpleName}: ${e.message}")
                 // Log loudly; a corrupt file latches failed via reader(). Silent swallowing made
                 // a routing failure un-diagnosable on a release build (canary 2026-07-23).
                 android.util.Log.w(TAG, "route over ${readers.size} file(s) failed", e)
@@ -158,31 +234,36 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
      *  [RouteDataObject.NONE_MAX_SPEED]; a wrong number on an autobahn is worse than a blank).
      *  Forward direction, like the GraphHopper lookup: few ways tag a directional limit. */
     override fun currentRoadLimit(lat: Double, lng: Double): Double? {
-        val p = LatLng(lat, lng)
-        val cands = regions().filter { it.id !in failed && it.covers(p) }.sortedBy { (it.n - it.s) * (it.e - it.w) }
-        if (cands.isEmpty()) return null
-        val readers = cands.mapNotNull { reader(it) }
-        if (readers.isEmpty()) return null
-        return runCatching {
-            synchronized(routeLock) {
-                val key = cands.joinToString(",") { it.id }
-                val ctx = limitCtx?.takeIf { limitCtxKey == key } ?: RoutePlannerFrontEnd().buildRoutingContext(
-                    builder().build(
-                        profileFor(TravelMode.DRIVE)!!,
-                        RoutingConfiguration.RoutingMemoryLimits(LIMIT_MEMORY_MB, NATIVE_MEMORY_MB),
-                        emptyMap(),
-                    ),
-                    null, readers.toTypedArray(), RoutePlannerFrontEnd.RouteCalculationMode.NORMAL,
-                ).also { limitCtx = it; limitCtxKey = key }
-                val seg = RoutePlannerFrontEnd().findRouteSegment(lat, lng, ctx, null) ?: return@synchronized null
-                // distToProj is the SQUARED distance in meters from the point to its projection.
-                if (seg.distToProj > LIMIT_SNAP_M * LIMIT_SNAP_M) return@synchronized null
-                val mps = seg.road.getMaximumSpeed(true)
-                if (mps <= 0f || mps >= RouteDataObject.NONE_MAX_SPEED - 0.5f) return@synchronized null
-                val kmh = mps * 3.6
-                if (kmh < 150.0) kmh else null
-            }
-        }.getOrNull()
+        if (!routeLock.tryLock()) return null
+        try {
+            val p = LatLng(lat, lng)
+            val cands = regions().filter { it.id !in failed && it.covers(p) }.sortedBy { (it.n - it.s) * (it.e - it.w) }
+            if (cands.isEmpty()) return null
+            val readers = cands.mapNotNull { reader(it) }
+            if (readers.isEmpty()) return null
+            val runtime = Runtime.getRuntime()
+            if (RoutingHeapBudget.routeMb(runtime.maxMemory(), runtime.totalMemory() - runtime.freeMemory()) == 0) return null
+            return runCatching {
+                routeLock.withLock {
+                    val key = cands.joinToString(",") { it.id }
+                    val ctx = limitCtx?.takeIf { limitCtxKey == key } ?: RoutePlannerFrontEnd().buildRoutingContext(
+                        builder().build(
+                            profileFor(TravelMode.DRIVE)!!,
+                            RoutingConfiguration.RoutingMemoryLimits(RoutingHeapBudget.lookupMb(Runtime.getRuntime().maxMemory()), NATIVE_MEMORY_MB),
+                            emptyMap(),
+                        ),
+                        null, readers.toTypedArray(), RoutePlannerFrontEnd.RouteCalculationMode.NORMAL,
+                    ).also { limitCtx = it; limitCtxKey = key }
+                    val seg = RoutePlannerFrontEnd().findRouteSegment(lat, lng, ctx, null) ?: return@withLock null
+                    // distToProj is the SQUARED distance in meters from the point to its projection.
+                    if (seg.distToProj > LIMIT_SNAP_M * LIMIT_SNAP_M) return@withLock null
+                    val mps = seg.road.getMaximumSpeed(true)
+                    if (mps <= 0f || mps >= RouteDataObject.NONE_MAX_SPEED - 0.5f) return@withLock null
+                    val kmh = mps * 3.6
+                    if (kmh < 150.0) kmh else null
+                }
+            }.getOrNull()
+        } finally { routeLock.unlock() }
     }
 
     /** What the speed-limit lookup sees at a point, for the on-demand harness: which files cover it,
@@ -194,13 +275,13 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
         val readers = cands.mapNotNull { reader(it) }
         if (readers.isEmpty()) return "no readable file covers the point (regions=${regions().size}, covering=${cands.map { it.id }}, failed=$failed)"
         return try {
-            synchronized(routeLock) {
+            routeLock.withLock {
                 val ctx = RoutePlannerFrontEnd().buildRoutingContext(
-                    builder().build(profileFor(TravelMode.DRIVE)!!, RoutingConfiguration.RoutingMemoryLimits(LIMIT_MEMORY_MB, NATIVE_MEMORY_MB), emptyMap()),
+                    builder().build(profileFor(TravelMode.DRIVE)!!, RoutingConfiguration.RoutingMemoryLimits(RoutingHeapBudget.lookupMb(Runtime.getRuntime().maxMemory()), NATIVE_MEMORY_MB), emptyMap()),
                     null, readers.toTypedArray(), RoutePlannerFrontEnd.RouteCalculationMode.NORMAL,
                 )
                 val seg = RoutePlannerFrontEnd().findRouteSegment(lat, lng, ctx, null)
-                    ?: return@synchronized "no road segment found near the point"
+                    ?: return@withLock "no road segment found near the point"
                 val r = seg.road
                 "road=${r.getName()} highway=${r.getHighway()} distToProj=${"%.1f".format(seg.distToProj)} m^2 " +
                     "maxspeed fwd=${r.getMaximumSpeed(true)} m/s back=${r.getMaximumSpeed(false)} m/s"
@@ -212,7 +293,9 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
 
     /** Drop cached readers (after an install/delete changes the set). */
     fun shutdown() {
-        synchronized(routeLock) {
+        activeRequest.get()?.cancel("data changed")
+        routeLock.withLock {
+            limitCtx?.unloadAllData()
             limitCtx = null
             limitCtxKey = ""
             readers.values.forEach { runCatching { it.close() } }
@@ -237,7 +320,7 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
     private fun reader(region: Region): BinaryMapIndexReader? {
         readers[region.id]?.let { return it }
         if (region.id in failed) return null
-        synchronized(routeLock) {
+        routeLock.withLock {
             readers[region.id]?.let { return it }
             val f = File(obfRoot, "${region.id}.obf")
             if (!f.exists()) return null
@@ -370,15 +453,13 @@ class ObfRouteEngine(private val obfRoot: File) : RouteEngine {
             return if (hasLatinLetter && noForeignLetter) v else null
         }
         const val LIMIT_SNAP_M = 25.0 // a fix farther than this from any road is off the network (a lot, a driveway)
-        const val LIMIT_MEMORY_MB = 32 // the lookup context only ever holds the tiles around the puck
         private const val TAG = "VelaObf"
         private const val JCL_LOG_PROP = "org.apache.commons.logging.Log"
 
-        // Route-calc heap budget passed to the OsmAnd router. Modest on purpose: the browse map
-        // already runs near the ceiling (CLAUDE.md memory rules) and the router allocates within
-        // this bound, spilling to more tile loads instead of OOMing.
-        private const val MEMORY_MB = 256
-        private const val NATIVE_MEMORY_MB = 64
+        private val routeWatch = java.util.concurrent.ScheduledThreadPoolExecutor(1) { task ->
+            Thread(task, "VelaRouteWatch").apply { isDaemon = true }
+        }.apply { removeOnCancelPolicy = true }
+        private const val NATIVE_MEMORY_MB = 16
 
         // routing.xml profile names.
         private fun profileFor(mode: TravelMode): String? = when (mode) {

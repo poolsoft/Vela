@@ -49,34 +49,59 @@ data class RoutingRegion(
 class RegionCatalog @Inject constructor(
     @ApplicationContext private val context: Context,
     private val http: OkHttpClient,
+    private val obfStore: ObfStore,
+    private val basemapStore: BasemapTileStore,
+    private val poiPackStore: PoiPackStore,
 ) {
-    suspend fun manifest(manifestUrl: String = app.vela.BuildConfig.OBF_MANIFEST_URL): List<RoutingRegion> = withContext(Dispatchers.IO) {
-        val urls = OfflineServerConfig.getObfManifestUrls(context)
-        val allRegions = ArrayList<RoutingRegion>()
-        for (url in urls) {
-            allRegions.addAll(fetchManifestFromUrl(url))
+    /** Always available, including a fresh restore with no cached server catalog. Call off the UI thread. */
+    fun installedRegions(): List<RoutingRegion> {
+        val bounds = obfStore.installedBounds()
+        val ids = bounds.keys + basemapStore.installedIds() + poiPackStore.installedIds()
+        val cached = OfflineServerConfig.getObfManifestUrls(context).flatMap { url ->
+            runCatching { parseManifest(cacheFile(url).readText()) }.getOrDefault(emptyList())
         }
-        if (allRegions.isEmpty() && manifestUrl !in urls) {
-            allRegions.addAll(fetchManifestFromUrl(manifestUrl))
-        }
-        allRegions.distinctBy { it.id }
+        return mergeInstalledRegions(cached, ids.associateWith { bounds[it] ?: doubleArrayOf(0.0, 0.0, 0.0, 0.0) })
+            .filter { it.id in ids }
     }
 
-    private fun fetchManifestFromUrl(url: String): List<RoutingRegion> {
-        return runCatching {
-            val json = http.newCall(Request.Builder().url(url).build()).execute()
-                .use { r -> if (!r.isSuccessful) error("HTTP ${r.code}"); r.body!!.string() }
-            val arr = JSONObject(json).getJSONArray("regions")
-            (0 until arr.length()).map { i ->
-                val o = arr.getJSONObject(i)
-                val b = o.getJSONArray("bbox") // [S, W, N, E]
-                RoutingRegion(
-                    o.getString("id"), o.getString("name"), o.getString("url"), o.optInt("sizeMb"),
-                    b.getDouble(0), b.getDouble(1), b.getDouble(2), b.getDouble(3),
-                    installedMb = o.optInt("installedMb"),
-                    rev = o.optInt("rev"),
-                )
-            }
-        }.getOrDefault(emptyList())
+    suspend fun manifest(manifestUrl: String = app.vela.BuildConfig.OBF_MANIFEST_URL): List<RoutingRegion> = withContext(Dispatchers.IO) {
+        val local = installedRegions()
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext local
+        val urls = OfflineServerConfig.getObfManifestUrls(context)
+        val remote = urls.flatMap { fetchManifestFromUrl(it) }.ifEmpty {
+            if (manifestUrl !in urls) fetchManifestFromUrl(manifestUrl) else emptyList()
+        }
+        // A failed fetch never removes installed rows or hides a restored map.
+        (remote + local).distinctBy { it.id }
+    }
+
+    private fun cacheFile(url: String) = java.io.File(context.filesDir,
+        "region_catalog/${java.security.MessageDigest.getInstance("SHA-256").digest(url.toByteArray()).joinToString("") { "%02x".format(it) }}.json")
+
+    private fun fetchManifestFromUrl(url: String): List<RoutingRegion> = runCatching {
+        val json = http.newCall(Request.Builder().url(url).build()).execute()
+            .use { r -> if (!r.isSuccessful) error("HTTP ${r.code}"); r.body!!.string() }
+        val regions = parseManifest(json)
+        runCatching { cacheFile(url).writeAtomicText(json) }
+        regions
+    }.getOrElse { runCatching { parseManifest(cacheFile(url).readText()) }.getOrDefault(emptyList()) }
+}
+
+internal fun parseManifest(json: String): List<RoutingRegion> {
+    val arr = JSONObject(json).getJSONArray("regions")
+    return (0 until arr.length()).map { i ->
+        val o = arr.getJSONObject(i)
+        val b = o.getJSONArray("bbox")
+        RoutingRegion(o.getString("id"), o.getString("name"), o.getString("url"), o.optInt("sizeMb"),
+            b.getDouble(0), b.getDouble(1), b.getDouble(2), b.getDouble(3),
+            installedMb = o.optInt("installedMb"), rev = o.optInt("rev"))
+    }
+}
+
+internal fun mergeInstalledRegions(catalog: List<RoutingRegion>, bounds: Map<String, DoubleArray>): List<RoutingRegion> {
+    val unique = catalog.distinctBy { it.id }
+    val known = unique.mapTo(hashSetOf()) { it.id }
+    return unique + bounds.filterKeys { it !in known }.map { (id, b) ->
+        RoutingRegion(id, id.replace('_', ' ').replace('-', ' '), "", 0, b[0], b[1], b[2], b[3])
     }
 }

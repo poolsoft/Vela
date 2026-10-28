@@ -204,7 +204,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import app.vela.ui.VelaWindowDialog as Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.vela.core.model.AboutSection
 import app.vela.core.model.LatLng
@@ -1349,7 +1349,7 @@ internal fun SaveToListSheet(
 ) {
     var creating by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    app.vela.ui.VelaWindowDialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.padding(vertical = 16.dp).widthIn(max = 420.dp)) {
                 Text(
@@ -1412,7 +1412,7 @@ private fun NoteEditorDialog(
     onDismiss: () -> Unit,
 ) {
     var text by remember { mutableStateOf(initial.orEmpty()) }
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    app.vela.ui.VelaWindowDialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.padding(20.dp).widthIn(max = 420.dp)) {
                 Text(stringResource(R.string.place_edit_note), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -2009,7 +2009,7 @@ private fun PickerDialog(onConfirm: () -> Unit, onDismiss: () -> Unit, content: 
     // Own the width (issue #432): the platform dialog keeps side margins that on a 360 dp phone
     // leave less than the Material date picker's fixed 360 dp, and the last weekday column was
     // clipped off, so Sundays could not be picked. Edge to edge on narrow phones, capped wider.
-    androidx.compose.ui.window.Dialog(
+    app.vela.ui.VelaWindowDialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     ) {

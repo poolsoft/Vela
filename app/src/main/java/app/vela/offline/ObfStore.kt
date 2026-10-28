@@ -39,7 +39,7 @@ class ObfStore @Inject constructor(
 
     fun writeRev(id: String, rev: Int) = synchronized(revsLock) {
         root.mkdirs()
-        File(root, "revs.json").writeText(readRevs().put(id, rev).toString())
+        File(root, "revs.json").writeAtomicText(readRevs().put(id, rev).toString())
     }
     private val indexFile = File(root, "index.json")
     private val indexLock = Any()
@@ -51,6 +51,10 @@ class ObfStore @Inject constructor(
         .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
+    /** Installed routing bounds are local metadata, independent of the download catalog. */
+    fun installedBounds(): Map<String, DoubleArray> =
+        readIndex().filterKeys { File(root, "$it.obf").let { file -> file.isFile && file.length() > 0 } }
+
     fun installedIds(): Set<String> =
         readIndex().keys.filter { File(root, "$it.obf").let { f -> f.exists() && f.length() > 0 } }.toSet()
 
@@ -58,6 +62,7 @@ class ObfStore @Inject constructor(
      *  false mid-stream aborts quietly (the cancel button's hook, same contract as
      *  the old graph download). */
     suspend fun download(region: RoutingRegion, active: () -> Boolean = { true }, onProgress: (Int) -> Unit): Boolean = withContext(Dispatchers.IO) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext false
         root.mkdirs()
         val dest = File(root, "${region.id}.obf")
         val tmp = File(root, "${region.id}.obf.tmp")
@@ -123,6 +128,6 @@ class ObfStore @Inject constructor(
         entries.forEach { (id, b) ->
             arr.put(JSONObject().put("id", id).put("bbox", JSONArray().put(b[0]).put(b[1]).put(b[2]).put(b[3])))
         }
-        indexFile.writeText(arr.toString())
+        indexFile.writeAtomicText(arr.toString())
     }
 }

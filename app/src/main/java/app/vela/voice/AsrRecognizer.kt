@@ -215,7 +215,7 @@ class AsrRecognizer @Inject constructor(
      *  engine is installed (no-op), and safe to call repeatedly - the synchronized loader keeps a
      *  built recognizer for the current engine+language. */
     fun warmUp() {
-        if (!AsrEngine.anyInstalled(context)) return
+        if (!app.vela.BuildConfig.NATIVE_VOICE_ENABLED || !AsrEngine.anyInstalled(context)) return
         // On a low-RAM device the warm-up is a bad trade: it spends ~267 MB at EVERY launch to
         // save ~1 s on a mic tap the user may never make (refreshAsr calls this from VM init plus
         // two LaunchedEffects). Those phones load on first listen instead; roomier devices keep
@@ -239,6 +239,7 @@ class AsrRecognizer @Inject constructor(
      *  installed/usable or the native load fails - callers fall back to the provider intent or hide
      *  the mic. */
     private fun ensureRecognizer(): OfflineRecognizer? {
+        if (!app.vela.BuildConfig.NATIVE_VOICE_ENABLED) return null
         val engine = engineForNow()
         val lang = pinnedLang(engine)
         val key = "${engine.id}|$lang"

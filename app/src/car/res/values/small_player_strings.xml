@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="car_small_clock_color">Clock color</string>
+    <string name="car_small_clock_turquoise">Turquoise</string>
+    <string name="car_small_clock_theme">Theme color</string>
+    <string name="car_small_clock_amber">Amber</string>
+    <string name="car_small_clock_outline">White outline</string>
+    <string name="car_small_visualizer">Visualizer</string>
+    <string name="car_small_clock_transparent">Transparent (outline only)</string>
+    <string name="car_small_clock_embossed">Embossed clock</string>
+    <string name="car_small_clock_white">White</string>
+    <string name="car_small_clock_custom">Custom colors…</string>
+    <string name="car_small_clock_two_colors">Two colors (hours / minutes)</string>
+    <string name="car_small_clock_hours">Hours</string>
+    <string name="car_small_clock_minutes">Minutes</string>
+    <string name="car_small_clock_save">Save</string>
+    <string name="car_small_clock_cancel">Cancel</string>
+    <string name="car_small_clock_soft">Soft pastel (Material You)</string>
+    <string name="car_small_clock_background">Match panel background</string>
+    <string name="car_small_clock_solid_outline">Solid hour / Outline minute</string>
+</resources>

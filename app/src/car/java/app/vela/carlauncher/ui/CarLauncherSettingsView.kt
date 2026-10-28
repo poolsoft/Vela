@@ -32,7 +32,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ViewSidebar
 import androidx.compose.material.icons.filled.Widgets
-import androidx.compose.material3.AlertDialog
+import app.vela.ui.VelaWindowAlertDialog as AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -68,6 +68,7 @@ import app.vela.carlauncher.apps.CarAppManager
 import app.vela.carlauncher.hardware.CarHardwareManager
 import app.vela.carlauncher.media.MediaNotificationListener
 import app.vela.carlauncher.settings.CarLauncherSettings
+import app.vela.carlauncher.tools.LauncherToolsSettings
 import app.vela.ui.AppLocale
 import app.vela.ui.settings.GroupDivider
 import app.vela.ui.settings.SettingsGroup
@@ -85,10 +86,12 @@ import kotlin.math.roundToInt
 private enum class CarSettingsSection {
     HUB,
     APPEARANCE,
+    CLOCK,
     DOCK_PANEL,
     WIDGETS,
     MUSIC,
-    AUTOLAUNCH
+    AUTOLAUNCH,
+    TOOLS
 }
 
 @Composable
@@ -111,7 +114,10 @@ fun CarLauncherSettingsView(
 
     when (section) {
         CarSettingsSection.HUB -> CarSettingsHubScreen(
-            onOpenSection = { section = it },
+            onOpenSection = {
+                if (it == CarSettingsSection.CLOCK) CarLauncherSettings.requestClockSettings()
+                else section = it
+            },
             onBack = onKapat,
             modifier = modifier
         )
@@ -119,6 +125,7 @@ fun CarLauncherSettingsView(
             onBack = { section = CarSettingsSection.HUB },
             modifier = modifier
         )
+        CarSettingsSection.CLOCK -> androidx.compose.runtime.LaunchedEffect(Unit) { CarLauncherSettings.requestClockSettings() }
         CarSettingsSection.DOCK_PANEL -> CarDockPanelSettingsScreen(
             onBack = { section = CarSettingsSection.HUB },
             modifier = modifier
@@ -132,6 +139,10 @@ fun CarLauncherSettingsView(
             modifier = modifier
         )
         CarSettingsSection.AUTOLAUNCH -> CarAutolaunchSettingsScreen(
+            onBack = { section = CarSettingsSection.HUB },
+            modifier = modifier
+        )
+        CarSettingsSection.TOOLS -> CarToolsSettingsScreen(
             onBack = { section = CarSettingsSection.HUB },
             modifier = modifier
         )
@@ -188,6 +199,13 @@ private fun CarSettingsHubScreen(
             )
 
             HubCategoryRow(
+                icon = Icons.Default.Tune,
+                title = stringResource(R.string.car_clock_customize),
+                description = stringResource(R.string.car_clock_settings_hint),
+                onClick = { onOpenSection(CarSettingsSection.CLOCK) }
+            )
+
+            HubCategoryRow(
                 icon = Icons.Default.ViewSidebar,
                 title = "Dock ve Panel Düzeni",
                 description = "Dock konumu, simge boyutları, yan panel genişliği ve genişleme biçimi",
@@ -215,6 +233,12 @@ private fun CarSettingsHubScreen(
                 onClick = { onOpenSection(CarSettingsSection.AUTOLAUNCH) }
             )
 
+            HubCategoryRow(
+                icon = Icons.Default.Backup,
+                title = "Araçlar ve Yedekleme",
+                description = "Seçmeli yedekleme/geri yükleme, başlangıç uygulaması, duvar kâğıdı ve metin ölçeği",
+                onClick = { onOpenSection(CarSettingsSection.TOOLS) }
+            )
             LauncherExitControl()
             Spacer(Modifier.height(16.dp))
         }
@@ -293,6 +317,10 @@ private fun CarAppearanceSettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val mapless by CarLauncherSettings.maplessPreference.collectAsState()
+    val maplessActive by CarLauncherSettings.maplessMode.collectAsState()
+    val maplessMain by CarLauncherSettings.maplessMainScreen.collectAsState()
+    val maplessScreen by CarLauncherSettings.maplessScreen.collectAsState()
     val startupScreen by CarLauncherSettings.baslangicEkrani.collectAsState()
     val tamEkran by CarLauncherSettings.tamEkranModu.collectAsState()
     val durumCubugu by CarLauncherSettings.durumCubuguGoster.collectAsState()
@@ -324,6 +352,33 @@ private fun CarAppearanceSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            SettingsGroup(title = "Haritasız mod") {
+                ToggleRow(
+                    label = "Haritasız çalış",
+                    hint = "Haritasız mod haritayı hemen kapatır. Çekmecedeki veya dock’a eklediğiniz Harita simgesi bu oturum için haritayı açar; başlangıç tercihiniz korunur.",
+                    checked = mapless,
+                    onCheckedChange = { CarLauncherSettings.setMaplessMode(it) }
+                )
+                if (mapless || maplessActive) {
+                    GroupDivider()
+                    ChoicePillRow(
+                        label = "Büyük panel",
+                        detail = "Harita kapalıyken açılacak ana ekran",
+                        selectedKey = maplessMain,
+                        options = listOf("music" to "Müzik player", "speedometer" to "Speedo", "dashboard" to "Dashboard"),
+                        onSelect = { CarLauncherSettings.setMaplessMainScreen(it) }
+                    )
+                    GroupDivider()
+                    ChoicePillRow(
+                        label = "Küçük panel",
+                        detail = "Seçim sonraki açılışta da korunur",
+                        selectedKey = maplessScreen,
+                        options = listOf("speedometer" to "Hız göstergesi (Speedo)", "dashboard" to "Dashboard"),
+                        onSelect = { CarLauncherSettings.setMaplessScreen(it) }
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
             SettingsGroup(title = "Başlangıç ekranı") {
                 ChoicePillRow(
                     label = "Uygulama açılış ekranı",
@@ -344,7 +399,7 @@ private fun CarAppearanceSettingsScreen(
                 GroupDivider()
                 ToggleRow(
                     label = "Durum Çubuğunu (Status Bar) Göster",
-                    hint = "Ekranın en üstünde saat ve sistem bildirim simgelerini görünür kılar",
+                    hint = "Saat ve bildirim simgelerini gösterir; açıldığında tam ekran modunu kapatır",
                     checked = durumCubugu,
                     onCheckedChange = { CarLauncherSettings.setDurumCubuguGoster(it) }
                 )
@@ -655,6 +710,7 @@ private fun CarMusicSettingsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val equalizerPackage by CarLauncherSettings.ekolayzirPaketi.collectAsState()
     val tercihEdilenMuzik by CarLauncherSettings.tercihEdilenMuzikUygulamasi.collectAsState()
     val kucukGorsellestirici by CarLauncherSettings.gorsellestiriciTipi.collectAsState()
     val buyukGorsellestirici by CarLauncherSettings.largeVisualizer.collectAsState()
@@ -754,11 +810,11 @@ private fun CarMusicSettingsScreen(
 
             SettingsGroup(title = "Ses Geliştirme (DSP)") {
                 ActionRow(
-                    label = "Ekolayzır / DSP Ayarlarını Aç",
-                    detail = "Cihazın dahili ses işlemcisi ve ekolayzır panelini başlatır",
-                    actionText = "Aç",
+                    label = "Ekolayzır uygulaması",
+                    detail = equalizerPackage?.let { app.vela.carlauncher.hardware.CarHardwareManager.getInstance(context).equalizerLabel() } ?: "Uygulama seçilmedi",
+                    actionText = "Seç",
                     onClick = {
-                        app.vela.carlauncher.hardware.CarHardwareManager.getInstance(context).openEqualizer(context)
+                        app.vela.carlauncher.hardware.CarHardwareManager.getInstance(context).chooseEqualizer(context)
                     }
                 )
             }
@@ -837,6 +893,39 @@ private fun CarAutolaunchSettingsScreen(
 // ═════════════════════════════════════════════════════════════════════════════
 // 7. GÖRSELLEŞTİRİCİ SEÇİM DİYALOĞU VE BİLEŞENİ
 // ═════════════════════════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CarToolsSettingsScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Araçlar ve Yedekleme") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                    }
+                }
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+        modifier = modifier.fillMaxSize()
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            LauncherToolsSettings()
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
 
 @Composable
 private fun VisualizerSelectorRow(

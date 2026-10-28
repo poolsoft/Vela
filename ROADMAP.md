@@ -492,3 +492,80 @@ the shared hidden-WebView base, `NavController`) are in FEATURES.
   the main regions, used first with FOSSGIS as the fallback, removes the single failure that
   takes routing from every user at once. The nav diagnostics record which router answered, so the
   decision can be made from real drives.
+
+## Car launcher performance follow-up
+
+- Measure remaining cold-start and surface-resize stalls after moving dock package resource loading off the UI thread. Validate on the target head unit when available; emulator results do not establish driver performance there.
+
+- Validate interrupted offline writes and font installation on the target storage hardware; atomic file replacement does not establish durability against every OEM power-loss behavior.
+
+- Verify measured-first dock/drawer layout, shared icon caching, fast cached-music restore and worker-isolated TTS on the target head unit; continue profiling workspace drawing and graphics-driver stalls independently.
+
+- Validate long-distance offline routing and cancellation on the 96 MiB head unit using its installed data. HH/base-road capability and selected engine are now logged; data without hierarchy may still fail within a safe budget. Native Valhalla cancellation remains limited by its external API. Compare slow-map reports with actual requested/effective layer settings; do not silently override user choices.
+
+
+- Validate the automatic render budget on the target head unit, including the 30-second sustained-frame threshold and thermal behavior. Keep existing explicit profiles and custom preferences intact.
+
+
+- Validate cold on-demand map activation on the GLES2 head unit after a mapless boot; verify startup preference and music continuity remain intact.
+
+
+- Validate Android Auto/head-unit takeover followed by floating-button and physical HOME return on the target ROM. Emulator task reuse checks cover HOME, notification-style direct entry and aliases; OEM-specific task and PiP handling still requires hardware validation.
+
+- Revisit a separate, independently owned navigation PiP surface only if required for the car variant; do not put the launcher Activity into the pinned task.
+
+- Validate immediate physical HOME returns while Android app switches are stopped on the target ROM; retained-task redirects now wait for the redirect Activity to resume.
+
+- Confirm window-focused, exact-task HOME redirection on the head unit; do not rely on generic component reuse while a duplicate HOME task exists.
+
+- Validate finish-before-return HOME redirection on the target ROM; the temporary record must be excluded before the retained singleTask owner is resolved.
+
+
+Car launcher HOME entry uses the lightweight CarLauncherEntryActivity forwarder; MainActivity is always a standard singleTask UI with car PiP disabled. Updating from the former MainActivity HOME component can require selecting Vela as the default Home app again. Target head-unit projection takeover remains a device acceptance check.
+
+
+The map search offline indicator uses an accessible icon without a text label. Stopping speech invalidates queued utterances but preserves the system TTS initialization callback; engine binding callbacks are gated by binding generation, not speech cancellation. Head-unit audio output remains a device acceptance check.
+
+
+Downloaded regions are listed from local OBF, basemap and POI inventory before a server catalog request. A validated per-source catalog cache supplies display names when available; a restored region without cache uses its local ID and cannot initiate a download without a catalog URL. Missing network access does not hide installed packages. Target head-unit restore remains an acceptance check.
+
+
+The in-app language picker excludes Hebrew. An existing explicit he or iw preference migrates to English before resource wrapping and navigation localization. Verify the picker and saved-language migration in the next packaged build.
+
+
+Car Smart Focus uses per-source playback edges and explicit app opt-in, with a separate user lock. Bluetooth connection/HFP alone does not qualify as music. Exposed ZLink/Android Auto MediaSessions participate as projection media; undocumented OEM-only playback remains unverified. Pause fallback waits 2 seconds, buffering waits up to 8 seconds, and calls/TTS suspend tracking. Large-player source selection is reused; small panels show external source icons only. Optional READ_PHONE_STATE is requested from the permissions page, never at startup. Verify actual incoming BT, HFP and projection on the target head unit.
+
+
+Smart Focus retains the playback owner separately from a browsed paused source, so Select followed by Play releases only the previous audible or preparing source once. Include this deferred handoff in head-unit acceptance.
+
+Equalizer acceptance remains open for proprietary head-unit DSP activities and their audio-session requirements.
+
+Validate native radio commands and HOME return on the physical head unit. Confirm whether its projection bridge exposes a MediaSession or a documented vendor playback protocol; app foreground and USB connection alone remain insufficient playback evidence.
+
+Validate the flat music-control chooser on the physical head unit, including touch targets, font scaling, radio entries and returning from manual to automatic tracking.
+
+- Verify small-player clock contrast, custom hour/minute colors, embossed edges, adaptive sizing, and source chooser touch targets on physical head units in day and night modes.
+
+- Validate retained-task HOME returns and paused-only radio windows on the API 27 head unit; supplied version 2256 logs also show process loss without an Android exit reason.
+
+- Validate category filtering, empty results, 20 km expansion and Turkish text fit on the API 27 head unit with downloaded POI packs.
+
+- Keep the existing CI translation gate in release validation alongside the Turkish resource audit.
+
+- Validate single-station radio seeking, USB detach/reattach, and source-strip switching on a physical head unit.
+
+- Verify fresh phone restart detection, radio unknown-state behavior and source-lock persistence on the physical head unit.
+
+- Verify player dock icon sizing and the six-control playback row at the physical head-unit split-panel sizes.
+
+- Confirm MediaStore system-sound flags and messaging-folder exclusion on the physical head unit after a manual music rescan.
+
+- Confirm native popup/dialog system-bar behavior on API 26-28 head-unit firmware and with each system-bar preference combination.
+
+## Car head-unit performance verification
+
+- Measure the new cache stage timings on the API-27 head unit, then optimize the measured bottleneck. Emulator timings do not establish head-unit performance.
+- Verify notification access on the head unit before assessing external MediaSession control; this special access requires a user grant.
+- Recheck OEM radio/Home task returns after the popup crash fix; a failed retained-task return alone does not prove a duplicate live launcher.
+
+- Verify real-clock side-panel editing and responsive geometry on the API-27 head unit, especially during repeated slider gestures and in narrow split panels.

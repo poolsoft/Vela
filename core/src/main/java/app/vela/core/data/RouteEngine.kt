@@ -35,6 +35,14 @@ interface RouteEngine {
         departBearingDeg: Double? = null,
     ): List<Route>
 
+    /** Blocking adapter hook. Engines with cooperative cancellation override this method. */
+    fun routeControlled(
+        origin: LatLng, destination: LatLng, mode: TravelMode,
+        avoidTolls: Boolean, avoidHighways: Boolean, avoidFerries: Boolean,
+        departBearingDeg: Double?, control: RouteControl,
+    ): List<Route> = if (control.isCanceled) emptyList() else
+        route(origin, destination, mode, avoidTolls, avoidHighways, avoidFerries, departBearingDeg)
+
     /** The posted speed limit (km/h) of the road nearest ([lat],[lng]), or null if unknown. Only the
      *  on-device engine can answer (from the OSM `maxspeed` in the graph); online engines have no offline
      *  limit data, so the default is null. Call off the main thread. Convert to mph at the UI boundary. */

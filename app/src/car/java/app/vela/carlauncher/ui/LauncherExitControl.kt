@@ -3,7 +3,7 @@ package app.vela.carlauncher.ui
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
+import app.vela.ui.VelaWindowAlertDialog as AlertDialog
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton

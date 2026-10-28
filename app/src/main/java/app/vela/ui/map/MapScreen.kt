@@ -246,10 +246,6 @@ private const val USE_MAPTILER = false
 private val SIDE_PANEL_WIDTH_MIN = 400.dp
 private val SIDE_PANEL_WIDTH_MAX = 520.dp
 
-/** Gap in px between the puck glyph's center and the current-road pill below it (issue #288).
- *  The nav puck bitmap is 202px drawn at ~half that on screen, so this clears its lower edge. */
-private const val PUCK_LABEL_GAP_PX = 62
-
 /** How far the OpenStreetMap credit lifts to clear the free-drive speed box, which sits in the same
  *  bottom-left corner: the box's height plus its 16 dp margin and a couple of dp of air. */
 private val SPEED_BOX_LIFT_DP = 78.dp
@@ -494,7 +490,8 @@ fun MapScreen(
     // Under D-pad the field blurs when focus walks the rows, so `searchExpanded` still carries the
     // overlay there (blur must not close it); BACK clears both and closes as before.
     val gates = SearchGates.of(state, searchExpanded, searchFocused)
-    val searchOpen = gates.searchOpen
+    val mapInputReady = app.vela.variant.CarIntegration.mapInputReady()
+    val searchOpen = mapInputReady && gates.searchOpen && state.categoryId == null
     // The results panel is open (not collapsed to the "N results" pill) → hide the bottom map
     // chrome (scale bar / locate FAB / Search this area) so it never draws on top of the list at
     // ANY size, not just full screen. The panel and the chrome are siblings in the same Box and the
@@ -849,7 +846,10 @@ fun MapScreen(
                         putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, app.vela.ui.AppLocale.effective().toLanguageTag())
                         putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, voicePrompt)
                     }
-                    runCatching { voiceLauncher.launch(intent) }
+                    runCatching { voiceLauncher.launch(intent) }.onFailure {
+                        app.vela.util.FileLogger.e("VoiceSearch", "System recognition launch failed", it)
+                        showAsrOffer = true
+                    }
                 }
                 else -> {
                     showAsrOffer = true
@@ -892,7 +892,10 @@ fun MapScreen(
                         putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, app.vela.ui.AppLocale.effective().toLanguageTag())
                         putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, voicePrompt)
                     }
-                    runCatching { voiceLauncher.launch(intent) }
+                    runCatching { voiceLauncher.launch(intent) }.onFailure {
+                        app.vela.util.FileLogger.e("VoiceSearch", "System recognition launch failed", it)
+                        showAsrOffer = true
+                    }
                 }
                 app.vela.ui.VoiceSearch.Mode.LOCAL -> {
                     if (state.asrInstalledIds.isNotEmpty()) {
@@ -926,13 +929,13 @@ fun MapScreen(
     if (showAsrOffer) {
         app.vela.ui.VelaDialog(
             onDismissRequest = { showAsrOffer = false },
-            title = stringResource(R.string.map_asr_offer_title),
-            confirmText = stringResource(R.string.settings_voice_search_download, app.vela.voice.AsrEngine.DEFAULT.sizeMb),
-            onConfirm = { showAsrOffer = false; vm.downloadAsrModel() },
+            title = "Sesli komut sağlayıcısı bulunamadı",
+            confirmText = "Tamam",
+            onConfirm = { showAsrOffer = false },
             dismissText = stringResource(R.string.root_not_now),
             onDismiss = { showAsrOffer = false },
             dismissLowEmphasis = true,
-            text = { Text(stringResource(R.string.map_asr_offer_body)) },
+            text = { Text("Yerel konuşma motorları geçici olarak kapalı. Sisteminizde sesli komut sağlayıcısı kurulu olmalı. Google TTS, konuşma tanıma uygulaması değildir.") },
         )
     }
     // Reflect whether the on-device model is present, so the mic + Settings update without a relaunch.
@@ -1370,7 +1373,7 @@ fun MapScreen(
                                 placeable.place(
                                     (at.x - placeable.width / 2f).roundToInt()
                                         .coerceIn(margin, maxX),
-                                    (at.y + PUCK_LABEL_GAP_PX).roundToInt(),
+                                    (at.y + NavPuckSizing.labelGapDp(app.vela.ui.PuckStyle.scale()).dp.roundToPx()).roundToInt(),
                                 )
                             }
                         },
@@ -1466,7 +1469,12 @@ fun MapScreen(
                     // while the endpoints card above replaces it in directions mode.
                     val searchBar: @Composable () -> Unit = {
                     SearchBar(
-                        query = state.query,
+                        inputEnabled = mapInputReady,
+                        query = if (state.categoryId != null) state.categoryFilter else state.query,
+                        forceClear = state.categoryId != null,
+                        placeholderText = if (state.categoryId != null)
+                            stringResource(R.string.search_category_filter_hint, state.categoryLabel.orEmpty())
+                            else stringResource(R.string.search_address_hint),
                         searching = state.searching,
                         onQueryChange = vm::onQueryChange,
                         fillTick = state.queryEdits,
@@ -1509,6 +1517,7 @@ fun MapScreen(
                                 Spacer(Modifier.width(10.dp))
                                 CategoryChips(
                                     onPick = vm::quickSearch,
+                                    selectedQuery = state.categoryId,
                                     modifier = Modifier.weight(1f),
                                 )
                             }
@@ -1545,8 +1554,9 @@ fun MapScreen(
                         // surfaces below, Google-style); the top bar keeps only the category
                         // chips, and only on the bare map (in landscape they already rendered
                         // beside the bar above).
-                        !landscapeOneLine && state.selected == null && state.results.isEmpty() -> CategoryChips(
+                        !landscapeOneLine && state.selected == null && (state.results.isEmpty() || state.categoryId != null) -> CategoryChips(
                             onPick = vm::quickSearch,
+                                    selectedQuery = state.categoryId,
                             modifier = Modifier.padding(top = 8.dp),
                         )
                     }
@@ -1709,7 +1719,7 @@ fun MapScreen(
                                 .coerceAtLeast(margin)
                             placeable.place(
                                 (at.x - placeable.width / 2f).roundToInt().coerceIn(margin, maxX),
-                                (at.y - PUCK_LABEL_GAP_PX - placeable.height).roundToInt()
+                                (at.y - NavPuckSizing.labelGapDp(app.vela.ui.PuckStyle.scale()).dp.roundToPx() - placeable.height).roundToInt()
                                     .coerceAtLeast(margin),
                             )
                         }
@@ -2243,7 +2253,7 @@ fun MapScreen(
             // gates it too: opening the viewer clears `selected`, which used to fall through to
             // THIS branch and draw the results list over the bottom-half mini map (user
             // 2026-07-18); the sheet returns when the viewer closes.
-            state.results.isNotEmpty() && (!searchOpen || pickingResults) && state.pickOnMap == null &&
+            (state.results.isNotEmpty() || state.categoryId != null) && (!searchOpen || pickingResults) && state.pickOnMap == null &&
                 state.streetView == null && !state.streetViewLoading -> {
               SearchResults(
                 results = state.results,
@@ -2259,7 +2269,14 @@ fun MapScreen(
                 onExpand = vm::expandResults,
                 onClose = vm::clearSearch,
                 listName = state.openListId?.let { id -> state.lists.firstOrNull { it.id == id }?.name },
-                query = state.query,
+                query = state.categoryLabel ?: state.query,
+                emptyMessage = if (state.categoryId != null) {
+                    if (state.searching) stringResource(R.string.search_category_loading)
+                    else if (state.categoryFilter.isNotBlank()) stringResource(R.string.search_category_filter_empty)
+                    else stringResource(R.string.search_category_area_empty)
+                } else null,
+                onExpandCategory = if (state.categoryId != null && state.categoryRadiusMeters < 20_000.0 && state.categoryCenter != null &&
+                    !state.searching && state.categoryFilter.isBlank()) vm::expandCategoryArea else null,
                 minimizeTick = resultsPanTick,
                 moreAvailable = state.resultsMoreQuery != null && state.resultsMoreQuery == state.query && state.openListId == null && state.pendingImport == null,
                 loadingMore = state.resultsLoadingMore,
@@ -3063,6 +3080,8 @@ private fun SearchResults(
     moreAvailable: Boolean = false, // a "More results" row at the end of the list (next pages of the same search)
     loadingMore: Boolean = false,
     onMore: () -> Unit = {},
+    emptyMessage: String? = null,
+    onExpandCategory: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     // A BOTTOM sheet, Google-style, sharing the place sheet's detent grammar:
@@ -3466,6 +3485,14 @@ private fun SearchResults(
                     },
                 state = listState,
             ) {
+                if (shown.isEmpty() && emptyMessage != null) item {
+                    Column(Modifier.fillMaxWidth().padding(20.dp)) {
+                        Text(if (results.isNotEmpty()) stringResource(R.string.search_results_filters_empty) else emptyMessage, color = SheetPalette.dim(dark))
+                        if (results.isEmpty()) onExpandCategory?.let { expand ->
+                            TextButton(onClick = expand) { Text(stringResource(R.string.search_category_expand)) }
+                        }
+                    }
+                }
                 items(shown) { place ->
                 Column(
                     Modifier
@@ -3500,7 +3527,7 @@ private fun SearchResults(
                     }
                     val sub = listOfNotNull(
                         place.priceText,
-                        place.category,
+                        if (place.category.equals("Address", ignoreCase = true)) stringResource(R.string.search_result_address) else place.category,
                         place.distanceMeters?.let { formatDistance(it) },
                     ).joinToString(" · ")
                     if (sub.isNotEmpty()) {
@@ -3643,7 +3670,9 @@ private fun MapSurface(
     // MapTiler (when a key is built in) gives the Google-like look + its own
     // light/dark styles; otherwise fall back to the keyless OpenFreeMap basemap
     // with our own dark/light recolor.
-    val mapStyleUri = if (hasMapTiler) {
+    val mapStyleUri = if (app.vela.ui.OfflineMode.on.value) {
+        MapFonts.effective(app.vela.core.data.tiles.MapStyle.LIBERTY.uri)
+    } else if (hasMapTiler) {
         val variant = if (darkTheme) "streets-v2-dark" else "streets-v2"
         "https://api.maptiler.com/maps/$variant/style.json?key=${BuildConfig.MAPTILER_KEY}"
     } else {
@@ -3696,7 +3725,7 @@ private fun MapSurface(
             }
         }
     }
-    VelaMapView(
+    MapRenderScene(
         styleUri = mapStyleUri,
         myLocation = state.myLocation,
         myBearing = state.myBearing,
@@ -3754,9 +3783,6 @@ private fun MapSurface(
             }
         },
         altColor = if (darkTheme) "#C8CDD4" else "#9AA0A6",
-        onSelectAlternate = vm::selectRoute,
-        // Every route wears its time on the map, placed where it runs apart from the others;
-        // tapping a bubble picks that route. Both choosers (the classic one since 2026-09-17).
         routeBubbles = if (state.directionsOpen && !state.navigating && state.routes.size > 1 &&
             state.travelMode != app.vela.core.model.TravelMode.TRANSIT
         ) {
@@ -3787,16 +3813,10 @@ private fun MapSurface(
         navDriveMode = state.travelMode == app.vela.core.model.TravelMode.DRIVE,
         navLabelExclude = navLabelExclude,
         navUpcomingRoads = navUpcomingRoads,
-        onNavRoadLatin = { vm.onNavRoadLatin(it) },
-        // Follow yields to a manual pan AND to step preview: the per-frame follow ticker used
-        // to keep re-pointing the camera at the puck while a banner swipe was trying to fly to
-        // the previewed turn - the two fought at 60 fps (user 2026-07-14). The puck itself
-        // keeps updating either way; only the camera steps aside.
         navFollowing = !state.navCameraDetached && state.previewStepIndex == null,
         navNorthUp = state.navNorthUp,
         // The compass below the nav card is the heading-up/north-up toggle during a drive
         // (a reorient-to-north tap would be overridden by the follow a frame later anyway).
-        onCompassTap = { if (state.navigating) { vm.toggleNavNorthUp(); true } else false },
         poisEnabled = app.vela.ui.MapPoiPrefs.showPois.value,
         // The POI bitmaps are fixed pixels, so below hdpi they render physically huge (a 240x320
         // phone at 120 dpi, issue #400, showed pins a fifth of the screen wide). Below 1.75x the
@@ -3804,16 +3824,11 @@ private fun MapSurface(
         poiIconScale = app.vela.ui.MapPoiPrefs.iconScale.floatValue * lowDensityIconScale(LocalDensity.current.density),
         // No density correction on labels: see the parameter's note in VelaMapView.
         poiLabelScale = app.vela.ui.MapPoiPrefs.iconScale.floatValue,
-        onNavPanned = vm::onNavPanned,
         ambientCoversView = state.ambientCoversView,
         // Grabbing the map with a sheet up drops it down out of the way so the map is yours
         // to look at (Google does the same): the results sheet to its bar, the place sheet to
         // its minimized card. The bar / a drag brings them back.
         driveFollowing = driveFollowing,
-        onMapTap = onMapTap,
-        onUserPan = onUserPan,
-        onScaleChanged = { metersPerPixelState.value = it },
-        onOverlayState = onOverlayState,
         darkTheme = darkTheme,
         amoled = amoled,
         applyKeylessTheme = !hasMapTiler,
@@ -3831,22 +3846,10 @@ private fun MapSurface(
         previewTarget = state.previewStepIndex?.let { state.activeRoute?.maneuvers?.getOrNull(it)?.location },
         navOverviewTick = navOverviewTick,
         navRecenterTick = navRecenterTick,
-        onNavZoomOverride = onNavZoomOverride,
-        onPuckScreen = { x, y -> puckScreen.value = Offset(x, y) },
-        onPoiTap = vm::onPoiTap,
-        onMarkerTap = { i -> displayedPlaces(state).getOrNull(i)?.let(vm::selectPlace) },
         parkingSpot = state.parkingSpot,
-        onParkingTap = { vm.showParkedCar(context.getString(R.string.map_parked_car)) },
-        // Saved places stick out while browsing (issue #171): every list place + quick-save
-        // draws its list's icon/emoji in the list's color. Hidden while a result set owns the
-        // map (a list's own results would double-draw) and during nav/replay (declutter).
         savedPins = savedPinData.map { it.first },
-        onSavedPinTap = { i -> savedPinData.getOrNull(i)?.second?.let(vm::selectPlace) },
         svPose = svPose,
         svTopInsetPx = (screenHeightPx * 0.55f).toInt(),
-        onSvMapTap = vm::moveStreetViewTo,
-        // No stale ambient dots mid-drive: the fetch pauses during nav, and the basemap POIs
-        // (kept visible in nav now) cover the gas-station-on-the-way case without duplicates.
         ambientPois = if (state.navigating) emptyList() else ambientMarkersOf(state),
         buildingOverlays = state.buildingOverlays,
         addressOverlays = state.addressOverlays,
@@ -3854,7 +3857,6 @@ private fun MapSurface(
         placesOverlays = state.placesOverlays,
         hiddenOpenPlaceIds = state.hiddenOpenPlaceIds,
         ambientClosed = if (state.navigating) emptyList() else state.ambientClosed.map { MapMarker(it.name, it.location, it.category) },
-        onOpenPlaceClosed = vm::onOpenPlaceClosed,
         placesPending = state.placesPending,
         placesOneSet = state.placesOneSet,
         osmBusinesses = app.vela.ui.MapPoiPrefs.osmBusinesses.value,
@@ -3884,8 +3886,6 @@ private fun MapSurface(
             }
         },
         basemapArchive = state.basemapArchive,
-        onOpenPlaceTap = vm::onOpenPlaceTap,
-        onRoadLimitKmh = vm::onOverlayRoadLimit,
         speedOverlayOn = speedOverlayArmed, // motion-armed with hysteresis - NEVER on the parked browse map
 
         trafficControls = state.trafficControls,
@@ -3895,17 +3895,50 @@ private fun MapSurface(
         // drops at the same coordinate and the two bus glyphs stacked read as a glitch
         // (user 2026-07-13). Structural list equality keeps the identity gate quiet.
         transitStops = state.transitStops.filterNot { st -> state.selected?.id == "gtfs:${st.stopId}" },
-        onTransitStopTap = vm::onTransitStopTap,
         navBannerBottomPx = if (state.navigating) navBannerBottomPx else 0,
         // Index into the SHOWN list (the same one ambientMarkersOf uploads), not the raw
         // pool - while a place is open the shown list drops the selected place's copy, so
         // raw-pool indices would be off by one past it.
-        onAmbientTap = { i -> ambientShownOf(state).getOrNull(i)?.let(vm::selectPlace) },
-        onCameraIdle = vm::onCameraIdle,
-        onMapLongPress = vm::onMapLongPress,
-        onAddressLabelTap = vm::onAddressLabelTap,
-        onViewport = vm::onViewport,
-        dpadController = mapDpad,
+
+    ).Draw(
+        callbacks = MapRenderCallbacks(
+            onSelectAlternate = vm::selectRoute,
+            // Every route wears its time on the map, placed where it runs apart from the others;
+            // tapping a bubble picks that route. Both choosers (the classic one since 2026-09-17).
+            onNavRoadLatin = { vm.onNavRoadLatin(it) },
+            // Follow yields to a manual pan AND to step preview: the per-frame follow ticker used
+            // to keep re-pointing the camera at the puck while a banner swipe was trying to fly to
+            // the previewed turn - the two fought at 60 fps (user 2026-07-14). The puck itself
+            // keeps updating either way; only the camera steps aside.
+            onCompassTap = { if (state.navigating) { vm.toggleNavNorthUp(); true } else false },
+            onNavPanned = vm::onNavPanned,
+            onMapTap = onMapTap,
+            onUserPan = onUserPan,
+            onScaleChanged = { metersPerPixelState.value = it },
+            onOverlayState = onOverlayState,
+            onNavZoomOverride = onNavZoomOverride,
+            onPuckScreen = { x, y -> puckScreen.value = Offset(x, y) },
+            onPoiTap = vm::onPoiTap,
+            onMarkerTap = { i -> displayedPlaces(state).getOrNull(i)?.let(vm::selectPlace) },
+            onParkingTap = { vm.showParkedCar(context.getString(R.string.map_parked_car)) },
+            // Saved places stick out while browsing (issue #171): every list place + quick-save
+            // draws its list's icon/emoji in the list's color. Hidden while a result set owns the
+            // map (a list's own results would double-draw) and during nav/replay (declutter).
+            onSavedPinTap = { i -> savedPinData.getOrNull(i)?.second?.let(vm::selectPlace) },
+            onSvMapTap = vm::moveStreetViewTo,
+            // No stale ambient dots mid-drive: the fetch pauses during nav, and the basemap POIs
+            // (kept visible in nav now) cover the gas-station-on-the-way case without duplicates.
+            onOpenPlaceClosed = vm::onOpenPlaceClosed,
+            onOpenPlaceTap = vm::onOpenPlaceTap,
+            onRoadLimitKmh = vm::onOverlayRoadLimit,
+            onTransitStopTap = vm::onTransitStopTap,
+            onAmbientTap = { i -> ambientShownOf(state).getOrNull(i)?.let(vm::selectPlace) },
+            onCameraIdle = vm::onCameraIdle,
+            onMapLongPress = vm::onMapLongPress,
+            onAddressLabelTap = vm::onAddressLabelTap,
+            onViewport = vm::onViewport,
+        ),
+        dpad = mapDpad,
         modifier = Modifier.fillMaxSize(),
     )
 }
@@ -4125,11 +4158,11 @@ private fun SearchEntryHost(state: MapUiState, vm: MapViewModel, focusManager: a
 }
 
 @Composable
-private fun CategoryChips(onPick: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun CategoryChips(onPick: (String) -> Unit, modifier: Modifier = Modifier, selectedQuery: String? = null) {
     // (localized label, STABLE English search query, icon) — the query is the logic key sent to Google
     // search (works in any locale), the label is what the user sees, so the chips localize without
     // changing what's searched.
-    val categories = app.vela.ui.QuickCategories.all().map { Triple(it.label, it.query, it.icon) }
+    val categories = remember { app.vela.ui.QuickCategories.all().map { Triple(it.label, it.query, it.icon) } }
     Row(
         modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -4151,6 +4184,7 @@ private fun CategoryChips(onPick: (String) -> Unit, modifier: Modifier = Modifie
                 // read DARKER than the label. onSurfaceVariant matches the glyph weight to
                 // the text, like Google's rows.
                 colors = androidx.compose.material3.AssistChipDefaults.elevatedAssistChipColors(
+                    containerColor = if (query == selectedQuery) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
                     leadingIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
             )
@@ -5324,7 +5358,7 @@ private fun ListsSheet(
     // D-pad-first initial focus (hard rule, docs/dpad.md): a raw Dialog must place focus
     // itself - land it on the New-list button so the menu opens usable with no wasted press.
     val listsAutoFocus = app.vela.ui.rememberDpadAutoFocus()
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    app.vela.ui.VelaWindowDialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.padding(vertical = 16.dp).widthIn(max = 420.dp)) {
                 Row(
@@ -5421,7 +5455,7 @@ private fun ParkingHistorySheet(
     onDismiss: () -> Unit,
 ) {
     val dark = isAppInDarkTheme()
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    app.vela.ui.VelaWindowDialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.padding(vertical = 16.dp).widthIn(max = 420.dp)) {
                 Row(
@@ -5543,7 +5577,7 @@ private fun ListEditorDialog(
     var color by remember { mutableStateOf(initial?.color ?: LIST_COLORS.first()) }
     var emojiOpen by remember { mutableStateOf(false) }
     var emojiText by remember { mutableStateOf("") }
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    app.vela.ui.VelaWindowDialog(onDismissRequest = onDismiss) {
         // Cap the dialog to most of the screen: with the emoji grid + free-type field open the
         // content grows past a short screen, which pushed the color row and Save button off the
         // bottom with no way to reach them (issue #193). The title and the action buttons stay

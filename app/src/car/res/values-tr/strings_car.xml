@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="car_map_gles_incompatible">Grafik sürücüsü bu harita motorunun istediği ES3 pencere yapılandırmasını sunmuyor. Harita başlatılmadı; launcher özellikleri kullanılabilir.</string>
+    <string name="car_map_gles_incompatible">Grafik sürücüsü bu harita motorunun istediği ES2 pencere yapılandırmasını sunmuyor. Harita başlatılmadı; launcher özellikleri kullanılabilir.</string>
     <string name="car_map_empty_test">Boş harita motorunu dene</string>
     <string name="car_map_style_test">Çevrimdışı dosyalar olmadan stili dene</string>
 
-    <string name="car_map_renderer_loading">Harita ayrı süreçte açılıyor…</string>
+    <string name="car_map_renderer_loading">Harita hazırlanıyor</string>
+    <string name="car_map_renderer_loading_detail">Çevrimdışı haritanız birazdan hazır olacak.</string>
     <string name="car_map_renderer_failed">Harita açılamadı. Ayrıntılar loga kaydedildi.</string>
     <string name="car_map_renderer_retry">Haritayı yeniden dene</string>
-    <string name="car_map_renderer_close">Haritayı kapat</string>
 
     <string name="car_map_probe_detail">İlk adım: ayrı harita sürecini test edin. Harita motoru ve harita verileri yüklenmeyecek.</string>
     <string name="car_map_probe_start">Harita sürecini test et</string>
@@ -42,7 +42,7 @@
     <string name="car_wallpaper_clear">Duvar kâğıdını kaldır</string>
     <string name="car_desktop_text_scale">Masaüstü yazı boyutu</string>
     <string name="car_picture_in_picture">Küçük kayan pencereyi aç</string>
-    <string name="car_source_internal">Yerel müzik</string>
+    <string name="car_source_internal">Vela Müzik</string>
     <string name="car_music_source">Müzik kaynağı seç</string>
     <string name="car_antenna_from_lat">Başlangıç enlemi</string>
     <string name="car_antenna_from_lon">Başlangıç boylamı</string>
@@ -105,7 +105,7 @@
     <string name="car_internal_settings">Ayarlar</string>
     <string name="car_internal_music">Müzik</string>
     <string name="car_internal_antenna">Anten</string>
-    <string name="car_internal_dashboard">Dashboard</string>
+    <string name="car_internal_dashboard">Gösterge paneli</string>
     <string name="car_internal_neon_dashboard">Dijital Gösterge</string>
     <string name="car_feature_pending">Bu araç henüz Vela’ya aktarılmadı.</string>
     <string name="car_app_launch_failed">Uygulama açılamadı.</string>
@@ -182,7 +182,7 @@
     <string name="car_permission_granted">Verildi</string>
     <string name="car_permission_required">Verilmedi</string>
     <string name="car_smart_focus">Smart Focus</string>
-    <string name="car_smart_focus_desc">Boştayken gerçek oynatmayı izle. Elle seçilen kaynak, otomatik izleme yeniden açılana kadar korunur. Yalnızca BT bağlanması kaynağı değiştirmez.</string>
+    <string name="car_smart_focus_desc">Gerçek müzik oynatmasını takip eder. Oynatıcı seçimi takibi kapatmaz; sabitlemek için Kaynağı sabitle seçeneğini kullanın. Bluetooth bağlantısı tek başına kaynağı değiştirmez.</string>
     <string name="car_source_last">Son kaynak</string>
     <string name="car_startup_source">Otomatik devam kaynağı (aşağıdaki otomatik oynatmayı etkinleştirin)</string>
     <string name="car_bt_wait">Açılışta bağlantı bekleme: %1$d saniye</string>
@@ -308,4 +308,28 @@
     <string name="car_settings_open_btn">Aç</string>
     <string name="car_permissions_subtitle">Konum, bildirim ve sistem erişim izinleri</string>
     <string name="settings_close">Kapat</string>
+    <string name="car_internal_map">Harita</string>
+    <string name="car_sources_title">Müzik kontrolü</string>
+    <string name="car_sources_auto">Otomatik takip</string>
+    <string name="car_sources_auto_hint">Çalan müziği takip eder. Yoksa Vela Müzik görünür.</string>
+    <string name="car_sources_current">Kontrol edilen: %1$s</string>
+    <string name="car_sources_playing">Çalıyor</string>
+    <string name="car_sources_waiting">Müzik bekleniyor</string>
+    <string name="car_sources_manual">Oynatıcı seçin</string>
+    <string name="car_sources_manual_hint">Oynatıcı seçimi takip modunu değiştirmeden oynatma ister. Kalıcı seçim için Kaynağı sabitle seçeneğini kullanın.</string>
+    <string name="car_sources_manual_selected">%1$s seçildi. Otomatik takip kapalı.</string>
+    <string name="car_sources_auto_selected">Otomatik takip açık</string>
+    <string name="car_sources_access">Diğer müzik uygulamalarını algılamak ve kontrol etmek için bildirim erişimine izin verin.</string>
+    <string name="car_sources_access_action">İzin ver</string>
+    <string name="car_sources_done">Tamam</string>
+    <string name="car_sources_controlled">Kontrol ediliyor</string>
+    <string name="car_sources_phone_hint">Telefon müziğini telefondan başlatın. Bluetooth ve uyumlu Android Auto oynatıcıları kullanılabilir olduğunda burada görünür.</string>
+    <string name="car_music_scan">Müzikleri tara</string>
+    <string name="car_sources_lock">Kaynağı sabitle</string>
+    <string name="car_sources_lock_hint">Otomatik takip açılana kadar seçili oynatıcıyı kontrol etmeye devam eder.</string>
+    <string name="car_sources_allow_follow">Otomatik devralmaya izin ver</string>
+    <string name="car_sources_state_unknown">Oynatma durumu bilinmiyor</string>
+    <string name="car_sources_follow_apps">Otomatik devralabilecek oynatıcılar</string>
+    <string name="car_sources_tracking_hint">Bluetooth bağlantısı ve telefon görüşmesi müzik kaynağını değiştirmez. Telefon yansıtması gerçek müzik oturumu sunmalıdır. Radyo frekans bilgisi tek başına oynatma kanıtı değildir. Vela Müzik’e dönülmesi müziği başlatmaz.</string>
+    <string name="car_music_equalizer_label">Ekolayzır</string>
 </resources>

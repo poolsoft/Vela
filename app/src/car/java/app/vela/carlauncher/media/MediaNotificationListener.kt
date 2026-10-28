@@ -32,11 +32,36 @@ class MediaNotificationListener : NotificationListenerService() {
 
     companion object {
         private const val TAG = "MediaNotifListener"
+        private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        @Volatile private var connected = false
+        private var lastRecovery = -30_000L
+
+        @Synchronized fun refreshAndReconnect(context: Context) {
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (now - lastRecovery < 2_000L) return
+            lastRecovery = now
+            recoveryScope.launch {
+                val component = ComponentName(context, MediaNotificationListener::class.java)
+                if (!bildirimIzniVerildiMi(context)) {
+                    FileLogger.w(TAG, "Media access unavailable: enable notification access to control external players")
+                    return@launch
+                }
+                runCatching {
+                    val manager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+                    MusicManager.getInstance(context).onOturumlarYenilendi(manager.getActiveSessions(component))
+                    if (!connected && android.os.Build.VERSION.SDK_INT >= 24) {
+                        requestRebind(component)
+                        FileLogger.i(TAG, "Media listener reconnect requested")
+                    }
+                }.onFailure { FileLogger.w(TAG, "Media recovery failed: ${it.javaClass.simpleName}: ${it.message}") }
+            }
+        }
+
 
         fun bildirimIzniVerildiMi(context: Context): Boolean {
             val paket = context.packageName
             val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-            return flat != null && flat.contains(paket)
+            return flat?.split(':')?.any { ComponentName.unflattenFromString(it)?.packageName == paket } == true
         }
 
         fun bildirimAyarlariniAc(context: Context) {
@@ -80,6 +105,7 @@ class MediaNotificationListener : NotificationListenerService() {
     }
 
     override fun onDestroy() {
+        connected = false
         dinleyiciyiKaldir()
         arkaPlanThread?.quitSafely()
         arkaPlanThread = null
@@ -89,6 +115,7 @@ class MediaNotificationListener : NotificationListenerService() {
     }
 
     override fun onListenerConnected() {
+        connected = true
         FileLogger.i(TAG, "NotificationListener baglandi. Medya oturumlari dinlenmeye hazir.")
         // system_server kilitlenmesini onlemek icin senkron islem yapma, arka plana gecikmeli post et
         arkaPlanHandler?.postDelayed({
@@ -98,6 +125,7 @@ class MediaNotificationListener : NotificationListenerService() {
     }
 
     override fun onListenerDisconnected() {
+        connected = false
         FileLogger.w(TAG, "NotificationListener baglantisi kesildi.")
         dinleyiciyiKaldir()
     }

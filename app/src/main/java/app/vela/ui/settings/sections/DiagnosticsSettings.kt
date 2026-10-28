@@ -64,11 +64,17 @@ import kotlinx.coroutines.withContext
 internal fun DiagnosticsSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onCloseSettings: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var showVoiceTests by remember { mutableStateOf(false) }
+    if (showVoiceTests) {
+        VoiceDiagnosticsScreen(vm, onBack = { showVoiceTests = false })
+        return
+    }
     val prefs = remember { context.getSharedPreferences("vela_settings", android.content.Context.MODE_PRIVATE) }
     SettingsScaffold(stringResource(R.string.settings_diagnostics), onBack) { topRow ->
         Spacer(Modifier.height(4.dp))
         LaunchedEffect(Unit) { vm.refreshDiagnostics() }
         PageIntro(stringResource(R.string.settings_diagnostics_hint))
+        FilledTonalButton(modifier = topRow, onClick = { showVoiceTests = true }) { Text("Sesli komut ve TTS testleri") }
         var showDiagConsent by remember { mutableStateOf(false) }
         SettingsGroup {
         ToggleRow(
@@ -76,7 +82,7 @@ internal fun DiagnosticsSettingsScreen(vm: MapViewModel, onBack: () -> Unit, onC
             checked = state.diagnosticsEnabled,
             onCheckedChange = { on -> if (on) showDiagConsent = true else vm.setDiagnostics(false) },
             // The top focusable control: Back routes its DOWN here, UP from here goes back to Back.
-            switchModifier = topRow,
+            switchModifier = Modifier,
         )
         GroupDivider()
         // Issue #507: the export with the searches, destinations, links and place names gone

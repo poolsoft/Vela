@@ -42,7 +42,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import app.vela.ui.VelaWindowDialog as Dialog
 
 /** Scope for [VelaMenu] content — call [item] once per menu entry (same order as it should show). */
 class VelaMenuScope internal constructor(internal val dpad: Boolean) {

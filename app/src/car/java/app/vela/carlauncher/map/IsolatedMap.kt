@@ -25,27 +25,43 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
     val density = LocalDensity.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val owner = LocalLifecycleOwner.current
+    val renderingActive = LocalMapRenderingActive.current
     val latestCallbacks by rememberUpdatedState(callbacks)
-    val client = remember(context) { IsolatedMapClient(context) { name, args -> latestCallbacks.dispatch(name, args) } }
+    val applicationContext = context.applicationContext
+    val client = remember(applicationContext) { IsolatedMapClient(applicationContext) { name, args -> latestCallbacks.dispatch(name, args) } }
     val state by client.state.collectAsState()
-    val settings = rendererSettings(context)
+    // prefs.all walks the whole preferences map; cache it until the settings file changes.
+    val settingsPrefs = remember(context) {
+        context.getSharedPreferences("vela_settings", Context.MODE_PRIVATE)
+    }
+    var settingsRevision by remember { mutableIntStateOf(0) }
+    DisposableEffect(settingsPrefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> settingsRevision++ }
+        settingsPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { settingsPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    val settings = remember(settingsPrefs, settingsRevision) { rendererSettings(context) }
     SideEffect { client.update(scene.copy(settings = settings, density = density.density, fontScale = density.fontScale,
         tuning = app.vela.core.config.CalibrationStore.latest.tuning,
         mapPalette = app.vela.ui.MapColors.current(), pipActive = app.vela.ui.PipMode.active.value,
         hostWidthDp = configuration.screenWidthDp, hostHeightDp = configuration.screenHeightDp)) }
-    DisposableEffect(client, owner, dpad) {
+    DisposableEffect(client, owner, dpad, renderingActive) {
         dpad?.remote = client::key
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) client.pause()
-            if (event == Lifecycle.Event.ON_START) client.resume()
+        fun syncVisibility() {
+            if (renderingActive && owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) client.resume()
+            else client.pause()
         }
+        val observer = LifecycleEventObserver { _, _ -> syncVisibility() }
         owner.lifecycle.addObserver(observer)
-        onDispose { owner.lifecycle.removeObserver(observer); dpad?.remote = null; client.close() }
+        syncVisibility()
+        onDispose { owner.lifecycle.removeObserver(observer); dpad?.remote = null }
     }
+    DisposableEffect(client) { onDispose { client.close() } }
     var surfaceGeneration by remember { mutableIntStateOf(0) }
     val failureHost = LocalMapRendererFailureHost.current
     val retry = { client.retry(); surfaceGeneration++; Unit }
     LaunchedEffect(state, failureHost) {
+        failureHost?.state = state
         failureHost?.failure = state.takeIf { it.failed }
         failureHost?.retry = retry
     }
@@ -67,7 +83,7 @@ fun IsolatedMap(scene: MapRenderScene, callbacks: MapRenderCallbacks, dpad: MapD
                 }
             })
         }
-        if (!state.ready && (!state.failed || failureHost == null)) MapRendererStatusPanel(state, retry)
+        if (!state.ready) MapRendererStatusPanel(state, retry)
     }
 }
 
@@ -106,11 +122,12 @@ internal class IsolatedMapClient(
     private var disconnectedAt = 0L
     private val monitor = object : Runnable {
         override fun run() {
-            if (connection == null) return
+            if (connection == null || !active || surface == null) return
             val now = SystemClock.elapsedRealtime()
             when {
-                service == null && now - bindAt > 5_000 -> fail("bind timeout")
-                service != null && now - heartbeatAt > 15_000 -> fail("renderer not responding: $terminalStage")
+                // A cold secondary process can take several seconds on low-end head units.
+                service == null && now - bindAt > 20_000 -> fail("bind timeout")
+                service != null && now - heartbeatAt > (if (mutableState.value.ready) 15_000 else 60_000) -> fail("renderer not responding: $terminalStage")
                 opened && !mutableState.value.ready && now - openAt > 60_000 -> fail("render timeout: $terminalStage")
                 else -> { send(MapRendererTransport.HEARTBEAT); handler.postDelayed(this, 5_000) }
             }
@@ -139,13 +156,21 @@ internal class IsolatedMapClient(
         pending.trySend(value)
     }
     fun surface(value: Surface?, w: Int, h: Int, density: Int) {
-        val changed = width != w || height != h || dpi != density
-        surface = value; width = w; height = h; dpi = density
-        if (changed && opened && value != null) {
-            hasStyle = false; hasFrame = false; openAt = SystemClock.elapsedRealtime()
-            mutableState.value = State(stage = "resizing")
+        if (value == null) {
+            surface = null
+            handler.removeCallbacks(monitor)
+            send(MapRendererTransport.SUSPEND)
+            return
         }
-        if (value == null) { disconnect(); return }
+        val changed = width != w || height != h || dpi != density
+        // Identical holder callbacks must not detach/rebind a healthy output again.
+        if (!changed && surface === value && opened && active && !mutableState.value.failed) return
+        surface = value; width = w; height = h; dpi = density
+        if (changed && opened) {
+            // A resize keeps the existing map/style; only the first frame needs startup UI.
+            openAt = SystemClock.elapsedRealtime()
+            FileLogger.i("MapRendererClient", "session=$session resize=${w}x${h} retainingReady=${mutableState.value.ready}")
+        }
         if (!active || mutableState.value.failed) return
         if (connection == null) connect() else if (service != null) openSurface()
     }
@@ -161,6 +186,7 @@ internal class IsolatedMapClient(
         val attempt = session
         bindAt = SystemClock.elapsedRealtime(); heartbeatAt = bindAt
         mutableState.value = State()
+        app.vela.ui.MapRenderProfile.slowRendering.value = false
         val receiver = Messenger(Handler(Looper.getMainLooper()) { msg ->
             val data = msg.data
             if (attempt == session && connection != null &&
@@ -171,12 +197,14 @@ internal class IsolatedMapClient(
                 when (msg.what) {
                     MapRendererTransport.STAGE -> {
                         val stage = data.getString("stage").orEmpty()
+                        if (stage == "auto-light") app.vela.ui.MapRenderProfile.slowRendering.value = true
                         if (stage.startsWith("error:")) fail(stage)
                         else if (stage != "heartbeat") {
                             terminalStage = stage
                             if (stage == "style-loading") { hasStyle = false; hasFrame = false }
                             if (stage == "style-ready") hasStyle = true
-                            if (stage == "frame") hasFrame = true
+                            // Offline/missing tiles can keep fully-rendered false even while the map draws.
+                            if (stage == "frame" || stage == "frame-partial") hasFrame = true
                             mutableState.value = State(hasStyle && hasFrame, stage = stage)
                             FileLogger.i("MapRendererClient", "session=$session pid=$remotePid stage=$stage")
                         }
@@ -215,6 +243,9 @@ internal class IsolatedMapClient(
         send(MapRendererTransport.OPEN, Bundle().apply {
             putParcelable("surface", target); putInt("width", width); putInt("height", height); putInt("dpi", dpi)
         })
+        handler.removeCallbacks(monitor)
+        heartbeatAt = SystemClock.elapsedRealtime()
+        handler.postDelayed(monitor, 5_000)
         scene?.let { pending.trySend(it) }
     }
     private fun send(what: Int, data: Bundle = Bundle()) {
@@ -283,7 +314,18 @@ internal class IsolatedMapClient(
         }
     }
     fun retry() { disconnect(); mutableState.value = State(); surface = null }
-    fun pause() { active = false; disconnect() }
-    fun resume() { active = true; if (!state.value.failed && connection == null) connect() }
+    fun pause() {
+        if (!active) return
+        active = false
+        handler.removeCallbacks(monitor)
+        send(MapRendererTransport.SUSPEND)
+    }
+    fun resume() {
+        if (active) return
+        active = true
+        if (state.value.failed) return
+        if (!state.value.ready) openAt = SystemClock.elapsedRealtime()
+        if (connection == null) connect() else openSurface()
+    }
     fun close() { active = false; disconnect(); pending.close(); scope.cancel() }
 }

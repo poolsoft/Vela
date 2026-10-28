@@ -663,16 +663,8 @@ names (`Route.roadNamesLatin`).
   where a one-way carriageway joins its two-way continuation under lane markings the router
   emits `Turn left` with a turn angle of well under a degree and `skipToSpeak` false (measured on
   a state file). The angle is the router's own measurement; a real left is tens of degrees.
-- A trip routes on the **smallest installed region box covering both endpoints**; boxes
-  overlap at borders, so selection falls through to the next smallest. A trip that does not fit
-  one region falls back online.
-- **Long routes can fail outright, not merely run slowly.** Past its budget the router throws
-  rather than degrading, and `MEMORY_MB` is 256 because the app already runs near its
-  `largeHeap` ceiling. Measured on a desktop with the shipped configuration, car profile:
-  4 km 0.87 s at 256 MB; 57 km 5.65 s at 256 MB; 151 km fails at 256 MB and takes 4.6 s at
-  1024 MB; 348 km fails at 1024 MB and takes 41.9 s at 3072 MB. The threshold is
-  region-dependent, not a fixed distance. Offline routing is therefore a city and metro
-  feature; intercity needs OsmAnd's precomputed HH, which the bake does not generate.
+- Routing loads installed files intersecting the padded trip bounding box; their union must cover both endpoints.
+- Long routes require suitable routing hierarchy and sufficient safe heap headroom. Car requests enable HH indexes or base-road two-phase search when available. Classic fallback can still exhaust its budget, so it returns safely rather than increasing the budget beyond the process heap. Installed assets can carry HH indexes independently of old adapter comments; data capabilities are detected and logged per calculation.
 - Three Android runtime requirements, all invisible until the engine logs:
   commons-logging's reflective discovery must be pre-pinned to `SimpleLog` before any OsmAnd
   class loads (R8 strips the implementation and the discovery NPEs on ART); `kxml2-vela.jar`
@@ -2719,3 +2711,140 @@ features this document describes only by rule. `ROADMAP.md` holds open work and 
 "not going to happen" list. `docs/book/` explains subsystems for a reader who wants to
 understand a behavior rather than rebuild it. `CLAUDE.md` carries the working rules for
 contributors and assistants.
+
+## Car dock metadata loading
+
+`AppDockManager` publishes package/order/launch-mode placeholders before resolving internal and installed-app metadata on `Dispatchers.IO`. Completion merges only label/icon fields into entries still present in the current list. Missing packages are omitted. Each explicit reload increments a generation; older completions cannot modify the new list. Default shortcuts are persisted after metadata resolution. New shortcuts resolve metadata through the same worker path.
+
+## Offline metadata replacement
+
+Index, revision and dead-space JSON writes use a unique sibling temporary file, flush its file descriptor, and atomically replace the target with the API-26 `Files.move` operation. Readers retain the old complete file until replacement. A failed write removes staging and leaves the target intact. Existing store locks still serialize read-modify-write operations. Sprite asset copies use the same replacement path. Glyph staging resides beside the active directory, validates required ranges and rejects extracted paths outside staging before activation. Activation renames the old directory to `glyphs.previous`; failure or a later lookup with a missing active directory restores it. A successful installation removes the previous directory. Explicit deletion removes that recovery directory too.
+
+## Head-unit first measure and speech isolation
+
+The drawer computes `floor(usableWidthPx / (88 * density))`, clamped to 2-8 columns, before measuring children. Dock holder creation and child measurement use the same current item size; vertical row fitting uses that size including margins. Cache hits bind synchronously and preserve a same-package holder icon while a missing replacement loads. One shared 4 MiB app-icon cache stores rasterized 64 dp artwork capped at 192 pixels. At most two icon misses decode concurrently, and package-keyed shared tasks coalesce duplicate requests; package/locale changes invalidate pending tasks and cache entries.
+
+Music index restore trusts saved metadata, deduplicates known primary-storage aliases without filesystem canonicalization, and does not stat every saved file. Playback and explicit user scans retain file checks. A manual scan still uses canonical identities. Missing cached entries can remain visible until a scan; no automatic scan is introduced.
+
+Voice engine initialization, setup, speech, stop and shutdown use one daemon speech worker with at most eight queued tasks. A blocked third-party TTS call cannot occupy the UI thread or spawn unlimited replacement threads. Speech deadlines include queue and initialization time (30 seconds for system TTS, 95 seconds for neural speech). Failure clears pending work, invalidates stale queued tasks, releases focus and publishes failure without waiting for `TextToSpeech.stop`. Cleanup remains on the worker and may itself remain blocked by a faulty engine. New engine bindings reject callbacks from abandoned bindings. Lazy engine startup remains unchanged.
+
+### Offline route resource protection
+
+All coroutine route calls use routeAwait and propagate cancellation through RouteControl to the blocking OBF RouteCalculationProgress. Direct adapter calls receive the same default 60-second deadline. A newer OBF request cancels the previous request; canceled waiters do not enter the search. Detached avoid/bicycle/fallback workers are canceled on timeout, parent cancellation and successful completion.
+
+The Java route budget in MiB is floor(min((maxHeap - usedHeap - reserve) / 2, maxHeap / 3, 96 MiB) / MiB), where reserve=max(24 MiB, maxHeap / 4). Budgets below 8 MiB reject the search safely. A shared daemon checks every 100 ms and cancels when free process headroom falls below max(12 MiB, maxHeap / 8). Native routing-memory configuration is 16 MiB. The speed-lookup context uses clamp(maxHeapMiB / 24, 2, 8) MiB and is unloaded before route planning. Route contexts unload tiles in finally. These are admission and best-effort runtime guards, not a guarantee against every OEM allocation failure.
+
+Car routing enables Java HH only when installed readers expose HH indexes; COMPLEX two-phase routing is selected when base-road subregions exist. Data lacking both hierarchies uses the bounded classic path. No straight-line segmentation or distance cutoff replaces real road routing. Native Valhalla retains its current API cancellation limitations.
+
+The boolean map_auto_device_budget defaults to false. Only explicit enablement lets low-end Standard resolve to Light after startup; Custom is unaffected. Without it, selected Standard applies normally after startup. Renderer settings transport the observable option for immediate updates, preserving all existing profile/layer preferences. Existing layer preferences and renderer-session retention remain unchanged.
+
+HH routing does not require a world-regions file for download suggestions. With missing-map suggestions disabled, the OsmandRegions adapter returns no downloadable-region hints; installed OBF coverage and HH indexes still determine the route. This prevents the uninitialized world-region reader from rejecting an otherwise valid HH calculation.
+
+Device classification reads the packed reqGlEsVersion integer. Parsing the display string such as 2.0 as hexadecimal is invalid and must not hide a GLES2 device from low-end graphics protection.
+
+
+### Automatic map rendering
+
+The auto profile selects Light when MemoryPressure.lowEnd is true (OS low-RAM, heap class below 128 MiB, or reported GLES below 3), otherwise Standard. Existing explicit profile choices are preserved. Startup remains Light until the first usable frame. Frame duration is measured between the SDK start/finish rendering callbacks. Three consecutive windows of at least 10 seconds, each containing at least 20 frames with at least half taking 80 ms or longer, select Light for the renderer process lifetime. Sparse/fast windows reset the streak. There is no automatic upward oscillation within that process. The renderer reports the downgrade to the launcher over the existing validated stage channel. Custom FPS, tilt and layer preferences are never rewritten; Custom bypasses the automatic budget after startup. Light applies 30 FPS, flat camera and the existing 3D/terrain exclusions. Traffic/transit preferences are unchanged. Settings display the hardware budget and its reason; navigation and satellite exclusions still apply independently.
+
+
+### On-demand map activation
+
+The internal://map launcher entry calls openMapForSession, clears the active mapless flag, ends initial-startup fallback eligibility and selects the normal split view. It does not write car_launcher_mapless_mode. Repeated activation is idempotent. Forced settings refresh reads the saved startup preference but does not overwrite the initialized active session. An explicit mapless toggle still closes the map immediately; a new process honors the saved startup preference. The internal app catalog and existing dock pin menu expose the entry without altering existing dock shortcuts.
+
+
+### Launcher activity ownership and task restoration
+
+The car variant holds a weak reference to its current interactive MainActivity. A second live Activity, including a separate HOME/standard task instance on the same process, forwards its intent to the owner and finishes before MapViewModel, Compose, media UI or renderer setup. A configuration replacement may claim ownership when the previous owner is changing configurations. Only the current owner updates foreground, floating-button lifecycle and PiP state; an old Activity stopping after its replacement cannot mark the app background.
+
+Launcher aliases and the floating button issue a singleTask launch matching the owner's original HOME or standard category. The actual incoming intent is carried separately and delivered once through onNewIntent, so a floating return does not spuriously reset the selected Home screen. A duplicate HOME Activity waits until resumed and window-focused, marks itself finishing, then issues the retained-owner launch. Marking it finishing first excludes that temporary record from singleTask lookup; otherwise Android can deliver the launch to the duplicate itself. Task-move APIs are not used because HOME can stop app switches even for a focused caller. No REORDER_TASKS permission is required. A cold MAIN launch uses CATEGORY_HOME when Vela holds the default Home role. Deep links and navigation intents are delivered to the retained owner.
+
+The car launcher variant disables PiP in its manifest and both API 26-30 and API 31+ entry paths, including when used as a normal app or during projection takeover. Background navigation/music services and the floating return button remain available. The standard maps variant retains PiP. A fullscreen owner resume clears stale PipMode state. Rejected duplicates and obsolete owners do not initialize or disconnect a second map client. Task restoration failure is logged; retained map/navigation state is not intentionally reset.
+
+
+The APK publishing workflow checks the packaged MainActivity with aapt: exactly one declaration, launchMode singleTask (0x2), supportsPictureInPicture false. This guards manifest-merge regressions independently of the runtime PiP conditions.
+
+
+Car launcher HOME entry uses the lightweight CarLauncherEntryActivity forwarder; MainActivity is always a standard singleTask UI with car PiP disabled. Updating from the former MainActivity HOME component can require selecting Vela as the default Home app again. Target head-unit projection takeover remains a device acceptance check.
+
+
+The map search offline indicator uses an accessible icon without a text label. Stopping speech invalidates queued utterances but preserves the system TTS initialization callback; engine binding callbacks are gated by binding generation, not speech cancellation. Head-unit audio output remains a device acceptance check.
+
+
+Downloaded regions are listed from local OBF, basemap and POI inventory before a server catalog request. A validated per-source catalog cache supplies display names when available; a restored region without cache uses its local ID and cannot initiate a download without a catalog URL. Missing network access does not hide installed packages. Target head-unit restore remains an acceptance check.
+
+
+The in-app language picker excludes Hebrew. An existing explicit he or iw preference migrates to English before resource wrapping and navigation localization. Verify the picker and saved-language migration in the next packaged build.
+
+
+Car Smart Focus uses per-source playback edges and default external tracking with explicit opt-out, with a separate user lock. Bluetooth connection/HFP alone does not qualify as music. Exposed ZLink/Android Auto MediaSessions participate as projection media; undocumented OEM-only playback remains unverified. Pause fallback waits 2 seconds, buffering waits up to 8 seconds, and calls/TTS suspend tracking. Large-player source selection is reused; small panels show external source icons only. Optional READ_PHONE_STATE is requested from the permissions page, never at startup. Verify actual incoming BT, HFP and projection on the target head unit.
+
+
+Smart Focus retains the playback owner separately from a browsed paused source, so Select followed by Play releases only the previous audible or preparing source once. Include this deferred handoff in head-unit acceptance.
+
+The equalizer package preference is shared by settings and all player entry points. Settings always opens the application picker. Playback buttons open the selected application directly, or show the picker when unset or unavailable. Selection alone does not launch the application; clearing restores the unselected state. The large-player button displays the selected application icon without a color tint. The picker includes launcher applications and audio-effect control-panel handlers, deduplicated by package.
+
+Smart Focus follows playing external MediaSessions by default, with explicit per-source opt-out. A cold snapshot adopts playing external music even when the internal player is playing. Normal paused external sources return to internal controls after 2 seconds; buffering or an explicit paused selection has an 8-second grace. Fallback never sends Play, and idle internal controls schedule no recheck. Session access is queried on manager initialization and foreground return, throttled to 2 seconds, on an IO dispatcher. A disconnected listener requests rebind only when notification access is granted. Hardware radio tuning events are observed independently of selection; initial sticky events update metadata without marking playback. HOME forwarding waits for the translucent entry activity to resume and forwards once to the existing singleTask UI.
+
+The large-player source button opens one flat, live music-control dialog with an automatic tracking card, the current controlled source and playback status, and icon rows for manual selection. A manual row selects controls without Play and persists auto_follow=false; the automatic card clears the manual lock, persists auto_follow=true and reevaluates already-playing sessions immediately. Per-source inclusion and playback-start options stay out of this dialog. Missing notification access offers a direct permission-settings action. The host dismisses the dialog when released; updates ignore playback-position ticks. Startup-source settings list actual available adapters without hardware-brand labels. The chooser width is capped at 640 dp with 32 dp horizontal screen allowance; its height is capped at 560 dp or the visible frame minus 16 dp. Source cards have a minimum height of 72 dp and 36 dp icons. Compact spacing keeps the first source visible on short landscape displays.
+
+Small music panel: the outlined clock supports turquoise (default), theme, amber, and white outline colors from its menu. Night mode dims the fill independently of the panel background. The external source icon opens the shared source chooser. Track titles wrap to two lines; a 3 dp progress indicator is hidden when duration is unavailable. The visualizer toggle is saved locally.
+
+The small clock uses 28% of panel height (32-100 dp), reserves 32 dp at each side for source and menu controls, and fits measured glyphs to the remaining bounds without a minimum font size. Transparent mode keeps the outline visible; optional embossed edges use static offset strokes and persist independently of color. Other clock instances retain their existing sizing and flat appearance.
+
+The small clock supports solid white, custom RGB colors with a live preview, and optional separate hour/minute colors. The picker commits only on Save. Clock height is 28% of panel height (32-100 dp) with 32 dp reserved at each side; measured glyph fitting prevents overflow. Embossed clock is near the top of the panel menu.
+
+Clock presets include soft Material You system accents on API 31+ with a cream/lavender fallback, plus a low-saturation palette sampled once from the panel artwork. Saved custom colors are preserved. HOME returns target the retained MainActivity AppTask before allowing a cold task; root forwarding tasks are removed and excluded from recents. A pause lasting 500 ms marks the launcher as background for the floating button even if an OEM radio window never stops it; resume cancels this transition.
+
+Address input and POI category browsing have separate state. Category chips select canonical OSM tags, use exact offline category/bounding-box queries first and explicit Overpass category requests as the online fallback. The initial radial limit is 10 km, with explicit expansion to 20 km. A bounded pool of 500 nearest POIs is filtered locally by accent-tolerant name/address tokens; typing never geocodes a category or refetches the pool. Empty filters restore the pool; X cancels pending work, clears category state and returns to address input while preserving active navigation. Generation checks prevent stale category responses after clear or replacement. Turkish resource completion and placeholder parity are audited with scripts/audit_turkish_resources.py.
+
+The Turkish mapscreen_results_count plural uses %1$d in every quantity, matching the base resource and CI placeholder validation.
+
+Music sources use a vertically scrolling icon list in the large player dock. Selecting a source requests playback; selecting an internal library track retains internal control while slow storage prepares. Legacy radio next/previous use single-station seek commands instead of continuous scan. Cached detached USB tracks are excluded from the active library without deleting the saved index. Failed queue entries are attempted once per failure sequence, and pending recovery is canceled by pause or a new track.
+
+Smart Focus separates automatic playback tracking, source locking, and per-source takeover permissions. Explicit selection consumes existing playback and preparation events; timestamped Android session events from before that selection cannot take over. A stopped source must begin a fresh playback transition before it can reclaim control. Automatic idle fallback changes controls to internal without starting playback. Radio frequency metadata alone is not playback evidence; radios without a real playback session remain manually selectable with an unknown-state label. Selected icons have an outline, while confirmed playing sources have a separate play indicator.
+
+The large music player uses its existing 60 dp vertical dock for a scrolling source-icon list, with close/library controls above and source settings below. There is no source toolbar above the cover or playlist. The equalizer is the sixth and final adaptive playback control, after repeat, and scanning sits after the playlist tabs before the overflow menu. Source selection, playing badges, tracking permissions and equalizer application dispatch keep their existing behavior.
+
+The player dock uses the existing playlist vector with fit-center scaling and 6 dp padding for a full-size glyph. Source settings reuse the launcher cyan gear asset without a monochrome tint; the equalizer also uses fit-center scaling so its built-in glyph or selected application icon fills the adaptive playback button. All controls retain their existing touch targets and actions.
+
+Music scanning shares messaging-folder and system-sound exclusions across MediaStore, direct file crawling and cached-library restoration. MediaStore ringtone/alarm/notification flags exclude audio regardless of folder, and excluded file identities prevent the crawler from re-adding those rows. The crawler prunes excluded folders and .nomedia directories before metadata reads. Matching uses folder boundaries and Locale.ROOT so ordinary album names remain eligible; IS_MUSIC is not required for head-unit USB compatibility.
+
+Native launcher popups apply system-bar preferences to their own focused window, including submenu levels. Music, dock, drawer and compact-panel menus use one focusable list-popup implementation backed by MenuBuilder, preserving item callbacks, disabled/checked items and submenus. Classic music/library/color dialogs bind the same preferences on window focus and clean up listeners on detach. Immersive mode hides both bars; non-immersive mode preserves navigation and honors the independent status-bar setting.
+
+## Car startup and native popup stability
+
+Native popup clicks resolve `MenuItem` from the displayed ListView adapter. Positions outside the live item count and invisible or disabled items do not dispatch. AppCompat retains the first item-click listener while a popup changes adapters; callbacks therefore do not capture a menu-level item list.
+
+Dock preference opening, reads and JSON parsing execute on `Dispatchers.IO`; publication executes on the main dispatcher. Reload generations reject obsolete loads. A separate edit generation rejects startup reads after user edits without canceling metadata enrichment of current shortcuts.
+
+The PMTiles archive LRU retains at most eight sources. Local cache keys contain the URI, file size and modification time. Unchanged local sources do not expire by elapsed time; remote sources retain the five-minute lifetime. Directory caches retain at most eight entries per source. Slow range reads, directory retrieval and decompression are logged at 250 ms or more; total request timing also reports archive lookup time. Music cache timing separates file reading, JSON parsing, metadata restoration, USB file checks and folder grouping. Timing records do not alter availability filtering or start a library scan.
+
+On API 30 and older, main, dialog and native popup windows set the legacy fullscreen, hide-navigation and immersive-sticky visibility bits alongside WindowInsetsController requests. The shared legacy helper preserves unrelated flags and writes only when the mask changes. Non-immersive mode restores navigation visibility and honors the separate status-bar preference.
+
+Native popup height is bounded by the visible frame and stable bottom inset, including background padding. Larger submenus scroll within that bound so the last row remains reachable on API 30.
+
+## Small player clock appearance
+
+The clock menu and Car settings hub open CLOCK mode in the existing launcher window. Controls occupy the large right panel and the real CarUnifiedPanelHost occupies the small left panel; portrait places the player above the controls. The same attached host is reparented when opening and closing the editor, rather than creating a duplicate preview. The map composition remains attached beneath it. The temporary panel order does not overwrite saved panel placement. Appearance, Colors and Time format tabs keep controls separate. Changes save immediately without a confirmation dialog; the panel coalesces preference callbacks into one posted style update and removes its listener on detach/release. Only the real clock ticks once per second.
+
+Appearance lives in small_music_panel preferences. Existing palette, custom color, dual-color and embossed keys retain their meaning. The launcher backup category includes this preference file with a typed allowlist, including legacy JSON and ZIP inspection/restore.
+
+| Key | Default | Valid values |
+| --- | --- | --- |
+| clock_color | 6 | 0..7: turquoise, theme, amber, outline-only, white, custom, pastel, panel background |
+| clock_custom_primary | 0xFFB8DDD4 | ARGB int |
+| clock_custom_secondary | 0xFFD8CDE4 | ARGB int |
+| clock_two_colors | true for palette 6/7 when missing | Boolean |
+| clock_embossed | false | Boolean |
+| clock_scale | 1.0 | 0.6..1.5 |
+| clock_spacing | -0.16 | -0.26..0.12 em; negative values overlap digits |
+| clock_colon_spacing | 0.06 | 0..0.20 em |
+| clock_outline | 1.15 | 0.5..3.0 dp |
+| clock_outline_color | white | ARGB int |
+| clock_opacity | 100 | 0..100 percent, fill only |
+| clock_font | 0 | 0 boxed asset, 1 rounded sans serif, 2 monospace |
+| clock_format | system | system, 24, 12 |
+| clock_seconds | false | Boolean |
+
+Non-finite geometry values fall back to defaults; restored numeric values are clamped before drawing. The real panel scales its existing 28-percent-height clock slot, whose base is clamped to 32..100 dp, by clock_scale and caps it at 40 percent of panel height. Glyphs then fit within the actual width and height, retaining the space reserved for the menu button. Fill opacity does not fade outlines or other player content. Night fill alpha is 204/255 of the selected opacity. Pastel colors use system accent colors on API 31+ and muted fallback colors on older devices. Panel-background colors use the same 12-by-12 drawable sample in both preview and panel. Reset writes only clock appearance keys and preserves unrelated player settings.

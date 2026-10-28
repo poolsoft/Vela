@@ -15,6 +15,9 @@ import app.vela.carlauncher.model.SesParcasi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.util.Collections
 
@@ -57,8 +60,16 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    // Parsed on first use, NOT at construction: the media service's main thread paid 3404 ms for
+    // the first getSharedPreferences() on the teyp (2026-10-10). VelaApp pre-warms these files on
+    // an IO thread, so this lazy read is cheap when the service is rebuilt.
+    private val prefs: SharedPreferences by lazy {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
     private val anaHandler = Handler(Looper.getMainLooper())
+    private val restoreLock = Mutex()
+    private val preferenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
+    private val savedPreferences = preferenceScope.async { prefs.all }
 
     private var mediaPlayer: MediaPlayer? = null
     val audioSessionId: Int get() = runCatching { mediaPlayer?.audioSessionId ?: 0 }.getOrDefault(0)
@@ -71,6 +82,10 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     private var lastSavedPosition = -1L
     private var pendingPlay = false
     private var recordNextStart = false
+    val isPreparing: Boolean get() = pendingPlay && !hazirMi && mediaPlayer != null
+    private val failedTracks = mutableSetOf<String>()
+    private var playbackGeneration = 0L
+    private var failedAdvance: Runnable? = null
     private var hazirMi = false
     private var odakGeriGelinceCal = false
     private var bekleyenSeekKonumu = 0L
@@ -111,7 +126,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
                     val pos = mediaPlayer?.currentPosition?.toLong() ?: 0L
                     _anlikKonumMs.value = pos
                     if (kotlin.math.abs(pos - lastSavedPosition) >= 5000) {
-                        prefs.edit().putLong(KEY_LAST_POS, pos).apply()
+                        preferenceScope.launch { prefs.edit().putLong(KEY_LAST_POS, pos).apply() }
                         lastSavedPosition = pos
                     }
                 } catch (e: Exception) {
@@ -153,12 +168,6 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         }
     }
 
-    init {
-        _karisikCal.value = prefs.getBoolean(KEY_SHUFFLE, false)
-        _tekrarModu.value = prefs.getInt(KEY_REPEAT, 0)
-        bekleyenSeekKonumu = 0L
-    }
-
     fun setListener(l: PlaybackListener?) {
         this.listener = l
     }
@@ -188,6 +197,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     fun parcaAtaVeOynat(parca: SesParcasi, liste: List<SesParcasi> = emptyList()) {
+        failedTracks.clear()
         val oynatmaListesi = if (liste.isNotEmpty()) {
             liste
         } else if (_calismaListesi.isNotEmpty()) {
@@ -212,34 +222,44 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         calParca(parca, otomatikOynat = true)
     }
 
-    fun restoreSavedPlayback(library: List<SesParcasi>, autoPlay: Boolean): Boolean {
-        if (_anlikParca.value != null) return true
-        val byKey = library.associateBy { it.libraryKey() }
+    suspend fun restoreSavedPlayback(library: List<SesParcasi>, autoPlay: Boolean): Boolean = restoreLock.withLock {
+        if (_anlikParca.value != null) return@withLock true
+        val savedPrefs = savedPreferences.await()
+        val restoreStarted = android.os.SystemClock.elapsedRealtime()
         fun savedKeys(key: String): List<String> = runCatching {
-            val array = org.json.JSONArray(prefs.getString(key, "[]"))
+            val array = org.json.JSONArray(savedPrefs[key] as? String ?: "[]")
             (0 until array.length()).map { array.getString(it) }
         }.getOrDefault(emptyList())
-        val queueKeys = savedKeys("last_queue")
-        val baseKeys = savedKeys("last_base_queue").ifEmpty { queueKeys }
-        val repo = MusicRepository.getInstance(context)
-        fun resolveTrack(key: String): SesParcasi? = byKey[key] ?: repo.findTrackPortAgnostic(key)
+        val resolved = withContext(Dispatchers.Default) {
+            val index = MusicTrackIndex(library)
+            val queueKeys = savedKeys("last_queue")
+            val baseKeys = savedKeys("last_base_queue").ifEmpty { queueKeys }
+            val result = Triple(baseKeys.mapNotNull(index::find), queueKeys.mapNotNull(index::find),
+                index.find(savedPrefs[KEY_LAST_PATH] as? String))
+            app.vela.util.FileLogger.i("MusicRestore", "library=${library.size} savedQueue=${queueKeys.size} resolvedQueue=${result.second.size} missing=${queueKeys.size - result.second.size} elapsedMs=${android.os.SystemClock.elapsedRealtime() - restoreStarted}")
+            result
+        }
+        // A user may have selected a song while the saved list was resolving.
+        if (_anlikParca.value != null) return@withLock true
+        _karisikCal.value = savedPrefs[KEY_SHUFFLE] as? Boolean ?: false
+        _tekrarModu.value = savedPrefs[KEY_REPEAT] as? Int ?: 0
         _calismaListesi.clear()
-        _calismaListesi.addAll(baseKeys.mapNotNull(::resolveTrack))
+        _calismaListesi.addAll(resolved.first)
         _calmaKuyrugu.clear()
-        _calmaKuyrugu.addAll(queueKeys.mapNotNull(::resolveTrack).ifEmpty { _calismaListesi })
+        _calmaKuyrugu.addAll(resolved.second.ifEmpty { _calismaListesi })
         _kuyruk.value = _calmaKuyrugu.toList()
-        val saved = prefs.getString(KEY_LAST_PATH, null) ?: return true
-        val track = resolveTrack(saved) ?: return false
-        val position = prefs.getLong(KEY_LAST_POS, 0L).coerceAtLeast(0L)
+        val track = resolved.third ?: _calmaKuyrugu.firstOrNull() ?: return@withLock true
+        val position = if (resolved.third != null) (savedPrefs[KEY_LAST_POS] as? Long ?: 0L).coerceAtLeast(0L) else 0L
         if (_calmaKuyrugu.none { it.libraryKey() == track.libraryKey() }) _calmaKuyrugu.add(track)
         if (_calismaListesi.none { it.libraryKey() == track.libraryKey() }) _calismaListesi.add(track)
         suAnkiIndex = _calmaKuyrugu.indexOfFirst { it.libraryKey() == track.libraryKey() }
         _kuyruk.value = _calmaKuyrugu.toList()
-        calParca(track, autoPlay && prefs.getBoolean("was_playing", false), position)
-        return true
+        calParca(track, autoPlay && savedPrefs["was_playing"] == true, position)
+        true
     }
 
     fun indexeGoreOynat(index: Int) {
+        failedTracks.clear()
         if (index in 0 until _calmaKuyrugu.size) {
             suAnkiIndex = index
             calParca(_calmaKuyrugu[index], otomatikOynat = true)
@@ -305,6 +325,10 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     private fun calParca(parca: SesParcasi, otomatikOynat: Boolean, startPosition: Long = 0L) {
+        if (app.vela.BuildConfig.DIAGNOSTIC_MUSIC_DISABLED) return
+        failedAdvance?.let(anaHandler::removeCallbacks)
+        failedAdvance = null
+        playbackGeneration++
         _playbackError.value = null
         anaHandler.removeCallbacks(ilerlemeGorevi)
         app.vela.diag.ProcessDiagnostics.checkpoint("music player: create")
@@ -332,6 +356,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
             durdurVeSifirlaPlayer()
             _playbackError.value = context.getString(app.vela.R.string.car_music_play_failed)
             _caliyorMu.value = false
+            advanceAfterFailure()
             listener?.onCalmaDurumuDegisti(false)
         }
 
@@ -363,6 +388,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         try {
             if (hazirMi && mediaPlayer?.isPlaying == false) {
                 mediaPlayer?.start()
+                failedTracks.clear()
                 _caliyorMu.value = true
                 if (recordNextStart) {
                     _anlikParca.value?.let { MusicPlaylistStore.getInstance(context).recordPlay(it) }
@@ -381,6 +407,9 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     fun duraklat(releaseFocus: Boolean = true) {
+        failedAdvance?.let(anaHandler::removeCallbacks)
+        failedAdvance = null
+        playbackGeneration++
         odakGeriGelinceCal = false
         pendingPlay = false
         if (releaseFocus) odagiBirak()
@@ -510,7 +539,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
 
     fun setKarisikCal(aktif: Boolean) {
         _karisikCal.value = aktif
-        prefs.edit().putBoolean(KEY_SHUFFLE, aktif).apply()
+        preferenceScope.launch { prefs.edit().putBoolean(KEY_SHUFFLE, aktif).apply() }
         if (_calismaListesi.size <= 1) {
             val varsayilan = getVarsayilanParcalar()
             if (varsayilan.isNotEmpty()) {
@@ -524,7 +553,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     fun setTekrarModu(mod: Int) {
         val yeniMod = mod % 3
         _tekrarModu.value = yeniMod
-        prefs.edit().putInt(KEY_REPEAT, yeniMod).apply()
+        preferenceScope.launch { prefs.edit().putInt(KEY_REPEAT, yeniMod).apply() }
         if (yeniMod == 2 && _calismaListesi.size <= 1) {
             val varsayilan = getVarsayilanParcalar()
             if (varsayilan.isNotEmpty()) {
@@ -581,13 +610,26 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         durdurVeSifirlaPlayer()
         _playbackError.value = context.getString(app.vela.R.string.car_music_play_failed)
         _caliyorMu.value = false
-        listener?.onCalmaDurumuDegisti(false)
         hazirMi = false
-        // Bozuk veya calinamayan dosyada takilip kalmak yerine bir sonraki sarkiya atla (Auto-skip)
-        if (_calmaKuyrugu.size > 1) {
-            anaHandler.postDelayed({ sonraki() }, 500)
-        }
+        advanceAfterFailure()
+        listener?.onCalmaDurumuDegisti(false)
         return true
+    }
+
+    /** Each failed queue entry is tried once; repeat mode cannot loop over a detached USB. */
+    private fun advanceAfterFailure() {
+        _anlikParca.value?.let { failedTracks.add(it.libraryKey()) }
+        val next = (1.._calmaKuyrugu.size).map { (suAnkiIndex + it).mod(_calmaKuyrugu.size) }
+            .firstOrNull { _calmaKuyrugu[it].libraryKey() !in failedTracks }
+        if (next == null) { pendingPlay = false; return }
+        val generation = playbackGeneration
+        failedAdvance = Runnable {
+            failedAdvance = null
+            if (generation == playbackGeneration) {
+                suAnkiIndex = next
+                calParca(_calmaKuyrugu[next], otomatikOynat = true)
+            }
+        }.also { anaHandler.postDelayed(it, 500L) }
     }
 
     private fun odakTalepEt(): Boolean {
@@ -622,14 +664,20 @@ class InternalMusicPlayer private constructor(private val context: Context) :
     }
 
     private fun kaydetDurum() {
-        val editor = prefs.edit()
-        _anlikParca.value?.let { editor.putString(KEY_LAST_PATH, it.libraryKey()) }
-            ?: editor.remove(KEY_LAST_PATH)
-        editor.putString("last_queue", org.json.JSONArray(_calmaKuyrugu.map { it.libraryKey() }).toString())
-        editor.putString("last_base_queue", org.json.JSONArray(_calismaListesi.map { it.libraryKey() }).toString())
-        editor.putLong(KEY_LAST_POS, _anlikKonumMs.value)
-        editor.putBoolean("was_playing", _caliyorMu.value || pendingPlay)
-        editor.apply()
+        val track = _anlikParca.value?.libraryKey()
+        val queue = _calmaKuyrugu.map { it.libraryKey() }
+        val base = _calismaListesi.map { it.libraryKey() }
+        val position = _anlikKonumMs.value
+        val playing = _caliyorMu.value || pendingPlay
+        preferenceScope.launch {
+            val editor = prefs.edit()
+            track?.let { editor.putString(KEY_LAST_PATH, it) } ?: editor.remove(KEY_LAST_PATH)
+            editor.putString("last_queue", org.json.JSONArray(queue).toString())
+            editor.putString("last_base_queue", org.json.JSONArray(base).toString())
+            editor.putLong(KEY_LAST_POS, position)
+            editor.putBoolean("was_playing", playing)
+            editor.apply()
+        }
     }
 
     fun serbestBirak() {

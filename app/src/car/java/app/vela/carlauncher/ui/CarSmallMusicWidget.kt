@@ -53,6 +53,10 @@ fun CarSmallMusicWidget(
             val btnPlay = view.findViewById<ImageButton>(R.id.widget_btn_play)
             val visualizer = view.findViewById<MusicVisualizerView>(R.id.widget_visualizer)
 
+            MediaSourceIcon.bind(view.findViewById(R.id.widget_app_icon), medya, externalOnly = true)
+            btnPlay?.isEnabled = medya.canControl
+            view.findViewById<ImageButton>(R.id.widget_btn_prev)?.isEnabled = medya.canSkipPrevious
+            view.findViewById<ImageButton>(R.id.widget_btn_next)?.isEnabled = medya.canSkipNext
             if (medya.albumKapagi != null) {
                 albumArt?.setImageBitmap(medya.albumKapagi)
             } else {

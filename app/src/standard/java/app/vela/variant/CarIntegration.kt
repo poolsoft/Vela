@@ -10,8 +10,11 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** Normal Vela variant: no launcher service, HOME role or OEM hardware hooks. */
 object CarIntegration {
+    fun onSpeechStateChanged(speaking: Boolean) = Unit
+    fun mapStorageAvailable(): Boolean = true
     const val available = false
     fun isolatedAutoSurface(context: Context): app.vela.ui.map.SurfaceMapController? = null
+    @Composable fun mapInputReady(): Boolean = true
     @Composable fun RenderIsolatedMap(
         scene: app.vela.ui.map.MapRenderScene,
         callbacks: app.vela.ui.map.MapRenderCallbacks,
@@ -30,6 +33,7 @@ object CarIntegration {
     fun init(context: Context) = Unit
     fun onResume(activity: ComponentActivity) = Unit
     fun onPause(activity: ComponentActivity) = Unit
+    fun onStop(activity: ComponentActivity) = Unit
     fun onCreated(activity: ComponentActivity) = Unit
     fun isDefaultHome(context: Context) = false
     fun prepareForExit(activity: ComponentActivity) = Unit

@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import android.os.StatFs
 import android.provider.DocumentsContract
+import app.vela.offline.PmtilesReader
+import app.vela.util.FileLogger
 import app.vela.BuildConfig
 import app.vela.R
 import app.vela.variant.CarIntegration
@@ -92,7 +94,7 @@ object PortableBackup {
             } catch (e: CancellationException) {
                 mutable.value = State(message = R.string.backup_cancelled)
             } catch (e: Exception) {
-                android.util.Log.w("PortableBackup", "Transfer failed", e)
+                FileLogger.w("PortableBackup", "Transfer failed at ${mutable.value.detail}", e)
                 mutable.value = State(message = (e as? Failure)?.resource ?: R.string.backup_failed)
             } finally {
                 DownloadService.end(app, label)
@@ -166,7 +168,9 @@ object PortableBackup {
         val revision = DownloadService.workRevision()
         val targetRoots = selectedCategories.flatMap { it.roots }.toSet()
         val original = inventory(app, targetRoots)
-        val dirs = targetRoots.filter { File(app.filesDir, it).isDirectory }.sorted()
+        val snapshot = if (ModularCategory.PLACES in selectedCategories) OfflineSearchSnapshot.create(app) else null
+        val dirs = (targetRoots.filter { File(app.filesDir, it).isDirectory } +
+            if (snapshot != null) listOf("poipacks") else emptyList()).distinct().sorted()
         
         val meta = mutableListOf<Source>()
         var personalText: String? = null
@@ -181,7 +185,9 @@ object PortableBackup {
             val bytes = launcherText.toByteArray(Charsets.UTF_8)
             meta += Source("launcher.json", null, bytes, bytes.size.toLong(), 0)
         }
-        val sources = original + meta
+        val sources = original + meta + listOfNotNull(snapshot?.let {
+            Source("poipacks/${it.name}", it, null, it.length(), it.lastModified())
+        })
         require(sources.isNotEmpty() && sources.size <= 100000)
         val total = sources.sumOf { it.size }
         val name = "Vela-backup-" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(java.time.ZoneOffset.UTC).format(Instant.now())
@@ -235,7 +241,7 @@ object PortableBackup {
         } catch (e: Exception) {
             runCatching { DocumentsContract.deleteDocument(app.contentResolver, folder) }
             throw e
-        }
+        } finally { snapshot?.delete() }
     }
 
     fun inspect(context: Context, tree: Uri) = run(context) { app ->
@@ -275,6 +281,7 @@ object PortableBackup {
         reviewed = null
         run(context) { app ->
             val work = BackupRestore.work(app)
+            var currentPath = "prepare"
             try {
                 BackupRestore.discard(app)
                 val stage = File(work, "staged").apply { check(mkdirs()) }
@@ -293,6 +300,7 @@ object PortableBackup {
                 val buffer = ByteArray(256 * 1024)
                 var done = 0L
                 for (entry in targetEntries) {
+                    currentPath = entry.path
                     currentCoroutineContext().ensureActive()
                     val path = if (entry.path in BackupFiles.metadata) entry.path else "files/${entry.path}"
                     val out = BackupFiles.local(stage, path)
@@ -301,7 +309,7 @@ object PortableBackup {
                     FileOutputStream(out).use { output ->
                         var remaining = entry.size
                         for (part in entry.parts) {
-                            val uri = docs[part] ?: throw Failure(R.string.backup_invalid)
+                            val uri = docs[part] ?: throw java.io.IOException("Missing backup part: $part for ${entry.path}")
                             app.contentResolver.openInputStream(uri)!!.use { input ->
                                 var left = minOf(remaining, BackupFiles.PART_BYTES)
                                 val chunk = left
@@ -319,9 +327,15 @@ object PortableBackup {
                         }
                         output.fd.sync()
                     }
-                    if (hex(hash.digest()) != entry.sha256) throw Failure(R.string.backup_invalid)
+                    check(out.length() == entry.size) { "Restored size mismatch: ${entry.path}" }
+                    check(hex(hash.digest()) == entry.sha256) { "Restored SHA-256 mismatch: ${entry.path}" }
+                    if (entry.path.endsWith(".pmtiles", ignoreCase = true)) {
+                        PmtilesReader.validateContainer(out)
+                        FileLogger.i("PortableBackup", "Verified map ${entry.path}: bytes=${entry.size}, SHA-256 OK, section bounds OK")
+                    }
                 }
 
+                currentPath = "settings/ready manifest"
                 val personalFile = File(stage, "personal.json")
                 if (personalFile.exists()) BackupPreferences.validate(personalFile.readText())
                 val launcherFile = File(stage, "launcher.json")
@@ -331,8 +345,10 @@ object PortableBackup {
                 val partialManifest = BackupFiles.Manifest(targetRoots, targetEntries, manifest.created, manifest.version)
                 BackupRestore.atomic(File(work, "ready.json"), partialManifest.json())
                 File(app.filesDir, "portable-restore-result").delete()
+                FileLogger.i("PortableBackup", "Restore staged: files=${targetEntries.size}, roots=${targetRoots.joinToString()}, live files unchanged until restart")
                 mutable.value = State(message = R.string.backup_ready, ready = true, done = done, total = done)
             } catch (e: Exception) {
+                FileLogger.w("PortableBackup", "Restore failed at $currentPath; live files were not installed", e)
                 BackupRestore.discard(app)
                 throw e
             }

@@ -34,6 +34,11 @@ android {
         // Play's library record alone or also the signing certificate. Never a shipped path.
         applicationId = (project.findProperty("appId") as String?)?.takeIf { it.isNotBlank() } ?: "app.vela"
         minSdk = 26
+        buildConfigField("boolean", "DIAGNOSTIC_BUILD", (providers.gradleProperty("diagnosticApk").orNull == "true").toString())
+        buildConfigField("boolean", "DIAGNOSTIC_MUSIC_DISABLED", "false")
+        // Temporary head-unit safety: no in-process sherpa-onnx ASR, Piper or wake-word JNI.
+        buildConfigField("boolean", "NATIVE_VOICE_ENABLED", "false")
+        buildConfigField("boolean", "NATIVE_TTS_ENABLED", "true")
         targetSdk = 35
         // Overridable from CI: -PappVersionCode / -PappVersionName (ci.yml derives
         // them from the run number → 0.3.<run> / 2000+run). Defaults are local/dev only.
@@ -192,12 +197,14 @@ android {
 
     buildTypes {
         release {
+            isDebuggable = providers.gradleProperty("diagnosticApk").orNull == "true"
             // Always ship release: R8 here is what keeps map scroll/nav smooth
             // (debug builds visibly lag).
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             val envSigning = signingConfigs.getByName("releaseFromEnv")
+            check(!isDebuggable || envSigning.storeFile?.exists() == true) { "Diagnostic APK requires the release signing key" }
             signingConfig = if (envSigning.storeFile?.exists() == true) {
                 envSigning
             } else {

@@ -96,6 +96,19 @@
             android:supportsPictureInPicture="true"
             android:theme="@style/Theme.Vela">
 
+            <!-- Standard maps category used by launchers and navigation app selectors. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.APP_MAPS" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="google.navigation" />
+            </intent-filter>
+
             <!-- Share TO Vela: a Google Maps share link, a URL, or a plain address from any
                  app's share sheet opens/imports/searches without the copy-paste dance. -->
             <intent-filter>
@@ -150,6 +163,13 @@
             </intent-filter>
         </activity-alias>
 
+        <activity
+            android:name=".util.AppRestartActivity"
+            android:exported="false"
+            android:process=":restart"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+
         <service
             android:name=".service.NavigationService"
             android:exported="false"
@@ -197,6 +217,7 @@
             android:name="android.telephony.PROPERTY_SATELLITE_DATA_OPTIMIZED"
             android:value="${applicationId}" />
 
+        <service android:name=".voice.PiperService" android:process=":voice_tts" android:exported="false" />
 </application>
 
 </manifest>

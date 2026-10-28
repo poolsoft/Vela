@@ -364,3 +364,29 @@ or if the system declines, the notification is exactly what it was before.
   device.
 - **Speed limits are only as good as OpenStreetMap.** Many roads carry no `maxspeed` tag, and
   there the badge is blank, which is the data rather than the lookup.
+
+## Bounded speech engine work
+
+Speech engine calls and stop/shutdown cleanup run on one daemon worker with at most eight pending jobs. A system speech deadline of 30 seconds includes time waiting for initialization or a busy engine; neural speech uses 95 seconds. Timeout releases focus and publishes failure without calling the engine on the UI thread. A broken engine may still occupy the worker; stale queued prompts are discarded rather than replayed after recovery.
+
+Map performance diagnostics record requested and effective 3D-building/topography states separately, including startup, profile and navigation restrictions; the device-protection toggle is opt-in and never rewrites stored layer choices.
+
+OBF requests use a 60-second deadline, cooperative engine progress cancellation and latest-request replacement. Every route context unloads its tiles on completion or failure; speed lookups skip a busy route instead of queuing behind it. Car searches enable Java HH for indexed data and COMPLEX two-phase search for base-road data. The native Valhalla adapter remains first choice when initialized; logs name the selected engine and OBF hierarchy capabilities.
+
+
+The map search offline indicator uses an accessible icon without a text label. Stopping speech invalidates queued utterances but preserves the system TTS initialization callback; engine binding callbacks are gated by binding generation, not speech cancellation. Head-unit audio output remains a device acceptance check.
+
+
+The in-app language picker excludes Hebrew. An existing explicit he or iw preference migrates to English before resource wrapping and navigation localization. Verify the picker and saved-language migration in the next packaged build.
+
+
+Car Smart Focus uses per-source playback edges and default external tracking with explicit opt-out, with a separate user lock. Bluetooth connection/HFP alone does not qualify as music. Exposed ZLink/Android Auto MediaSessions participate as projection media; undocumented OEM-only playback remains unverified. Pause fallback waits 2 seconds, buffering waits up to 8 seconds, and calls/TTS suspend tracking. Large-player source selection is reused; small panels show external source icons only. Optional READ_PHONE_STATE is requested from the permissions page, never at startup. Verify actual incoming BT, HFP and projection on the target head unit.
+
+
+Smart Focus retains the playback owner separately from a browsed paused source, so Select followed by Play releases only the previous audible or preparing source once. Include this deferred handoff in head-unit acceptance.
+
+Equalizer selection is shared across settings and player controls. The large player displays the selected application icon; an unset selection opens the picker.
+
+Smart Focus tracks playing external music by default and returns to internal controls when it stops, without starting playback. Media listener recovery runs on foreground return. Radio labels are hardware-neutral, radio tuning is observed before selection, and HOME forwarding waits for entry resume.
+
+The large player uses a flat music-control dialog with automatic tracking, current playback status and icon rows for explicit manual control. Selecting a row never starts playback; returning to automatic tracking immediately follows existing external music.

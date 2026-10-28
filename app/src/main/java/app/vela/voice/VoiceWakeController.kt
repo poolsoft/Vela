@@ -72,9 +72,10 @@ class VoiceWakeController @Inject constructor(
         }
     }
 
-    fun isEnabled(): Boolean = prefs.getBoolean(KEY_WAKE_ENABLED, false)
+    fun isEnabled(): Boolean = app.vela.BuildConfig.NATIVE_VOICE_ENABLED && prefs.getBoolean(KEY_WAKE_ENABLED, false)
 
     fun setEnabled(enabled: Boolean) {
+        if (enabled && !app.vela.BuildConfig.NATIVE_VOICE_ENABLED) return
         prefs.edit().putBoolean(KEY_WAKE_ENABLED, enabled).apply()
         if (enabled) {
             startListening()

@@ -1,14 +1,16 @@
 package app.vela.carlauncher.apps
 
 import android.content.Context
-import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.graphics.drawable.Drawable
-import androidx.core.content.ContextCompat
 import app.vela.carlauncher.model.AppShortcut
 import app.vela.carlauncher.model.InternalApp
 import app.vela.carlauncher.model.LaunchMode
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,53 +39,91 @@ class AppDockManager private constructor(private val context: Context) {
         }
     }
 
-    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences by lazy { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
     private val _kisayollar = MutableStateFlow<List<AppShortcut>>(emptyList())
     val kisayollar: StateFlow<List<AppShortcut>> = _kisayollar.asStateFlow()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var loadGeneration = 0
+    private var editGeneration = 0
 
     init {
         yukleKisayollar()
     }
 
     fun yukleKisayollar() {
-        val json = prefs.getString(KEY_SHORTCUTS, null)
-        val liste = mutableListOf<AppShortcut>()
+        loadGeneration++
+        val generation = loadGeneration
+        val edits = editGeneration
+        scope.launch {
+            val started = android.os.SystemClock.elapsedRealtime()
+            val (items, defaults) = withContext(Dispatchers.IO) {
+                val json = prefs.getString(KEY_SHORTCUTS, null)
+                val liste = mutableListOf<AppShortcut>()
 
-        if (!json.isNullOrBlank()) {
-            try {
-                val array = JSONArray(json)
-                val pm = context.packageManager
+                if (!json.isNullOrBlank()) {
+                    try {
+                        val array = JSONArray(json)
 
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    val pkg = obj.getString("package")
-                    val order = obj.optInt("order", i)
-                    val launchModeStr = obj.optString("launchMode", LaunchMode.FULL_SCREEN.name)
-                    val launchMode = try {
-                        LaunchMode.valueOf(launchModeStr)
+                        for (i in 0 until array.length()) {
+                            val obj = array.getJSONObject(i)
+                            val pkg = obj.getString("package")
+                            val order = obj.optInt("order", i)
+                            val launchModeStr = obj.optString("launchMode", LaunchMode.FULL_SCREEN.name)
+                            val launchMode = try {
+                                LaunchMode.valueOf(launchModeStr)
+                            } catch (e: Exception) {
+                                LaunchMode.FULL_SCREEN
+                            }
+
+                            liste.add(placeholder(pkg, order, launchMode))
+                        }
                     } catch (e: Exception) {
-                        LaunchMode.FULL_SCREEN
-                    }
-
-                    val shortcut = cozAppShortcut(pkg, order, launchMode, pm)
-                    if (shortcut != null) {
-                        liste.add(shortcut)
+                        liste.clear()
                     }
                 }
-            } catch (e: Exception) {
-                liste.clear()
+
+                if (json.isNullOrBlank()) {
+                    liste.addAll(varsayilanKisayollariOlustur())
+                }
+
+                liste.sortedBy { it.sira } to json.isNullOrBlank()
             }
+            if (generation != loadGeneration || edits != editGeneration) return@launch
+            _kisayollar.value = items
+            app.vela.util.FileLogger.i("AppDockManager", "Preferences ready count=${items.size} elapsedMs=${android.os.SystemClock.elapsedRealtime() - started}")
+            resolveMetadata(items, persistDefaults = defaults)
         }
-
-        if (json.isNullOrBlank()) {
-            liste.addAll(varsayilanKisayollariOlustur())
-            kaydetJson(liste)
-        }
-
-        _kisayollar.value = liste.sortedBy { it.sira }
     }
 
-    private fun cozAppShortcut(pkg: String, order: Int, launchMode: LaunchMode, pm: PackageManager): AppShortcut? {
+    private fun placeholder(pkg: String, order: Int, mode: LaunchMode) =
+        AppShortcut(pkg, pkg.substringAfter("://"), sira = order, launchMode = mode)
+
+    private fun resolveMetadata(items: List<AppShortcut>, persistDefaults: Boolean = false) {
+        val generation = loadGeneration
+        scope.launch {
+            val started = android.os.SystemClock.elapsedRealtime()
+            val resolved = withContext(Dispatchers.IO) {
+                app.vela.diag.ProcessDiagnostics.checkpoint("dock: metadata load")
+                items.associate { item ->
+                    item.paketAdi to try {
+                        cozAppShortcut(item.paketAdi, item.sira, item.launchMode, context.packageManager)
+                    } catch (error: Exception) {
+                        app.vela.util.FileLogger.w("AppDockManager", "Shortcut metadata unavailable: ${error.javaClass.simpleName}")
+                        item
+                    }
+                }
+            }
+            if (generation != loadGeneration) return@launch
+            // Only enrich current entries: loading must not resurrect removals or undo edits.
+            _kisayollar.value = mergeDockMetadata(_kisayollar.value, resolved)
+            if (persistDefaults) kaydetJson(_kisayollar.value)
+            app.vela.diag.ProcessDiagnostics.checkpoint("dock: metadata ready")
+            app.vela.util.FileLogger.i("AppDockManager", "Metadata ready count=${_kisayollar.value.size} elapsedMs=${android.os.SystemClock.elapsedRealtime() - started}")
+        }
+    }
+
+    private suspend fun cozAppShortcut(pkg: String, order: Int, launchMode: LaunchMode, pm: PackageManager): AppShortcut? {
         if (InternalApp.isInternalUri(pkg)) {
             val internal = InternalApp.fromUri(pkg) ?: return null
             return AppShortcut(
@@ -98,7 +138,7 @@ class AppDockManager private constructor(private val context: Context) {
         return try {
             val appInfo = pm.getApplicationInfo(pkg, 0)
             val ad = pm.getApplicationLabel(appInfo).toString()
-            val ikon = pm.getApplicationIcon(appInfo)
+            val ikon = CarAppManager.getInstance(context).loadIcon(pkg)
             AppShortcut(
                 paketAdi = pkg,
                 ad = ad,
@@ -112,7 +152,6 @@ class AppDockManager private constructor(private val context: Context) {
     }
 
     private fun varsayilanKisayollariOlustur(): List<AppShortcut> {
-        val pm = context.packageManager
         val varsayilanlar = listOf(
             "internal://neon_dashboard",
             "internal://dashboard",
@@ -126,16 +165,13 @@ class AppDockManager private constructor(private val context: Context) {
         var order = 0
 
         for (pkg in varsayilanlar) {
-            val shortcut = cozAppShortcut(pkg, order, LaunchMode.FULL_SCREEN, pm)
-            if (shortcut != null) {
-                liste.add(shortcut)
-                order++
-            }
+            liste.add(placeholder(pkg, order++, LaunchMode.FULL_SCREEN))
         }
         return liste
     }
 
     private fun kaydetJson(liste: List<AppShortcut>) {
+        editGeneration++ // An outstanding startup read cannot overwrite a newer edit.
         try {
             val array = JSONArray()
             for (s in liste) {
@@ -152,17 +188,27 @@ class AppDockManager private constructor(private val context: Context) {
         }
     }
 
-    fun kisayolEkle(paketAdi: String): Boolean {
+    fun kisayolEkle(paketAdi: String, mode: LaunchMode = LaunchMode.FULL_SCREEN): Boolean {
         val guncel = _kisayollar.value.toMutableList()
         if (guncel.any { it.paketAdi == paketAdi }) return false
 
         val pm = context.packageManager
-        val shortcut = cozAppShortcut(paketAdi, guncel.size, LaunchMode.FULL_SCREEN, pm) ?: return false
+        if (!InternalApp.isInternalUri(paketAdi)) {
+            try { pm.getApplicationInfo(paketAdi, 0) } catch (_: PackageManager.NameNotFoundException) { return false }
+        } else if (InternalApp.fromUri(paketAdi) == null) return false
+        val shortcut = placeholder(paketAdi, guncel.size, mode)
 
         guncel.add(shortcut)
         kaydetJson(guncel)
         _kisayollar.value = guncel
+        resolveMetadata(listOf(shortcut))
         return true
+    }
+
+    fun setLaunchMode(packageName: String, mode: LaunchMode) {
+        val updated = _kisayollar.value.map { if (it.paketAdi == packageName) it.copy(launchMode = mode) else it }
+        kaydetJson(updated)
+        _kisayollar.value = updated
     }
 
     fun kisayolTasi(paketAdi: String, delta: Int) {
@@ -193,4 +239,13 @@ class AppDockManager private constructor(private val context: Context) {
         prefs.edit().remove(KEY_SHORTCUTS).apply()
         yukleKisayollar()
     }
+}
+
+
+/** Metadata completion cannot overwrite user edits made while package resources load. */
+internal fun mergeDockMetadata(
+    current: List<AppShortcut>, resolved: Map<String, AppShortcut?>,
+): List<AppShortcut> = current.mapNotNull { item ->
+    if (!resolved.containsKey(item.paketAdi)) item
+    else resolved[item.paketAdi]?.let { item.copy(ad = it.ad, ikon = it.ikon) }
 }

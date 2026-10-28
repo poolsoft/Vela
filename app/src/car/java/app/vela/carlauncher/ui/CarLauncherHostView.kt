@@ -62,7 +62,6 @@ fun CarLauncherHostView(
     var measuredPortrait by remember { mutableStateOf(configuration.orientation == Configuration.ORIENTATION_PORTRAIT) }
     val shortcuts by AppDockManager.getInstance(context).kisayollar.collectAsState()
     val tamEkran by CarLauncherSettings.tamEkranModu.collectAsState()
-    val durumCubugu by CarLauncherSettings.durumCubuguGoster.collectAsState()
     val dockKonumu by CarLauncherSettings.dockKonumu.collectAsState()
     val dockBoyutu by CarLauncherSettings.dockBoyutu.collectAsState()
     val panelKonumu by CarLauncherSettings.panelKonumu.collectAsState()
@@ -72,6 +71,8 @@ fun CarLauncherHostView(
     val dimEnabled by CarLauncherSettings.geceKarartmaEtkin.collectAsState()
     val dimLevel by CarLauncherSettings.geceKarartmaSeviyesi.collectAsState()
     val desktop by CarLauncherSettings.desktopModu.collectAsState()
+    val mapless by CarLauncherSettings.maplessMode.collectAsState()
+    val maplessMain by CarLauncherSettings.maplessMainScreen.collectAsState()
     val visualizerType by CarLauncherSettings.gorsellestiriciTipi.collectAsState()
     val largeVisualizer by CarLauncherSettings.largeVisualizer.collectAsState()
     val visualizerFps by CarLauncherSettings.visualizerFps.collectAsState()
@@ -89,21 +90,19 @@ fun CarLauncherHostView(
     val latestMap by rememberUpdatedState(haritaIcerigi)
     val latestAssistant by rememberUpdatedState(onAsistanTiklandi)
 
-    val parentComposition = rememberCompositionContext()
-    androidx.compose.runtime.LaunchedEffect(tamEkran, durumCubugu) {
-        val window = (context as? android.app.Activity)?.window
-        if (window != null) {
-            val wic = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-            if (tamEkran || !durumCubugu) {
-                wic.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-                wic.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
-                wic.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            } else {
-                wic.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-                wic.isAppearanceLightStatusBars = false
-            }
+    var dockReady by remember { mutableStateOf(!app.vela.ui.MemoryPressure.lowRam) }
+    var panelReady by remember { mutableStateOf(!app.vela.ui.MemoryPressure.lowRam) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (!dockReady) {
+            kotlinx.coroutines.delay(500)
+            dockReady = true
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: dock stage ready")
+            kotlinx.coroutines.delay(1_000)
+            panelReady = true
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: panel stage ready")
         }
     }
+    val parentComposition = rememberCompositionContext()
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { ctx ->
@@ -114,6 +113,8 @@ fun CarLauncherHostView(
             panel.clipToOutline = true
             map.clipToOutline = true
             val mapCompose = ComposeView(ctx).apply {
+                // Panel reparenting must not dispose the renderer's client and kill its service.
+                setViewCompositionStrategy(androidx.compose.ui.platform.ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
                 setParentCompositionContext(parentComposition)
                 setContent {
                     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp))) { latestMap() }
@@ -125,7 +126,14 @@ fun CarLauncherHostView(
                 root.findViewById<ImageButton>(R.id.widget_handle),
                 root.findViewById<FrameLayout>(R.id.app_drawer_container)
             )
-            val binding = LauncherHostBinding(manager, panel, mapCompose)
+            val binding = LauncherHostBinding(
+                manager = manager,
+                panel = panel,
+                mapContainer = map,
+                dockContainer = dock,
+                mapCompose = mapCompose,
+                nightDimOverlay = root.findViewById(R.id.night_dim_overlay)
+            )
             root.tag = binding
             root.addOnLayoutChangeListener { _, l, t, r, b, oldL, oldT, oldR, oldB ->
                 if (r - l > 0 && b - t > 0) measuredPortrait = b - t > r - l
@@ -137,12 +145,13 @@ fun CarLauncherHostView(
             val binding = root.tag as LauncherHostBinding
             val manager = binding.manager
             val panel = binding.panel
-            val map = root.findViewById<ExactFrameLayout>(R.id.map_container)
-            val dock = root.findViewById<FrameLayout>(R.id.app_dock)
+            // Perf: update her recomposition'da (medya dahil) calisir; findViewById cache'lendi.
+            val map = binding.mapContainer
+            val dock = binding.dockContainer
             val portrait = measuredPortrait
             val vertical = !portrait && dockKonumu != "bottom"
 
-            if (binding.dockHost?.isVertical != vertical) {
+            if (dockReady && binding.dockHost?.isVertical != vertical) {
                 binding.dockHost?.release()
                 dock.removeAllViews()
                 binding.dockHost = CarAppDockHost(
@@ -154,17 +163,26 @@ fun CarLauncherHostView(
                     onMiniMusicClick = { latestPanel("MUSIC") },
                     onPlayPauseClick = { latestPlay() },
                     onNextClick = { latestNext() },
-                    onAssistantClick = { latestAssistant() }
+                    onAssistantClick = { latestAssistant() },
+                    onSettingsClick = { latestSettings() }
                 ).also { dock.addView(it.rootView) }
             }
             binding.dockHost?.updateShortcuts(shortcuts)
-            binding.dockHost?.updateMedia(medya)
+            if (binding.lastMedia != medya) {
+                binding.lastMedia = medya
+                binding.dockHost?.updateMedia(medya)
+                binding.musicHost?.updateMediaState(medya)
+                binding.unifiedHost?.updateMedia(medya)
+            }
             binding.dockHost?.updateModeButton(desktop, fullScreenMap)
             binding.dockHost?.setVoiceListening(isVoiceListening, voiceAudioLevel)
 
-            val effectiveMode = if (desktop) "DESKTOP" else contentMode
-            if (binding.contentMode != effectiveMode) {
-                binding.releasePanel()
+            val effectiveMode = if (desktop) "DESKTOP" else if (mapless && contentMode == "UNIFIED") {
+                when (maplessMain) { "dashboard" -> "DASHBOARD"; "speedometer" -> "NEON_DASHBOARD"; else -> "MUSIC" }
+            } else contentMode
+            if (panelReady && binding.contentMode != effectiveMode) {
+                binding.releasePanel(keepUnified = effectiveMode == "CLOCK" ||
+                    (binding.contentMode == "CLOCK" && effectiveMode == "UNIFIED"))
                 binding.contentMode = effectiveMode
                 when (effectiveMode) {
                     "DESKTOP" -> {
@@ -221,33 +239,56 @@ fun CarLauncherHostView(
                             root.context, { latestPanel("UNIFIED") }, { latestLaunch(it.paketAdi) }
                         ).also { panel.addView(it.rootView) }
                     }
-                    else -> {
-                        binding.unifiedHost = CarUnifiedPanelHost(
+                    "CLOCK" -> {
+                        val clock = binding.unifiedHost ?: CarUnifiedPanelHost(
                             root.context, telemetri, medya,
                             { latestPlay() }, { latestNext() }, { latestPrevious() },
                             { latestPanel("MUSIC") }, { latestPanel("NEON_DASHBOARD") },
                             { latestSettings() }
-                        ).also { panel.addView(it.rootView) }
+                        ).also { binding.unifiedHost = it }
+                        // Keep the real player alive above the retained map, with no duplicate clock.
+                        map.addView(clock.rootView, FrameLayout.LayoutParams(-1, -1))
+                        binding.panelCompose = ComposeView(root.context).apply {
+                            setParentCompositionContext(parentComposition)
+                            setContent {
+                                androidx.compose.material3.MaterialTheme(colorScheme = androidx.compose.material3.darkColorScheme()) {
+                                    ClockCustomizationScreen(onBack = { latestPanel("UNIFIED") })
+                                }
+                            }
+                        }.also { panel.addView(it) }
+                    }
+                    else -> {
+                        val clock = binding.unifiedHost ?: CarUnifiedPanelHost(
+                            root.context, telemetri, medya,
+                            { latestPlay() }, { latestNext() }, { latestPrevious() },
+                            { latestPanel("MUSIC") }, { latestPanel("NEON_DASHBOARD") },
+                            { latestSettings() }
+                        ).also { binding.unifiedHost = it }
+                        panel.addView(clock.rootView, FrameLayout.LayoutParams(-1, -1))
                     }
                 }
             }
-            binding.musicHost?.updateMediaState(medya)
+            binding.setMapContentVisible(effectiveMode != "CLOCK")
             binding.musicHost?.updateVisualizerType(largeVisualizer, visualizerFps)
-            binding.dashboardHost?.updateTelemetri(telemetri)
-            binding.unifiedHost?.updateMedia(medya)
-            binding.unifiedHost?.updateVisualizerType(visualizerType, visualizerFps)
-            map.setInterceptTouch(contentMode != "UNIFIED" && !fullScreenMap) { latestPanel("UNIFIED") }
-
-            root.findViewById<View>(R.id.night_dim_overlay).apply {
-                visibility = if (dimEnabled) View.VISIBLE else View.GONE
-                alpha = dimLevel
+            if (binding.dashboardHost != null && binding.lastTelemetry != telemetri) {
+                binding.lastTelemetry = telemetri
+                binding.dashboardHost?.updateTelemetri(telemetri)
             }
-            binding.fullScreenMap = fullScreenMap
+            binding.unifiedHost?.updateVisualizerType(visualizerType, visualizerFps)
+            map.setInterceptTouch(!mapless && contentMode != "UNIFIED" && contentMode != "CLOCK" && !fullScreenMap) { latestPanel("UNIFIED") }
+
+            binding.nightDimOverlay?.let { overlay ->
+                val targetVis = if (dimEnabled) View.VISIBLE else View.GONE
+                if (overlay.visibility != targetVis) overlay.visibility = targetVis
+                if (dimEnabled && overlay.alpha != dimLevel) overlay.alpha = dimLevel
+            }
+            binding.fullScreenMap = fullScreenMap && !mapless
+            manager.clockEditor = contentMode == "CLOCK"
             manager.setDesktopModeState(desktop)
-            manager.setContentFullScreen(contentMode != "UNIFIED")
+            manager.setContentFullScreen(mapless || contentMode != "UNIFIED")
             val inputs = listOf(
                 dockKonumu, dockBoyutu, panelKonumu, panelWidth, panelHeight, expansion,
-                desktop, fullScreenMap, contentMode, tamEkran,
+                desktop, fullScreenMap && !mapless, contentMode, mapless, maplessMain, tamEkran,
                 measuredPortrait, configuration.orientation, configuration.screenWidthDp, configuration.screenHeightDp
             )
             if (binding.layoutInputs != inputs) {
@@ -265,7 +306,10 @@ fun CarLauncherHostView(
 private class LauncherHostBinding(
     val manager: CarLayoutManager,
     val panel: FrameLayout,
-    private val mapCompose: ComposeView
+    val mapContainer: ExactFrameLayout,
+    val dockContainer: FrameLayout,
+    private val mapCompose: ComposeView,
+    val nightDimOverlay: View?
 ) {
     var dockHost: CarAppDockHost? = null
     var musicHost: CarMusicPlayerHost? = null
@@ -277,19 +321,26 @@ private class LauncherHostBinding(
     var fullScreenMap = false
     var layoutInputs: List<Any>? = null
     private var released = false
+    var lastMedia: MedyaParcasi? = null
+    var lastTelemetry: HizTelemetrisi? = null
+
+    fun setMapContentVisible(visible: Boolean) {
+        mapCompose.visibility = if (visible) View.VISIBLE else View.INVISIBLE
+    }
 
     fun applyLayout() {
         if (!released) manager.applyLayout(isWidgetPanelOpen = !fullScreenMap)
     }
 
-    fun releasePanel() {
+    fun releasePanel(keepUnified: Boolean = false) {
         musicHost?.release()
         drawerHost?.release()
-        unifiedHost?.release()
+        unifiedHost?.rootView?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        if (!keepUnified) unifiedHost?.release()
         panelCompose?.disposeComposition()
         musicHost = null
         dashboardHost = null
-        unifiedHost = null
+        if (!keepUnified) unifiedHost = null
         drawerHost = null
         panelCompose = null
         panel.removeAllViews()

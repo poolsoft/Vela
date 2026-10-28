@@ -41,6 +41,9 @@ class CarLayoutManager(
     var isDesktopMode: Boolean = false
         private set
 
+    // Clock controls use the large right/bottom panel; the real player stays left/top.
+    var clockEditor: Boolean = false
+
     private var initialTouchX = 0f
     private var initialTouchY = 0f
     private var initialPanelPercent = 0.35f
@@ -104,7 +107,7 @@ class CarLayoutManager(
         if (isPortrait) {
             val availableHeight = getAvailablePanelHeight(isPortrait)
             if (availableHeight <= 0) return
-            val expandUp = carSettings.getPortraitExpansion() == "expand_up"
+            val expandUp = clockEditor || carSettings.getPortraitExpansion() == "expand_up"
             var smallViewOnTop = !expandUp
             if (isContentFullScreen) {
                 smallViewOnTop = !smallViewOnTop
@@ -116,7 +119,7 @@ class CarLayoutManager(
         } else {
             val availableWidth = getAvailablePanelWidth(isPortrait)
             if (availableWidth <= 0) return
-            val expandRight = carSettings.getLandscapeExpansion() == "expand_right"
+            val expandRight = !clockEditor && carSettings.getLandscapeExpansion() == "expand_right"
             var smallViewOnLeft = expandRight
             if (isContentFullScreen) {
                 smallViewOnLeft = !smallViewOnLeft
@@ -144,10 +147,13 @@ class CarLayoutManager(
 
     private fun dockExtent(portrait: Boolean): Int {
         val density = context.resources.displayMetrics.density
-        val scale = 0.3f + carSettings.getEffectiveDockSize(portrait) / 100f * 1.4f
-        val base = if (carSettings.getEffectiveDockPosition(portrait) == "bottom")
-            context.resources.getDimension(R.dimen.dock_height) else 64f * density
-        return (base * scale).toInt().coerceIn((64 * density).toInt(), (104 * density).toInt())
+        return if (carSettings.getEffectiveDockPosition(portrait) == "bottom") {
+            val scale = 0.3f + carSettings.getEffectiveDockSize(portrait) / 100f * 1.4f
+            val base = context.resources.getDimension(R.dimen.dock_height)
+            (base * scale).toInt().coerceIn((64 * density).toInt(), (104 * density).toInt())
+        } else {
+            app.vela.carlauncher.ui.dockSidebarWidth(carSettings.getEffectiveDockSize(portrait), density)
+        }
     }
     private fun getAvailablePanelWidth(portrait: Boolean): Int {
         val size = rootLayout.width.takeIf { it > 0 } ?: context.resources.displayMetrics.widthPixels
@@ -285,7 +291,7 @@ class CarLayoutManager(
             val smallViewId = if (isContentFullScreen) R.id.map_container else R.id.widget_panel
 
             if (isPortrait) {
-                val expandUp = carSettings.getPortraitExpansion() == "expand_up"
+                val expandUp = clockEditor || carSettings.getPortraitExpansion() == "expand_up"
                 val topViewId = if (expandUp) R.id.map_container else R.id.widget_panel
                 val bottomViewId = if (expandUp) R.id.widget_panel else R.id.map_container
 
@@ -339,7 +345,7 @@ class CarLayoutManager(
                 val leftSide = if (dockPos == "left") ConstraintSet.END else ConstraintSet.START
                 val rightSide = if (dockPos == "right") ConstraintSet.START else ConstraintSet.END
 
-                val expandRight = carSettings.getLandscapeExpansion() == "expand_right"
+                val expandRight = !clockEditor && carSettings.getLandscapeExpansion() == "expand_right"
                 val leftViewId = if (expandRight) R.id.widget_panel else R.id.map_container
                 val rightViewId = if (expandRight) R.id.map_container else R.id.widget_panel
 
@@ -387,7 +393,7 @@ class CarLayoutManager(
 
         // Overlay expands the content over an unchanged map; swap keeps both visible.
         if (isWidgetPanelOpen && isContentFullScreen && !isDesktopMode &&
-            carSettings.panelGenislemeDavranisi.value == "overlay") {
+            carSettings.panelGenislemeDavranisi.value == "overlay" && !carSettings.maplessMode.value) {
             val left = if (dockPos == "left") R.id.app_dock else ConstraintSet.PARENT_ID
             val right = if (dockPos == "right") R.id.app_dock else ConstraintSet.PARENT_ID
             val bottom = if (dockPos == "bottom") R.id.app_dock else ConstraintSet.PARENT_ID
@@ -412,7 +418,7 @@ class CarLayoutManager(
                     ((getAvailablePanelHeight(true) - topMargin - bottomMargin) *
                         (1f - carSettings.getWidgetPanelHeightPortrait())).toInt().coerceAtLeast(1))
             } else {
-                val freeSide = if (carSettings.getLandscapeExpansion() == "expand_right") ConstraintSet.END else ConstraintSet.START
+                val freeSide = if (!clockEditor && carSettings.getLandscapeExpansion() == "expand_right") ConstraintSet.END else ConstraintSet.START
                 cs.clear(R.id.widget_panel, freeSide)
                 cs.constrainWidth(R.id.widget_panel,
                     ((getAvailablePanelWidth(false) - 2 * sideMargin) *

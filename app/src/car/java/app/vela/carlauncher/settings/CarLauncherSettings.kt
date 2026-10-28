@@ -11,6 +11,13 @@ import kotlinx.coroutines.flow.asStateFlow
  * Kod icerisinde Turkce karakter kullanilmamistir (identifier ve degiskenlerde).
  */
 object CarLauncherSettings {
+    private var clockSettingsRequested = false
+    fun requestClockSettings() {
+        clockSettingsRequested = true
+        requestHomeScreen()
+    }
+    fun consumeClockSettingsRequest(): Boolean = clockSettingsRequested.also { clockSettingsRequested = false }
+
 
     private const val PREFS_NAME = "vela_car_launcher_prefs"
 
@@ -182,9 +189,18 @@ object CarLauncherSettings {
     fun baslat(context: Context, force: Boolean = false) {
         if (force || !::prefs.isInitialized) {
             prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            _maplessPreference.value = prefs.getBoolean("car_launcher_mapless_mode", false)
+            if (!sessionInitialized) {
+                _maplessMode.value = _maplessPreference.value
+                sessionInitialized = true
+            }
+            _maplessMainScreen.value = prefs.getString("car_launcher_mapless_main", "music")
+                ?.takeIf { it in setOf("music", "speedometer", "dashboard") } ?: "music"
+            _maplessScreen.value = prefs.getString("car_launcher_mapless_screen", "speedometer")
+                ?.takeIf { it in setOf("speedometer", "dashboard") } ?: "speedometer"
             _carModeEtkin.value = prefs.getBoolean(KEY_CAR_MODE_ENABLED, true)
             _tamEkranModu.value = prefs.getBoolean(KEY_IMMERSIVE_MODE, true)
-            _durumCubuguGoster.value = prefs.getBoolean(KEY_STATUS_BAR, true)
+            _durumCubuguGoster.value = !_tamEkranModu.value && prefs.getBoolean(KEY_STATUS_BAR, true)
             _dockKonumu.value = prefs.getString(KEY_DOCK_POSITION, "right") ?: "right"
             _dockBoyutu.value = prefs.getInt(KEY_DOCK_SIZE, 50)
             _panelKonumu.value = prefs.getString(KEY_PANEL_POSITION, "right") ?: "right"
@@ -222,6 +238,52 @@ object CarLauncherSettings {
         }
     }
 
+    private var sessionInitialized = false
+    private val _maplessPreference = MutableStateFlow(false)
+    val maplessPreference = _maplessPreference.asStateFlow()
+    private val _maplessMainScreen = MutableStateFlow("music")
+    val maplessMainScreen = _maplessMainScreen.asStateFlow()
+    fun setMaplessMainScreen(screen: String) {
+        require(screen in setOf("music", "speedometer", "dashboard"))
+        _maplessMainScreen.value = screen
+        if (::prefs.isInitialized) prefs.edit().putString("car_launcher_mapless_main", screen).apply()
+    }
+    private var initialMapAttempt = true
+    fun finishInitialMapAttempt() { initialMapAttempt = false }
+    fun disableFailedMap(reason: String): Boolean {
+        if (!initialMapAttempt) {
+            app.vela.util.FileLogger.w("MapStartup", "Map failed after startup; keeping launcher mode: $reason")
+            return false
+        }
+        initialMapAttempt = false
+        app.vela.util.FileLogger.w("MapStartup", "Initial map startup failed; switching to mapless mode: $reason")
+        setMaplessMode(true)
+        return true
+    }
+    private val _maplessMode = MutableStateFlow(false)
+    val maplessMode: StateFlow<Boolean> = _maplessMode.asStateFlow()
+    private val _maplessScreen = MutableStateFlow("speedometer")
+    val maplessScreen: StateFlow<String> = _maplessScreen.asStateFlow()
+
+    /** Explicit session-only opening; the next process still honors the saved startup choice. */
+    fun openMapForSession() {
+        sessionInitialized = true
+        initialMapAttempt = false
+        _maplessMode.value = false
+    }
+
+    fun setMaplessMode(enabled: Boolean) {
+        _maplessPreference.value = enabled
+        // Disabling is immediate; enabling the renderer is deferred until a fresh app process.
+        if (enabled) _maplessMode.value = true
+        if (::prefs.isInitialized) prefs.edit().putBoolean("car_launcher_mapless_mode", enabled).apply()
+    }
+    fun setMaplessScreen(screen: String) {
+        require(screen in setOf("speedometer", "dashboard"))
+        _maplessScreen.value = screen
+        if (::prefs.isInitialized) prefs.edit().putString("car_launcher_mapless_screen", screen).apply()
+    }
+
     fun setCarModeEtkin(etkin: Boolean) {
         _carModeEtkin.value = etkin
         if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_CAR_MODE_ENABLED, etkin).apply()
@@ -229,12 +291,18 @@ object CarLauncherSettings {
 
     fun setTamEkranModu(tamEkran: Boolean) {
         _tamEkranModu.value = tamEkran
-        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_IMMERSIVE_MODE, tamEkran).apply()
+        if (tamEkran) _durumCubuguGoster.value = false
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_IMMERSIVE_MODE, tamEkran).apply {
+            putBoolean(KEY_STATUS_BAR, _durumCubuguGoster.value)
+        }.apply()
     }
 
     fun setDurumCubuguGoster(goster: Boolean) {
         _durumCubuguGoster.value = goster
-        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_STATUS_BAR, goster).apply()
+        if (goster) _tamEkranModu.value = false
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_STATUS_BAR, goster).apply {
+            if (goster) putBoolean(KEY_IMMERSIVE_MODE, false)
+        }.apply()
     }
 
     fun setDockKonumu(konum: String) {

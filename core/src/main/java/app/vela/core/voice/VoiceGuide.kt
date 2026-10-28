@@ -29,7 +29,73 @@ class VoiceGuide @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : TextToSpeech.OnInitListener {
 
-    private var tts: TextToSpeech? = null
+    @Volatile private var tts: TextToSpeech? = null
+    private val speechWorker = SpeechWorker()
+    private val generation = java.util.concurrent.atomic.AtomicLong()
+    private val bindingGeneration = java.util.concurrent.atomic.AtomicLong()
+    private fun engineTask(action: () -> Unit) {
+        val expected = generation.get()
+        if (!speechWorker.execute { if (expected == generation.get()) safely(action) }) {
+            focusHandler.post { failed(IllegalStateException("TTS worker unavailable")) }
+        }
+    }
+
+    // A stop cancels speech, not the service connection. Dropping onInit leaves a bound
+    // engine permanently unready and every later prompt waits until its deadline.
+    private fun bindingTask(action: () -> Unit) {
+        if (!speechWorker.execute { safely(action) }) {
+            focusHandler.post { failed(IllegalStateException("TTS worker unavailable")) }
+        }
+    }
+
+    private fun stopEngine(engine: TextToSpeech? = tts) {
+        engine ?: return
+        engineTask { engine.stop() }
+    }
+    private var requiredSystemEngine: String? = null
+    private var deferredEngine: String? = null
+    private val speechRequest = java.util.concurrent.atomic.AtomicLong()
+    var onFailure: ((Throwable) -> Unit)? = null
+    @Volatile var speechStatus: String = "idle"
+        private set
+
+    /** Bind the external TTS service only on the first speech request. Never fall back to JNI. */
+    fun useSystemEngineLazily(packageName: String) {
+        if (requiredSystemEngine == packageName) return
+        requiredSystemEngine = packageName
+        deferredEngine = packageName
+        useNeural = false
+        neural?.stop()
+        neural = null
+    }
+
+    /** Select neural speech without binding or loading either engine at application startup. */
+    fun useNeuralEngineLazily(synth: NeuralSynth) {
+        requiredSystemEngine = null
+        deferredEngine = null
+        neural = synth
+        useNeural = true
+        currentEngine = VelaPiper.ENGINE_ID
+        ready = true
+        working = true
+    }
+
+    private fun failed(error: Throwable) {
+        generation.incrementAndGet()
+        speechWorker.clearPending()
+        speechStatus = "error: ${error.javaClass.simpleName}: ${error.message}"
+        working = false
+        ready = false
+        systemInitFailed = true
+        pending.clear()
+        runCatching { releaseAllFocus() }
+        android.util.Log.e("VoiceGuide", "TTS unavailable", error)
+        focusHandler.post { runCatching { onFailure?.invoke(error) } }
+    }
+
+    private inline fun safely(action: () -> Unit) {
+        try { action() } catch (error: Exception) { failed(error) }
+    }
 
     /** Speech-rate multiplier (1.0 = normal, >1 = faster), settable live from Settings. Applied to the
      *  Android TextToSpeech engine; the neural voice reads its own `voice_speed` pref per utterance. */
@@ -42,23 +108,24 @@ class VoiceGuide @Inject constructor(
     }
     fun setRate(rate: Float) {
         speechRate = rate.coerceIn(0.5f, 2.0f)
-        tts?.setSpeechRate(speechRate)
+        val engine = tts
+        engineTask { engine?.setSpeechRate(speechRate) }
     }
-    private var ready = false
+    @Volatile private var ready = false
     private var currentEngine: String? = null
-    private val pending = ArrayDeque<Pair<String, Boolean>>()
+    private val pending = java.util.concurrent.ConcurrentLinkedDeque<Pair<String, Boolean>>()
 
     // System-TTS FALLBACK for language mismatch: the neural (Piper) voice is a single-language
     // model, so when the nav text is generated in a language it can't speak (the user switched the
     // app/system language to one whose voice isn't downloaded) we route to Android TextToSpeech in
     // that language instead of mangling it through the wrong voice. `tts` holds EITHER the user's
     // chosen system engine (useNeural=false) OR this lazily-created default fallback (useNeural=true).
-    private var systemReady = false
+    @Volatile private var systemReady = false
     // Set when the system-TTS engine's onInit FAILED — so speakViaSystem stops queueing into `pending`
     // forever (unbounded growth + a stale backlog that a later successful init would replay). Reset on a
     // successful init.
-    private var systemInitFailed = false
-    private var lastSystemLang: String? = null // avoid re-running setLanguage/selectBestVoice each utterance
+    @Volatile private var systemInitFailed = false
+    @Volatile private var lastSystemLang: String? = null // avoid re-running setLanguage/selectBestVoice each utterance
 
     /** Invoked with a language code when guidance CAN'T speak that language (no matching neural voice
      *  AND the system TTS has no voice for it) — the UI surfaces a "download a &lt;language&gt; voice"
@@ -115,7 +182,7 @@ class VoiceGuide @Inject constructor(
      *  runtime lives. When the user selects [VelaPiper.ENGINE_ID], guidance goes here instead of
      *  Android TextToSpeech. Null until wired / on a build without it. */
     var neural: NeuralSynth? = null
-    private var useNeural = false
+    @Volatile private var useNeural = false
 
     /** The language the nav text is currently GENERATED in (`NavStringsRegistry`) — the language the
      *  chosen voice must actually be able to speak. */
@@ -125,8 +192,7 @@ class VoiceGuide @Inject constructor(
     /** TTS health for the UI: null = initializing, true = a usable voice is ready,
      *  false = init failed or the chosen language has no installed voice data. Lets
      *  Settings tell the user *why* it's silent instead of failing quietly. */
-    @Volatile
-    var working: Boolean? = null
+    @Volatile var working: Boolean? = null
         private set
 
     /** When true, all spoken guidance is suppressed (the in-nav mute button). */
@@ -157,8 +223,14 @@ class VoiceGuide @Inject constructor(
     val isSpeaking: Boolean
         get() = synchronized(focusLock) { activeUtterances > 0 || focusHeld }
 
+    /** Music-source interruption notification is separate from the microphone echo guard. */
+    @Volatile var onPlaybackInterruptionChanged: ((Boolean) -> Unit)? = null
+
     private fun notifySpeakingState(speaking: Boolean) {
-        focusHandler.post { onSpeakingStateChanged?.invoke(speaking) }
+        focusHandler.post {
+            runCatching { onSpeakingStateChanged?.invoke(speaking) }
+            runCatching { onPlaybackInterruptionChanged?.invoke(speaking) }
+        }
     }
 
     // Abandon focus a beat AFTER the last prompt ends (see releaseFocus) rather than instantly, so the
@@ -177,8 +249,8 @@ class VoiceGuide @Inject constructor(
         // listener at all, so Vela kept announcing turns over ringing and active calls. The
         // next scheduled prompt re-fires naturally once the call releases focus.
         if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-            tts?.stop()
-            neural?.stop()
+            stopEngine()
+            safely { neural?.stop() }
             focusHandler.removeCallbacks(abandonFocusRunnable)
             synchronized(focusLock) {
                 activeUtterances = 0
@@ -212,7 +284,9 @@ class VoiceGuide @Inject constructor(
      *  2026-09-19, "pause music a little early"). A fresh grant means nothing of ours is
      *  speaking, so nothing waits on an interrupt behind the delay. */
     private fun afterFocusLead(fresh: Boolean, go: () -> Unit) {
-        if (fresh) focusHandler.postDelayed(go, FOCUS_LEAD_MS) else go()
+        val expected = generation.get()
+        if (fresh) focusHandler.postDelayed({ if (expected == generation.get()) engineTask(go) }, FOCUS_LEAD_MS)
+        else engineTask(go)
     }
 
     private fun releaseFocus() {
@@ -240,7 +314,19 @@ class VoiceGuide @Inject constructor(
     /** Initialize, or **re-initialize** if [enginePackage] differs from the engine
      *  currently loaded — so picking a different engine in Settings actually takes
      *  effect (the old idempotent guard ignored later picks). */
-    fun init(enginePackage: String? = null) {
+    fun init(enginePackage: String? = null) = engineTask {
+        deferredEngine = null
+        initEngine(requiredSystemEngine ?: enginePackage)
+    }
+
+    private fun initEngine(enginePackage: String?) {
+        if (requiredSystemEngine != null) {
+            check(context.packageManager.queryIntentServices(
+                Intent("android.intent.action.TTS_SERVICE").setPackage(enginePackage), 0,
+            ).isNotEmpty()) {
+                "Google TTS kurulu değil veya kullanılamıyor"
+            }
+        }
         // One of Vela's own in-process neural voices (vela.piper) — no Android TextToSpeech
         // involved. The right synth is wired into [neural] by MapViewModel first. Do NOT shut the
         // system `tts` down here — it stays as the fallback for languages the neural voice can't
@@ -251,51 +337,67 @@ class VoiceGuide @Inject constructor(
             useNeural = true
             ready = true // the neural synth loads + queues internally
             working = neural != null
-            neural?.warmUp()
+            // Selecting the saved engine must not load a native model at launcher startup.
+            // Route creation / explicit voice selection warm it; speak() also loads lazily.
             drainPendingLatest()
             return
         }
         useNeural = false
         neural?.stop()
-        if (tts != null && enginePackage == currentEngine) return
-        if (tts != null) shutdown()
+        if (tts != null && enginePackage == currentEngine && !systemInitFailed) return
+        tts?.let { old -> tts = null; old.shutdown() }
+        releaseAllFocus()
         currentEngine = enginePackage
+        systemInitFailed = false
         working = null
         ready = false
         systemReady = false
         lastSystemLang = null
-        tts = if (enginePackage != null) {
-            TextToSpeech(context, this, enginePackage)
-        } else {
-            TextToSpeech(context, this)
+        val expected = bindingGeneration.incrementAndGet()
+        val listener = TextToSpeech.OnInitListener { status ->
+            bindingTask { if (expected == bindingGeneration.get() && !systemInitFailed) handleInit(status) }
         }
+        tts = if (enginePackage != null) TextToSpeech(context, listener, enginePackage)
+            else TextToSpeech(context, listener)
         attachTtsListener()
     }
 
     private fun attachTtsListener() {
-        tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) = releaseFocus()
+        val bound = tts ?: return
+        bound.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) { if (tts !== bound) return; if (!speechStatus.startsWith("error:")) speechStatus = "speaking" }
+            override fun onDone(utteranceId: String?) { if (tts !== bound) return; if (!speechStatus.startsWith("error:")) speechStatus = "done"; releaseFocus() }
             // QUEUE_FLUSH fires onStop (not onDone) for the flushed utterance — without this
             // override every interrupt stranded a refcount and focus never released.
-            override fun onStop(utteranceId: String?, interrupted: Boolean) = releaseFocus()
+            override fun onStop(utteranceId: String?, interrupted: Boolean) { if (tts !== bound) return; if (!speechStatus.startsWith("error:")) speechStatus = "stopped"; releaseFocus() }
             @Deprecated("deprecated") override fun onError(utteranceId: String?) {
-                working = false // the engine accepted text but couldn't synthesize it
-                releaseFocus()
+                if (tts !== bound) return
+                failed(IllegalStateException("TTS synthesis failed engine=$currentEngine language=${targetLang()}"))
+            }
+            override fun onError(utteranceId: String?, errorCode: Int) {
+                if (tts !== bound) return
+                failed(IllegalStateException("TTS synthesis failed code=$errorCode engine=$currentEngine language=${targetLang()}"))
             }
         })
     }
 
     /** Speak a sample so the user can confirm the engine actually makes sound (the
      *  only true test on their hardware — we can't hear it for them). */
-    fun test() = speak(app.vela.core.i18n.NavStringsRegistry.current().voiceTest(), interrupt = true, ignoreMute = true)
+    fun test() {
+        if (systemInitFailed) init(requiredSystemEngine ?: currentEngine)
+        speak(app.vela.core.i18n.NavStringsRegistry.current().voiceTest(), interrupt = true, ignoreMute = true)
+    }
 
-    override fun onInit(status: Int) {
+    override fun onInit(status: Int) = bindingTask { handleInit(status) }
+
+    private fun handleInit(status: Int) {
+        if (systemInitFailed) return
         val t = tts
         if (status != TextToSpeech.SUCCESS || t == null) {
             systemReady = false
             systemInitFailed = true
             if (!useNeural) working = false // the PRIMARY engine failed to start
+            failed(IllegalStateException("TTS initialization failed: $status"))
             pending.clear() // nothing can speak the backlog — drop it instead of replaying it on a later init
             if (useNeural) langUnavailable?.invoke(targetLang()) // fallback engine dead → "download a <lang> voice"
             return
@@ -313,7 +415,9 @@ class VoiceGuide @Inject constructor(
         // language it has no voice for.
         t.setSpeechRate(speechRate)
         t.setPitch(1.0f)
+        if (systemInitFailed) return
         systemReady = true
+        android.util.Log.i("VoiceGuide", "System TTS ready engine=$currentEngine")
         systemInitFailed = false
         lastSystemLang = null // force setLanguage on the first utterance
         if (!useNeural) { ready = true; working = true } // this system engine is the PRIMARY voice
@@ -327,7 +431,7 @@ class VoiceGuide @Inject constructor(
      *  speaking... random letters"). Only the latest is still relevant, and the live nav loop
      *  re-announces the current maneuver anyway. */
     private fun drainPendingLatest() {
-        val last = pending.lastOrNull()
+        val last = pending.peekLast()
         pending.clear()
         last?.let { (text, interrupt) -> speakNow(text, interrupt) }
     }
@@ -371,6 +475,7 @@ class VoiceGuide @Inject constructor(
             installedEnginesCache = list
             list
         }
+        requiredSystemEngine?.let { required -> return installed.filter { it.packageName == required } }
         val vela = if (VelaPiper.isReady(context)) listOf(VoiceEngine(VelaPiper.ENGINE_ID, VelaPiper.LABEL)) else emptyList()
         return vela + installed
     }
@@ -400,6 +505,23 @@ class VoiceGuide @Inject constructor(
 
     fun speak(text: String, interrupt: Boolean = false, ignoreMute: Boolean = false) {
         if (muted && !ignoreMute) return
+        if (systemInitFailed && !useNeural && deferredEngine == null) return
+        speechStatus = "pending"
+        val request = speechRequest.incrementAndGet()
+        // The deadline includes time queued behind a blocked OEM call.
+        focusHandler.postDelayed({
+            if (request == speechRequest.get() && (speechStatus == "pending" || speechStatus == "speaking")) {
+                failed(java.util.concurrent.TimeoutException("TTS did not complete within the speech deadline"))
+                stopEngine()
+            }
+        }, if (useNeural) 95_000 else 30_000)
+        engineTask { speakSafely(text, interrupt, ignoreMute) }
+    }
+
+    private fun speakSafely(text: String, interrupt: Boolean, ignoreMute: Boolean) {
+        if (muted && !ignoreMute) return
+        deferredEngine?.let { deferredEngine = null; initEngine(it) }
+        if (systemInitFailed && !useNeural) return
         runCatching { onSpoken?.invoke(text) }
         runCatching { onPromptAlert?.invoke() }
         if (!ready) {
@@ -448,7 +570,12 @@ class VoiceGuide @Inject constructor(
             // Romanize any foreign-script name for this (Latin) neural voice so it isn't dropped
             // (issue #184); the on-screen banner keeps the real local-script name.
             val spoken = forSpeech(SpokenScript.forVoice(text, n.voiceLanguage ?: t, roadNameLatin))
-            afterFocusLead(fresh) { n.speak(spoken, interrupt) { releaseFocus() } }
+            val request = speechRequest.get()
+            speechStatus = "speaking"
+            afterFocusLead(fresh) { n.speak(spoken, interrupt) {
+                if (request == speechRequest.get()) speechStatus = "done"
+                releaseFocus()
+            } }
             return
         }
         speakViaSystem(text, interrupt, t)
@@ -465,13 +592,16 @@ class VoiceGuide @Inject constructor(
             else pending.addLast(text to interrupt) // drained by onInit once the fallback engine is ready
             return
         }
+        if (systemInitFailed) return
         if (t != lastSystemLang) {
             val avail = runCatching { engine.setLanguage(Locale(t)) }.getOrDefault(TextToSpeech.LANG_NOT_SUPPORTED)
             if (avail < TextToSpeech.LANG_AVAILABLE) {
                 working = false
+                speechStatus = "error: TTS dili desteklenmiyor: $t"
                 langUnavailable?.invoke(t) // "download a <language> voice" — don't mangle it through the wrong one
                 return
             }
+            if (systemInitFailed) return
             selectBestVoice(engine, Locale(t))
             engine.setSpeechRate(speechRate)
             engine.setPitch(1.0f)
@@ -496,8 +626,7 @@ class VoiceGuide @Inject constructor(
             // The utterance was never enqueued, so NONE of the onDone/onStop/onError callbacks that
             // release focus will ever fire for it — roll back the acquire here or music stays ducked
             // forever (audit 2026-07-06). Also surface the dead engine like the onError path does.
-            releaseFocus()
-            working = false
+            failed(IllegalStateException("TTS speak returned ERROR"))
         }
     }
 
@@ -507,7 +636,10 @@ class VoiceGuide @Inject constructor(
         if (tts != null) return
         systemReady = false
         lastSystemLang = null
-        tts = TextToSpeech(context, this)
+        val fallback = requiredSystemEngine ?: if (useNeural) "com.google.android.tts" else null
+        val expected = bindingGeneration.incrementAndGet()
+        val listener = TextToSpeech.OnInitListener { status -> bindingTask { if (expected == bindingGeneration.get() && !systemInitFailed) handleInit(status) } }
+        tts = fallback?.let { TextToSpeech(context, listener, it) } ?: TextToSpeech(context, listener)
         attachTtsListener()
     }
 
@@ -519,9 +651,12 @@ class VoiceGuide @Inject constructor(
         app.vela.core.i18n.NavStringsRegistry.current().expandForSpeech(text)
 
     fun stop() {
+        speechStatus = "stopped"
+        speechRequest.incrementAndGet()
+        generation.incrementAndGet()
         openerToken++ // cancel any deferred nav-start opener still waiting for its road name
-        tts?.stop()
-        neural?.stop()
+        stopEngine()
+        safely { neural?.stop() }
         // Drop any queued-but-unspoken prompts: once guidance stops (nav end / mute), a backlog is
         // stale and must not survive to be flushed later when a voice attaches (issue: stale burst).
         pending.clear()
@@ -529,8 +664,12 @@ class VoiceGuide @Inject constructor(
     }
 
     fun shutdown() {
-        tts?.shutdown()
+        bindingGeneration.incrementAndGet()
+        generation.incrementAndGet()
+        speechWorker.clearPending()
+        val old = tts
         tts = null
+        engineTask { old?.shutdown() }
         ready = false
         systemReady = false
         lastSystemLang = null

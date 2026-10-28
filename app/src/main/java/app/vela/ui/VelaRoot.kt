@@ -49,6 +49,24 @@ fun VelaRoot(vm: MapViewModel = hiltViewModel()) {
         }
     }
 
+    // GPS belongs to the launcher, including mapless gauges. startLocation is idempotent;
+    // MapScreen's existing requests and permission callbacks can safely share this owner.
+    val locationOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(locationOwner, vm) {
+        fun startIfPermitted() {
+            val fine = androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+            val coarse = androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+            if (fine == android.content.pm.PackageManager.PERMISSION_GRANTED || coarse == android.content.pm.PackageManager.PERMISSION_GRANTED)
+                vm.startLocation()
+        }
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) startIfPermitted()
+        }
+        locationOwner.lifecycle.addObserver(observer)
+        if (locationOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) startIfPermitted()
+        onDispose { locationOwner.lifecycle.removeObserver(observer) }
+    }
+
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var settingsOpenOffline by rememberSaveable { mutableStateOf(false) }
     var settingsOpenCar by rememberSaveable { mutableStateOf(false) }
@@ -169,6 +187,9 @@ fun VelaRoot(vm: MapViewModel = hiltViewModel()) {
     Box {
         // MapScreen stays composed even while Settings is open or CarMode toggles,
         // and CarLauncherLayout draws around or passes through it without recreating MapView.
+        androidx.compose.runtime.CompositionLocalProvider(
+            app.vela.ui.map.LocalMapRenderingActive provides !showSettings,
+        ) {
         CarIntegration.MapContainer(
             onOpenSettings = { settingsOpenCar = true; showSettings = true },
             onVoiceClick = { vm.triggerVoiceSearch() },
@@ -180,6 +201,7 @@ fun VelaRoot(vm: MapViewModel = hiltViewModel()) {
                 onOpenSettings = { showSettings = true },
                 onOpenVoiceSettings = { settingsOpenVoice = true; showSettings = true },
             )
+        }
         }
         if (showSettings) {
             SettingsScreen(

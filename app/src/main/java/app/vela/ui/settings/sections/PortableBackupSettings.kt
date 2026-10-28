@@ -30,7 +30,7 @@ import app.vela.ui.settings.PageIntro
 import app.vela.ui.settings.SettingsScaffold
 
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.window.Dialog
+import app.vela.ui.VelaWindowDialog as Dialog
 import androidx.compose.ui.window.DialogProperties
 
 private fun android.content.Context.findActivity(): android.app.Activity? = when (this) {
@@ -440,10 +440,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                     Spacer(Modifier.height(12.dp))
                     Button(
                         onClick = {
-                            context.let { app ->
-                                app.findActivity()?.finishAffinity()
-                                android.os.Process.killProcess(android.os.Process.myPid())
-                            }
+                            (context.findActivity() as? app.vela.MainActivity)?.restartAfterRestore()
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {

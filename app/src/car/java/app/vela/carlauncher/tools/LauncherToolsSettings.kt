@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import app.vela.ui.VelaWindowAlertDialog as AlertDialog
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,6 +54,7 @@ fun LauncherToolsSettings() {
 
     var pendingRestorePackage by remember { mutableStateOf<LauncherBackup.BackupPackage?>(null) }
     var selectedRestoreCategories by remember { mutableStateOf<Set<LauncherBackup.BackupCategory>>(emptySet()) }
+    var restoreSummary by remember { mutableStateOf<String?>(null) }
 
     val revision by LauncherStartup.preferencesChanged.collectAsState()
     val selected = remember(revision) { LauncherStartup.selected(context) }
@@ -391,6 +393,10 @@ fun LauncherToolsSettings() {
                                 WidgetManager.getInstance(context).reload()
                                 MusicPlaylistStore.getInstance(context).reload()
                                 LauncherStartup.preferencesChanged.value++
+                                // Dosyalar diskte, ama uygulama ici kayitlar acilista okunmustu: yeniden
+                                // kaydetmeden teyp yeniden baslayana kadar cevrimdisi yerler/rotalar bos
+                                // gorunur. Ozet, bilgisayar baglamadan teypte dogrulama icin.
+                                restoreSummary = withContext(Dispatchers.IO) { LauncherBackup.refreshAfterRestore(context) }
                             }
                             busy = false
                             pendingRestorePackage = null
@@ -429,6 +435,20 @@ fun LauncherToolsSettings() {
                 }
             },
             confirmButton = { TextButton(onClick = { choosingApp = false }) { Text(stringResource(android.R.string.cancel)) } }
+        )
+    }
+
+    // Geri yukleme ozeti: teyp uzerinde ne kuruldugunu bilgisayar baglamadan dogrulamak icin.
+    restoreSummary?.let { summary ->
+        AlertDialog(
+            onDismissRequest = { restoreSummary = null },
+            title = { Text(stringResource(R.string.car_backup_restore_success)) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                    Text(summary, fontSize = 13.sp)
+                }
+            },
+            confirmButton = { TextButton(onClick = { restoreSummary = null }) { Text("OK") } }
         )
     }
 }

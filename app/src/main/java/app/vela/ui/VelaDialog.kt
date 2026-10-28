@@ -41,7 +41,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import app.vela.ui.VelaWindowDialog as Dialog
 import androidx.compose.ui.window.DialogProperties
 
 /**

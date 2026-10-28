@@ -65,6 +65,16 @@ object BackupRestore {
         try {
             val manifest = ready.inputStream().use { BackupFiles.parse(BackupFiles.readBounded(it)) }
             val stage = File(work, "staged")
+            // Recheck the cheap staging invariant before moving any live root. No full-file
+            // hashing at startup: transfer already checked SHA-256 in the background.
+            manifest.entries.forEach { entry ->
+                val path = if (entry.path in BackupFiles.metadata) entry.path else "files/${entry.path}"
+                val staged = BackupFiles.local(stage, path)
+                check(staged.isFile && staged.length() == entry.size) { "Missing or incomplete staged file: ${entry.path}" }
+                if (entry.path.endsWith(".pmtiles", ignoreCase = true)) {
+                    app.vela.offline.PmtilesReader.validateContainer(staged)
+                }
+            }
             val paths = manifest.roots.map { "files/$it" } + BackupPreferences.stage(context, stage)
             require(paths.all(::allowedTarget))
             val appDir = File(context.applicationInfo.dataDir)
@@ -85,7 +95,7 @@ object BackupRestore {
             // A committed install must never be undone. Next launch resumes result/cleanup.
             if (committed.exists()) throw e
             if (journal.exists()) rollback(context, work)
-            record(context, "rolled_back")
+            record(context, "rolled_back", e)
             cleanup(work)
             return
         }
@@ -110,7 +120,23 @@ object BackupRestore {
             }
         }
     }
-    private fun record(context: Context, result: String) = atomic(File(context.filesDir, "portable-restore-result"), result)
+    private fun record(context: Context, result: String, error: Exception? = null) {
+        // Recovery runs before FileLogger.init. Retain its reason outside the cleaned staging
+        // directory, then publish it once the application logger is ready.
+        atomic(File(context.filesDir, "portable-restore-diagnostic.json"), JSONObject()
+            .put("result", result).put("time", System.currentTimeMillis())
+            .put("error", error?.stackTraceToString()?.take(16000).orEmpty()).toString())
+        atomic(File(context.filesDir, "portable-restore-result"), result)
+    }
+
+    fun logRecovery(context: Context) {
+        val diagnostic = File(context.filesDir, "portable-restore-diagnostic.json")
+        if (!diagnostic.isFile) return
+        runCatching {
+            val text = diagnostic.inputStream().use { BackupFiles.readBounded(it) }
+            app.vela.util.FileLogger.i("BackupRestore", "Last recovery: $text")
+        }.onFailure { app.vela.util.FileLogger.w("BackupRestore", "Cannot read recovery report", it) }
+    }
     private fun cleanup(work: File) {
         // Keep the committed marker until every journal/ready marker is gone: cleanup is restartable.
         check(File(work, "old").deleteRecursively())

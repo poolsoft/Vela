@@ -43,10 +43,18 @@ class PoiPackStore @Inject constructor(
         packsRoot.listFiles { f -> f.extension == "db" }?.map { it.absolutePath } ?: emptyList()
 
     /** Register every installed pack with the core stores. Call at startup and after install/delete. */
-    fun registerPacks() = OfflinePacks.reload(installedPaths())
+    fun registerPacks() {
+        val paths = installedPaths()
+        OfflinePacks.reload(paths)
+        app.vela.util.FileLogger.i("OfflineSearch", "packFiles=${paths.map { File(it).name }} opened=${OfflinePacks.dbs.size}")
+        OfflinePacks.failures.forEach { (path, reason) ->
+            app.vela.util.FileLogger.w("OfflineSearch", "Pack could not open: ${File(path).name}: $reason")
+        }
+    }
 
     /** Fetch the pack catalog. Supports multi-source manifests (Poolsoft fork, Upstream, Custom). */
     suspend fun manifest(manifestUrl: String = app.vela.BuildConfig.POI_PACK_MANIFEST_URL): List<RoutingRegion> = withContext(Dispatchers.IO) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext emptyList()
         val urls = OfflineServerConfig.getPoiManifestUrls(context)
         val allRegions = ArrayList<RoutingRegion>()
         for (url in urls) {
@@ -99,11 +107,12 @@ class PoiPackStore @Inject constructor(
 
     private fun writeRev(id: String, rev: Int) = synchronized(revsLock) {
         packsRoot.mkdirs()
-        File(packsRoot, "revs.json").writeText(readRevs().put(id, rev).toString())
+        File(packsRoot, "revs.json").writeAtomicText(readRevs().put(id, rev).toString())
     }
 
     /** Download + unzip [region]'s pack to `poipacks/<id>.db` and register it. 0..100 progress. */
     suspend fun download(region: RoutingRegion, active: () -> Boolean = { true }, onProgress: (Int) -> Unit): Boolean = withContext(Dispatchers.IO) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext false
         packsRoot.mkdirs()
         val dest = File(packsRoot, "${region.id}.db")
         val tmp = File(packsRoot, "${region.id}.db.tmp")
@@ -156,6 +165,7 @@ class PoiPackStore @Inject constructor(
      * against the manifest's per-table row counts, so a bad patch can't leave a half-updated pack.
      */
     suspend fun applyDelta(region: RoutingRegion, onProgress: (Int) -> Unit): Boolean = withContext(Dispatchers.IO) {
+        if (!app.vela.ui.OfflineMode.networkAllowed) return@withContext false
         val deltaUrl = region.deltaUrl ?: return@withContext false
         val dest = File(packsRoot, "${region.id}.db")
         if (!dest.exists() || region.counts.isEmpty()) return@withContext false
@@ -233,7 +243,7 @@ class PoiPackStore @Inject constructor(
         File(packsRoot, "$id.db").delete()
         synchronized(revsLock) {
             packsRoot.mkdirs()
-            File(packsRoot, "revs.json").writeText(readRevs().apply { remove(id) }.toString())
+            File(packsRoot, "revs.json").writeAtomicText(readRevs().apply { remove(id) }.toString())
         }
         registerPacks()
     }

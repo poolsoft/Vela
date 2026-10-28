@@ -155,6 +155,12 @@ data class MapUiState(
     // satellite-optimized in the manifest, so it also has to behave like it - photos and the
     // fat ambient fan-out step aside while this is true.
     val lowData: Boolean = false,
+    val categoryId: String? = null,
+    val categoryLabel: String? = null,
+    val categoryFilter: String = "",
+    val categoryCenter: LatLng? = null,
+    val categoryRadiusMeters: Double = 10_000.0,
+    val categoryPlaces: List<Place> = emptyList(),
     val query: String = "",
     val results: List<Place> = emptyList(),
     // The query whose results can page further ("More results" row at the end of the list);
@@ -568,16 +574,19 @@ class MapViewModel @Inject constructor(
         // Relocate any pre-browser flat Piper install (filesDir/piper/*.onnx) into the per-voice subdir
         // layout the voice browser expects — synchronous, rename-only (no re-download), crash-safe.
         VelaPiper.migrateFlatLayoutIfNeeded(appContext)
-        // Restore the saved voice; default to the downloaded Piper voice.
-        val savedRaw = appContext.getSharedPreferences("vela_settings", Context.MODE_PRIVATE)
-            .getString("voice_engine", null)
-        val savedEngine = when {
-            // A stale neural id from a removed voice (vela.kokoro / vela.matcha) → our Piper voice.
-            savedRaw == null || savedRaw.startsWith("vela.") ->
-                if (VelaPiper.isReady(appContext)) VelaPiper.ENGINE_ID else null
-            else -> savedRaw // a system TTS engine the user picked
+        // Restore only the engine choice. Neither the ONNX process nor Google binds at startup.
+        val savedEngine = appContext.getSharedPreferences("vela_settings", Context.MODE_PRIVATE).getString("voice_engine", null)
+            ?.takeIf { it == VelaPiper.ENGINE_ID && app.vela.BuildConfig.NATIVE_TTS_ENABLED && VelaPiper.isReady(appContext) &&
+                appContext.getSharedPreferences("vela_settings", Context.MODE_PRIVATE).getBoolean("voice_isolated_tts_opt_in", false) }
+            ?: "com.google.android.tts"
+        if (savedEngine == VelaPiper.ENGINE_ID) voice.useNeuralEngineLazily(piperSynth)
+        else voice.useSystemEngineLazily(savedEngine)
+        piperSynth.onFailure = { reason ->
+            voice.useSystemEngineLazily("com.google.android.tts")
+            settingsPrefs.edit().putString("voice_engine", "com.google.android.tts").apply()
+            _state.update { it.copy(selectedEngine = VoiceEngine("com.google.android.tts", "Google Text-to-Speech")) }
+            flashStatus("Vela TTS durduruldu; Google TTS seçildi. Ayrıntılar logda: $reason")
         }
-        neuralSynthFor(savedEngine)?.let { voice.neural = it }
         // When guidance can't speak the app/system language (the neural voice is a different
         // language AND no system TTS voice exists for it) — e.g. the user set the app language to
         // Russian but only has the English voice — VoiceGuide stays silent (never mangles it) and
@@ -590,7 +599,7 @@ class MapViewModel @Inject constructor(
                 // nudge to the voice library. One it CAN'T (Japanese: no Piper/espeak voice) → the
                 // library is a dead end, so point at the phone's own voice settings to add a system
                 // voice, which is where ja guidance is spoken from.
-                val hasVela = app.vela.core.voice.PiperCatalog.hasVoiceFor(lang)
+                val hasVela = app.vela.BuildConfig.NATIVE_TTS_ENABLED && app.vela.core.voice.PiperCatalog.hasVoiceFor(lang)
                 val msg = appContext.getString(
                     if (hasVela) R.string.mapvm_voice_lang_missing else R.string.mapvm_voice_lang_system,
                     endonym,
@@ -600,12 +609,8 @@ class MapViewModel @Inject constructor(
                 }
             }
         }
-        voice.init(savedEngine) // null → default system TTS; also warms the engine list for Settings
-        if (savedEngine != null) {
-            val label = velaLabel(savedEngine)
-                ?: voice.availableEngines().firstOrNull { it.packageName == savedEngine }?.label ?: savedEngine
-            _state.update { it.copy(selectedEngine = VoiceEngine(savedEngine, label)) }
-        }
+        // No TTS service or native voice model starts during launcher initialization.
+        _state.update { it.copy(selectedEngine = VoiceEngine(savedEngine, if (savedEngine == VelaPiper.ENGINE_ID) VelaPiper.LABEL else "Google Text-to-Speech")) }
         // The neural voice loads when the route chooser opens (warmVoiceForRoute), not at launch: it
         // holds its model for the whole session, and a drive always passes through the chooser a few
         // seconds before the first spoken prompt.
@@ -638,7 +643,6 @@ class MapViewModel @Inject constructor(
         if (voiceWakeController.isEnabled()) {
             voiceWakeController.startListening()
         }
-        asrRecognizer.clearAllQuarantines()
         refreshAsr()
         refreshNotices() // any cached notices, shown immediately
         // Fleet default map color set (a user's own Settings pick always wins - see MapColors).
@@ -1018,6 +1022,11 @@ class MapViewModel @Inject constructor(
      *  (the calibrated search endpoint plus Photon and the local address pack).
      *  Best-effort, and a stale response is dropped if the query moved on. */
     fun onQueryChange(q: String) {
+        if (_state.value.categoryId != null) {
+            _state.update { it.copy(categoryFilter = q,
+                results = app.vela.core.data.NearbyCategories.filterLoaded(it.categoryPlaces, q), resultsCollapsed = false) }
+            return
+        }
         _state.update { it.copy(query = q) }
         suggestJob?.cancel()
         val term = q.trim()
@@ -1284,7 +1293,16 @@ class MapViewModel @Inject constructor(
     /** The X in the search bar: wipe the query, results and selection. Closing an ALONG-ROUTE
      *  browse instead returns to the trip it belongs to (restore the destination + panel) —
      *  the user was hunting for a stop, not abandoning the drive. */
+    private var categoryGeneration = 0L
+
     fun clearSearch() {
+        categoryGeneration++
+        searchJob?.cancel()
+        moreJob?.cancel()
+        moreSearch = null
+        _state.update { it.copy(categoryId = null, categoryLabel = null, categoryFilter = "",
+            categoryPlaces = emptyList(), categoryCenter = null, searching = false, status = null,
+            resultsMoreQuery = null, resultsLoadingMore = false) }
         openDirectionsOnResult = false
         suggestJob?.cancel()
         val backToTrip = _state.value.alongRouteDest
@@ -1362,6 +1380,7 @@ class MapViewModel @Inject constructor(
     private fun maybeCheckForUpdate() {
         val prefs = appContext.getSharedPreferences("vela_settings", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("self_update_check", true)) return
+        if (!app.vela.ui.OfflineMode.networkAllowed) return // offline-only: no GitHub release lookup
         val now = System.currentTimeMillis()
         if (now - prefs.getLong("last_update_check_ms", 0L) < 20 * 60 * 60_000L) return
         prefs.edit().putLong("last_update_check_ms", now).apply()
@@ -1450,15 +1469,15 @@ class MapViewModel @Inject constructor(
 
     // The map-area tile download is MapLibre's own machinery, so its cancel is region-based, not
     // flag-based: detach the observer (no stray onDone), stop, delete the partial region.
-    @Volatile private var areaRegion: org.maplibre.android.offline.OfflineRegion? = null
+    @Volatile private var areaRegion: com.mapbox.mapboxsdk.offline.OfflineRegion? = null
 
     fun cancelAreaDownload() {
         val r = areaRegion ?: return
         areaRegion = null
         runCatching { r.setObserver(null) }
-        runCatching { r.setDownloadState(org.maplibre.android.offline.OfflineRegion.STATE_INACTIVE) }
+        runCatching { r.setDownloadState(com.mapbox.mapboxsdk.offline.OfflineRegion.STATE_INACTIVE) }
         runCatching {
-            r.delete(object : org.maplibre.android.offline.OfflineRegion.OfflineRegionDeleteCallback {
+            r.delete(object : com.mapbox.mapboxsdk.offline.OfflineRegion.OfflineRegionDeleteCallback {
                 override fun onDelete() {}
                 override fun onError(error: String) {}
             })
@@ -1646,6 +1665,7 @@ class MapViewModel @Inject constructor(
     // panning to another area returns results THERE, not back at your GPS location. Falls back to GPS
     // before the map has settled a center.
     fun search() {
+        if (_state.value.categoryId != null) return
         val q = _state.value.query.trim()
         val near = plausibleBias(mapCenter) ?: plausibleBias(_state.value.myLocation)
         if (handleQueryIntent(q, near)) return
@@ -1795,7 +1815,13 @@ class MapViewModel @Inject constructor(
     }
 
     /** Re-run the current query biased to the area the user has panned to. */
-    fun searchThisArea() = runSearch(_state.value.query.trim(), plausibleBias(mapCenter))
+    fun searchThisArea() {
+        val state = _state.value
+        if (state.categoryId != null) {
+            loadCategory(state.categoryId, state.categoryLabel.orEmpty(),
+                plausibleBias(mapCenter) ?: state.categoryCenter, state.categoryRadiusMeters, state.categoryFilter)
+        } else runSearch(state.query.trim(), plausibleBias(mapCenter))
+    }
 
     // "More results" (2026-09-13): the search fetches three pages; this pulls the next three of
     // the SAME request (query, window, ranking point) and appends what is new. The row disappears
@@ -1833,7 +1859,7 @@ class MapViewModel @Inject constructor(
     fun onCameraIdle(center: LatLng) {
         mapCenter = center
         maybeOfferRouting()
-        if (_state.value.results.isNotEmpty() && _state.value.selected == null) {
+        if ((_state.value.results.isNotEmpty() || _state.value.categoryId != null) && _state.value.selected == null) {
             _state.update { it.copy(showSearchThisArea = true) }
         }
         warmWebViewsWhenQuiet()
@@ -1945,7 +1971,7 @@ class MapViewModel @Inject constructor(
      *  Google-side fetch for a place (listing, reviews, photos, details, boards) checks this first,
      *  so an offline tap shows what is on the phone and never a spinner waiting on a host that
      *  cannot answer (user 2026-09-14). */
-    private fun offlineNow(): Boolean = _state.value.offline || !isOnline()
+    private fun offlineNow(): Boolean = _state.value.offline || app.vela.ui.OfflineMode.on.value || !isOnline()
 
     /** Offline, or the user turned Google off (Settings > Privacy): the Google-only fetches take
      *  the same "nothing to ask" path either way. NOT [offlineNow] itself: that one also decides
@@ -1981,6 +2007,9 @@ class MapViewModel @Inject constructor(
     }
 
     private fun runSearch(q: String, near: LatLng?) {
+        searchJob?.cancel()
+        categoryGeneration++
+        _state.update { it.copy(categoryId = null, categoryLabel = null, categoryFilter = "", categoryPlaces = emptyList(), categoryCenter = null) }
         if (q.isEmpty()) return
         // Pasted coordinates ("37.77, -122.42" or a geo: string) drop a reverse-geocoded pin
         // there instead of going to the search endpoint as text - same handling a bare external
@@ -2076,17 +2105,10 @@ class MapViewModel @Inject constructor(
             // No connection → skip the Google scrape entirely (it would just hang to the socket timeout,
             // the "search does nothing offline" report) and search the on-device OSM index straight away.
             // Empty index = no area downloaded yet, so point the user at the download (issue #3).
-            if (!isOnline()) {
+            if (offlineNow()) {
                 val (offline, haveArea) = withContext(Dispatchers.IO) {
-                    val rawPois = runCatching { offlinePoiStore.search(q, near) }.getOrDefault(emptyList())
-                    // A pack POI usually carries no address of its own (OSM tags few), so the rows
-                    // read as bare names; fill the shown ones from the address index, the same
-                    // lookup the sheet runs on select (user 2026-09-19, "does not show the POI
-                    // address"). Bounded to what the list shows first.
-                    val pois = rawPois.mapIndexed { i, p ->
-                        if (i >= OFFLINE_ADDR_FILL || !p.address.isNullOrBlank()) p // fill only the first rows, the ones on screen
-                        else p.copy(address = runCatching { addressStore.reverseGeocode(p.location) }.getOrNull() ?: p.address)
-                    }
+                    // Show local results without reverse-geocoding every row; selection fills the address.
+                    val pois = runCatching { offlinePoiStore.search(q, near) }.onFailure { app.vela.util.FileLogger.w("OfflineSearch", "POI query failed", it) }.getOrDefault(emptyList())
                     val isAddress = app.vela.core.data.OfflineAddressStore.looksLikeAddress(q)
                     val addrs = runCatching { addressStore.geocode(q, near) }.getOrDefault(emptyList())
                     val atAddr = if (isAddress) {
@@ -2101,7 +2123,7 @@ class MapViewModel @Inject constructor(
                         else -> addrs.distinctBy { it.id }
                     }
                     val have = merged.isNotEmpty() ||
-                        runCatching { offlinePoiStore.count() > 0 || addressStore.count() > 0 || addressStore.streetCount() > 0 }.getOrDefault(false)
+                        hasOfflineSearchData()
                     merged to have
                 }
                 _state.update {
@@ -2114,7 +2136,7 @@ class MapViewModel @Inject constructor(
                         haveArea ->
                             it.copy(results = emptyList(), status = appContext.getString(R.string.mapvm_offline_no_match, q), searching = false)
                         else ->
-                            it.copy(results = emptyList(), status = appContext.getString(R.string.mapvm_offline_no_data), searching = false)
+                            it.copy(results = emptyList(), status = offlineDataProblem(), searching = false)
                     }
                 }
                 return@launch
@@ -2240,9 +2262,9 @@ class MapViewModel @Inject constructor(
                     // A dead connection: if there's a downloaded area the query just didn't match it, else
                     // point the user at the offline download instead of a raw "Unable to resolve host".
                     val haveArea = withContext(Dispatchers.IO) {
-                        runCatching { offlinePoiStore.count() > 0 || addressStore.count() > 0 || addressStore.streetCount() > 0 }.getOrDefault(false)
+                        hasOfflineSearchData()
                     }
-                    val msg = if (haveArea) appContext.getString(R.string.mapvm_offline_no_match, q) else appContext.getString(R.string.mapvm_offline_no_data)
+                    val msg = if (haveArea) appContext.getString(R.string.mapvm_offline_no_match, q) else offlineDataProblem()
                     _state.update { it.copy(status = msg, searching = false) }
                 } else {
                     _state.update { it.copy(status = appContext.getString(R.string.mapvm_search_failed_reason, e.message), searching = false) }
@@ -2255,8 +2277,20 @@ class MapViewModel @Inject constructor(
      *  interpolated address hits (addresses first so a typed street resolves). Used both when the online
      *  scrape throws AND when it succeeds with zero results, so a small local place Google misses still
      *  surfaces instead of a blank screen. */
+    private fun hasOfflineSearchData(): Boolean =
+        listOf(offlinePoiStore::count, addressStore::count, addressStore::streetCount).any { count ->
+            runCatching { count() > 0 }
+                .onFailure { app.vela.util.FileLogger.w("OfflineSearch", "Data count failed", it) }.getOrDefault(false)
+        }
+
+    private fun offlineDataProblem(): String {
+        val failed = app.vela.core.data.OfflinePacks.failures.keys.map { java.io.File(it).name }
+        return if (failed.isNotEmpty()) appContext.getString(R.string.mapvm_offline_pack_unreadable, failed.joinToString())
+            else appContext.getString(R.string.mapvm_offline_no_data)
+    }
+
     private suspend fun offlineSearch(q: String, near: LatLng?): List<Place> = withContext(Dispatchers.IO) {
-        val pois = runCatching { offlinePoiStore.search(q, near) }.getOrDefault(emptyList())
+        val pois = runCatching { offlinePoiStore.search(q, near) }.onFailure { app.vela.util.FileLogger.w("OfflineSearch", "POI query failed", it) }.getOrDefault(emptyList())
         val addrs = runCatching { addressStore.geocode(q, near) }.getOrDefault(emptyList())
         val isAddr = app.vela.core.data.OfflineAddressStore.looksLikeAddress(q)
         (if (isAddr && addrs.isNotEmpty()) addrs + pois else pois + addrs).distinctBy { it.id }
@@ -4042,8 +4076,52 @@ class MapViewModel @Inject constructor(
     }
 
     fun quickSearch(category: String) {
-        _state.update { it.copy(query = category) }
-        search()
+        val chip = app.vela.ui.QuickCategories.all().firstOrNull { it.query.equals(category, ignoreCase = true) }
+        val display = chip?.let { app.vela.ui.AppLocale.wrap(appContext).getString(it.label) } ?: category
+        val current = _state.value
+        if (current.categoryId == category && current.categoryPlaces.isNotEmpty()) {
+            onQueryChange("")
+            return
+        }
+        loadCategory(category, display, plausibleBias(mapCenter) ?: plausibleBias(current.myLocation), 10_000.0, "")
+    }
+
+    fun expandCategoryArea() {
+        val state = _state.value
+        state.categoryId?.let { loadCategory(it, state.categoryLabel.orEmpty(), state.categoryCenter, 20_000.0, state.categoryFilter) }
+    }
+
+    private fun loadCategory(category: String, label: String, center: LatLng?, radius: Double, filter: String) {
+        searchJob?.cancel()
+        suggestJob?.cancel()
+        moreJob?.cancel()
+        moreSearch = null
+        val generation = ++categoryGeneration
+        _state.update { it.copy(categoryId = category, categoryLabel = label, categoryFilter = filter,
+            categoryCenter = center, categoryRadiusMeters = radius, categoryPlaces = emptyList(),
+            query = "", results = emptyList(), suggestions = emptyList(), querySuggestions = emptyList(), localSuggestions = emptyList(),
+            selected = null, status = null, searching = center != null, resultsCollapsed = false,
+            resultsMoreQuery = null, resultsLoadingMore = false, openListId = null, pendingImport = null) }
+        if (center == null) {
+            _state.update { it.copy(status = appContext.getString(R.string.search_category_location_required)) }
+            return
+        }
+        searchJob = viewModelScope.launch {
+            val categories = app.vela.core.data.NearbyCategories.values(category)
+            val hits = withContext(Dispatchers.IO) {
+                val local = runCatching { offlinePoiStore.near(center, radius, 500, categories) }
+                    .onFailure { app.vela.util.FileLogger.w("CategorySearch", "Local category lookup failed", it) }.getOrDefault(emptyList())
+                val pool = if (local.isNotEmpty() || offlineNow()) local else
+                    app.vela.core.data.OverpassPois.nearbyCategory(http, category, center, radius)
+                app.vela.core.data.CategoryFilter.applyIfEnabled(
+                    app.vela.core.data.NearbyCategories.nearby(pool, center, categories, radiusMeters = radius))
+            }
+            coroutineContext.ensureActive()
+            if (generation != categoryGeneration) return@launch
+            _state.update { it.copy(categoryPlaces = hits, searching = false,
+                results = app.vela.core.data.NearbyCategories.filterLoaded(hits, it.categoryFilter)) }
+            app.vela.util.FileLogger.i("CategorySearch", "category=$category radius=$radius pool=${hits.size} generation=$generation")
+        }
     }
 
     /**
@@ -5390,16 +5468,30 @@ class MapViewModel @Inject constructor(
     fun setStyle(style: MapStyle) =
         _state.update { it.copy(styleUri = style.uri, styleName = style.label) }
 
-    fun voiceEngines(): List<VoiceEngine> = voice.availableEngines()
+    fun voiceEngines(): List<VoiceEngine> = buildList {
+        if (app.vela.BuildConfig.NATIVE_TTS_ENABLED && VelaPiper.isReady(appContext)) add(VoiceEngine(VelaPiper.ENGINE_ID, VelaPiper.LABEL))
+        addAll(voice.availableEngines().filter { it.packageName == "com.google.android.tts" })
+    }
 
     /** The in-process synth backing a Vela neural engine id (else null for a system TTS engine). */
     private fun neuralSynthFor(engineId: String?): PiperSynth? =
-        if (engineId == VelaPiper.ENGINE_ID) piperSynth else null
+        if (app.vela.BuildConfig.NATIVE_TTS_ENABLED && engineId == VelaPiper.ENGINE_ID) piperSynth else null
     private fun velaLabel(engineId: String): String? =
         if (engineId == VelaPiper.ENGINE_ID) VelaPiper.LABEL else null
 
     fun setVoiceEngine(e: VoiceEngine) {
-        neuralSynthFor(e.packageName)?.let { voice.neural = it; it.warmUp() } // point VoiceGuide at the right synth
+        if (e.packageName != "com.google.android.tts" && neuralSynthFor(e.packageName) == null) {
+            flashStatus("Yerel ses motorları geçici olarak kapalı; Google TTS kullanılıyor.")
+            return
+        }
+        if (e.packageName == VelaPiper.ENGINE_ID) {
+            settingsPrefs.edit().putBoolean("voice_isolated_tts_opt_in", true).apply()
+            piperSynth.allowRetry()
+            voice.useNeuralEngineLazily(piperSynth)
+        } else {
+            piperSynth.release()
+            voice.useSystemEngineLazily("com.google.android.tts")
+        }
         voice.init(e.packageName) // re-init now so the pick applies + a test plays through it
         settingsPrefs.edit().putString("voice_engine", e.packageName).apply() // survive restart
         _state.update { it.copy(selectedEngine = e) }
@@ -5502,7 +5594,6 @@ class MapViewModel @Inject constructor(
             showStatus(appContext.getString(R.string.mapvm_not_enough_space, v.displayName, v.sizeMb))
             return
         }
-        val firstEver = VelaPiper.installedVoiceIds(appContext).isEmpty()
         voiceCancel.set(false)
         _state.update { it.copy(voiceDownloadingId = id, voiceDownloadPct = 0f, voiceInstalling = false) }
         downloadLaunch(v.displayName) {
@@ -5521,7 +5612,7 @@ class MapViewModel @Inject constructor(
                 )
             }
             if (ok && VelaPiper.isVoiceReady(appContext, id)) {
-                if (firstEver) selectVoice(id, audition = false) else flashStatus(appContext.getString(R.string.mapvm_voice_downloaded, v.displayName))
+                flashStatus(appContext.getString(R.string.mapvm_voice_downloaded, v.displayName))
             } else if (!voiceCancel.get()) { // a user cancel is not a failure - stay quiet
                 showStatus(appContext.getString(R.string.mapvm_voice_download_failed, v.displayName))
             }
@@ -5534,7 +5625,8 @@ class MapViewModel @Inject constructor(
     fun refreshAsr() {
         _state.update {
             it.copy(
-                asrInstalledIds = app.vela.voice.AsrEngine.installed(appContext).map { e -> e.id }.toSet(),
+                asrInstalledIds = if (app.vela.BuildConfig.NATIVE_VOICE_ENABLED)
+                    app.vela.voice.AsrEngine.installed(appContext).map { e -> e.id }.toSet() else emptySet(),
                 asrActiveId = app.vela.voice.AsrEngine.active(appContext).id,
             )
         }
@@ -5637,7 +5729,7 @@ class MapViewModel @Inject constructor(
     /** Enable or disable hands-free wake word detection ("Hey Vela" / custom keyword). */
     fun setWakeWordEnabled(enabled: Boolean) {
         voiceWakeController.setEnabled(enabled)
-        _state.update { it.copy(wakeWordEnabled = enabled) }
+        _state.update { it.copy(wakeWordEnabled = voiceWakeController.isEnabled()) }
     }
 
     /** Enable or disable silent mode (shows pulsing border on car dock mic instead of fullscreen dialog). */
@@ -5681,10 +5773,18 @@ class MapViewModel @Inject constructor(
      *  on its own right after a download reads as a bug (user 2026-07-10). The Test button remains
      *  the on-demand way to hear the active voice. */
     fun selectVoice(id: String, audition: Boolean = true) {
+        if (!app.vela.BuildConfig.NATIVE_TTS_ENABLED) {
+            flashStatus("Yerel sesler geçici olarak kapalı; Google TTS kullanılıyor.")
+            return
+        }
         if (!VelaPiper.isVoiceReady(appContext, id)) return
         VelaPiper.setSelectedVoiceId(appContext, id)
-        piperSynth.reloadVoice() // THE build of the new voice (race-free; runs first on the worker)
-        setVoiceEngine(VoiceEngine(VelaPiper.ENGINE_ID, VelaPiper.LABEL)) // route VoiceGuide→neural + persist engine
+        piperSynth.release()
+        piperSynth.allowRetry()
+        voice.useNeuralEngineLazily(piperSynth)
+        settingsPrefs.edit().putString("voice_engine", VelaPiper.ENGINE_ID).apply()
+        settingsPrefs.edit().putBoolean("voice_isolated_tts_opt_in", true).apply()
+        _state.update { it.copy(selectedEngine = VoiceEngine(VelaPiper.ENGINE_ID, VelaPiper.LABEL)) }
         refreshInstalledVoices() // selectedVoiceId + per-voice speaker for the variant UI
         if (audition) voice.speak(appContext.getString(R.string.mapvm_voice_sample), interrupt = true)
     }
@@ -5746,6 +5846,9 @@ class MapViewModel @Inject constructor(
 
     /** null = still initializing, true = a voice is ready, false = no usable voice. */
     fun voiceWorking(): Boolean? = voice.working
+    fun voiceTestStatus(): String = voice.speechStatus
+    fun voiceTestFinished(): Boolean = voice.speechStatus == "done" || voice.speechStatus.startsWith("error:")
+    fun stopVoiceTest() = voice.stop()
 
     /** Open-source engines a phone with none can install in one tap (off F-Droid). */
     fun installableEngines(): List<VoiceInstaller.Engine> =
@@ -6315,14 +6418,9 @@ class MapViewModel @Inject constructor(
      *  after, so the cleared bytes leave the file (issue #601). */
     suspend fun clearMapCache(flash: Boolean = true): Unit = kotlinx.coroutines.withContext(Dispatchers.Main) {
         kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-            runCatching {
-                org.maplibre.android.offline.OfflineManager.getInstance(appContext).clearAmbientCache(
-                    object : org.maplibre.android.offline.OfflineManager.FileSourceCallback {
-                        override fun onSuccess() { if (cont.isActive) cont.resume(Unit) { _, _, _ -> } }
-                        override fun onError(message: String) { if (cont.isActive) cont.resume(Unit) { _, _, _ -> } }
-                    },
-                )
-            }.onFailure { if (cont.isActive) cont.resume(Unit) { _, _, _ -> } }
+            app.vela.offline.OfflineMaps.clearCache(appContext) {
+                if (cont.isActive) cont.resume(Unit) { _, _, _ -> }
+            }
         }
         kotlinx.coroutines.suspendCancellableCoroutine { cont ->
             app.vela.offline.OfflineMaps.packDatabase(appContext) { if (cont.isActive) cont.resume(Unit) { _, _, _ -> } }
@@ -6336,7 +6434,7 @@ class MapViewModel @Inject constructor(
         val (s, w, n, e, zoom) = listOf(v[0], v[1], v[2], v[3], v[4])
         val minZ = (zoom - 1).coerceIn(0.0, 15.0)
         val maxZ = (zoom + 3).coerceIn(minZ, 16.0)
-        val bounds = org.maplibre.android.geometry.LatLngBounds.from(n, e, s, w)
+        val bounds = com.mapbox.mapboxsdk.geometry.LatLngBounds.from(n, e, s, w)
         // The coordinate name is STORED metadata (it is what tells two saved areas apart in the
         // Settings list) - it is deliberately NOT shown in any banner (user 2026-07-23: the raw
         // coords flashing over the progress card read as a second, junk banner).
@@ -6587,7 +6685,11 @@ class MapViewModel @Inject constructor(
         // each candidate file to see whether it actually draws the map there (issue #552). The
         // answers are memoized, so this is a handful of small reads on the first look at an area.
         basemapArchiveJob?.cancel()
-        basemapArchiveJob = viewModelScope.launch(Dispatchers.IO) { pickBasemapArchive(center) }
+        basemapArchiveJob = viewModelScope.launch(Dispatchers.IO) {
+            // Coalesce transient camera centres while preserving the first map load.
+            if (_state.value.basemapArchive != null) kotlinx.coroutines.delay(500)
+            pickBasemapArchive(center)
+        }
     }
 
     private var basemapArchiveJob: Job? = null
@@ -6598,16 +6700,18 @@ class MapViewModel @Inject constructor(
         val corners = viewport?.let { v -> listOf(LatLng(v[0], v[1]), LatLng(v[0], v[3]), LatLng(v[2], v[1]), LatLng(v[2], v[3])) }.orEmpty()
         // Offline the archive in use is kept while any of the view is still inside it: there is
         // nothing to stream in its place (issue #552, fourth round).
-        val file = basemapStore.installedFor(center, mountedNow, corners, keepMounted = _state.value.offline)
+        val preferLocal = app.vela.variant.CarIntegration.available
+        val file = basemapStore.installedFor(center, mountedNow, corners, keepMounted = _state.value.offline || preferLocal)
         // A SHALLOW archive (baked a zoom level short because the full bake would pass GitHub's
         // 2 GiB asset limit) draws as a blurred version of the same map once you are past its
         // depth, so a download made the map worse than streaming (issue #552). Online, the streamed
         // tiles win; offline it is still far better than an empty screen.
         val shallow = file != null &&
             (basemapStore.maxZoomOf(file) ?: app.vela.offline.BasemapTileStore.FULL_MAP_ZOOM) < app.vela.offline.BasemapTileStore.FULL_MAP_ZOOM
-        val usable = file?.takeUnless { shallow && !_state.value.offline }
-        if (shallow) android.util.Log.i("VelaBasemap", "installed basemap is shallow (max zoom < ${app.vela.offline.BasemapTileStore.FULL_MAP_ZOOM}); using it only offline")
+        val usable = file?.takeUnless { shallow && !_state.value.offline && !preferLocal }
+        if (shallow) android.util.Log.i("VelaBasemap", "Shallow installed basemap: offline=${_state.value.offline}, preferLocal=$preferLocal")
         val uri = usable?.let { "pmtiles://file://${it.absolutePath}" }
+        kotlin.coroutines.coroutineContext.ensureActive()
         if (uri != _state.value.basemapArchive) {
             // Swapping the source re-points every basemap layer, which re-tiles and re-lays out the
             // whole map: a visible freeze. At the edge of a downloaded region the honest answer
@@ -6617,6 +6721,7 @@ class MapViewModel @Inject constructor(
             // ever delay a swap the view still wants.
             val since = android.os.SystemClock.elapsedRealtime() - lastBasemapSwapMs
             if (since < BASEMAP_SWAP_COOLDOWN_MS) kotlinx.coroutines.delay(BASEMAP_SWAP_COOLDOWN_MS - since)
+            kotlin.coroutines.coroutineContext.ensureActive()
             lastBasemapSwapMs = android.os.SystemClock.elapsedRealtime()
             val fonts = app.vela.offline.GlyphPackStore.installed(appContext)
             android.util.Log.i("VelaBasemap", "offline basemap for the view: ${uri?.substringAfterLast('/') ?: "none"} (glyph pack installed=$fonts)")
@@ -6624,7 +6729,9 @@ class MapViewModel @Inject constructor(
             // An archive without the glyph pack (an interrupted first download) heals itself the
             // next time there is a connection: labels need the pack, and without it the tiles
             // with labels never complete offline.
-            if (uri != null && !fonts) {
+            // Offline-only: keep the missing pack for a later connection instead of stalling the
+            // head unit on a download the user did not ask for.
+            if (uri != null && !fonts && app.vela.ui.OfflineMode.networkAllowed) {
                 viewModelScope.launch(Dispatchers.IO) { app.vela.offline.GlyphPackStore.ensureInstalled(appContext, http) }
             }
         }
@@ -7202,6 +7309,8 @@ class MapViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
+            val local = withContext(Dispatchers.IO) { regionCatalog.installedRegions() }
+            _state.update { it.copy(routingRegions = local) }
             val regions = regionCatalog.manifest(app.vela.BuildConfig.OBF_MANIFEST_URL)
             _state.update { it.copy(routingRegions = regions) }
             val extras = regionExtrasMb(regions)
@@ -7660,7 +7769,6 @@ class MapViewModel @Inject constructor(
         const val DR_MAX_M = 3_000.0      // hard cap on blind travel - longer than any common tunnel, short enough to bound a wrong guess
         const val SPEED_LIMIT_FORGET_M = 300.0 // drive this far past the last KNOWN limit with only
                                                // untagged snaps → clear the badge (don't show a stale limit)
-        const val OFFLINE_ADDR_FILL = 20      // offline search rows whose blank address is filled from the index
         const val OFFLINE_AT_ADDR_M = 40.0    // a POI this close to a typed address is "at" it
         const val RESUME_MAX_AGE_MS = 60 * 60 * 1000L // a persisted nav older than this = that drive is long
                                                       // over; don't offer to resume it on the next launch

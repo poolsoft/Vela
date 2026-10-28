@@ -24,6 +24,22 @@ class MusicRepositoryCacheTest {
             File(dir, "car_music_index_v1.json").writeText(org.json.JSONArray().put(
                 org.json.JSONObject().put("id", 42L).put("baslik", "Saved track")
                     .put("dosyaYolu", track.absolutePath).put("contentUri", "file://${track.absolutePath}")
+            ).put(
+                org.json.JSONObject().put("id", 43L).put("baslik", "Duplicate cached track")
+                    .put("dosyaYolu", File(dir, "./test.mp3").path).put("contentUri", "file://${track.absolutePath}")
+            ).put(
+                org.json.JSONObject().put("id", 44L).put("baslik", "Detached USB track")
+                    .put("dosyaYolu", File(dir, "usb-detached/missing.mp3").absolutePath)
+            ).put(
+                org.json.JSONObject().put("id", 45L).put("baslik", "Old messaging cache entry")
+                    .put("dosyaYolu", File(dir, "WhatsApp/Media/voice.mp3").apply {
+                        parentFile.mkdirs(); writeBytes(byteArrayOf(1))
+                    }.absolutePath)
+            ).put(
+                org.json.JSONObject().put("id", 46L).put("baslik", "Old ringtone cache entry")
+                    .put("dosyaYolu", File(dir, "Ringtones/tone.mp3").apply {
+                        parentFile.mkdirs(); writeBytes(byteArrayOf(1))
+                    }.absolutePath)
             ).toString())
             val context = object : ContextWrapper(null) {
                 override fun getFilesDir(): File {

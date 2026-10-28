@@ -25,42 +25,43 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.flow.first
 import app.vela.core.model.LatLng
 import app.vela.core.model.distanceTo
 import app.vela.offline.OfflineMaps
-import org.maplibre.android.MapLibre
-import org.maplibre.android.camera.CameraPosition
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.gestures.MoveGestureDetector
-import org.maplibre.android.gestures.ShoveGestureDetector
-import org.maplibre.android.gestures.StandardScaleGestureDetector
-import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.MapView
-import org.maplibre.android.maps.Style
-import org.maplibre.android.style.expressions.Expression
-import org.maplibre.android.style.layers.CircleLayer
-import org.maplibre.android.style.layers.FillLayer
-import org.maplibre.android.style.layers.HillshadeLayer
-import org.maplibre.android.style.layers.LineLayer
-import org.maplibre.android.style.layers.Property
-import org.maplibre.android.style.layers.PropertyFactory
-import org.maplibre.android.style.layers.SymbolLayer
-import org.maplibre.android.style.layers.RasterLayer
-import org.maplibre.android.style.sources.GeoJsonOptions
-import org.maplibre.android.style.sources.GeoJsonSource
-import org.maplibre.android.style.sources.VectorSource
-import org.maplibre.android.style.sources.RasterDemSource
-import org.maplibre.android.style.sources.RasterSource
-import org.maplibre.android.style.sources.TileSet
-import org.maplibre.geojson.Feature
-import org.maplibre.geojson.FeatureCollection
-import org.maplibre.geojson.LineString
-import org.maplibre.geojson.Point
+import com.mapbox.mapboxsdk.Mapbox as MapLibre
+import com.mapbox.mapboxsdk.camera.CameraPosition
+import com.mapbox.mapboxsdk.camera.CameraUpdateFactory
+import com.mapbox.android.gestures.MoveGestureDetector
+import com.mapbox.android.gestures.ShoveGestureDetector
+import com.mapbox.android.gestures.StandardScaleGestureDetector
+import com.mapbox.mapboxsdk.maps.MapboxMap as MapLibreMap
+import com.mapbox.mapboxsdk.maps.MapView
+import com.mapbox.mapboxsdk.maps.Style
+import com.mapbox.mapboxsdk.style.expressions.Expression
+import com.mapbox.mapboxsdk.style.layers.CircleLayer
+import com.mapbox.mapboxsdk.style.layers.FillLayer
+import com.mapbox.mapboxsdk.style.layers.HillshadeLayer
+import com.mapbox.mapboxsdk.style.layers.LineLayer
+import com.mapbox.mapboxsdk.style.layers.Property
+import com.mapbox.mapboxsdk.style.layers.PropertyFactory
+import com.mapbox.mapboxsdk.style.layers.SymbolLayer
+import com.mapbox.mapboxsdk.style.layers.RasterLayer
+import com.mapbox.mapboxsdk.style.sources.GeoJsonOptions
+import com.mapbox.mapboxsdk.style.sources.GeoJsonSource
+import com.mapbox.mapboxsdk.style.sources.VectorSource
+import com.mapbox.mapboxsdk.style.sources.RasterDemSource
+import com.mapbox.mapboxsdk.style.sources.RasterSource
+import com.mapbox.mapboxsdk.style.sources.TileSet
+import com.mapbox.geojson.Feature
+import com.mapbox.geojson.FeatureCollection
+import com.mapbox.geojson.LineString
+import com.mapbox.geojson.Point
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import org.maplibre.android.geometry.LatLng as MLLatLng
-import org.maplibre.android.geometry.LatLngBounds as MLLatLngBounds
+import com.mapbox.mapboxsdk.geometry.LatLng as MLLatLng
+import com.mapbox.mapboxsdk.geometry.LatLngBounds as MLLatLngBounds
 
 private const val ROUTE_SRC = "vela-route-src"
 // A search from a view this tall (meters, north to south) keeps its camera when at least
@@ -529,7 +530,7 @@ private val lastCameraMoveMs = longArrayOf(0L)
 private const val TWIN_PASS_STILL_MS = 700L
 /** Free-drive look-ahead (speed x 5 m) time constant: slow on purpose, see the free-drive ticker. */
 
-private fun flightCb() = object : org.maplibre.android.maps.MapLibreMap.CancelableCallback {
+private fun flightCb() = object : com.mapbox.mapboxsdk.maps.MapboxMap.CancelableCallback {
     override fun onFinish() { if (flightDepth[0] > 0) flightDepth[0]-- }
     override fun onCancel() { if (flightDepth[0] > 0) flightDepth[0]-- }
 }
@@ -542,271 +543,132 @@ private fun flightCb() = object : org.maplibre.android.maps.MapLibreMap.Cancelab
  * The location dot also shows a heading arrow when a GPS bearing is available.
  */
 @Composable
-fun VelaMapView(
-    styleUri: String,
-    myLocation: LatLng?,
-    myBearing: Float?,
-    myAccuracyM: Float? = null,
-    mySpeed: Float? = null,
-    myFixRaw: LatLng? = null, // last accepted raw fix (pre low-pass), for the free-drive follow estimator
-    mySpeedRaw: Float? = null, // THIS fix's own measurement (null = fix had none) — Kalman feed
-    // Trip-replay time scale (1 = live). The recorded fixes arrive speedup× faster than real time
-    // but carry REAL speeds, so all the puck's wall-clock physics (dead-reckon integration, blind
-    // window, easing time-constants, plausibility caps) must run in TRACE time or the puck reckons
-    // 1/speedup of the ground covered per fix and surges to catch up — the "stuttery arrow +
-    // pulsing mph" replay artifact. At speedup=1 every formula is byte-identical to before.
-    replaySpeedup: Float = 1f,
-    replaying: Boolean = false, // trip replay: synthetic fixes, so LIVE sensors must stay out of the puck
-    compassHeading: Float? = null, // device facing (sensor); points the browse cone when stopped
-    locationStale: Boolean = false,
-    cameraTarget: LatLng?,
-    cameraTargetZoom: Double? = null, // deep-link z= override for the target fly (null = default framing)
-    recenterTick: Int = 0, // bumped on each recenter tap → force a move even if already "centered"
-    cameraBottomInsetPx: Int = 0,
-    // Landscape side-panel width (the place/results sheets as a left column): the optical center
-    // shifts RIGHT instead of up, so a focused pin lands in the map strip beside the panel.
-    cameraLeftInsetPx: Int = 0,
-    cameraRightInsetPx: Int = 0,
-    cameraTopInsetPx: Int = 0, // measured top chrome (the endpoints card) - the route fit clears it
-    routePolyline: List<LatLng>,
-    routeColor: String,
-    routeDashed: Boolean = false, // draw the route dashed (walking / biking), Google-style
-    // The transit itinerary whose drill-down is open in the chooser (issue #233): its ride legs
-    // draw as agency-colored lines through the stops with white stop dots, walk legs as dotted
-    // links. Null = nothing drawn. The caller gates it to the open, non-navigating chooser — or
-    // to step-by-step transit nav (issue #232), where [transitNavLeg] is the guided leg's index
-    // and the camera frames THAT leg instead of the whole trip, re-framing on each advance.
-    transitPreview: app.vela.core.model.TransitItinerary? = null,
-    transitNavLeg: Int? = null,
-
-    // Per-segment live traffic as (startFraction, endFraction, level) along the route
-    // — colors the route line like Google (free-flow elsewhere). Empty = no live data.
-    routeTrafficSpans: List<Triple<Float, Float, Int>> = emptyList(),
-    alternates: List<Pair<Int, List<LatLng>>> = emptyList(),
-    altColor: String = "#9AA0A6",
-    onSelectAlternate: (Int) -> Unit = {},
-    routeBubbles: List<RouteBubble> = emptyList(), // Google-style chooser experiment: time bubbles on the routes
-    markers: List<MapMarker>,
-    // Intermediate trip stops in VISIT ORDER - drawn as numbered teal pins (1, 2, ...) while a
-    // trip is planned or driven; reordering the stops re-numbers the pins (list identity keys it).
-    stopPins: List<LatLng> = emptyList(),
-    destinationPin: LatLng? = null, // the trip's END, drawn as a flag beside the numbered stops
-    // Drive nav, tap-to-stop: the place the card is offering, drawn as a red "+" teardrop so the
-    // driver can see WHERE the offer is before the button changes the drive.
-    candidatePin: LatLng? = null,
-    frameMarkers: Boolean,
-    // True while a PLACE SHEET owns the camera (a result is open): the marker-cluster fit is
-    // remembered, not forgotten, so closing the sheet returns to the results WITHOUT re-framing
-    // the whole cluster (the "zooms me out when I exit the POI" report, user 2026-07-18). The
-    // forget still happens when the sheet closes with no place open (a pan away + reopening the
-    // list deliberately re-frames).
-    holdMarkerFit: Boolean = false,
-    navMode: Boolean,
-    navDriveMode: Boolean = false, // navigating a DRIVE route -> the aggressive car-mode declutter
-    navLabelExclude: List<String> = emptyList(), // roads already DRIVEN: never bubble-label the road you're ON
-    navUpcomingRoads: List<String> = emptyList(), // the next turns' target roads: always bubble-labeled
-    // Foreign-name romanizing (issue #184): as nav road tiles load, report each road's local name ->
-    // its basemap name:latin, so guidance can SAY/SHOW the real romanized name instead of the ICU
-    // consonant skeleton. Accumulates across the drive; called only when the map grows.
-    onNavRoadLatin: (Map<String, String>) -> Unit = {},
-    navFollowing: Boolean = true,
-    navNorthUp: Boolean = false,
-    // Free-drive follow (no route open): when true the camera tracks the live fix north-up and
-    // the heading beam is smoothed per frame, the way the puck is during nav. The caller drops it
-    // to false on a user pan and raises it again on the locate tap.
-    driveFollowing: Boolean = false,
-    onNavPanned: () -> Unit = {},
-    ambientCoversView: Boolean = false, // viewport inside the ambient-Google fetch area → OSM POIs yield
-    onUserPan: () -> Unit = {},
-    onMapTap: () -> Unit = {}, // ANY map tap, before POI/marker resolution - dismiss-transients hook
-    onScaleChanged: (metersPerPixel: Double) -> Unit = {},
-    // Debug badge feed: reports the fill-buildings overlay state on each settle - "none" (no overlay
-    // in this region), "hidden" (auto-suppressed because OSM is dense here) or "drawing" (visible).
-    // Only wired when the Building-overlay-debug developer toggle is on; a no-op otherwise.
-    onOverlayState: (String) -> Unit = {},
-    darkTheme: Boolean,
-    amoled: Boolean = false,
-    applyKeylessTheme: Boolean,
-    trafficOn: Boolean,
-    transitOn: Boolean = false, // highlight rail (train + subway/tram) lines from the basemap tiles
-    satelliteOn: Boolean = false, // Esri World Imagery raster under the symbol layers (map button)
-    satDeep: Int = 0, // deep imagery for this area (issue #244): 0 none, 20..22 Esri native level, -1 Google fallback
-    topographyOn: Boolean = false, // terrain-relief hillshade; OFF by default (Google-style)
-    previewTarget: LatLng?,
-    navOverviewTick: Int = 0, // bumped by the in-nav Overview button — fly the camera out to the whole route
-    navRecenterTick: Int = 0, // bumped by the nav Re-center button — drop the pinch zoom/tilt overrides back to auto
-    // Reports whether a manual pinch/shove override is active during nav (true on set, false on
-    // clear) so the screen can show Re-center for a zoomed-but-still-following camera (issue #238).
-    onNavZoomOverride: (Boolean) -> Unit = {},
-    /** The drawn puck's position in SCREEN px while navigating, so the caller can hang the
-     *  current-road label off it (issue #288). Reported only when it actually moves. */
-    onPuckScreen: (Float, Float) -> Unit = { _, _ -> },
-    onPoiTap: (name: String, location: LatLng, poiKind: String?) -> Unit,
-    onMarkerTap: (index: Int) -> Unit,
-    parkingSpot: LatLng? = null, // saved "parked here" pin; tap → onParkingTap
-    savedPins: List<SavedPin> = emptyList(), // saved/list places while browsing (issue #171)
-    onSavedPinTap: (index: Int) -> Unit = {},
-    onParkingTap: () -> Unit = {},
-    // Street View pose while the half-screen pano viewer is open: [lat, lng, compassYawDeg].
-    // Draws the rotating view cone at the pano and eases the camera there on each pano hop.
-    svPose: DoubleArray? = null,
-    // Height (px) of the Street View pane covering the top of the screen: applied as camera TOP
-    // padding while the viewer is open so the pose puck centers in the VISIBLE strip below it.
-    svTopInsetPx: Int = 0,
-    // Tap on the mini-map while Street View is open = "take me there": the viewer jumps to the
-    // nearest pano at the tapped point. Pre-empts all POI/pin tap resolution while the pane is up.
-    onSvMapTap: (LatLng) -> Unit = {},
-    ambientPois: List<MapMarker> = emptyList(),
-    onAmbientTap: (index: Int) -> Unit = {},
-    onTransitStopTap: (app.vela.core.data.transit.Transitous.MapStop) -> Unit = {},
-    buildingOverlays: List<String> = emptyList(), // full pmtiles:// source URIs (file:// downloaded / https:// streamed)
-    addressOverlays: List<String> = emptyList(), // pmtiles:// URIs for house-number labels (streamed, OpenAddresses)
-    maxspeedOverlays: List<String> = emptyList(), // pmtiles:// URIs for the posted-speed overlay (streamed); read under the puck
-    hiddenOpenPlaceIds: Set<String> = emptySet(), // Overture ids whose Google listing said permanently closed: never drawn
-    ambientClosed: List<MapMarker> = emptyList(), // permanently closed places in Google's last nearby answer (Both mode purge)
-    onOpenPlaceClosed: (id: String) -> Unit = {}, // an open place matched one of [ambientClosed]: hide it for good
-    placesPending: Boolean = false, // the open places source is on but its lookup has not answered yet
-    placesOneSet: Boolean = false, // the covering places archive carries OSM's landmarks: hide the basemap's point layers
-    osmBusinesses: Boolean = false, // draw OSM's businesses under the open places layer too (deduped by name)
-    navExitCallout: Pair<LatLng, String>? = null, // the exit you are taking: green bubble with its number
-    navTapPlaces: Boolean = false, // drive nav: show the divert-worthy places and let a tap offer one as a stop
-    placesOverlays: List<String> = emptyList(),   // pmtiles:// URIs of the open-data places layer (Overture), file:// or streamed
-    basemapArchive: String? = null,               // pmtiles://file:// of an installed offline basemap covering the view; swaps the style's tile source
-    onOpenPlaceTap: (app.vela.core.model.Place) -> Unit = {}, // a tapped open-places feature, seeded from its tile attributes
-    onRoadLimitKmh: (Double?) -> Unit = {}, // reports the maxspeed (km/h) read from the overlay under the puck, or null
-    speedOverlayOn: Boolean = false, // only query the overlay while it can matter (driving / navigating)
-    trafficControls: List<app.vela.core.data.TrafficControl> = emptyList(), // OSM lights + stop signs drawn at high zoom
-    flockCameras: List<app.vela.core.data.AlprCamera> = emptyList(), // ALPR/Flock cameras drawn at high zoom
-    speedCameras: List<app.vela.core.data.SpeedCamera> = emptyList(), // fixed radar cameras (issue #229)
-    transitStops: List<app.vela.core.data.transit.Transitous.MapStop> = emptyList(), // canonical GTFS stops at street zoom
-    navBannerBottomPx: Int = 0, // measured screen-Y of the maneuver banner's bottom edge; drops the compass below it during nav
-    // Compass tap: return true to CONSUME (nav uses it to toggle heading-up/north-up); false runs
-    // the default reorient-to-north animation.
-    onCompassTap: () -> Boolean = { false },
-    poisEnabled: Boolean = true, // master "Show places on the map" - also hides the OSM fallback POIs
-    poiIconScale: Float = 1f, // Settings icon-size multiplier (low-density car screens want < 1)
-    // LABELS do not take the low-density correction. That correction exists because an icon is a
-    // fixed-pixel BITMAP, which a 120 dpi head unit draws physically huge; text is rendered from
-    // SDF glyphs at a size that already accounts for the pixel ratio, so shrinking it by the same
-    // factor just made it unreadable in a car (user 2026-09-19, "text next to POIs is way too
-    // small" with the icons finally right). This is the Settings multiplier alone.
-    poiLabelScale: Float = 1f,
-    onCameraIdle: (center: LatLng) -> Unit,
-    onMapLongPress: (location: LatLng) -> Unit,
-    onAddressLabelTap: (number: String, location: LatLng, tileStreet: String?) -> Unit = { _, _, _ -> },
-    onViewport: (south: Double, west: Double, north: Double, east: Double, zoom: Double) -> Unit = { _, _, _, _, _ -> },
-    dpadController: MapDpadController? = null, // key-driven pan/zoom/select for D-pad-only devices (docs/dpad.md)
-    modifier: Modifier = Modifier,
+internal fun VelaMapView(
+    scene: MapRenderScene,
+    callbacks: MapRenderCallbacks,
+    dpadController: MapDpadController?,
+    modifier: Modifier,
 ) {
-    if (app.vela.variant.CarIntegration.RenderIsolatedMap(
-        scene = MapRenderScene(
-            styleUri = styleUri,
-            myLocation = myLocation,
-            myBearing = myBearing,
-            myAccuracyM = myAccuracyM,
-            mySpeed = mySpeed,
-            myFixRaw = myFixRaw,
-            mySpeedRaw = mySpeedRaw,
-            replaySpeedup = replaySpeedup,
-            replaying = replaying,
-            compassHeading = compassHeading,
-            locationStale = locationStale,
-            cameraTarget = cameraTarget,
-            cameraTargetZoom = cameraTargetZoom,
-            recenterTick = recenterTick,
-            cameraBottomInsetPx = cameraBottomInsetPx,
-            cameraLeftInsetPx = cameraLeftInsetPx,
-            cameraRightInsetPx = cameraRightInsetPx,
-            cameraTopInsetPx = cameraTopInsetPx,
-            routePolyline = routePolyline,
-            routeColor = routeColor,
-            routeDashed = routeDashed,
-            transitPreview = transitPreview,
-            transitNavLeg = transitNavLeg,
-            routeTrafficSpans = routeTrafficSpans,
-            alternates = alternates,
-            altColor = altColor,
-            routeBubbles = routeBubbles,
-            markers = markers,
-            stopPins = stopPins,
-            destinationPin = destinationPin,
-            candidatePin = candidatePin,
-            frameMarkers = frameMarkers,
-            holdMarkerFit = holdMarkerFit,
-            navMode = navMode,
-            navDriveMode = navDriveMode,
-            navLabelExclude = navLabelExclude,
-            navUpcomingRoads = navUpcomingRoads,
-            navFollowing = navFollowing,
-            navNorthUp = navNorthUp,
-            driveFollowing = driveFollowing,
-            ambientCoversView = ambientCoversView,
-            darkTheme = darkTheme,
-            amoled = amoled,
-            applyKeylessTheme = applyKeylessTheme,
-            trafficOn = trafficOn,
-            transitOn = transitOn,
-            satelliteOn = satelliteOn,
-            satDeep = satDeep,
-            topographyOn = topographyOn,
-            previewTarget = previewTarget,
-            navOverviewTick = navOverviewTick,
-            navRecenterTick = navRecenterTick,
-            parkingSpot = parkingSpot,
-            savedPins = savedPins,
-            svPose = svPose,
-            svTopInsetPx = svTopInsetPx,
-            ambientPois = ambientPois,
-            buildingOverlays = buildingOverlays,
-            addressOverlays = addressOverlays,
-            maxspeedOverlays = maxspeedOverlays,
-            hiddenOpenPlaceIds = hiddenOpenPlaceIds,
-            ambientClosed = ambientClosed,
-            placesPending = placesPending,
-            placesOneSet = placesOneSet,
-            osmBusinesses = osmBusinesses,
-            navExitCallout = navExitCallout,
-            navTapPlaces = navTapPlaces,
-            placesOverlays = placesOverlays,
-            basemapArchive = basemapArchive,
-            speedOverlayOn = speedOverlayOn,
-            trafficControls = trafficControls,
-            flockCameras = flockCameras,
-            speedCameras = speedCameras,
-            transitStops = transitStops,
-            navBannerBottomPx = navBannerBottomPx,
-            poisEnabled = poisEnabled,
-            poiIconScale = poiIconScale,
-            poiLabelScale = poiLabelScale,
-        ),
-        callbacks = MapRenderCallbacks(
-            onSelectAlternate = onSelectAlternate,
-            onNavRoadLatin = onNavRoadLatin,
-            onNavPanned = onNavPanned,
-            onUserPan = onUserPan,
-            onMapTap = onMapTap,
-            onScaleChanged = onScaleChanged,
-            onOverlayState = onOverlayState,
-            onNavZoomOverride = onNavZoomOverride,
-            onPuckScreen = onPuckScreen,
-            onPoiTap = onPoiTap,
-            onMarkerTap = onMarkerTap,
-            onSavedPinTap = onSavedPinTap,
-            onParkingTap = onParkingTap,
-            onSvMapTap = onSvMapTap,
-            onAmbientTap = onAmbientTap,
-            onTransitStopTap = onTransitStopTap,
-            onOpenPlaceClosed = onOpenPlaceClosed,
-            onOpenPlaceTap = onOpenPlaceTap,
-            onRoadLimitKmh = onRoadLimitKmh,
-            onCompassTap = onCompassTap,
-            onCameraIdle = onCameraIdle,
-            onMapLongPress = onMapLongPress,
-            onAddressLabelTap = onAddressLabelTap,
-            onViewport = onViewport,
-        ), dpad = dpadController, modifier = modifier,
-    )) return
+    // Keep the Compose/Dex method signature small; the scene already owns all renderer values.
+    val styleUri = scene.styleUri
+    val myLocation = scene.myLocation
+    val myBearing = scene.myBearing
+    val myAccuracyM = scene.myAccuracyM
+    val mySpeed = scene.mySpeed
+    val myFixRaw = scene.myFixRaw
+    val mySpeedRaw = scene.mySpeedRaw
+    val replaySpeedup = scene.replaySpeedup
+    val replaying = scene.replaying
+    val compassHeading = scene.compassHeading
+    val locationStale = scene.locationStale
+    val cameraTarget = scene.cameraTarget
+    val cameraTargetZoom = scene.cameraTargetZoom
+    val recenterTick = scene.recenterTick
+    val cameraBottomInsetPx = scene.cameraBottomInsetPx
+    val cameraLeftInsetPx = scene.cameraLeftInsetPx
+    val cameraRightInsetPx = scene.cameraRightInsetPx
+    val cameraTopInsetPx = scene.cameraTopInsetPx
+    val routePolyline = scene.routePolyline
+    val routeColor = scene.routeColor
+    val routeDashed = scene.routeDashed
+    val transitPreview = scene.transitPreview
+    val transitNavLeg = scene.transitNavLeg
+    val routeTrafficSpans = scene.routeTrafficSpans
+    val alternates = scene.alternates
+    val altColor = scene.altColor
+    val routeBubbles = scene.routeBubbles
+    val markers = scene.markers
+    val stopPins = scene.stopPins
+    val destinationPin = scene.destinationPin
+    val candidatePin = scene.candidatePin
+    val frameMarkers = scene.frameMarkers
+    val holdMarkerFit = scene.holdMarkerFit
+    val navMode = scene.navMode
+    val navDriveMode = scene.navDriveMode
+    val navLabelExclude = scene.navLabelExclude
+    val navUpcomingRoads = scene.navUpcomingRoads
+    val navFollowing = scene.navFollowing
+    val navNorthUp = scene.navNorthUp
+    val driveFollowing = scene.driveFollowing
+    val ambientCoversView = scene.ambientCoversView
+    val darkTheme = scene.darkTheme
+    val amoled = scene.amoled
+    val applyKeylessTheme = scene.applyKeylessTheme
+    val trafficOn = scene.trafficOn
+    val transitOn = scene.transitOn
+    val satelliteOn = scene.satelliteOn
+    val satDeep = scene.satDeep
+    val topographyOn = scene.topographyOn
+    val previewTarget = scene.previewTarget
+    val navOverviewTick = scene.navOverviewTick
+    val navRecenterTick = scene.navRecenterTick
+    val parkingSpot = scene.parkingSpot
+    val savedPins = scene.savedPins
+    val svPose = scene.svPose
+    val svTopInsetPx = scene.svTopInsetPx
+    val ambientPois = scene.ambientPois
+    val buildingOverlays = scene.buildingOverlays
+    val addressOverlays = scene.addressOverlays
+    val maxspeedOverlays = scene.maxspeedOverlays
+    val hiddenOpenPlaceIds = scene.hiddenOpenPlaceIds
+    val ambientClosed = scene.ambientClosed
+    val placesPending = scene.placesPending
+    val placesOneSet = scene.placesOneSet
+    val osmBusinesses = scene.osmBusinesses
+    val navExitCallout = scene.navExitCallout
+    val navTapPlaces = scene.navTapPlaces
+    val placesOverlays = scene.placesOverlays
+    val basemapArchive = scene.basemapArchive
+    val speedOverlayOn = scene.speedOverlayOn
+    val trafficControls = scene.trafficControls
+    val flockCameras = scene.flockCameras
+    val speedCameras = scene.speedCameras
+    val transitStops = scene.transitStops
+    val navBannerBottomPx = scene.navBannerBottomPx
+    val poisEnabled = scene.poisEnabled
+    val poiIconScale = scene.poiIconScale
+    val poiLabelScale = scene.poiLabelScale
+    val onSelectAlternate = callbacks.onSelectAlternate
+    val onNavRoadLatin = callbacks.onNavRoadLatin
+    val onNavPanned = callbacks.onNavPanned
+    val onUserPan = callbacks.onUserPan
+    val onMapTap = callbacks.onMapTap
+    val onScaleChanged = callbacks.onScaleChanged
+    val onOverlayState = callbacks.onOverlayState
+    val onNavZoomOverride = callbacks.onNavZoomOverride
+    val onPuckScreen = callbacks.onPuckScreen
+    val onPoiTap = callbacks.onPoiTap
+    val onMarkerTap = callbacks.onMarkerTap
+    val onSavedPinTap = callbacks.onSavedPinTap
+    val onParkingTap = callbacks.onParkingTap
+    val onSvMapTap = callbacks.onSvMapTap
+    val onAmbientTap = callbacks.onAmbientTap
+    val onTransitStopTap = callbacks.onTransitStopTap
+    val onOpenPlaceClosed = callbacks.onOpenPlaceClosed
+    val onOpenPlaceTap = callbacks.onOpenPlaceTap
+    val onRoadLimitKmh = callbacks.onRoadLimitKmh
+    val onCompassTap = callbacks.onCompassTap
+    val onCameraIdle = callbacks.onCameraIdle
+    val onMapLongPress = callbacks.onMapLongPress
+    val onAddressLabelTap = callbacks.onAddressLabelTap
+    val onViewport = callbacks.onViewport
     val context = LocalContext.current
+    val renderLifecycle = LocalLifecycleOwner.current.lifecycle
+    val renderEpoch = remember { intArrayOf(0) }
+    var startupLight by remember { mutableStateOf(true) }
+    val requestedProfile = app.vela.ui.MapRenderProfile.selected.value
+    val selectedProfile = app.vela.ui.MapRenderProfile.effective(
+        requestedProfile, app.vela.ui.MemoryPressure.lowEnd || app.vela.ui.MapRenderProfile.slowRendering.value, startupLight,
+        app.vela.ui.MapRenderProfile.autoDeviceBudget.value)
+    val lightProfile = app.vela.ui.MapRenderProfile.isLight(selectedProfile)
+    val flatCamera = app.vela.ui.MapRenderProfile.flatCamera(selectedProfile)
+    val flatCameraHolder = rememberUpdatedState(flatCamera)
+    // Explicit Custom tilt is a user choice; Standard keeps the fragile-GPU nav default.
+    val navFlatCameraHolder = rememberUpdatedState(flatCamera ||
+        (selectedProfile != app.vela.ui.MapRenderProfile.CUSTOM && isFragileOrEmulator()))
+    val maxFps = app.vela.ui.MapRenderProfile.maxFps(selectedProfile)
+    val maxFpsHolder = rememberUpdatedState(maxFps)
+    val lightProfileHolder = rememberUpdatedState(lightProfile)
     val density = LocalDensity.current
     // Push MapLibre's compass below the status bar (it defaults to the top-right corner, which sits
     // *under* the status bar). During NAV the full-width maneuver banner also sits at the top and painted
@@ -864,6 +726,9 @@ fun VelaMapView(
     val transitStopsNow = rememberUpdatedState(transitStops)
     val parkingTap = rememberUpdatedState(onParkingTap)
     val cameraIdle = rememberUpdatedState(onCameraIdle)
+    // getMapAsync may complete after the first location/target update. Read the live seed,
+    // not the callback's original Compose snapshot.
+    val startupCamera = rememberUpdatedState((cameraTarget ?: myLocation) to cameraTargetZoom)
     val longPress = rememberUpdatedState(onMapLongPress)
     val addrLabelTap = rememberUpdatedState(onAddressLabelTap)
     val navPanned = rememberUpdatedState(onNavPanned)
@@ -893,7 +758,7 @@ fun VelaMapView(
     val screenPositionHolder = rememberUpdatedState(screenPosition)
     val framingInsets = rememberUpdatedState(Triple(cameraLeftInsetPx, cameraTopInsetPx, cameraBottomInsetPx))
     val framingRightInset = rememberUpdatedState(cameraRightInsetPx)
-    val navTiltEase = remember { doubleArrayOf(if (isFragileOrEmulator()) 0.0 else 55.0) } // eased so the compass toggle glides, not snaps
+    val navTiltEase = remember { doubleArrayOf(if (navFlatCameraHolder.value) 0.0 else 55.0) } // eased so the compass toggle glides, not snaps
     val navPadEase = remember { doubleArrayOf(0.0) } // puck-low top padding as a height fraction, eased on (re)attach
     val wasNavRef = remember { booleanArrayOf(false) } // a drive actually ran - gates the one-shot camera teardown
     val onCompassTapHolder = rememberUpdatedState(onCompassTap)
@@ -979,6 +844,7 @@ fun VelaMapView(
     remember {
         app.vela.variant.CarIntegration.mapRendererStage("library")
         MapLibre.getInstance(context)
+        app.vela.offline.PmtilesMapBridge.install()
     }
     // D-pad-only operation (docs/dpad.md): MapLibre's MapView calls requestFocus() on
     // itself and overrides onKeyDown to handle hardware D-pad keys (DPAD_CENTER = zoom in,
@@ -1023,7 +889,7 @@ fun VelaMapView(
         prefs.edit().putBoolean("map_init_inflight", true).apply()
         val textureDefault = if (isEmulator()) false else fragileGpuDefault()
         val textureModeEnabled = if (isEmulator()) false else prefs.getBoolean("texture_render", textureDefault)
-        val opts = org.maplibre.android.maps.MapLibreMapOptions.createFromAttributes(context)
+        val opts = com.mapbox.mapboxsdk.maps.MapboxMapOptions.createFromAttributes(context)
             .textureMode(textureModeEnabled)
         app.vela.diag.ProcessDiagnostics.checkpoint("map: create texture=$textureModeEnabled")
         app.vela.variant.CarIntegration.mapRendererStage("map-create")
@@ -1037,6 +903,23 @@ fun VelaMapView(
 
     var mapRef by remember { mutableStateOf<MapLibreMap?>(null) }
     var mapInitRequested by remember { mutableStateOf(false) }
+    LaunchedEffect(mapView, selectedProfile, maxFps, flatCamera, topographyOn, app.vela.ui.Buildings3d.on.value, navMode, navDriveMode, satelliteOn, trafficOn, transitOn) {
+        // Zero is ignored by SDK 10.3.7; restore the display budget explicitly.
+        val refresh = (mapView.display?.refreshRate ?: 60f).toInt().coerceAtLeast(30)
+        val appliedFps = if (maxFps > 0) minOf(maxFps, refresh) else refresh
+        mapView.setMaximumFps(appliedFps)
+        mapView.getMapAsync { map ->
+            map.uiSettings.isTiltGesturesEnabled = !flatCamera
+            if (flatCamera && map.cameraPosition.tilt != 0.0) {
+                map.moveCamera(CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.Builder(map.cameraPosition).tilt(0.0).build()))
+            }
+        }
+        app.vela.util.FileLogger.i("MapProfile", "profile=$selectedProfile fps=$appliedFps tilt=${!flatCamera} startup=$startupLight requested=$requestedProfile autoBudget=${app.vela.ui.MapRenderProfile.autoDeviceBudget.value} " +
+            "buildingsRequested=${app.vela.ui.Buildings3d.on.value} buildingsEffective=${app.vela.ui.Buildings3d.on.value && !lightProfile && !satelliteOn && !navMode} " +
+            "topographyRequested=$topographyOn topographyEffective=${topographyOn && !lightProfile && !(navMode && navDriveMode)} trafficRequested=$trafficOn transitRequested=$transitOn")
+    }
+
     // Ending nav returns the camera to Google's flat north-up browse view — the follow camera's
     // last bearing/tilt used to linger, which also left the compass pinned on the map (it only
     // hides facing north; user 2026-07-10). Below mapRef so the handle is in scope.
@@ -1046,8 +929,8 @@ fun VelaMapView(
         val cam = m.cameraPosition
         if (kotlin.math.abs(cam.bearing) > 0.5 || cam.tilt > 0.5) {
             m.animateCamera(
-                org.maplibre.android.camera.CameraUpdateFactory.newCameraPosition(
-                    org.maplibre.android.camera.CameraPosition.Builder(cam).bearing(0.0).tilt(0.0).build(),
+                com.mapbox.mapboxsdk.camera.CameraUpdateFactory.newCameraPosition(
+                    com.mapbox.mapboxsdk.camera.CameraPosition.Builder(cam).bearing(0.0).tilt(0.0).build(),
                 ),
                 600,
             )
@@ -1062,7 +945,6 @@ fun VelaMapView(
     val puckOverlayX = remember { androidx.compose.runtime.mutableFloatStateOf(Float.NaN) }
     val puckOverlayY = remember { androidx.compose.runtime.mutableFloatStateOf(Float.NaN) }
     val puckOverlayRot = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-    val puckOverlaySquash = remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
     val puckOverlayHidLayer = remember { booleanArrayOf(false) } // ME_ARROW_LAYER hidden for the overlay
     fun dropPuckOverlay() {
         if (puckOverlayOn.value) puckOverlayOn.value = false
@@ -1156,6 +1038,7 @@ fun VelaMapView(
         var dictStaleTicks = 0
         var emptyPassTicks = 0 // consecutive quantum passes that placed no label (tiles still loading)
         while (true) {
+            renderLifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.STARTED) }
             if (!style.isFullyLoaded) break
             val quantum = (navPuck.progressM / 400.0).toLong()
             // Drop the callouts the puck is past, every tick (cheap: a filter swap, gated on a 25 m step).
@@ -1210,9 +1093,9 @@ fun VelaMapView(
                                         else -> continue
                                     }
                                     val geom = f.geometry() ?: continue
-                                    val lines: List<List<org.maplibre.geojson.Point>> = when (geom) {
-                                        is org.maplibre.geojson.LineString -> listOf(geom.coordinates())
-                                        is org.maplibre.geojson.MultiLineString -> geom.coordinates()
+                                    val lines: List<List<com.mapbox.geojson.Point>> = when (geom) {
+                                        is com.mapbox.geojson.LineString -> listOf(geom.coordinates())
+                                        is com.mapbox.geojson.MultiLineString -> geom.coordinates()
                                         else -> emptyList()
                                     }
                                     // Proper crossings OR a T-junction endpoint on the route (arterials
@@ -1298,7 +1181,7 @@ fun VelaMapView(
     // while navigating (keeping even the top rank still left labels flickering at the threshold)
     // for a clean nav map, and restore on exit. Keyed on styleRef so it re-applies after a style
     // (re)load (dark/light flip), which recreates the layers at default visibility.
-    LaunchedEffect(navMode, navDriveMode, styleRef, topographyOn) {
+    LaunchedEffect(navMode, navDriveMode, styleRef, topographyOn, lightProfile) {
         val style = styleRef?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         val vis = if (navMode) Property.NONE else Property.VISIBLE
         runCatching {
@@ -1350,7 +1233,7 @@ fun VelaMapView(
         // mid-drive is not lost.
         val dvis = if (navMode && navDriveMode) Property.NONE else Property.VISIBLE
         runCatching {
-            ensureTopography(style, topographyOn && !(navMode && navDriveMode))
+            ensureTopography(style, topographyOn && !lightProfile && !(navMode && navDriveMode))
         }
         val driveSet = navMode && navDriveMode && navTapPlaces
         if (driveSet != placesNavDriveSet) {
@@ -1396,7 +1279,7 @@ fun VelaMapView(
     // overlay gate probes, so it never competes with visible work.
     val warmHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     val warmPending = remember { arrayOf<Runnable?>(null) }
-    val warmSnapshotter = remember { arrayOf<org.maplibre.android.snapshotter.MapSnapshotter?>(null) }
+    val warmSnapshotter = remember { arrayOf<com.mapbox.mapboxsdk.snapshotter.MapSnapshotter?>(null) }
     val warmDoneBuckets = remember { HashSet<Long>() }
     val warmCtx = rememberUpdatedState(Pair(buildingOverlays, navMode))
     DisposableEffect(Unit) {
@@ -1455,7 +1338,7 @@ fun VelaMapView(
         buildingOverlays.forEachIndexed { i, uri ->
             runCatching {
                 val srcId = "vela-ovl-src-$i"
-                style.addSource(VectorSource(srcId, uri)) // uri already carries pmtiles://file:// or pmtiles://https://
+                style.addSource(VectorSource(srcId, app.vela.offline.PmtilesMapBridge.sourceUrl(uri))) // uri already carries pmtiles://file:// or pmtiles://https://
                 val layer = FillLayer("vela-ovl-$i", srcId).apply {
                     setSourceLayer("building") // the tippecanoe layer name (build-overlay-region.sh: -l building)
                     setMinZoom(16f) // match the OSM `building` layer: footprints only at close (Google-like ~250ft) zoom, where the density gate can also compare accurately
@@ -1619,7 +1502,7 @@ fun VelaMapView(
         placesOverlays.forEachIndexed { i, uri ->
             runCatching {
                 val srcId = "vela-places-src-$i"
-                style.addSource(VectorSource(srcId, uri))
+                style.addSource(VectorSource(srcId, app.vela.offline.PmtilesMapBridge.sourceUrl(uri)))
                 // "top `n` in the cell, or prominent enough on its own" -> the value, else nothing.
                 // COALESCE the rank to 0 so a tile baked before the property existed passes the
                 // test instead of failing it: `frank` (the per-block icon budget) only appears in
@@ -1892,7 +1775,7 @@ fun VelaMapView(
         maxspeedOverlays.forEachIndexed { i, uri ->
             runCatching {
                 val srcId = "vela-ms-src-$i"
-                style.addSource(VectorSource(srcId, uri))
+                style.addSource(VectorSource(srcId, app.vela.offline.PmtilesMapBridge.sourceUrl(uri)))
                 val layer = LineLayer("vela-ms-$i", srcId).apply {
                     setSourceLayer("maxspeed") // tippecanoe layer name (build-maxspeed-region.sh: -l maxspeed)
                     setMinZoom(11f)
@@ -1921,6 +1804,7 @@ fun VelaMapView(
     LaunchedEffect(speedOverlayOn) {
         if (!speedOverlayOn) { onRoadLimitKmh(null); return@LaunchedEffect }
         while (true) {
+            renderLifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.STARTED) }
             val m = mapRef
             val fix = latestFix.value
             // AUDIT FIX 11 (2026-07-15): queryRenderedFeatures is a synchronous main-thread call
@@ -1931,7 +1815,7 @@ fun VelaMapView(
             val busy = flightDepth[0] > 0 || scaling[0] || shoving[0]
             if (!busy && m != null && fix != null && latestMs.value.isNotEmpty()) {
                 val kmh = runCatching {
-                    val p = m.projection.toScreenLocation(org.maplibre.android.geometry.LatLng(fix.lat, fix.lng))
+                    val p = m.projection.toScreenLocation(com.mapbox.mapboxsdk.geometry.LatLng(fix.lat, fix.lng))
                     val r = 14f
                     val layers = latestMs.value.indices.map { "vela-ms-$it" }.toTypedArray()
                     m.queryRenderedFeatures(android.graphics.RectF(p.x - r, p.y - r, p.x + r, p.y + r), *layers)
@@ -2032,7 +1916,7 @@ fun VelaMapView(
         addressOverlays.forEachIndexed { i, uri ->
             runCatching {
                 val srcId = "vela-addr-src-$i"
-                style.addSource(VectorSource(srcId, uri))
+                style.addSource(VectorSource(srcId, app.vela.offline.PmtilesMapBridge.sourceUrl(uri)))
                 val layer =
                     SymbolLayer("vela-addr-$i", srcId).apply {
                         setSourceLayer("address") // tippecanoe layer name (build-address-region.sh: -l address)
@@ -2097,7 +1981,7 @@ fun VelaMapView(
     // fragment-expensive thing on screen (user 2026-07-13).
     // Also forced off DURING NAV (2026-07-17): the tilted nav camera at z16+ is exactly where
     // extrusion's per-pixel cost peaks, for scenery nobody studies mid-drive - the battery lever.
-    val buildings3d = app.vela.ui.Buildings3d.on.value && !satelliteOn && !navMode
+    val buildings3d = app.vela.ui.Buildings3d.on.value && !lightProfile && !satelliteOn && !navMode
     LaunchedEffect(buildings3d, styleRef) {
         runCatching {
             styleRef?.takeIf { it.isFullyLoaded }?.getLayer("building-3d")?.setProperties(
@@ -2196,9 +2080,18 @@ fun VelaMapView(
             browseFlying[0] = false // whatever canceled the follow also canceled the flight (onCancel), but never leak
             return@LaunchedEffect
         }
+        val frameBudget = RenderFrameBudget()
+        var frameEpoch = renderEpoch[0]
         var lastNanos = 0L
         while (true) {
+            if (!renderLifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                lastNanos = 0L
+                renderLifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.STARTED) }
+            }
             val now = withFrameNanos { it }
+            // The lifecycle can stop while withFrameNanos is already suspended.
+            if (frameEpoch != renderEpoch[0]) { lastNanos = 0L; frameEpoch = renderEpoch[0]; frameBudget.reset() }
+            if (!frameBudget.shouldRender(now, maxFpsHolder.value)) continue
             val dt = (if (lastNanos == 0L) 0.0 else ((now - lastNanos) / 1e9)).toFloat().coerceIn(0f, 0.1f)
             lastNanos = now
             val style = styleRef?.takeIf { it.isFullyLoaded } ?: continue
@@ -2301,7 +2194,7 @@ fun VelaMapView(
                         (kotlin.math.abs(db) / CAM_BRG_TURN_DEG).coerceAtMost(1.0)).toFloat()
                     val kBrg = (1f - kotlin.math.exp(-dt / brgTau)).toDouble()
                     browseAtt[0] = (cp.bearing + db * kBrg + 360.0) % 360.0
-                    browseAtt[1] = cp.tilt + (55.0 - cp.tilt) * k
+                    browseAtt[1] = cp.tilt + ((if (flatCameraHolder.value) 0.0 else 55.0) - cp.tilt) * k
                     attSettling = true // camera state is live every frame while driving
                 } else {
                     // NORTH-UP, FLAT (walking/slow browse) - enforced against the LIVE camera every
@@ -2483,7 +2376,7 @@ fun VelaMapView(
             wasNavRef[0] = false
             navPuck.kalman.reset() // nav ended — don't carry a stale speed into the next trip
             navUserTilt[0] = Double.NaN // shove-set tilt is a per-drive override
-            navTiltEase[0] = if (isFragileOrEmulator()) 0.0 else 55.0 // next drive starts at the default pitch, not wherever this one ended
+            navTiltEase[0] = if (navFlatCameraHolder.value) 0.0 else 55.0 // next drive starts at the default pitch, not wherever this one ended
             // Camera padding is STICKY MapLibre state: the nav view's puck-low offset (top padding,
             // set on every follow frame + the pre-engage case) would otherwise shift the browse
             // camera's center for the rest of the session. Bearing + tilt are sticky the same way.
@@ -2509,9 +2402,18 @@ fun VelaMapView(
         val cutStart = doubleArrayOf(Double.NaN) // cut piece [start, end] along the route (m)
         val cutEnd = doubleArrayOf(Double.NaN)
         val aheadAnchor = doubleArrayOf(Double.NaN) // where the uploaded ahead line begins (m)
+        val frameBudget = RenderFrameBudget()
+        var frameEpoch = renderEpoch[0]
         var lastNanos = 0L
         while (true) {
+            if (!renderLifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                lastNanos = 0L
+                renderLifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.STARTED) }
+            }
             val now = withFrameNanos { it }
+            // The lifecycle can stop while withFrameNanos is already suspended.
+            if (frameEpoch != renderEpoch[0]) { lastNanos = 0L; frameEpoch = renderEpoch[0]; frameBudget.reset() }
+            if (!frameBudget.shouldRender(now, maxFpsHolder.value)) continue
             // Two frame deltas: dtRaw (true wall-clock, for the PHYSICS — a janky 150 ms frame
             // must integrate 150 ms of travel, else the puck loses distance and lurches at each
             // fix) and dt (clamped, for the EASING filters only, where a huge step just means
@@ -2738,12 +2640,12 @@ fun VelaMapView(
                     camState[3] += (tgtZoom - camState[3]) * kZoom
                     // Tilt: north-up or fragile GPU/emulator = flat; else a shove-set override wins over the 55 default.
                     val tiltTgt = when {
-                        isFragileOrEmulator() -> 0.0
+                        navFlatCameraHolder.value -> 0.0
                         navNorthUpHolder.value -> 0.0
                         !navUserTilt[0].isNaN() -> navUserTilt[0]
                         else -> 55.0
                     }
-                    navTiltEase[0] += (tiltTgt - navTiltEase[0]) * kBrg
+                    navTiltEase[0] = if (navFlatCameraHolder.value) 0.0 else navTiltEase[0] + (tiltTgt - navTiltEase[0]) * kBrg
                     val paddingFraction = app.vela.core.config.MapCameraFraming.fraction(screenPositionHolder.value, !navNorthUpHolder.value)
                     navPadEase[0] += (paddingFraction - navPadEase[0]) * kPos
                     if (kotlin.math.abs(paddingFraction - navPadEase[0]) < 0.002) navPadEase[0] = paddingFraction
@@ -2778,12 +2680,11 @@ fun VelaMapView(
                     // the white glyph moved 1-2 px on 95% of frames). In follow mode the puck is
                     // therefore a Compose overlay at the projection of the SAME point through the
                     // camera state just set, so the two cannot disagree by a frame. Same look:
-                    // rotated by the bearing relative to the camera, squashed by the tilt.
+                    // rotated by the bearing relative to the camera, with a stable screen size.
                     val scr = cam.projection.toScreenLocation(MLLatLng(pt.lat, pt.lng))
                     puckOverlayX.floatValue = scr.x
                     puckOverlayY.floatValue = scr.y
                     puckOverlayRot.floatValue = (((navPuck.displayBearing - camState[2]).toFloat() % 360f) + 360f) % 360f
-                    puckOverlaySquash.floatValue = kotlin.math.cos(Math.toRadians(navTiltEase[0])).toFloat().coerceIn(0.2f, 1f)
                     if (!puckOverlayOn.value) puckOverlayOn.value = true
                     if (!puckOverlayHidLayer[0]) {
                         puckOverlayHidLayer[0] = true
@@ -2958,7 +2859,7 @@ fun VelaMapView(
         // addObserver delivers the owner's current state; eager calls duplicate EGL resume.
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START -> mapView.onStart()
+                Lifecycle.Event.ON_START -> { renderEpoch[0]++; mapView.onStart() }
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
                 Lifecycle.Event.ON_STOP -> mapView.onStop()
@@ -2996,6 +2897,16 @@ fun VelaMapView(
         if (!mapInitRequested && mapRef == null) {
             mapInitRequested = true
             mv.getMapAsync { map ->
+                // Seed before registering idle/viewport listeners. Animating from MapLibre's
+                // default world camera reports intermediate views back to the VM, which can
+                // replace the selected regional archive with world, then load the region again.
+                startupCamera.value.first?.let { target ->
+                    val zoom = startupCamera.value.second
+                        ?: app.vela.core.config.CalibrationStore.latest.tune("browseZoomWide", 14.5)
+                    map.moveCamera(CameraUpdateFactory.newLatLngZoom(MLLatLng(target.lat, target.lng), zoom))
+                    lastCameraTarget = target
+                    app.vela.util.FileLogger.i("MapCamera", "Initial camera seeded before viewport listeners: $target zoom=$zoom")
+                }
                 map.uiSettings.isLogoEnabled = false
                 // Hide the bottom-left attribution "ⓘ" — open-tile attribution lives
                 // in Settings → About instead, so the map stays clean (Google-style).
@@ -3004,7 +2915,7 @@ fun VelaMapView(
                 // explicitly so it can't be off, and lift the default ~60° cap to 70° so a
                 // satisfying near-horizon 3D is reachable; browse-camera moves use
                 // newLatLngZoom (which preserves pitch), so a tilt the user sets sticks.
-                map.uiSettings.isTiltGesturesEnabled = true
+                map.uiSettings.isTiltGesturesEnabled = !flatCameraHolder.value
                 // Two-finger tilt was nearly impossible to trigger (user 2026-07-11): stock
                 // shove detection wants both fingers moving in near-perfect vertical parallel
                 // (20 degrees). Widen the accepted angle and drop the start threshold so a
@@ -3446,12 +3357,12 @@ fun VelaMapView(
                             val styleJson = "{\"version\":8,\"sources\":{$sources},\"layers\":[$layers]}"
                             runCatching {
                                 warmSnapshotter[0]?.cancel()
-                                val snap = org.maplibre.android.snapshotter.MapSnapshotter(
+                                val snap = com.mapbox.mapboxsdk.snapshotter.MapSnapshotter(
                                     context,
-                                    org.maplibre.android.snapshotter.MapSnapshotter.Options(768, 768)
+                                    com.mapbox.mapboxsdk.snapshotter.MapSnapshotter.Options(768, 768)
                                         .withStyleJson(styleJson)
                                         .withCameraPosition(
-                                            org.maplibre.android.camera.CameraPosition.Builder()
+                                            com.mapbox.mapboxsdk.camera.CameraPosition.Builder()
                                                 .target(t).zoom(16.2).build(),
                                         ),
                                 )
@@ -3487,7 +3398,7 @@ fun VelaMapView(
                 if (fpsProbeOn) {
                     var frames = 0
                     var since = android.os.SystemClock.elapsedRealtime()
-                    mv.addOnDidFinishRenderingFrameListener { _, _, _ ->
+                    mv.addOnDidFinishRenderingFrameListener { _ ->
                         frames++
                         val now = android.os.SystemClock.elapsedRealtime()
                         if (now - since >= 1000) {
@@ -3497,9 +3408,49 @@ fun VelaMapView(
                         }
                     }
                 }
+                val automaticFrameBudget = app.vela.ui.MapRenderProfile.FrameBudget()
+                var frameStartedAt = 0L
+                mv.addOnWillStartRenderingFrameListener {
+                    frameStartedAt = android.os.SystemClock.elapsedRealtime()
+                }
                 var frameReportedForStyle: Style? = null
-                mv.addOnDidFinishRenderingFrameListener { fully, _, _ ->
+                var partialReportedForStyle: Style? = null
+                var startupReleasePosted = false
+                var reportedWidth = -1
+                var reportedHeight = -1
+                mv.addOnDidFinishRenderingFrameListener { fully ->
+                    val finishedAt = android.os.SystemClock.elapsedRealtime()
+                    if (!startupLight && frameStartedAt > 0 &&
+                        app.vela.ui.MapRenderProfile.selected.value == app.vela.ui.MapRenderProfile.AUTO &&
+                        automaticFrameBudget.sample(finishedAt, finishedAt - frameStartedAt)) {
+                        mv.post {
+                            if (!app.vela.ui.MapRenderProfile.slowRendering.value) {
+                                app.vela.ui.MapRenderProfile.slowRendering.value = true
+                                app.vela.variant.CarIntegration.mapRendererStage("auto-light")
+                            }
+                        }
+                    }
+                    frameStartedAt = 0L
+
+                    // Report the first frame at a new size even when the retained style is unchanged.
+                    if (mv.width != reportedWidth || mv.height != reportedHeight) {
+                        reportedWidth = mv.width
+                        reportedHeight = mv.height
+                        frameReportedForStyle = null
+                        partialReportedForStyle = null
+                    }
                     val currentStyle = map.style
+                    // Leave the startup budget only after the initial usable map frame.
+                    // This changes drawing options in place, never the saved preference or style.
+                    if (!startupReleasePosted && currentStyle?.isFullyLoaded == true &&
+                        mv.width > 0 && mv.height > 0) {
+                        startupReleasePosted = true
+                        mv.post { startupLight = false }
+                    }
+                    if (!fully && currentStyle != null && currentStyle !== partialReportedForStyle) {
+                        partialReportedForStyle = currentStyle
+                        app.vela.variant.CarIntegration.mapRendererStage("frame-partial")
+                    }
                     if (fully && currentStyle != null && currentStyle !== frameReportedForStyle) {
                         frameReportedForStyle = currentStyle
                         app.vela.variant.CarIntegration.mapRendererStage("frame")
@@ -3599,7 +3550,7 @@ fun VelaMapView(
                     // found nothing and the toggle was dead in every release APK (caught by
                     // the 2026-07-15 simulated-drive smoke test).
                     fun findCompass(v: android.view.View): android.view.View? {
-                        if (v is org.maplibre.android.maps.widgets.CompassView) return v
+                        if (v is com.mapbox.mapboxsdk.maps.widgets.CompassView) return v
                         if (v is android.view.ViewGroup) {
                             for (i in 0 until v.childCount) findCompass(v.getChildAt(i))?.let { return it }
                         }
@@ -3854,8 +3805,9 @@ fun VelaMapView(
         // (issue #344), so a size/color change reloads to re-register it.
         // The offline basemap rides the key: entering or leaving an installed region reloads the
         // style with its tile source pointed at the local archive (or back at OpenFreeMap).
-        val styleKey = "$styleUri|dark=$darkTheme|amoled=$amoled|pal=${app.vela.ui.MapColors.current()}|sat=$satelliteOn|puck=${app.vela.ui.PuckStyle.key()}|hn=${app.vela.ui.HouseNumbers.level.value}|base=${basemapArchive ?: ""}"
+        val styleKey = "$styleUri|dark=$darkTheme|amoled=$amoled|pal=${app.vela.ui.MapColors.current()}|sat=$satelliteOn|puck=${app.vela.ui.PuckStyle.key()}|hn=${app.vela.ui.HouseNumbers.level.value}|base=${basemapArchive ?: ""}|offline=${app.vela.ui.OfflineMode.on.value}"
         if (appliedStyleKey != styleKey) {
+            app.vela.util.FileLogger.i("MapStyle", "Reload: source=${MapFonts.sourceOf(styleUri)} previous=$appliedStyleKey next=$styleKey")
             appliedStyleKey = styleKey
             // An installed offline basemap wins over every style source: the remote Liberty URL
             // cannot load with no signal, and the swap needs the JSON in hand anyway. The MapFonts
@@ -3880,8 +3832,13 @@ fun VelaMapView(
                 // handling; a vanished/empty file falls back to the plain URL.
                 val f = java.io.File(styleUri.removePrefix("file://"))
                 val json = runCatching { f.readText() }.getOrNull()
-                if (json.isNullOrBlank()) Style.Builder().fromUri(app.vela.core.data.tiles.MapStyle.LIBERTY.uri)
-                else Style.Builder().fromJson(withLocalBasemap(context, json, basemapArchive))
+                if (json.isNullOrBlank()) {
+                    // Empty or vanished patch: the bundled asset is the fallback, never the remote
+                    // URL - offline it does not resolve and the load hangs past the render deadline.
+                    val bundled = runCatching { context.assets.open("styles/liberty-roboto.json").bufferedReader().use { it.readText() } }.getOrDefault("")
+                    if (bundled.isNotBlank()) Style.Builder().fromJson(withLocalBasemap(context, bundled, basemapArchive))
+                    else Style.Builder().fromUri(app.vela.core.data.tiles.MapStyle.LIBERTY.uri)
+                } else Style.Builder().fromJson(withLocalBasemap(context, json, basemapArchive))
             } else {
                 Style.Builder().fromUri(styleUri)
             }
@@ -3899,7 +3856,7 @@ fun VelaMapView(
                     // The local source goes in AFTER the style has loaded and the layers using it
                     // are re-attached, the order the places archives use; a source declared in the
                     // JSON or handed to Style.Builder never got past the z0 tile (device 2026-09-14).
-                    runCatching { style.addSource(VectorSource(LOCAL_BASEMAP_SRC, basemapArchive)) }
+                    runCatching { style.addSource(VectorSource(LOCAL_BASEMAP_SRC, app.vela.offline.PmtilesMapBridge.sourceUrl(basemapArchive))) }
                         .onFailure { android.util.Log.w("VelaBasemap", "local source add failed", it) }
                     runCatching {
                         style.layers.forEachIndexed { i, l ->
@@ -3947,7 +3904,7 @@ fun VelaMapView(
                 // The traffic raster is Google's tile server; off entirely without Google.
                 ensureTraffic(style, trafficOn && !app.vela.ui.GoogleFree.on.value)
                 ensureTransit(style, transitOn)
-                ensureTopography(style, topographyOn)
+                ensureTopography(style, topographyOn && !lightProfileHolder.value)
             }
         } else {
             styleRef?.takeIf { it.isFullyLoaded }?.let {
@@ -3967,7 +3924,7 @@ fun VelaMapView(
                         ensureSatellite(it, satelliteOn)
                         ensureTraffic(it, trafficOn)
                         ensureTransit(it, transitOn)
-                        ensureTopography(it, topographyOn)
+                        ensureTopography(it, topographyOn && !lightProfileHolder.value)
                     }
                 }
             }
@@ -4087,7 +4044,7 @@ fun VelaMapView(
                     // rides the same single move.
                     map.moveCamera(
                         CameraUpdateFactory.newCameraPosition(
-                            org.maplibre.android.camera.CameraPosition.Builder()
+                            com.mapbox.mapboxsdk.camera.CameraPosition.Builder()
                                 .target(MLLatLng(previewTarget.lat, previewTarget.lng))
                                 .zoom(16.5)
                                 .tilt(0.0)
@@ -4122,7 +4079,7 @@ fun VelaMapView(
                                 CameraPosition.Builder()
                                     .target(MLLatLng(loc.lat, loc.lng))
                                     .zoom(zoom)
-                                    .tilt(if (navNorthUp) 0.0 else 55.0)
+                                    .tilt(if (navNorthUp || navFlatCameraHolder.value) 0.0 else 55.0)
                                     .bearing(if (navNorthUp) 0.0 else brg.toDouble())
                                     // Same puck-low offset as the engaged follow ticker.
                                     .padding(cameraLeftInsetPx.toDouble(),
@@ -4307,21 +4264,20 @@ fun VelaMapView(
     if (puckOverlayOn.value) {
         val puckKey = app.vela.ui.PuckStyle.key()
         val puckImg = remember(puckKey) { navPuckBitmap().asImageBitmap() }
-        val sizePx = puckImg.width
+        val sizeDp = NavPuckSizing.displayEdgeDp(puckImg.width).dp
+        val sizePx = with(density) { sizeDp.toPx() }
         androidx.compose.foundation.Image(
             bitmap = puckImg,
             contentDescription = null,
             modifier = Modifier
-                // Outer layer: place the center at the projected point and squash by the tilt
-                // (in SCREEN space, after the rotation below - hence two layers).
+                // Place the center in screen space; camera pitch must not resize the arrow.
                 .graphicsLayer {
                     translationX = puckOverlayX.floatValue - sizePx / 2f
                     translationY = puckOverlayY.floatValue - sizePx / 2f
-                    scaleY = puckOverlaySquash.floatValue
                 }
                 // Inner layer: the heading, relative to the camera (the map rotates under it).
                 .graphicsLayer { rotationZ = puckOverlayRot.floatValue }
-                .size(with(density) { sizePx.toDp() }),
+                .size(sizeDp),
         )
     }
     }
@@ -4442,7 +4398,8 @@ private fun ensureLayers(style: Style) {
     applyPoiTierFilters(style, fuelOnly = false)
 
     if (style.getImage(ME_ARROW_IMG) == null) style.addImage(ME_ARROW_IMG, arrowBitmap())
-    if (style.getImage(NAV_PUCK_IMG) == null) style.addImage(NAV_PUCK_IMG, navPuckBitmap())
+    if (style.getImage(NAV_PUCK_IMG) == null) style.addImage(NAV_PUCK_IMG,
+        navPuckBitmap().apply { density = NavPuckSizing.IMAGE_DENSITY_DPI })
 
     // Terrain relief — only over the OpenMapTiles basemap (the keyless path).
     if (basemapSrc(style) != null) ensureHillshade(style)
@@ -5378,11 +5335,11 @@ private fun addRouteBubbleImage(st: Style, id: String, fill: Int, edge: Int, d: 
     st.addImage(
         id, bmp,
         listOf(
-            org.maplibre.android.maps.ImageStretches(r + d, cx - 7 * d),
-            org.maplibre.android.maps.ImageStretches(cx + 7 * d, w - r - d),
+            com.mapbox.mapboxsdk.maps.ImageStretches(r + d, cx - 7 * d),
+            com.mapbox.mapboxsdk.maps.ImageStretches(cx + 7 * d, w - r - d),
         ),
-        listOf(org.maplibre.android.maps.ImageStretches(r + d, bodyH - r - d)),
-        org.maplibre.android.maps.ImageContent(8 * d, 4 * d, w - 8 * d, bodyH - 4 * d),
+        listOf(com.mapbox.mapboxsdk.maps.ImageStretches(r + d, bodyH - r - d)),
+        com.mapbox.mapboxsdk.maps.ImageContent(8 * d, 4 * d, w - 8 * d, bodyH - 4 * d),
     )
 }
 
@@ -5515,7 +5472,7 @@ private fun crossLabelPoint(line: List<Pair<Double, Double>>, window: List<LatLn
  *  else name:latin (which OpenMapTiles fills from name:en where OSM has one, otherwise a
  *  transliteration). Returned only when it is a genuinely Latin-script string that differs from the
  *  local name, so we never store another non-Latin alias as if it were romanized. */
-private fun latinAliasOf(f: org.maplibre.geojson.Feature, name: String): String? {
+private fun latinAliasOf(f: com.mapbox.geojson.Feature, name: String): String? {
     for (key in arrayOf("name:en", "name:latin")) {
         val v = runCatching { f.getStringProperty(key) }.getOrNull()
         if (v.isNullOrBlank() || v == name) continue
@@ -5678,21 +5635,21 @@ private fun ensureNavRoadLabels(style: Style, on: Boolean, dark: Boolean, densit
     style.addImage(
         NAV_BUBBLE_IMG, navBubbleBitmap(dark, d),
         listOf(
-            org.maplibre.android.maps.ImageStretches(r + d, cx - 7 * d),
-            org.maplibre.android.maps.ImageStretches(cx + 7 * d, w - r - d),
+            com.mapbox.mapboxsdk.maps.ImageStretches(r + d, cx - 7 * d),
+            com.mapbox.mapboxsdk.maps.ImageStretches(cx + 7 * d, w - r - d),
         ),
-        listOf(org.maplibre.android.maps.ImageStretches(r + d, body - r - d)),
-        org.maplibre.android.maps.ImageContent(6 * d, 3 * d, w - 6 * d, body - 3 * d),
+        listOf(com.mapbox.mapboxsdk.maps.ImageStretches(r + d, body - r - d)),
+        com.mapbox.mapboxsdk.maps.ImageContent(6 * d, 3 * d, w - 6 * d, body - 3 * d),
     )
     // The green twin, for the exit you are taking (same geometry, so the same stretch zones).
     style.addImage(
         NAV_EXIT_BUBBLE_IMG, navBubbleBitmap(dark, d, green = true),
         listOf(
-            org.maplibre.android.maps.ImageStretches(r + d, cx - 7 * d),
-            org.maplibre.android.maps.ImageStretches(cx + 7 * d, w - r - d),
+            com.mapbox.mapboxsdk.maps.ImageStretches(r + d, cx - 7 * d),
+            com.mapbox.mapboxsdk.maps.ImageStretches(cx + 7 * d, w - r - d),
         ),
-        listOf(org.maplibre.android.maps.ImageStretches(r + d, body - r - d)),
-        org.maplibre.android.maps.ImageContent(6 * d, 3 * d, w - 6 * d, body - 3 * d),
+        listOf(com.mapbox.mapboxsdk.maps.ImageStretches(r + d, body - r - d)),
+        com.mapbox.mapboxsdk.maps.ImageContent(6 * d, 3 * d, w - 6 * d, body - 3 * d),
     )
     // The exit you are taking gets its own green callout (user 2026-09-17): the exits you drive
     // past keep the basemap's shields, and this one says which is yours. Its own source so it
@@ -6235,19 +6192,27 @@ private fun namesAgree(a: String, b: String): Boolean = app.vela.core.util.Place
  *  URI of a planetiler bake in the same OpenMapTiles schema OpenFreeMap serves), so an installed
  *  region draws from disk. Same layers, same look; only the source changes. Null = unchanged. */
 private fun withLocalBasemap(context: android.content.Context, json: String, archive: String?): String {
-    if (archive == null) return json
+    val offlineOnly = app.vela.ui.OfflineMode.on.value
+    if (archive == null && !offlineOnly) return json
     return runCatching {
         val root = org.json.JSONObject(json)
         // Drop the online source and point every layer at a NEW id the builder adds programmatically.
         // Re-using the id "openmaptiles" for the local archive loaded nothing past the z0 tile while
         // the identical URI under a fresh id loaded everything (device, 2026-09-14); the old id is
         // referenced by the road-name dictionary and the hillshade guard, which stay online-only.
-        root.getJSONObject("sources").remove("openmaptiles")
+        val sources = root.getJSONObject("sources")
+        sources.remove("openmaptiles")
+        // The decorative low-zoom raster is online-only even when the vector map is local.
+        val removedSources = app.vela.offline.removeRemoteStyleSources(root)
         val layers = root.getJSONArray("layers")
         var moved = 0
         localBasemapLayerIds.clear()
-        for (i in 0 until layers.length()) {
+        for (i in layers.length() - 1 downTo 0) {
             val l = layers.getJSONObject(i)
+            if (l.optString("source") in removedSources || (archive == null && l.optString("source") == "openmaptiles")) {
+                layers.remove(i)
+                continue
+            }
             if (l.optString("source") == "openmaptiles") { l.put("source", LOCAL_BASEMAP_SRC); localBasemapLayerIds += l.getString("id"); moved++ }
             // The glyph pack on disk carries the live style's stack names (Noto Sans Regular / Italic /
             // Bold, Roboto composited over them); the bundled Liberty asset asks for Roboto stacks.
@@ -6263,9 +6228,15 @@ private fun withLocalBasemap(context: android.content.Context, json: String, arc
         // blank, 2026-09-14). The glyph pack and the sprite live in files/ (asset:// hung the same
         // way), so both are served from disk here whenever the pack is installed.
         val glyphs = app.vela.offline.GlyphPackStore.glyphUrl(context)
-        if (glyphs != null) root.put("glyphs", glyphs)
-        app.vela.offline.GlyphPackStore.spriteUrl(context)?.let { root.put("sprite", it) }
-        android.util.Log.i("VelaBasemap", "style tile source -> ${archive.substringAfterLast('/')} ($moved layers re-pointed)")
+        root.put("glyphs", glyphs ?: app.vela.offline.GlyphPackStore.localGlyphUrl(context))
+        if (glyphs == null) app.vela.util.FileLogger.w("OfflineMapResources",
+            "Incomplete glyph pack; labels may be missing: ${app.vela.offline.GlyphPackStore.missingRequiredFiles(context)}")
+        val sprite = app.vela.offline.GlyphPackStore.spriteUrl(context)
+        if (sprite != null) root.put("sprite", sprite) else {
+            root.remove("sprite")
+            app.vela.util.FileLogger.w("OfflineMapResources", "Incomplete local sprite; map icons may be missing")
+        }
+        app.vela.util.FileLogger.i("OfflineMapResources", "archive=$archive movedLayers=$moved removedOnlineSources=$removedSources glyphs=${root.optString("glyphs")} sprite=$sprite")
         root.toString()
     }.getOrElse { android.util.Log.w("VelaBasemap", "style rewrite failed", it); json }
 }
@@ -6463,7 +6434,11 @@ internal fun fragileGpuDefault(): Boolean =
                 android.os.Build.SOC_MANUFACTURER.contains("unisoc", ignoreCase = true)
             )
 
-internal fun isFragileOrEmulator(): Boolean = isEmulator() || fragileGpuDefault()
+// `MemoryPressure.lowEnd` extends the old fragileGpuDefault() (SDK >= 34) heuristic down to the
+// API 27 GLES2 head unit: measured GLES version + low RAM + heap class pick the lean profile there
+// (plan F5, 2026-10-10). The `texture_render` default still uses fragileGpuDefault() alone.
+internal fun isFragileOrEmulator(): Boolean =
+    isEmulator() || fragileGpuDefault() || app.vela.ui.MemoryPressure.lowEnd
 
 /** Google-style 3D building geometry, shared by all four palettes. Extrusions start a zoom level
  *  AFTER the flat footprints (z17 vs 16): at ~500ft Manhattan towers leaned over and BURIED the
@@ -7100,7 +7075,7 @@ private var dashDotZoom: Double = -1e9
 
 /** Regenerate the walk/bike dot POINTS for the current zoom: one dot every
  *  [ROUTE_DOT_SPACING_PX] screen pixels' worth of meters along the route. */
-private fun regenRouteDots(map: org.maplibre.android.maps.MapLibreMap, style: Style, poly: List<LatLng>) {
+private fun regenRouteDots(map: com.mapbox.mapboxsdk.maps.MapboxMap, style: Style, poly: List<LatLng>) {
     val src = style.getSourceAs<GeoJsonSource>(ROUTE_DOT_SRC) ?: return
     dashDotPoly = poly
     dashDotZoom = map.cameraPosition.zoom
@@ -7202,7 +7177,7 @@ private fun setMeSource(style: Style, p: LatLng, bearing: Float) {
 
 /** A 64-point geodesic circle polygon of [radiusM] meters around [center] - the accuracy halo's
  *  geometry (drawn in real meters, so it grows and shrinks with the zoom like the world does). */
-private fun accuracyCircle(center: LatLng, radiusM: Double): org.maplibre.geojson.Polygon {
+private fun accuracyCircle(center: LatLng, radiusM: Double): com.mapbox.geojson.Polygon {
     val latR = Math.toRadians(center.lat)
     val dLat = radiusM / 111_320.0
     val dLng = radiusM / (111_320.0 * Math.cos(latR)).coerceAtLeast(1.0)
@@ -7210,7 +7185,7 @@ private fun accuracyCircle(center: LatLng, radiusM: Double): org.maplibre.geojso
         val a = 2.0 * Math.PI * i / 64
         Point.fromLngLat(center.lng + dLng * Math.sin(a), center.lat + dLat * Math.cos(a))
     }
-    return org.maplibre.geojson.Polygon.fromLngLats(listOf(pts))
+    return com.mapbox.geojson.Polygon.fromLngLats(listOf(pts))
 }
 
 /** Compass bearing (deg, 0 = N) from [a] to [b]. */
@@ -7218,7 +7193,7 @@ private fun accuracyCircle(center: LatLng, radiusM: Double): org.maplibre.geojso
  *  it - point-to-SEGMENT distance, because a mid-block address on a straight road can sit half a
  *  block from the nearest VERTEX. Null when no named road is that close (or tiles aren't loaded). */
 private fun nearestStreetName(map: MapLibreMap, lat: Double, lng: Double): String? {
-    val src = map.style?.let { st -> basemapSrc(st)?.let { st.getSourceAs<org.maplibre.android.style.sources.VectorSource>(it) } } ?: return null
+    val src = map.style?.let { st -> basemapSrc(st)?.let { st.getSourceAs<com.mapbox.mapboxsdk.style.sources.VectorSource>(it) } } ?: return null
     val feats = runCatching { src.querySourceFeatures(arrayOf("transportation_name"), null) }.getOrNull() ?: return null
     val mLat = 111_320.0
     val mLng = 111_320.0 * kotlin.math.cos(Math.toRadians(lat))
@@ -7236,8 +7211,8 @@ private fun nearestStreetName(map: MapLibreMap, lat: Double, lng: Double): Strin
     for (f in feats) {
         val name = f.getStringProperty("name")?.takeIf { it.isNotBlank() } ?: continue
         val lines: List<List<Point>> = when (val g = f.geometry()) {
-            is org.maplibre.geojson.LineString -> listOf(g.coordinates())
-            is org.maplibre.geojson.MultiLineString -> g.coordinates()
+            is com.mapbox.geojson.LineString -> listOf(g.coordinates())
+            is com.mapbox.geojson.MultiLineString -> g.coordinates()
             else -> continue
         }
         for (line in lines) {
@@ -7334,7 +7309,7 @@ private fun routeGradient(
 }
 
 private fun applyData(
-    map: org.maplibre.android.maps.MapLibreMap,
+    map: com.mapbox.mapboxsdk.maps.MapboxMap,
     style: Style,
     context: android.content.Context,
     dark: Boolean,
@@ -7835,6 +7810,8 @@ private fun applyData(
         )
         style.getLayer(ME_ARROW_LAYER)?.setProperties(
             PropertyFactory.iconImage(if (navMode) NAV_PUCK_IMG else ME_ARROW_IMG),
+            PropertyFactory.iconSize(if (navMode) NavPuckSizing.SYMBOL_SCALE else 1f),
+            PropertyFactory.iconPitchAlignment(if (navMode) Property.ICON_PITCH_ALIGNMENT_VIEWPORT else Property.ICON_PITCH_ALIGNMENT_MAP),
             PropertyFactory.visibility(if (me != null && bearing != null && !meStale && !puckOverlayOwnsArrow) Property.VISIBLE else Property.NONE),
         )
     }
@@ -7907,7 +7884,7 @@ internal fun navPuckBitmap(
 ): Bitmap {
     // 202 = +15% per issue #251 (2026-08-10); the earlier chain was 96 -> 112 -> 136 -> 176.
     // [scale] is the Settings "Arrow size" (issue #344): Large 1.25x, Extra large 1.5x.
-    val size = (202 * scale).toInt()
+    val size = (NavPuckSizing.BITMAP_EDGE * scale).toInt()
     val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     // Drawn in the original 176-space and scaled whole, so the disc/arrow/shadow proportions the

@@ -23,6 +23,7 @@ class XyAutoMusicAdapter(
     private var baslikMetni: String = ""
     private var sanatciMetni: String = ""
     private var kapakBitmap: Bitmap? = null
+    private var kapakYolu: String? = null
     private var caliyor: Boolean = false
     private var aktif: Boolean = false
 
@@ -52,11 +53,9 @@ class XyAutoMusicAdapter(
                         }
                     }
 
-                    if (!picPath.isNullOrBlank()) {
-                        val file = File(picPath)
-                        if (file.exists()) {
-                            kapakBitmap = BitmapFactory.decodeFile(file.absolutePath)
-                        }
+                    if (!picPath.isNullOrBlank() && picPath != kapakYolu) {
+                        kapakYolu = picPath
+                        kapakBitmap = guvenliKapakOku(File(picPath))
                     }
 
                     aktif = true
@@ -101,6 +100,28 @@ class XyAutoMusicAdapter(
 
     override fun konumaGit(konumMs: Long) {}
 
+    /**
+     * Dusuk bellekli cihazlar icin olcekli kapak okuma: orijinal dosya ne olursa olsun
+     * en fazla 512px, RGB_565 (alfasiz, yari bellek) decode edilir.
+     * Eski bitmap bilerek recycle edilmez: ImageView hala referans tutuyor olabilir.
+     */
+    private fun guvenliKapakOku(file: File, maxBoyut: Int = 512): Bitmap? {
+        return try {
+            if (!file.isFile || file.length() <= 0L || file.length() > 12L * 1024 * 1024) return null
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.absolutePath, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+            var sample = 1
+            while (bounds.outWidth / sample > maxBoyut || bounds.outHeight / sample > maxBoyut) sample *= 2
+            BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
+                inSampleSize = sample
+                inPreferredConfig = Bitmap.Config.RGB_565
+            })
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
     override fun aktifMi(): Boolean = aktif
 
     override fun kaynakAdi(): String = "Araç Teyp Medya"
@@ -118,6 +139,8 @@ class XyAutoMusicAdapter(
     override fun caliyorMu(): Boolean = caliyor
 
     override fun serbestBirak() {
+        kapakBitmap = null
+        kapakYolu = null
         try {
             context.unregisterReceiver(alici)
         } catch (e: Exception) {

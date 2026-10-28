@@ -61,8 +61,11 @@ fun CarDock(
 
     LaunchedEffect(isVertical) {
         val format = if (isVertical) SimpleDateFormat("HH\nmm", Locale.getDefault()) else SimpleDateFormat("HH:mm", Locale.getDefault())
+        var sonSaat = ""
         while (true) {
-            saatMetni = format.format(Date())
+            // Ayni dakika icinde state yazma: her saniye dock kompozisyonunu recompose ederdi.
+            val saat = format.format(Date())
+            if (saat != sonSaat) { sonSaat = saat; saatMetni = saat }
             delay(1000L)
         }
     }
@@ -129,6 +132,7 @@ fun CarDock(
                             shortcut.paketAdi == "internal://music" -> onMuzikPaneliAc()
                             shortcut.paketAdi == "internal://settings" -> onAyarlarTiklandi()
                             shortcut.paketAdi == "internal://antenna" -> onAntenTiklandi()
+                            shortcut.paketAdi == "internal://map" -> app.vela.carlauncher.settings.CarLauncherSettings.openMapForSession()
                             InternalApp.isInternalUri(shortcut.paketAdi) -> onAyarlarTiklandi()
                             else -> {
                                 try {
@@ -155,11 +159,12 @@ class DynamicDockShortcutAdapter(
     private val onItemClick: (AppShortcut) -> Unit
 ) : RecyclerView.Adapter<DynamicDockShortcutAdapter.ViewHolder>() {
 
-    private var itemSizePx = 0
-    fun setItemSize(size: Int) {
+    var itemSizePx = 0
+        private set
+    fun setItemSize(size: Int, notify: Boolean = true) {
         if (itemSizePx == size) return
         itemSizePx = size
-        notifyDataSetChanged()
+        if (notify) notifyDataSetChanged()
     }
 
     var onItemLongClick: ((AppShortcut, View) -> Unit)? = null
@@ -174,7 +179,7 @@ class DynamicDockShortcutAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val density = parent.context.resources.displayMetrics.density
-        val size = (48 * density).toInt()
+        val size = itemSizePx.takeIf { it > 0 } ?: (48 * density).toInt()
 
         val button = ImageButton(parent.context).apply {
             layoutParams = ViewGroup.MarginLayoutParams(size, size).apply {
@@ -192,7 +197,8 @@ class DynamicDockShortcutAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        if (itemSizePx > 0) holder.button.layoutParams = holder.button.layoutParams.apply {
+        if (itemSizePx > 0 && (holder.button.layoutParams.width != itemSizePx ||
+                holder.button.layoutParams.height != itemSizePx)) holder.button.layoutParams = holder.button.layoutParams.apply {
             width = itemSizePx
             height = itemSizePx
         }

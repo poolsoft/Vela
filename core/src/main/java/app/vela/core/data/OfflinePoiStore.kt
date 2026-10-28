@@ -85,10 +85,8 @@ class OfflinePoiStore @Inject constructor(
         val yol = db.path ?: return false
         return ftsTabloCache.getOrPut(yol) {
             runCatching {
-                db.rawQuery(
-                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='poi_fts' LIMIT 1",
-                    null,
-                ).use { it.moveToFirst() }
+                // An imported FTS5 table may exist even when this Android SQLite has no FTS5 module.
+                db.rawQuery("SELECT rowid FROM poi_fts LIMIT 0", null).use { it.moveToFirst(); true }
             }.getOrDefault(false)
         }
     }
@@ -117,22 +115,27 @@ class OfflinePoiStore @Inject constructor(
         }
     }
 
-    fun count(): Int = helper.readableDatabase
-        .rawQuery("SELECT COUNT(*) FROM poi", null)
-        .use { if (it.moveToFirst()) it.getInt(0) else 0 }
+    fun count(): Int = runCatching {
+        helper.readableDatabase.rawQuery("SELECT COUNT(*) FROM poi", null)
+            .use { if (it.moveToFirst()) it.getInt(0) else 0 }
+    }.getOrDefault(0) + OfflinePacks.count("poi")
 
     /** Every POI within [radiusM] of [loc], nearest first: the businesses AT a typed address. A
      *  pack POI often has no `addr:*` of its own (most US chains do not in OSM), so an address
      *  search could find the house point but never the shop standing on it (user 2026-09-19). */
-    fun near(loc: LatLng, radiusM: Double, limit: Int = 6): List<Place> {
+    fun near(loc: LatLng, radiusM: Double, limit: Int = 6, categories: List<String> = emptyList()): List<Place> {
         val dLat = radiusM / 111_000.0
         val dLng = dLat / Math.cos(Math.toRadians(loc.lat)).coerceAtLeast(0.2)
-        val args = arrayOf((loc.lat - dLat).toString(), (loc.lat + dLat).toString(), (loc.lng - dLng).toString(), (loc.lng + dLng).toString())
-        val sql = "SELECT id,name,lat,lng,category,address,phone,website,hours FROM poi WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?"
+        val args = mutableListOf((loc.lat - dLat).toString(), (loc.lat + dLat).toString(), (loc.lng - dLng).toString(), (loc.lng + dLng).toString())
+        val categoryClause = if (categories.isEmpty()) "" else {
+            args.addAll(categories)
+            " AND lower(replace(category,'_',' ')) IN (${categories.joinToString(",") { "?" }})"
+        }
+        val sql = "SELECT id,name,lat,lng,category,address,phone,website,hours FROM poi WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?" + categoryClause
         val rows = ArrayList<Place>()
         fun query(db: android.database.sqlite.SQLiteDatabase) {
             runCatching {
-                db.rawQuery(sql, args).use { c ->
+                db.rawQuery(sql, args.toTypedArray()).use { c ->
                     while (c.moveToNext()) {
                         val at = LatLng(c.getDouble(2), c.getDouble(3))
                         val d = loc.distanceTo(at)
@@ -446,7 +449,10 @@ class OfflinePoiStore @Inject constructor(
         val temizTekTerim = ftsTemizle(norm(term))
 
         val adayHavuzu = LinkedHashMap<String, AramaAdayi>()
-        val tumDbListesi = listOf(helper.readableDatabase) + OfflinePacks.dbs
+        val local = runCatching { helper.readableDatabase }
+            .onFailure { android.util.Log.w("OfflinePoiStore", "Local cache could not open; keeping region packs", it) }
+            .getOrNull()
+        val tumDbListesi = listOfNotNull(local) + OfflinePacks.dbs
 
         for (db in tumDbListesi) {
             if (hasFtsTablosu(db)) {
@@ -476,7 +482,8 @@ class OfflinePoiStore @Inject constructor(
                         ftsSorgula(db, katman3Query, 100, near, term, qWords, adayHavuzu)
                     }
                 }
-            } else {
+            }
+            if (!hasFtsTablosu(db) || adayHavuzu.size < limit || kategoriBul(term).isNotEmpty()) {
                 // FTS5 Bulunmayan Klasik DB Motoru (Vela sunucusundan indirilen mevcut .poipack dosyalari)
                 akilliSqlSorgula(db, term, words, near, qWords, adayHavuzu)
             }

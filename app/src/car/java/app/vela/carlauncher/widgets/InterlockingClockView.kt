@@ -8,6 +8,7 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.Typeface
 import android.graphics.Xfermode
 import android.util.AttributeSet
+import android.view.View
 import androidx.appcompat.widget.AppCompatTextView
 
 /**
@@ -28,16 +29,111 @@ class InterlockingClockView @JvmOverloads constructor(
         private val CLEAR_XFERMODE: Xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
     }
 
+    var fillColor: Int = android.graphics.Color.TRANSPARENT
+        set(value) { field = value; invalidate() }
+
+    var minuteFillColor: Int? = null
+        set(value) { field = value; invalidate() }
+
+    var embossed: Boolean = false
+        set(value) { field = value; invalidate() }
+    var fitTextToBounds: Boolean = false
+        set(value) { field = value; invalidate() }
+
+    var digitSpacingEm: Float = -OVERLAP_EM
+        set(value) { field = value.coerceIn(-0.26f, 0.12f); invalidate() }
+    var colonSpacingEm: Float = COLON_GAP_EM
+        set(value) { field = value.coerceIn(0f, 0.2f); invalidate() }
+    var outlineWidthDp: Float = 1.15f
+        set(value) { field = value.coerceIn(0.5f, 3f); invalidate() }
+    var clockFont: Int = 0
+        set(value) { if (field != value) { field = value; applyClockTypeface(); invalidate() } }
+
     init {
+        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         applyClockTypeface()
     }
 
     private fun applyClockTypeface() {
-        try {
-            typeface = Typeface.createFromAsset(context.assets, "fonts/Cross Boxed.ttf")
-        } catch (e: Exception) {
-            typeface = Typeface.DEFAULT_BOLD
+        when (clockFont) {
+            1 -> {
+                typeface = Typeface.create("sans-serif-rounded", Typeface.BOLD)
+            }
+            2 -> {
+                typeface = Typeface.create("monospace", Typeface.BOLD)
+            }
+            3 -> {
+                try {
+                    typeface = Typeface.createFromAsset(context.assets, "fonts/condensed_clock.ttf")
+                } catch (e: Exception) {
+                    typeface = Typeface.DEFAULT_BOLD
+                }
+            }
+            else -> {
+                try {
+                    typeface = Typeface.createFromAsset(context.assets, "fonts/Cross Boxed.ttf")
+                } catch (e: Exception) {
+                    typeface = Typeface.DEFAULT_BOLD
+                }
+            }
         }
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val widthMode = MeasureSpec.getMode(widthMeasureSpec)
+        val widthSize = MeasureSpec.getSize(widthMeasureSpec)
+        val heightMode = MeasureSpec.getMode(heightMeasureSpec)
+        val heightSize = MeasureSpec.getSize(heightMeasureSpec)
+
+        val value = text
+        val p = paint
+        val metrics = p.fontMetrics
+        val textH = (metrics.bottom - metrics.top).coerceAtLeast(1f)
+        val density = resources.displayMetrics.density
+        val minH = (36f * density).toInt()
+
+        val desiredHeight = (textH + paddingTop + paddingBottom + density * 4f).toInt().coerceAtLeast(minH)
+        val measuredHeight = when (heightMode) {
+            MeasureSpec.EXACTLY -> heightSize
+            MeasureSpec.AT_MOST -> minOf(desiredHeight, heightSize)
+            else -> desiredHeight
+        }
+
+        val measuredWidth = if (widthMode == MeasureSpec.EXACTLY) {
+            widthSize
+        } else {
+            var w = 0f
+            if (!value.isNullOrEmpty()) {
+                val baseTextSize = p.textSize
+                val overlap = -baseTextSize * digitSpacingEm
+                val colonGap = baseTextSize * colonSpacingEm
+                for (i in 0 until value.length) {
+                    val isColon = value[i] == ':'
+                    p.textSize = if (isColon) baseTextSize * COLON_SCALE else baseTextSize
+                    w += p.measureText(value, i, i + 1)
+                    if (i < value.length - 1) {
+                        w += spacingAfter(value, i, overlap, colonGap)
+                    }
+                }
+                p.textSize = baseTextSize
+            }
+            val desiredWidth = (w + paddingLeft + paddingRight + density * 4f).toInt()
+            if (widthMode == MeasureSpec.AT_MOST) minOf(desiredWidth, widthSize) else desiredWidth
+        }
+
+        setMeasuredDimension(measuredWidth, measuredHeight)
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w != oldw || h != oldh) {
+            invalidate()
+        }
+    }
+
+    override fun onTextChanged(text: CharSequence?, start: Int, lengthBefore: Int, lengthAfter: Int) {
+        super.onTextChanged(text, start, lengthBefore, lengthAfter)
+        invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -45,9 +141,10 @@ class InterlockingClockView @JvmOverloads constructor(
         if (value.isNullOrEmpty()) return
 
         val p = paint
-        val baseTextSize = p.textSize
-        val overlap = p.textSize * OVERLAP_EM
-        val colonGap = p.textSize * COLON_GAP_EM
+        val originalTextSize = p.textSize
+        var baseTextSize = originalTextSize
+        var overlap = -p.textSize * digitSpacingEm
+        var colonGap = p.textSize * colonSpacingEm
         var contentWidth = 0f
 
         for (i in 0 until value.length) {
@@ -60,6 +157,20 @@ class InterlockingClockView @JvmOverloads constructor(
         }
         p.textSize = baseTextSize
 
+        // Measure the actual clock glyphs, including overlap, before fitting the panel.
+        if (fitTextToBounds) {
+            val inset = resources.displayMetrics.density * 3f
+            val availableWidth = (width - paddingLeft - paddingRight - inset * 2).coerceAtLeast(1f)
+            val availableHeight = (height - paddingTop - paddingBottom - inset * 2).coerceAtLeast(1f)
+            val glyphHeight = p.fontMetrics.let { it.bottom - it.top }
+            val scale = minOf(1f, availableWidth / contentWidth.coerceAtLeast(1f),
+                availableHeight / glyphHeight.coerceAtLeast(1f))
+            baseTextSize *= scale
+            overlap *= scale
+            colonGap *= scale
+            contentWidth *= scale
+            p.textSize = baseTextSize
+        }
         val metrics = p.fontMetrics
         var x = paddingLeft + (width - paddingLeft - paddingRight - contentWidth).coerceAtLeast(0f) / 2f
         val baseline = paddingTop + (height - paddingTop - paddingBottom - metrics.bottom - metrics.top) / 2f
@@ -68,7 +179,7 @@ class InterlockingClockView @JvmOverloads constructor(
         val oldColor = p.color
         val oldStrokeWidth = p.strokeWidth
         val oldXfermode = p.xfermode
-        val outlineWidth = (resources.displayMetrics.density * 1.15f).coerceAtLeast(1f)
+        val outlineWidth = (resources.displayMetrics.density * outlineWidthDp).coerceAtLeast(0.5f)
         val layer = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
 
         for (i in 0 until value.length) {
@@ -83,6 +194,21 @@ class InterlockingClockView @JvmOverloads constructor(
             canvas.drawText(glyph, x, glyphBaseline, p)
 
             p.xfermode = oldXfermode
+            if (embossed) {
+                val depth = resources.displayMetrics.density
+                p.style = Paint.Style.STROKE
+                p.strokeWidth = outlineWidth * 1.6f
+                p.color = 0xB0000000.toInt()
+                canvas.drawText(glyph, x + depth * 1.4f, glyphBaseline + depth * 1.4f, p)
+                p.color = 0xA0FFFFFF.toInt()
+                canvas.drawText(glyph, x - depth * 0.7f, glyphBaseline - depth * 0.7f, p)
+            }
+            val glyphColor = if (isMinute(value, i)) minuteFillColor ?: fillColor else fillColor
+            if (glyphColor != android.graphics.Color.TRANSPARENT) {
+                p.style = Paint.Style.FILL
+                p.color = glyphColor
+                canvas.drawText(glyph, x, glyphBaseline, p)
+            }
             p.style = Paint.Style.STROKE
             p.strokeWidth = outlineWidth
             var outlineColor = currentTextColor
@@ -100,9 +226,18 @@ class InterlockingClockView @JvmOverloads constructor(
         p.style = oldStyle
         p.color = oldColor
         p.strokeWidth = oldStrokeWidth
-        p.textSize = baseTextSize
+        p.textSize = originalTextSize
         p.xfermode = oldXfermode
         canvas.restoreToCount(layer)
+    }
+
+    private fun isMinute(value: CharSequence, index: Int): Boolean {
+        val colonIdx = value.indexOf(':')
+        return if (colonIdx >= 0) {
+            index > colonIdx
+        } else {
+            index >= (value.length / 2)
+        }
     }
 
     private fun spacingAfter(value: CharSequence, index: Int, overlap: Float, colonGap: Float): Float {

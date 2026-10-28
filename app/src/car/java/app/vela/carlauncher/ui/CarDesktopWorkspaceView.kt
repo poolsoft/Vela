@@ -52,7 +52,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Widgets
-import androidx.compose.material3.AlertDialog
+import app.vela.ui.VelaWindowAlertDialog as AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
@@ -172,10 +172,15 @@ fun CarDesktopWorkspaceView(
     LaunchedEffect(Unit) {
         val saatFormati = SimpleDateFormat("HH:mm", Locale.getDefault())
         val tarihFormati = SimpleDateFormat("d MMMM EEEE", Locale.getDefault())
+        var sonSaat = ""
+        var sonTarih = ""
         while (true) {
             val simdi = Date()
-            saatMetni = saatFormati.format(simdi)
-            tarihMetni = tarihFormati.format(simdi)
+            // Ayni dakika icinde state yazma: her saniye tum kompozisyonu recompose ederdi.
+            val saat = saatFormati.format(simdi)
+            if (saat != sonSaat) { sonSaat = saat; saatMetni = saat }
+            val tarih = tarihFormati.format(simdi)
+            if (tarih != sonTarih) { sonTarih = tarih; tarihMetni = tarih }
             delay(1000L)
         }
     }

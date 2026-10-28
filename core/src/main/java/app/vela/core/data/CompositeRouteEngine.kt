@@ -29,17 +29,27 @@ class CompositeRouteEngine @Inject constructor(
         avoidHighways: Boolean,
         avoidFerries: Boolean,
         departBearingDeg: Double?,
+    ): List<Route> = routeControlled(origin, destination, mode, avoidTolls, avoidHighways,
+        avoidFerries, departBearingDeg, RouteControl())
+
+    override fun routeControlled(
+        origin: LatLng, destination: LatLng, mode: TravelMode,
+        avoidTolls: Boolean, avoidHighways: Boolean, avoidFerries: Boolean,
+        departBearingDeg: Double?, control: RouteControl,
     ): List<Route> {
+        if (control.isCanceled) return emptyList()
         if (valhallaEngine.isReady(mode)) {
-            val routes = valhallaEngine.route(
-                origin, destination, mode, avoidTolls, avoidHighways, avoidFerries, departBearingDeg
+            android.util.Log.i("OfflineRoute", "engine=valhalla")
+            val routes = valhallaEngine.routeControlled(
+                origin, destination, mode, avoidTolls, avoidHighways, avoidFerries, departBearingDeg, control
             )
             if (routes.isNotEmpty()) return routes
         }
 
-        if (obfEngine.isReady(mode)) {
-            return obfEngine.route(
-                origin, destination, mode, avoidTolls, avoidHighways, avoidFerries, departBearingDeg
+        if (!control.isCanceled && obfEngine.isReady(mode)) {
+            android.util.Log.i("OfflineRoute", "engine=obf; valhalla unavailable or returned no route")
+            return obfEngine.routeControlled(
+                origin, destination, mode, avoidTolls, avoidHighways, avoidFerries, departBearingDeg, control
             )
         }
 

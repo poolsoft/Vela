@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="car_clock_customize">Clock customization</string>
+    <string name="car_clock_settings_hint">Small player clock: colors, size, spacing and live preview</string>
+    <string name="car_clock_preview">LIVE PREVIEW</string>
+    <string name="car_clock_live_hint">Changes appear immediately and are saved automatically.</string>
+    <string name="car_clock_custom_colors">Custom colors</string>
+    <string name="car_clock_outline_color">Outline</string>
+    <string name="car_clock_hue">Hue</string>
+    <string name="car_clock_saturation">Saturation</string>
+    <string name="car_clock_brightness">Brightness</string>
+    <string name="car_clock_size">Clock size</string>
+    <string name="car_clock_fit_hint">Fits within the panel without covering its menu button.</string>
+    <string name="car_clock_spacing">Digit spacing</string>
+    <string name="car_clock_colon_spacing">Colon spacing</string>
+    <string name="car_clock_outline_width">Outline thickness</string>
+    <string name="car_clock_opacity">Fill opacity</string>
+    <string name="car_clock_font">Typeface</string>
+    <string name="car_clock_font_boxed">Futuristic</string>
+    <string name="car_clock_font_rounded">Rounded</string>
+    <string name="car_clock_font_classic">Classic</string>
+    <string name="car_clock_font_condensed">Condensed</string>
+    <string name="car_clock_show_colon">Show colon (:)</string>
+    <string name="car_clock_show_date">Show date</string>
+    <string name="car_clock_format">Time format</string>
+    <string name="car_clock_format_system">System</string>
+    <string name="car_clock_format_24">24 hours</string>
+    <string name="car_clock_format_12">12 hours</string>
+    <string name="car_clock_seconds">Show seconds</string>
+    <string name="car_clock_reset">Reset clock appearance</string>
+    <string name="car_clock_back">Back</string>
+    <string name="car_clock_tab_appearance">Appearance</string>
+    <string name="car_clock_tab_colors">Colors</string>
+    <string name="car_clock_tab_time">Time format</string>
+</resources>

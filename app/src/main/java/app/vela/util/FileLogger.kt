@@ -77,7 +77,15 @@ object FileLogger {
                     append("==================================================\n")
                     append("Vela Baslatildi: ").append(synchronized(dateFormat) { dateFormat.format(Date()) }).append("\n")
                     append("Cihaz: ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL).append("\n")
-                    append("Android Surumu: API ").append(Build.VERSION.SDK_INT).append(" (").append(Build.VERSION.RELEASE).append(")\n")
+                    val sdkInt = Build.VERSION.SDK_INT
+                    val release = Build.VERSION.RELEASE
+                    val name = androidName(sdkInt)
+                    append("Android Surumu: ")
+                    if (name == null) append(release) else append(name)
+                    append(" (API ").append(sdkInt).append(")")
+                    // The teyp reports API 27 while RELEASE claims "10.0"; keep the raw value visible.
+                    if (name != null && !release.startsWith(name)) append(", rom report=").append(release)
+                    append("\n")
                     append("Uygulama Dizini: ").append(logFile?.absolutePath).append("\n")
                     append("==================================================")
                 }
@@ -160,6 +168,21 @@ object FileLogger {
         } catch (e: Exception) {
             // Dosyaya yazarken hata olursa donguye girmemek icin sessiz kal
         }
+    }
+
+    /** Marketing Android version for an SDK level; the teyp reports API 27 with RELEASE "10.0". */
+    private fun androidName(sdk: Int): String? = when (sdk) {
+        26 -> "8.0"
+        27 -> "8.1"
+        28 -> "9"
+        29 -> "10"
+        30 -> "11"
+        31, 32 -> "12"
+        33 -> "13"
+        34 -> "14"
+        35 -> "15"
+        36 -> "16"
+        else -> null
     }
 
     private fun dosyayaSenkronYaz(seviye: String, tag: String, mesaj: String) {

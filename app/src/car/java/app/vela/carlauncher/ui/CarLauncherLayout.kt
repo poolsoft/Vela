@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -19,6 +20,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.zIndex
@@ -40,8 +43,14 @@ fun CarLauncherLayout(
     voiceAudioLevel: Float = 0f,
     haritaIcerigi: @Composable () -> Unit
 ) {
+    val latestMapContent by androidx.compose.runtime.rememberUpdatedState(haritaIcerigi)
+    // Portrait bypasses the launcher host. Keep the same map composition when
+    // moving between that branch and the landscape panel, including its IPC client.
+    val retainedMapContent = remember {
+        androidx.compose.runtime.movableContentOf { latestMapContent() }
+    }
     if (passthrough) {
-        Box(modifier.fillMaxSize()) { haritaIcerigi() }
+        Box(modifier.fillMaxSize()) { retainedMapContent() }
         return
     }
     val context = LocalContext.current
@@ -67,38 +76,59 @@ fun CarLauncherLayout(
         else scanLauncher.launch(audioPermission)
     }
     val libraryRepository = remember { app.vela.carlauncher.media.MusicRepository.getInstance(context) }
-    val libraryTracks by libraryRepository.parcalar.collectAsState()
+    // Perf: binlerce parcalik liste state olarak tutulmuyor; restore icin bos/dolu bayragi yeterli.
+    // Liste degisince tum layout recompose oluyordu.
+    val libraryReady by remember {
+        libraryRepository.parcalar
+            .map { it.isNotEmpty() }
+            .distinctUntilChanged()
+    }.collectAsState(false)
     var playbackRestored by remember { mutableStateOf(false) }
     val mediaManager = remember { CarMediaManager.getInstance(context) }
     val telemetry = remember { CarTelemetryManager.getInstance(context) }
     val apps = remember { CarAppManager.getInstance(context) }
     val media by mediaManager.medyaDurumu.collectAsState()
-    val telemetryState by telemetry.telemetriDurumu.collectAsState()
+    val telemetryState by telemetry.telemetriDurumu.collectAsStateWithLifecycle()
     val desktop by CarLauncherSettings.desktopModu.collectAsState()
+    val mapless by CarLauncherSettings.maplessMode.collectAsState()
     val autoPlay by CarLauncherSettings.otomatikOynat.collectAsState()
     var contentMode by rememberSaveable { mutableStateOf("UNIFIED") }
     var fullMap by rememberSaveable { mutableStateOf(CarLauncherSettings.getStartupScreen() == "map_only") }
     val homeScreenRequest by CarLauncherSettings.homeScreenRequest.collectAsState()
     LaunchedEffect(homeScreenRequest) {
-        CarLauncherSettings.setDesktopModu(CarLauncherSettings.getStartupScreen() == "desktop")
-        contentMode = "UNIFIED"
-        fullMap = CarLauncherSettings.getStartupScreen() == "map_only"
+        val clockEditor = CarLauncherSettings.consumeClockSettingsRequest()
+        CarLauncherSettings.setDesktopModu(!clockEditor && CarLauncherSettings.getStartupScreen() == "desktop")
+        contentMode = if (clockEditor) "CLOCK" else "UNIFIED"
+        fullMap = !clockEditor && CarLauncherSettings.getStartupScreen() == "map_only"
     }
 
     LaunchedEffect(Unit) {
         try {
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: media service start begin")
             CarMediaService.baslat(context)
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: media service start complete")
         } catch (error: Exception) {
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: media service start failed")
+            app.vela.util.FileLogger.e("CarLauncherLayout", "Media service unavailable", error)
             android.util.Log.w("CarLauncherLayout", "Media service unavailable", error)
         }
     }
     LaunchedEffect(Unit) {
-        if (!app.vela.carlauncher.tools.LauncherStartup.run(context))
+        app.vela.diag.ProcessDiagnostics.checkpoint("launcher: startup tools begin")
+        if (!app.vela.carlauncher.tools.LauncherStartup.run(context)) {
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: startup tools failed")
+            app.vela.util.FileLogger.e("CarLauncherLayout", "Startup tool launch failed")
             Toast.makeText(context, R.string.car_tools_failed, Toast.LENGTH_LONG).show()
+        } else {
+            app.vela.diag.ProcessDiagnostics.checkpoint("launcher: startup tools complete")
+        }
     }
-    LaunchedEffect(libraryTracks, autoPlay) {
-        if (!playbackRestored && libraryTracks.isNotEmpty())
-            playbackRestored = mediaManager.getMusicManager().restoreSavedPlayback(libraryTracks, autoPlay)
+    LaunchedEffect(libraryReady, autoPlay) {
+        if (!playbackRestored && libraryReady) {
+            app.vela.diag.ProcessDiagnostics.checkpoint("music playback: restore begin")
+            playbackRestored = mediaManager.getMusicManager().restoreSavedPlayback(libraryRepository.parcalar.value, autoPlay)
+            app.vela.diag.ProcessDiagnostics.checkpoint("music playback: restore complete")
+        }
     }
 
     fun showPanel(mode: String) {
@@ -114,6 +144,10 @@ fun CarLauncherLayout(
     fun launchApp(uri: String) {
         val launched = apps.uygulamayiBaslat(uri) { internal ->
             when (internal) {
+                InternalApp.MAP -> {
+                    CarLauncherSettings.openMapForSession()
+                    showSplit()
+                }
                 InternalApp.SETTINGS -> { showSplit(); onOpenSettings() }
                 InternalApp.MUSIC -> { contentMode = "UNIFIED"; showPanel("MUSIC") }
                 InternalApp.DASHBOARD -> { contentMode = "UNIFIED"; showPanel("DASHBOARD") }
@@ -131,7 +165,7 @@ fun CarLauncherLayout(
             telemetri = telemetryState,
             medya = media,
             contentMode = contentMode,
-            fullScreenMap = fullMap,
+            fullScreenMap = fullMap && !mapless,
             isVoiceListening = isVoiceListening,
             voiceAudioLevel = voiceAudioLevel,
             onPanelChange = ::showPanel,
@@ -156,7 +190,7 @@ fun CarLauncherLayout(
             onAyarlarAc = { onOpenSettings() },
             onAsistanTiklandi = onAsistanTiklandi,
             modifier = Modifier.fillMaxSize(),
-            haritaIcerigi = haritaIcerigi
+            haritaIcerigi = retainedMapContent
         )
     }
 }

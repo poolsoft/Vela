@@ -1,5 +1,8 @@
 package app.vela
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.systemBars
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -23,6 +26,51 @@ import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private val ownsLauncherUi get() = !CarIntegration.available || launcherOwner.get() === this
+    private var ownerHomeTask = false
+    private var redirectIntent: Intent? = null
+
+    companion object {
+        private var launcherOwner = java.lang.ref.WeakReference<MainActivity>(null)
+
+        private fun liveOwner(): MainActivity? = launcherOwner.get()?.takeUnless {
+            it.isFinishing || it.isDestroyed || it.isChangingConfigurations
+        }
+
+        private const val RETURN_INTENT = "app.vela.launcher.RETURN_INTENT"
+
+        /** Reuse the owner's task type and let Android deliver its foreground launch normally. */
+        fun returnToApp(context: Context, incoming: Intent = Intent(Intent.ACTION_MAIN)) {
+            val owner = if (CarIntegration.available) liveOwner() else null
+            // HOME belongs only to the forwarding entry Activity. The UI always uses a
+            // standard task, including a cold launch from the system Home role.
+            val launch = Intent(Intent.ACTION_MAIN).setClass(context, MainActivity::class.java).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+                putExtra(RETURN_INTENT, incoming)
+            }
+            // Prefer the existing concrete task, including after process reclamation.
+            // OEM HOME/radio windows can otherwise leave a second task card behind.
+            if (CarIntegration.available) {
+                val tasks = context.getSystemService(android.app.ActivityManager::class.java).appTasks
+                val retained = tasks.firstOrNull { it.taskInfo.id == owner?.taskId }
+                    ?: tasks.firstOrNull { it.taskInfo.baseActivity?.className == MainActivity::class.java.name }
+                if (retained != null) {
+                    try {
+                        launch.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        retained.startActivity(context, launch, null)
+                        app.vela.util.FileLogger.i("LauncherTask", "Return reused task=${retained.taskInfo.id} ownerTask=${owner?.taskId}")
+                        return
+                    } catch (error: RuntimeException) {
+                        app.vela.util.FileLogger.w("LauncherTask", "Retained task return failed: ${error.javaClass.simpleName}")
+                    }
+                }
+            }
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            context.startActivity(launch)
+            app.vela.util.FileLogger.i("LauncherTask", "Requested return ownerTask=${owner?.taskId} homeTask=${owner?.ownerHomeTask}")
+        }
+    }
+
     // Same instance the Compose tree gets (both resolve to this activity's store),
     // so a deep link handled here shows up in the UI.
     private val vm: MapViewModel by viewModels()
@@ -49,15 +97,27 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!ownsLauncherUi) {
+            // HOME stops app switches. Wait until this redirect is resumed before launching
+            // the retained standard task, otherwise Android may silently reject the return.
+            if (window.decorView.hasWindowFocus()) completeRedirect()
+            return
+        }
+        if (!isInPictureInPictureMode) app.vela.ui.PipMode.active.value = false
+        if (!CarIntegration.available && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            runCatching { setPictureInPictureParams(pipParams(vm.state.value.navigating)) }
+        }
         app.vela.diag.ProcessDiagnostics.activity("resume")
         app.vela.util.FileLogger.i("MainActivity", "onResume - Uygulama on planda")
         // The 12/24-hour clock setting can change while Vela sits in the background (issue #357).
         app.vela.ui.Clock24.refresh(this)
         CarIntegration.onResume(this)
+        applySystemBarPreferences()
     }
 
     override fun onPause() {
         super.onPause()
+        if (!ownsLauncherUi) return
         app.vela.diag.ProcessDiagnostics.activity("pause")
         app.vela.util.FileLogger.i("MainActivity", "onPause - Uygulama arka plana geciyor")
         CarIntegration.onPause(this)
@@ -66,7 +126,24 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         app.vela.util.FileLogger.i("MainActivity", "onCreate baslatildi. Intent: ${intent?.action}")
         installSplashScreen()
+        // Apply the saved window policy before Activity/Compose initialization can draw.
+        // Preferences have already been loaded by VelaApp (after pending restore recovery).
+        applySystemBarPreferences()
+        app.vela.util.FileLogger.i("SystemBars", "Before activity create: immersive=${CarIntegration.immersive.value}, statusBar=${CarIntegration.statusBarVisible.value}")
         super.onCreate(savedInstanceState)
+        if (CarIntegration.available) {
+            val existing = liveOwner()
+            if (existing != null && existing !== this) {
+                app.vela.util.FileLogger.w("LauncherTask", "Rejecting duplicate task=$taskId instance=${System.identityHashCode(this)}; ownerTask=${existing.taskId} home=${intent?.hasCategory(Intent.CATEGORY_HOME)}")
+                @Suppress("DEPRECATION")
+                val forwarded = intent?.getParcelableExtra<Intent>(RETURN_INTENT)
+                redirectIntent = forwarded ?: intent ?: Intent(Intent.ACTION_MAIN)
+                return
+            }
+            ownerHomeTask = intent?.hasCategory(Intent.CATEGORY_HOME) == true
+            launcherOwner = java.lang.ref.WeakReference(this)
+        }
+        app.vela.util.FileLogger.i("LauncherTask", "Owner created task=$taskId instance=${System.identityHashCode(this)} home=${intent?.hasCategory(Intent.CATEGORY_HOME)}")
         app.vela.diag.ProcessDiagnostics.activity("create")
         enableEdgeToEdge()
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
@@ -74,6 +151,7 @@ class MainActivity : ComponentActivity() {
         }
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
         window.statusBarColor = android.graphics.Color.TRANSPARENT
+        applySystemBarPreferences()
         // A language change re-creates this Activity so the whole UI re-reads localized resources.
         AppLocale.onLocaleChanged = { recreate() }
         // Picture-in-picture mini map while navigating (user 2026-07-24, the Google Maps
@@ -82,7 +160,7 @@ class MainActivity : ComponentActivity() {
         // onUserLeaveHint below calls enterPictureInPictureMode by hand. Everything is
         // best-effort (runCatching): a launcher or ROM that forbids PiP just falls back to the
         // notification-only background nav that already works.
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        if (!CarIntegration.available && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             lifecycleScope.launch {
                 var last: Boolean? = null
                 vm.state.collect { s ->
@@ -108,29 +186,56 @@ class MainActivity : ComponentActivity() {
             // the map is white, so the icons must go DARK; edge-to-edge alone left them light
             // (white-on-white, unreadable). Flip the appearance whenever the app theme changes.
             androidx.compose.runtime.LaunchedEffect(dark, durumCubugu, tamEkran) {
-                val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-                controller.isAppearanceLightStatusBars = !dark
-                controller.isAppearanceLightNavigationBars = !dark
-                controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                if (tamEkran) {
-                    controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-                } else {
-                    controller.show(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
-                    if (durumCubugu) {
-                        controller.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-                    } else {
-                        controller.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-                    }
-                }
+                darkSystemBarIcons = !dark
+                applySystemBarPreferences()
             }
             androidx.compose.runtime.CompositionLocalProvider(
                 androidx.compose.ui.platform.LocalConfiguration provides
                     (liveConfig.value ?: androidx.compose.ui.platform.LocalConfiguration.current),
             ) {
                 VelaTheme(darkTheme = dark) {
-                    VelaRoot(vm = vm)
+                    if (CarIntegration.available) {
+                        androidx.compose.foundation.layout.Box(
+                            androidx.compose.ui.Modifier.fillMaxSize().windowInsetsPadding(
+                                androidx.compose.foundation.layout.WindowInsets.systemBars
+                            )
+                        ) { VelaRoot(vm = vm) }
+                    } else VelaRoot(vm = vm)
                 }
             }
+        }
+    }
+
+    private fun completeRedirect() {
+        val pending = redirectIntent ?: return
+        redirectIntent = null
+        window.decorView.post {
+            // Exclude this temporary HOME record from singleTask lookup before returning.
+            // Otherwise Android can deliver the launch back to this duplicate itself.
+            finish()
+            returnToApp(this, pending)
+        }
+    }
+
+    private var darkSystemBarIcons = false
+
+    // One owner for both the XML launcher and Compose screens, including Home returns.
+    private fun applySystemBarPreferences() {
+        app.vela.ui.applyVelaSystemBars(window, darkSystemBarIcons)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // API 30+ can defer controller requests made before attachment. Reassert before
+        // the initial traversal instead of waiting for Compose's LaunchedEffect.
+        applySystemBarPreferences()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            applySystemBarPreferences()
+            window.decorView.post { applySystemBarPreferences() }
         }
     }
 
@@ -138,7 +243,7 @@ class MainActivity : ComponentActivity() {
     private fun pipParams(autoEnter: Boolean): android.app.PictureInPictureParams {
         val b = android.app.PictureInPictureParams.Builder()
             .setAspectRatio(android.util.Rational(3, 4))
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+        if (!CarIntegration.available && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             b.setAutoEnterEnabled(autoEnter)
             b.setSeamlessResizeEnabled(false) // map surfaces cross-fade better than they stretch
         }
@@ -157,7 +262,7 @@ class MainActivity : ComponentActivity() {
         super.onUserLeaveHint()
         // Pre-Android-12 manual PiP entry (12+ auto-enters via the params above).
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S &&
-            vm.state.value.navigating
+            ownsLauncherUi && !CarIntegration.available && vm.state.value.navigating
         ) {
             runCatching { enterPictureInPictureMode(pipParams(true)) }
                 .onFailure { android.util.Log.w("VelaPip", "enterPictureInPictureMode failed", it) }
@@ -169,7 +274,7 @@ class MainActivity : ComponentActivity() {
         newConfig: android.content.res.Configuration,
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        app.vela.ui.PipMode.active.value = isInPictureInPictureMode
+        if (ownsLauncherUi) app.vela.ui.PipMode.active.value = isInPictureInPictureMode
     }
 
     /** Settings exit is explicit; Home relaunches the selected launcher, a normal app exits. */
@@ -181,20 +286,44 @@ class MainActivity : ComponentActivity() {
         app.vela.service.NavigationService.stop(this)
         CarIntegration.prepareForExit(this)
         if (restart) {
-            startActivity(Intent(this, MainActivity::class.java).apply {
-                action = Intent.ACTION_MAIN
-                addCategory(Intent.CATEGORY_HOME)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-            })
-            finish()
+            handOffRestart()
         } else {
             app.vela.diag.ProcessDiagnostics.explicitClose()
             finishAndRemoveTask()
         }
     }
 
+    /** A restore needs a new process: attachBaseContext installs files before readers exist. */
+    fun restartAfterRestore() {
+        vm.stopReplay()
+        vm.stopNav()
+        app.vela.service.NavigationService.stop(this)
+        CarIntegration.prepareForExit(this)
+        handOffRestart()
+    }
+
+    private fun handOffRestart() {
+        app.vela.diag.ProcessDiagnostics.explicitClose()
+        app.vela.diag.ProcessDiagnostics.checkpointAndFlush("settings: restart hand-off")
+        startActivity(Intent(this, app.vela.util.AppRestartActivity::class.java).apply {
+            putExtra("oldPid", android.os.Process.myPid())
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        })
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        @Suppress("DEPRECATION")
+        val forwarded = intent.getParcelableExtra<Intent>(RETURN_INTENT)
+        if (!ownsLauncherUi) {
+            redirectIntent = forwarded ?: intent
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED) && window.decorView.hasWindowFocus()) completeRedirect()
+            return
+        }
+        receiveReturnIntent(forwarded ?: intent)
+    }
+
+    private fun receiveReturnIntent(intent: Intent) {
         setIntent(intent)
         app.vela.util.FileLogger.i("MainActivity", "onNewIntent: ${intent.action}, home=${intent.hasCategory(Intent.CATEGORY_HOME)}, task=$taskId")
         handleIntent(intent)
@@ -202,6 +331,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (!ownsLauncherUi) return
         app.vela.diag.ProcessDiagnostics.activity("start", true)
         app.vela.util.FileLogger.i("MainActivity", "onStart")
         app.vela.ui.AppVisibility.foreground.value = true
@@ -209,13 +339,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        if (!ownsLauncherUi) return
         app.vela.diag.ProcessDiagnostics.activity("stop", false)
         app.vela.util.FileLogger.i("MainActivity", "onStop")
         app.vela.ui.AppVisibility.foreground.value = false
+        CarIntegration.onStop(this)
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        if (!ownsLauncherUi) return
+        if (launcherOwner.get() === this) {
+            launcherOwner.clear()
+            app.vela.ui.AppLocale.onLocaleChanged = null
+        }
         app.vela.diag.ProcessDiagnostics.activity("destroy finishing=$isFinishing configChange=$isChangingConfigurations task=$taskId")
         app.vela.util.FileLogger.i("MainActivity", "onDestroy - Activity kapandi")
     }
@@ -227,7 +364,9 @@ class MainActivity : ComponentActivity() {
         when (intent?.action) {
             Intent.ACTION_VIEW -> {
                 val data = intent.data?.toString() ?: return
-                MapLinkParser.parse(data)?.let { vm.openDeepLink(it) }
+                val target = MapLinkParser.parse(data)
+                if (target != null) vm.openDeepLink(target)
+                else if (MapLinkParser.isShareLink(data)) vm.openSharedText(data)
             }
             // Share TO Vela: a Google Maps share link imports without the copy-paste dance, a
             // geo:/maps URL opens like a deep link, plain text (an address someone texted you)

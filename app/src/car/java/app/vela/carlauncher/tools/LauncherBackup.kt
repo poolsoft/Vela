@@ -77,8 +77,16 @@ object LauncherBackup {
 
     // Tercih dosyalari ve anahtarlarinin semasi (Sadece Launcher bilesenleri)
     val schema: Map<String, Map<String, String>> = mapOf(
+        "small_music_panel" to mapOf(
+            "clock_color" to "Int", "clock_custom_primary" to "Int", "clock_custom_secondary" to "Int",
+            "clock_two_colors" to "Boolean", "clock_embossed" to "Boolean", "clock_scale" to "Float",
+            "clock_spacing" to "Float", "clock_colon_spacing" to "Float", "clock_outline" to "Float",
+            "clock_outline_color" to "Int", "clock_opacity" to "Int", "clock_font" to "Int",
+            "clock_format" to "String", "clock_seconds" to "Boolean", "visualizer" to "Boolean", "clock_show_colon" to "Boolean", "clock_show_date" to "Boolean"
+        ),
         "vela_car_launcher_prefs" to mapOf(
             "car_launcher_enabled" to "Boolean", "car_launcher_immersive_mode" to "Boolean",
+            "car_launcher_mapless_main" to "String", "car_launcher_mapless_mode" to "Boolean", "car_launcher_mapless_screen" to "String",
             "car_launcher_status_bar" to "Boolean", "car_launcher_dock_position" to "String",
             "car_launcher_dock_size" to "Int", "widget_panel_position" to "String",
             "car_launcher_expansion_behavior" to "String", "widget_panel_width_percent" to "Float",
@@ -109,7 +117,7 @@ object LauncherBackup {
     )
 
     private fun getCategoryPrefFiles(category: BackupCategory): List<String> = when (category) {
-        BackupCategory.LAUNCHER -> listOf("vela_car_launcher_prefs")
+        BackupCategory.LAUNCHER -> listOf("vela_car_launcher_prefs", "small_music_panel")
         BackupCategory.DOCK -> listOf("car_launcher_app_dock")
         BackupCategory.WIDGETS -> listOf("vela_car_launcher_widgets", "vela_desktop_widget_layout")
         BackupCategory.MUSIC -> listOf("vela_music_playlists", "vela_music_focus")
@@ -234,6 +242,15 @@ object LauncherBackup {
                             zipOut.closeEntry()
                         }
                     }
+                }
+            }
+            if (BackupCategory.PLACES in selectedCategories) {
+                app.vela.backup.OfflineSearchSnapshot.create(context)?.let { snapshot ->
+                    try {
+                        zipOut.putNextEntry(ZipEntry("files/poipacks/${snapshot.name}"))
+                        snapshot.inputStream().use { it.copyTo(zipOut, BUFFER_SIZE) }
+                        zipOut.closeEntry()
+                    } finally { snapshot.delete() }
                 }
             }
             zipOut.finish()
@@ -362,7 +379,7 @@ object LauncherBackup {
                     } else if (name.startsWith("preferences/") && name.endsWith(".json")) {
                         val prefName = name.removePrefix("preferences/").removeSuffix(".json")
                         val cat = when (prefName) {
-                            "vela_car_launcher_prefs" -> BackupCategory.LAUNCHER
+                            "vela_car_launcher_prefs", "small_music_panel" -> BackupCategory.LAUNCHER
                             "car_launcher_app_dock" -> BackupCategory.DOCK
                             "vela_car_launcher_widgets", "vela_desktop_widget_layout" -> BackupCategory.WIDGETS
                             "vela_music_playlists", "vela_music_focus" -> BackupCategory.MUSIC
@@ -402,7 +419,7 @@ object LauncherBackup {
             val groups = jsonRoot.optJSONObject("groups") ?: JSONObject()
             val categoriesInJson = mutableSetOf<BackupCategory>()
 
-            if (groups.has("vela_car_launcher_prefs")) categoriesInJson.add(BackupCategory.LAUNCHER)
+            if (groups.has("vela_car_launcher_prefs") || groups.has("small_music_panel")) categoriesInJson.add(BackupCategory.LAUNCHER)
             if (groups.has("car_launcher_app_dock")) categoriesInJson.add(BackupCategory.DOCK)
             if (groups.has("vela_car_launcher_widgets") || groups.has("vela_desktop_widget_layout")) categoriesInJson.add(BackupCategory.WIDGETS)
             if (groups.has("vela_music_playlists") || groups.has("vela_music_focus")) categoriesInJson.add(BackupCategory.MUSIC)
@@ -458,7 +475,7 @@ object LauncherBackup {
                 } else if (name.startsWith("preferences/") && name.endsWith(".json")) {
                     val prefName = name.removePrefix("preferences/").removeSuffix(".json")
                     val cat = when (prefName) {
-                        "vela_car_launcher_prefs" -> BackupCategory.LAUNCHER
+                        "vela_car_launcher_prefs", "small_music_panel" -> BackupCategory.LAUNCHER
                         "car_launcher_app_dock" -> BackupCategory.DOCK
                         "vela_car_launcher_widgets", "vela_desktop_widget_layout" -> BackupCategory.WIDGETS
                         "vela_music_playlists", "vela_music_focus" -> BackupCategory.MUSIC
@@ -536,6 +553,34 @@ object LauncherBackup {
         }
 
         editor.commit()
+    }
+
+    /**
+     * Geri yukleme sonrasi cagrilir: dosyalar diske yazildi ama uygulama ici kayitlar (OfflinePacks,
+     * adres/POI indeksleri) ilk okundugu halde kalir, teyp yeniden baslatilana kadar yerler ve rota
+     * sonuclari bos gorunur. Burada yeniden kaydedip diskte ne oldugunu ozetler.
+     */
+    fun refreshAfterRestore(context: Context): String {
+        // PoiPackStore is a Hilt class; the registration itself is core, so hand the installed
+        // pack files straight to OfflinePacks (same call PoiPackStore.registerPacks makes).
+        runCatching {
+            val packs = File(context.filesDir, "poipacks").listFiles { f -> f.extension == "db" }
+                ?.map { it.absolutePath }.orEmpty()
+            app.vela.core.data.OfflinePacks.reload(packs)
+        }.onFailure { app.vela.util.FileLogger.w("LauncherBackup", "poi pack re-register failed", it) }
+        val lines = scanDeviceCategories(context)
+            .filter { it.category.isFileCategory }
+            .map { "${categoryLabel(it.category)}: ${it.fileCount} dosya, ${formatFileSize(it.totalBytes)}" }
+        val glyphs = if (app.vela.offline.GlyphPackStore.installed(context)) "var" else "yok"
+        return ("glif paketi: " + glyphs + "\n" + lines.joinToString("\n")).trim()
+    }
+
+    private fun categoryLabel(category: BackupCategory): String = when (category) {
+        BackupCategory.MAPS -> "Haritalar"
+        BackupCategory.PLACES -> "Yerler / POI"
+        BackupCategory.ROUTES -> "Geziler"
+        BackupCategory.ROUTING_DATA -> "Rota motoru"
+        else -> category.id
     }
 
     // Geriye donuk tek dosya API (Gerekirse)

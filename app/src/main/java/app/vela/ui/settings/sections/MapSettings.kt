@@ -27,13 +27,62 @@ internal fun MapSettingsScreen(onBack: () -> Unit) {
     SettingsScaffold(stringResource(R.string.settings_map), onBack) { topRow ->
         Spacer(Modifier.height(4.dp))
         SettingsGroup {
+            Text(stringResource(R.string.settings_map_render_profile),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
+            listOf(
+                app.vela.ui.MapRenderProfile.AUTO to R.string.settings_map_render_auto,
+                app.vela.ui.MapRenderProfile.STANDARD to R.string.settings_map_render_standard,
+                app.vela.ui.MapRenderProfile.LIGHT to R.string.settings_map_render_light,
+                app.vela.ui.MapRenderProfile.CUSTOM to R.string.settings_map_render_custom,
+            ).forEach { (id, label) ->
+                SelectableRow(label = stringResource(label),
+                    selected = app.vela.ui.MapRenderProfile.selected.value == id,
+                    onClick = { app.vela.ui.MapRenderProfile.set(context, id) },
+                    modifier = if (id == app.vela.ui.MapRenderProfile.STANDARD) topRow else Modifier)
+            }
+            Hint(stringResource(R.string.settings_map_render_profile_hint))
+            if (app.vela.ui.MapRenderProfile.selected.value == app.vela.ui.MapRenderProfile.AUTO) {
+                val limited = app.vela.ui.MemoryPressure.lowEnd || app.vela.ui.MapRenderProfile.slowRendering.value
+                Hint(stringResource(if (limited) R.string.settings_map_auto_light else R.string.settings_map_auto_standard))
+                Hint(stringResource(R.string.settings_map_auto_details,
+                    app.vela.ui.MemoryPressure.heapClassMb,
+                    app.vela.ui.MemoryPressure.glEsVersion.toString(16)))
+            }
+            GroupDivider()
+            if (app.vela.ui.MapRenderProfile.selected.value != app.vela.ui.MapRenderProfile.AUTO) ToggleRow(label = stringResource(R.string.settings_map_auto_budget),
+                checked = app.vela.ui.MapRenderProfile.autoDeviceBudget.value,
+                onCheckedChange = { app.vela.ui.MapRenderProfile.setAutoDeviceBudget(context, it) },
+                hint = stringResource(R.string.settings_map_auto_budget_hint))
+        }
+        Spacer(Modifier.height(16.dp))
+        if (app.vela.ui.MapRenderProfile.selected.value == app.vela.ui.MapRenderProfile.CUSTOM) {
+            SettingsGroup(title = stringResource(R.string.settings_map_custom_controls)) {
+                Text(stringResource(R.string.settings_map_custom_fps, app.vela.ui.MapRenderProfile.customMaxFps.intValue),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
+                androidx.compose.material3.Slider(
+                    value = app.vela.ui.MapRenderProfile.customMaxFps.intValue.toFloat(),
+                    valueRange = 15f..60f,
+                    steps = 8,
+                    onValueChange = { app.vela.ui.MapRenderProfile.setMaxFps(context, it.toInt()) },
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                Hint(stringResource(R.string.settings_map_custom_fps_hint))
+                GroupDivider()
+                ToggleRow(label = stringResource(R.string.settings_map_custom_tilt),
+                    checked = app.vela.ui.MapRenderProfile.customTilt.value,
+                    onCheckedChange = { app.vela.ui.MapRenderProfile.setTilt(context, it) },
+                    hint = stringResource(R.string.settings_map_custom_tilt_hint))
+                Hint(stringResource(R.string.settings_map_custom_layers_hint))
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+        SettingsGroup {
         ToggleRow(
             label = stringResource(R.string.settings_live_traffic),
             checked = app.vela.ui.Traffic.on.value,
             onCheckedChange = { app.vela.ui.Traffic.set(context, it) },
             hint = stringResource(R.string.settings_live_traffic_hint),
-            // The top focusable control: Back routes its DOWN here, UP from here goes back to Back.
-            switchModifier = topRow,
         )
         GroupDivider()
         ToggleRow(

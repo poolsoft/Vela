@@ -34,7 +34,7 @@ object VoiceSearch {
 
     fun init(context: Context) {
         enabled.value = prefs(context).getBoolean(KEY, true)
-        engine.value = readEngine(prefs(context).getString(ENGINE_KEY, null))
+        engine.value = if (app.vela.BuildConfig.NATIVE_VOICE_ENABLED) readEngine(prefs(context).getString(ENGINE_KEY, null)) else Engine.SYSTEM
         // Legacy migration: an old explicit LOCAL pin (pre-picker) hid the mic entirely when the
         // model was later deleted, even with voice apps installed. AUTO behaves identically while
         // the model exists and degrades gracefully without it.
@@ -48,8 +48,9 @@ object VoiceSearch {
     }
 
     fun setEngine(context: Context, value: Engine) {
-        engine.value = value
-        prefs(context).edit().putString(ENGINE_KEY, value.name).apply()
+        val selected = if (app.vela.BuildConfig.NATIVE_VOICE_ENABLED) value else Engine.SYSTEM
+        engine.value = selected
+        prefs(context).edit().putString(ENGINE_KEY, selected.name).apply()
     }
 
     /** An installed tier-2 voice-input app: display label + the exact activity Vela launches. */
@@ -139,7 +140,7 @@ object VoiceSearch {
     }.getOrDefault(false)
 
     /** Is Vela's own on-device model downloaded (tier-1)? File-existence check, no model load. */
-    fun localReady(context: Context): Boolean = AsrEngine.anyInstalled(context)
+    fun localReady(context: Context): Boolean = app.vela.BuildConfig.NATIVE_VOICE_ENABLED && AsrEngine.anyInstalled(context)
 
     /** Resolve what the mic should do right now. NONE → hide the mic. */
     fun resolvedMode(context: Context): Mode {

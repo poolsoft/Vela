@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="car_clock_customize">Saat özelleştirme</string>
+    <string name="car_clock_settings_hint">Küçük player saati: renkler, büyüklük, aralıklar ve canlı önizleme</string>
+    <string name="car_clock_preview">CANLI ÖNİZLEME</string>
+    <string name="car_clock_live_hint">Değişiklikler anında uygulanır ve otomatik kaydedilir.</string>
+    <string name="car_clock_custom_colors">Özel renkler</string>
+    <string name="car_clock_outline_color">Kontur</string>
+    <string name="car_clock_hue">Renk tonu</string>
+    <string name="car_clock_saturation">Doygunluk</string>
+    <string name="car_clock_brightness">Parlaklık</string>
+    <string name="car_clock_size">Saat büyüklüğü</string>
+    <string name="car_clock_fit_hint">Paneli ve menü düğmesini aşmadan ölçeklenir.</string>
+    <string name="car_clock_spacing">Rakam aralığı</string>
+    <string name="car_clock_colon_spacing">İki nokta aralığı</string>
+    <string name="car_clock_outline_width">Kontur kalınlığı</string>
+    <string name="car_clock_opacity">Dolgu opaklığı</string>
+    <string name="car_clock_font">Yazı tipi</string>
+    <string name="car_clock_font_boxed">Fütüristik</string>
+    <string name="car_clock_font_rounded">Yuvarlak</string>
+    <string name="car_clock_font_classic">Klasik</string>
+    <string name="car_clock_font_condensed">Kondans (Spor)</string>
+    <string name="car_clock_show_colon">İki noktayı göster (:)</string>
+    <string name="car_clock_show_date">Tarihi göster</string>
+    <string name="car_clock_format">Saat biçimi</string>
+    <string name="car_clock_format_system">Sistem</string>
+    <string name="car_clock_format_24">24 saat</string>
+    <string name="car_clock_format_12">12 saat</string>
+    <string name="car_clock_seconds">Saniyeleri göster</string>
+    <string name="car_clock_reset">Saat görünümünü sıfırla</string>
+    <string name="car_clock_back">Geri</string>
+    <string name="car_clock_tab_appearance">Görünüm</string>
+    <string name="car_clock_tab_colors">Renkler</string>
+    <string name="car_clock_tab_time">Saat biçimi</string>
+</resources>

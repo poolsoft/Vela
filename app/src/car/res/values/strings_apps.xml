@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="car_app_add_dock">Add to dock</string>
+    <string name="car_app_info">App info</string>
+    <string name="car_app_uninstall">Uninstall</string>
+    <string name="car_app_dock_split">Add to dock · split-screen request</string>
+    <string name="car_app_dock_freeform">Add to dock · floating window</string>
+    <string name="car_app_mode_full">Open normally</string>
+    <string name="car_app_mode_split">Request split screen</string>
+    <string name="car_app_mode_freeform">Open in floating window</string>
+    <string name="car_app_mode_saved">Dock shortcut and opening preference saved</string>
+    <string name="car_app_freeform_unavailable">This device does not report floating-window support. Choose normal opening from the dock menu.</string>
+</resources>

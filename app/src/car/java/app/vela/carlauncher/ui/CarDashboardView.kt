@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -99,6 +100,9 @@ fun CarDashboardView(
             }
 
             // ORTA KISIM: BUYUK NEON / SPOR KADRAN
+            val neonBrush = remember {
+                Brush.sweepGradient(listOf(ClPrimary, ClNeonBlue, Color(0xFFFF5252)))
+            }
             Box(
                 modifier = Modifier.size(260.dp),
                 contentAlignment = Alignment.Center
@@ -119,9 +123,7 @@ fun CarDashboardView(
 
                     // Neon Hiz Yayi
                     drawArc(
-                        brush = Brush.sweepGradient(
-                            listOf(ClPrimary, ClNeonBlue, Color(0xFFFF5252))
-                        ),
+                        brush = neonBrush,
                         startAngle = 140f,
                         sweepAngle = sweepAngle,
                         useCenter = false,

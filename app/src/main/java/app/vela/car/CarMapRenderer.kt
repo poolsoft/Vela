@@ -21,11 +21,11 @@ import app.vela.core.model.Route
 import app.vela.core.model.bearingTo
 import app.vela.core.model.destinationPoint
 import app.vela.core.nav.NavSession
-import org.maplibre.android.MapLibre
-import org.maplibre.android.camera.CameraPosition
-import org.maplibre.android.geometry.LatLng as MLLatLng
-import org.maplibre.android.snapshotter.MapSnapshot
-import org.maplibre.android.snapshotter.MapSnapshotter
+import com.mapbox.mapboxsdk.Mapbox as MapLibre
+import com.mapbox.mapboxsdk.camera.CameraPosition
+import com.mapbox.mapboxsdk.geometry.LatLng as MLLatLng
+import com.mapbox.mapboxsdk.snapshotter.MapSnapshot
+import com.mapbox.mapboxsdk.snapshotter.MapSnapshotter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -344,7 +344,7 @@ class CarMapRenderer(
             requestRender()
             return
         }
-        runCatching { MapLibre.getInstance(carContext) }
+        runCatching { app.vela.offline.PmtilesMapBridge.install(); MapLibre.getInstance(carContext) }
         center = center ?: puck ?: locationProvider.lastKnown()
         // Reuse the existing snapshotter when the surface size is unchanged. A screen transition
         // (Main→Preview→ActiveNav) re-delivers onSurfaceAvailable at the SAME size; recreating the
@@ -356,25 +356,23 @@ class CarMapRenderer(
             return
         }
         runCatching { s?.cancel() }
-        // Same style resolution as the phone map: MapFonts' Roboto-patched Liberty when its
-        // cache is ready (read + handed over as JSON - the snapshotter has no file:// branch
-        // of its own), else the plain URL. Without this the car screen kept Noto after the
-        // phone flipped to Roboto.
+        // Always from disk: the cached Roboto patch, else the bundled Liberty asset - handed over
+        // as JSON text, because the snapshotter has no file:// branch of its own. withStyle(remote)
+        // neither loads nor fails fast without a signal (teyp, 2026-10-10).
         val effectiveStyle = app.vela.ui.map.MapFonts.effective(MapStyle.LIBERTY.uri)
-        val patchedJson = if (effectiveStyle.startsWith("file://")) {
-            runCatching { java.io.File(effectiveStyle.removePrefix("file://")).readText() }
-                .getOrNull()?.takeIf { it.isNotBlank() }
-        } else null
-        // The layer ids of the style being loaded, for the palette's blanket passes: the patched
-        // JSON when there is one, else the bundled Liberty asset (the same layer ids as the live
-        // style; it is the phone's offline fallback for the same reason).
+        val styleJson = runCatching {
+            if (effectiveStyle.startsWith("file://")) java.io.File(effectiveStyle.removePrefix("file://")).readText() else null
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: runCatching { carContext.assets.open("styles/liberty-roboto.json").bufferedReader().use { it.readText() } }.getOrNull()
+        app.vela.util.FileLogger.i("MapStyle", "car style-source=${app.vela.ui.map.MapFonts.sourceOf(effectiveStyle)}")
+        // The layer ids of the style being loaded, for the palette's blanket passes.
         styleLayerIds = runCatching {
-            val json = patchedJson ?: carContext.assets.open("styles/liberty-roboto.json").bufferedReader().use { it.readText() }
+            val json = styleJson ?: return@runCatching emptyList<String>()
             val layers = org.json.JSONObject(json).getJSONArray("layers")
             (0 until layers.length()).map { layers.getJSONObject(it).getString("id") }
         }.getOrDefault(emptyList())
         val opts = MapSnapshotter.Options(width, height)
-            .let { if (patchedJson != null) it.withStyleJson(patchedJson) else it.withStyle(MapStyle.LIBERTY.uri) }
+            .let { if (styleJson != null) it.withStyleJson(styleJson) else it.withStyle(MapStyle.LIBERTY.uri) }
             .withPixelRatio(1.0f)
             .withLogo(false)
         themed = false
