@@ -7,12 +7,8 @@ import app.vela.ui.map.MapRenderScene
 import kotlinx.serialization.json.encodeToStream
 import kotlinx.serialization.json.decodeFromStream
 import java.io.File
-import java.io.FileOutputStream
-import java.io.OutputStream
-import java.util.zip.CRC32
-import java.util.zip.Deflater
-import java.util.zip.DeflaterOutputStream
 import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
 /** Geometry travels via a descriptor, never a multi-megabyte Binder parcel. */
 internal object MapRendererTransport {
@@ -31,56 +27,24 @@ internal object MapRendererTransport {
     fun write(context: Context, scene: MapRenderScene): ParcelFileDescriptor {
         val file = File.createTempFile("map-scene-", ".gz", context.cacheDir)
         try {
-            // GZIPOutputStream does not expose the deflate level, and the level-6 default costs
-            // real CPU on low-end units where this runs per scene update. Same gzip framing the
-            // JDK uses (raw deflater + header + CRC32/ISIZE trailer) with BEST_SPEED compression.
-            val crc = CRC32()
-            var count = 0L
-            FileOutputStream(file).use { out ->
-                out.write(GZIP_HEADER)
-                val deflater = Deflater(Deflater.BEST_SPEED, true)
-                try {
-                    val deflated = DeflaterOutputStream(out, deflater, 512)
-                    val bounded = object : OutputStream() {
-                        override fun write(value: Int) {
-                            require(++count <= MAX_BYTES) { "scene exceeds limit" }
-                            crc.update(value)
-                            deflated.write(value)
-                        }
-                        override fun write(bytes: ByteArray, offset: Int, length: Int) {
-                            require(length <= MAX_BYTES - count) { "scene exceeds limit" }
-                            count += length
-                            crc.update(bytes, offset, length)
-                            deflated.write(bytes, offset, length)
-                        }
+            GZIPOutputStream(file.outputStream()).use { compressed ->
+                var count = 0
+                val bounded = object : java.io.OutputStream() {
+                    override fun write(value: Int) {
+                        require(++count <= MAX_BYTES) { "scene exceeds limit" }
+                        compressed.write(value)
                     }
-                    MapRenderJson.json.encodeToStream(scene, bounded)
-                    deflated.finish()
-                    deflated.flush()
-                    writeLe32(out, crc.value.toInt())
-                    writeLe32(out, (count and 0xFFFFFFFFL).toInt())
-                } finally {
-                    deflater.end()
+                    override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                        require(length <= MAX_BYTES - count) { "scene exceeds limit" }
+                        count += length
+                        compressed.write(bytes, offset, length)
+                    }
                 }
+                MapRenderJson.json.encodeToStream(scene, bounded)
             }
             return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
         } finally { file.delete() }
     }
-
-    /** Little-endian gzip CRC32/ISIZE field, as GZIPInputStream expects. */
-    private fun writeLe32(out: OutputStream, value: Int) {
-        out.write(value and 0xFF)
-        out.write((value ushr 8) and 0xFF)
-        out.write((value ushr 16) and 0xFF)
-        out.write((value ushr 24) and 0xFF)
-    }
-
-    /** 1f 8b 08 00 00000000 04 ff: deflate stream with no optional fields. */
-    private val GZIP_HEADER = byteArrayOf(
-        0x1f.toByte(), 0x8b.toByte(), 0x08.toByte(), 0x00.toByte(),
-        0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(),
-        0x04.toByte(), 0xff.toByte()
-    )
 
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     fun read(fd: ParcelFileDescriptor): MapRenderScene =
