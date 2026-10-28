@@ -209,6 +209,7 @@ jobs:
           name: vela-maps-apk
           path: release-apks/*.apk
           if-no-files-found: error
+          retention-days: 30
 
       - name: Publish diagnostic APKs
         if: env.DIAGNOSTIC_APK == 'true'

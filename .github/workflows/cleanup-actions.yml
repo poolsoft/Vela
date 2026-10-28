@@ -1,0 +1,59 @@
+name: Cleanup Old Actions and Artifacts
+
+on:
+  schedule:
+    # Her pazar gece saat 03:00 UTC'de calisir
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      min_keep:
+        description: 'Asgari korunacak son kayit sayisi'
+        required: true
+        default: '3'
+        type: string
+      days_limit:
+        description: 'Kac gunden eski kayitlar temizlensin'
+        required: true
+        default: '7'
+        type: string
+      dry_run:
+        description: 'Gercekten silmeden sadece listele (Test modu)'
+        type: boolean
+        default: false
+  workflow_run:
+    workflows: ["Build APK"]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run smart cleanup
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          MIN_KEEP="${{ inputs.min_keep || '3' }}"
+          DAYS_LIMIT="${{ inputs.days_limit || '7' }}"
+          DRY_RUN_FLAG=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            DRY_RUN_FLAG="--dry-run"
+          fi
+          
+          python3 tools/cleanup_github_actions.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --min-keep "$MIN_KEEP" \
+            --days "$DAYS_LIMIT" \
+            $DRY_RUN_FLAG
