@@ -194,18 +194,6 @@ object CarIntegration {
         // Mapless mode replaces the whole map composition, so no renderer or EGL surface starts.
         val mapless by CarLauncherSettings.maplessMode.collectAsState()
         val context = androidx.compose.ui.platform.LocalContext.current
-        var testsOpen by remember { androidx.compose.runtime.mutableStateOf(false) }
-        val homeRequest by CarLauncherSettings.homeScreenRequest.collectAsState()
-        androidx.compose.runtime.LaunchedEffect(homeRequest) { testsOpen = false }
-        if (testsOpen) {
-            app.vela.carlauncher.diag.DiagnosticTestScreen(
-                onClose = { testsOpen = false },
-                onSettings = onOpenSettings,
-                setMapLevel = { mapRenderLevel.intValue = it },
-                mapContent = content,
-            )
-            return
-        }
         val failureHost = remember { app.vela.carlauncher.map.MapRendererFailureHost() }
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
         val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -219,7 +207,7 @@ object CarIntegration {
             voiceAudioLevel = voiceAudioLevel,
             haritaIcerigi = {
                 if (mapless) {
-                    app.vela.carlauncher.ui.CarMaplessContent(onOpenSettings, onDiagnostics = { testsOpen = true })
+                    app.vela.carlauncher.ui.CarMaplessContent(onOpenSettings)
                 } else {
                     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
                         androidx.compose.runtime.CompositionLocalProvider(

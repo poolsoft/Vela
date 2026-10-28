@@ -7,20 +7,16 @@ on:
         description: 'Yayinlama Kanali'
         type: choice
         required: true
-        default: 'stable'
+        default: 'canary'
         options:
-          - stable
           - canary
+          - stable
       force:
         description: 'Ayni kodda olsa bile yeniden derle'
         type: boolean
         default: false
-      diagnostic:
-        description: 'Debuggable diagnostic APK uret'
-        type: boolean
-        default: false
   push:
-    branches: [ main, canary, codex/maplibre-10.3.7 ]
+    branches: [ main, canary ]
     paths:
       - 'app/**'
       - 'core/**'
@@ -37,7 +33,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      DIAGNOSTIC_APK: ${{ inputs.diagnostic == true || github.ref == 'refs/heads/codex/maplibre-10.3.7' }}
+      DIAGNOSTIC_APK: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,7 +93,7 @@ jobs:
         id: ver
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            CH="${{ github.event.inputs.channel || 'stable' }}"
+            CH="${{ github.event.inputs.channel || 'canary' }}"
           else
             CH="canary"
           fi
@@ -106,9 +102,6 @@ jobs:
             echo "name=0.4.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           else
             echo "name=0.4.${{ github.run_number }}-canary" >> "$GITHUB_OUTPUT"
-          fi
-          if [ "${{ env.DIAGNOSTIC_APK }}" = "true" ]; then
-            echo "name=0.4.${{ github.run_number }}-diagnostic" >> "$GITHUB_OUTPUT"
           fi
           # Local head-unit diagnostics reached 2101; keep CI upgrades above those APKs.
           echo "code=$(( 2100 + ${{ github.run_number }} ))" >> "$GITHUB_OUTPUT"
@@ -164,9 +157,7 @@ jobs:
             [ -f "$apk" ] || continue
             bname=$(basename "$apk" .apk)
             arch=$(echo "$bname" | sed -e 's/app-car-//' -e 's/-release//')
-            if [ "${{ env.DIAGNOSTIC_APK }}" = "true" ]; then
-              prefix="vela-maps-diagnostic"
-            elif [ "$CH" = "canary" ]; then
+            if [ "$CH" = "canary" ]; then
               prefix="vela-maps-canary"
             else
               prefix="vela-maps-v${VER}"
@@ -180,14 +171,6 @@ jobs:
           echo "Hazirlanan APK dosyalari:"
           ls -lh release-apks/
 
-      - name: Verify diagnostic APK flag
-        if: env.DIAGNOSTIC_APK == 'true'
-        run: |
-          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
-          test -n "$AAPT"
-          for apk in release-apks/*.apk; do
-            "$AAPT" dump badging "$apk" | grep -q '^application-debuggable'
-          done
 
       - name: Verify packaged launcher task and PiP policy
         run: |
@@ -211,24 +194,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish diagnostic APKs
-        if: env.DIAGNOSTIC_APK == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DIAGNOSTIC_VERSION: ${{ steps.ver.outputs.name }}
-          DIAGNOSTIC_CODE: ${{ steps.ver.outputs.code }}
-        run: |
-          TAG="diagnostic-${{ github.run_number }}"
-          printf 'versionName: %s\nversionCode: %s\n\nRelease imzali, debugger acik tani APK. Harita hatasinda muzik/gosterge duzenine gecis, yerel harita onceligi ve renderer oturumunu koruma duzeltmeleri dahildir. Sesli komut ve TTS acilista otomatik baslatilmaz. Logcat uygulamanin erisim yetkisiyle logs klasorune kaydedilir.\n' "$DIAGNOSTIC_VERSION" "$DIAGNOSTIC_CODE" > "$RUNNER_TEMP/diagnostic-notes.md"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --latest=false \
-              --title "Vela $DIAGNOSTIC_VERSION (Tani)" \
-              --notes-file "$RUNNER_TEMP/diagnostic-notes.md"
-          fi
-          gh release upload "$TAG" release-apks/*.apk --clobber
 
       - name: Publish Canary build (rolling release)
-        if: env.DIAGNOSTIC_APK != 'true' && steps.ver.outputs.channel == 'canary' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary')
+        if: steps.ver.outputs.channel == 'canary' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -248,7 +216,7 @@ jobs:
             release-apks/*.apk
 
       - name: Publish Stable Release
-        if: env.DIAGNOSTIC_APK != 'true' && steps.ver.outputs.channel == 'stable'
+        if: steps.ver.outputs.channel == 'stable'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

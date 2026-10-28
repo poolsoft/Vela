@@ -357,6 +357,12 @@ class CarMusicPlayerHost(
             }
         }
 
+        scope.launch {
+            app.vela.carlauncher.settings.CarLauncherSettings.maplessMode.collect { isMapless ->
+                btnClose?.visibility = if (isMapless) View.GONE else View.VISIBLE
+            }
+        }
+
         btnClose?.setOnClickListener {
             onCloseClick()
         }

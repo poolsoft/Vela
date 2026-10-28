@@ -17,7 +17,8 @@ import app.vela.carlauncher.widgets.FuturisticSpeedometerView
  */
 class CarDashboardHost(
     private val context: Context,
-    private val onCloseClick: () -> Unit
+    private val isMapless: Boolean = false,
+    private val onCloseClick: () -> Unit = {}
 ) {
 
     val rootView: View = LayoutInflater.from(context).inflate(R.layout.activity_neon_dashboard, null, false)
@@ -26,8 +27,12 @@ class CarDashboardHost(
     private val futuristicSpeed: FuturisticSpeedometerView? = rootView.findViewById(R.id.futuristic_speed)
 
     init {
-        btnClose?.setOnClickListener {
-            onCloseClick()
+        if (isMapless) {
+            btnClose?.visibility = View.GONE
+        } else {
+            btnClose?.setOnClickListener {
+                onCloseClick()
+            }
         }
     }
 

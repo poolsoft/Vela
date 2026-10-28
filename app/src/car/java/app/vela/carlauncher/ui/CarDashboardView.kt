@@ -52,7 +52,7 @@ private val ClNeonBlue = Color(0xFF00E5FF)
 @Composable
 fun CarDashboardView(
     telemetri: HizTelemetrisi,
-    onKapat: () -> Unit,
+    onKapat: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val animatedHiz by animateFloatAsState(targetValue = telemetri.anlikHizKmh.toFloat())
@@ -82,20 +82,22 @@ fun CarDashboardView(
                     letterSpacing = 1.sp
                 )
 
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x33FFFFFF))
-                        .clickable(onClick = onKapat),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Kapat",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
+                if (onKapat != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x33FFFFFF))
+                            .clickable(onClick = onKapat),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Kapat",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
