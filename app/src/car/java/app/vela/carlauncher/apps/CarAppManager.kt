@@ -44,12 +44,12 @@ class CarAppManager private constructor(private val context: Context) {
     data class AppSnapshot(val generation: Int, val items: List<AracUygulamasi>)
     private val _apps = MutableStateFlow<AppSnapshot?>(null)
     val apps: StateFlow<AppSnapshot?> = _apps.asStateFlow()
-    private val icons = object : LruCache<String, Drawable>(4 * 1024 * 1024) {
+    private val icons = object : LruCache<String, Drawable>(32 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Drawable): Int =
             (value as? BitmapDrawable)?.bitmap?.allocationByteCount?.coerceAtLeast(1) ?: 4096
     }
     private val iconLoads = HashMap<String, Deferred<Drawable?>>()
-    private val iconPermits = kotlinx.coroutines.sync.Semaphore(2)
+    private val iconPermits = kotlinx.coroutines.sync.Semaphore(8)
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) { invalidate() }
     }
@@ -63,7 +63,11 @@ class CarAppManager private constructor(private val context: Context) {
             }
             override fun onLowMemory() { icons.evictAll() }
             override fun onTrimMemory(level: Int) {
-                if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) icons.evictAll()
+                if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE) {
+                    icons.evictAll()
+                } else if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE) {
+                    icons.trimToSize(icons.maxSize() / 2)
+                }
             }
         })
         val packages = IntentFilter().apply {
@@ -83,6 +87,18 @@ class CarAppManager private constructor(private val context: Context) {
                 val loaded = scanApps()
                 ensureActive()
                 _apps.value = AppSnapshot(generation, loaded)
+                prewarmIcons(loaded)
+            }
+        }
+    }
+
+    private fun prewarmIcons(apps: List<AracUygulamasi>) {
+        scope.launch(Dispatchers.IO) {
+            for (app in apps) {
+                ensureActive()
+                if (icons.get(app.paketAdi) == null && !InternalApp.isInternalUri(app.paketAdi)) {
+                    loadIcon(app.paketAdi)
+                }
             }
         }
     }
