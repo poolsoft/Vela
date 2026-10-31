@@ -12,7 +12,7 @@ internal data class SmallClockAppearance(
     val secondary: Int = 0xFFD8CDE4.toInt(),
     val dual: Boolean = true,
     val embossed: Boolean = false,
-    val scale: Float = 0.28f,
+    val scale: Float = 0.88f,
     val spacing: Float = -0.16f,
     val colonSpacing: Float = 0.06f,
     val outline: Float = 1.15f,
@@ -25,10 +25,11 @@ internal data class SmallClockAppearance(
     val showDate: Boolean = false,
 ) {
     fun normalized() = copy(palette = palette.coerceIn(0, 8),
-        scale = (if (scale.isFinite()) scale else 0.28f).let { s ->
-            // Migration: Eski surumde scale 0.6f..1.5f (1.0f = %28) araligindaydi.
-            if (s > 0.5f) (s * 0.28f).coerceIn(0.15f, 0.50f)
-            else s.coerceIn(0.15f, 0.50f)
+        scale = (if (scale.isFinite()) scale else 0.88f).let { s ->
+            // Migration: Eger eski surumlerden kucuk scale (0.15f..0.50f) geldiyse %88'e uyarla
+            if (s in 0.15f..0.50f) (s / 0.28f * 0.88f).coerceIn(0.20f, 0.98f)
+            else if (s > 0.98f) 0.98f
+            else s.coerceIn(0.20f, 0.98f)
         },
         spacing = (if (spacing.isFinite()) spacing else -0.16f).coerceIn(-0.26f, 0.12f),
         colonSpacing = (if (colonSpacing.isFinite()) colonSpacing else 0.06f).coerceIn(0f, 0.2f),
@@ -113,7 +114,7 @@ internal data class SmallClockAppearance(
             val mode = p.getInt("clock_color", 6)
             return SmallClockAppearance(mode, p.getInt("clock_custom_primary", 0xFFB8DDD4.toInt()),
                 p.getInt("clock_custom_secondary", 0xFFD8CDE4.toInt()), p.getBoolean("clock_two_colors", mode in setOf(6, 7, 8)),
-                p.getBoolean("clock_embossed", false), p.getFloat("clock_scale", 0.28f),
+                p.getBoolean("clock_embossed", false), p.getFloat("clock_scale", 0.88f),
                 p.getFloat("clock_spacing", -0.16f), p.getFloat("clock_colon_spacing", 0.06f),
                 p.getFloat("clock_outline", 1.15f), p.getInt("clock_outline_color", Color.WHITE),
                 p.getInt("clock_opacity", 100), p.getInt("clock_font", 0),

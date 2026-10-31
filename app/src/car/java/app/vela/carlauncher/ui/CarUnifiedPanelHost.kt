@@ -253,8 +253,10 @@ class CarUnifiedPanelHost(
         val density = context.resources.displayMetrics.density
         val w = width / density
         val h = height / density
-        val clockHeight = (h * clockStyle.scale).coerceIn(24f, h * 0.48f)
-        val targetPx = clockHeight * density * 0.90f
+        val targetWidth = width * clockStyle.scale
+        val calculatedPx = clockView?.calculateTextSizeForWidth(targetWidth) ?: (width * 0.35f)
+        val maxAllowedPx = h * density * 0.45f
+        val targetPx = minOf(calculatedPx, maxAllowedPx)
         clockView?.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, targetPx)
         clockView?.let {
             if (it.layoutParams.height != android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {

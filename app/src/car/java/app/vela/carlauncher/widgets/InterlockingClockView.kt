@@ -159,7 +159,7 @@ class InterlockingClockView @JvmOverloads constructor(
 
         // Measure the actual clock glyphs, including overlap, before fitting the panel.
         if (fitTextToBounds) {
-            val inset = resources.displayMetrics.density * 3f
+            val inset = resources.displayMetrics.density * 1f
             val availableWidth = (width - paddingLeft - paddingRight - inset * 2).coerceAtLeast(1f)
             val widthScale = availableWidth / contentWidth.coerceAtLeast(1f)
             val heightScale = if (layoutParams != null && layoutParams.height > 0) {
@@ -247,5 +247,26 @@ class InterlockingClockView @JvmOverloads constructor(
 
     private fun spacingAfter(value: CharSequence, index: Int, overlap: Float, colonGap: Float): Float {
         return if (value[index] == ':' || value[index + 1] == ':') colonGap else -overlap
+    }
+    fun calculateTextSizeForWidth(targetWidth: Float, textValue: String? = null): Float {
+        val value = textValue ?: text?.toString().takeUnless { it.isNullOrEmpty() } ?: "00:00"
+        val p = paint
+        val refSize = 100f
+        val oldSize = p.textSize
+        p.textSize = refSize
+        val overlap = -refSize * digitSpacingEm
+        val colonGap = refSize * colonSpacingEm
+        var w = 0f
+        for (i in 0 until value.length) {
+            val isColon = value[i] == ':'
+            p.textSize = if (isColon) refSize * COLON_SCALE else refSize
+            w += p.measureText(value, i, i + 1)
+            if (i < value.length - 1) {
+                w += spacingAfter(value, i, overlap, colonGap)
+            }
+        }
+        p.textSize = oldSize
+        if (w <= 0f) return oldSize
+        return (targetWidth / w) * refSize
     }
 }

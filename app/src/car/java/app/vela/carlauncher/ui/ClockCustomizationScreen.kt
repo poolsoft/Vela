@@ -57,7 +57,7 @@ internal fun ClockCustomizationScreen(onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 when (section) {
                     0 -> {
-                        ClockSlider(stringResource(R.string.car_clock_size), style.scale * 100, 15f..50f,
+                        ClockSlider(stringResource(R.string.car_clock_size), style.scale * 100, 20f..98f,
                             (style.scale * 100).roundToInt().toString() + "%") { change(style.copy(scale = it / 100f)) }
                         Text(stringResource(R.string.car_clock_fit_hint), style = MaterialTheme.typography.bodySmall)
                         ClockSlider(stringResource(R.string.car_clock_spacing), style.spacing * 100, -26f..12f,
