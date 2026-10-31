@@ -161,15 +161,20 @@ class InterlockingClockView @JvmOverloads constructor(
         if (fitTextToBounds) {
             val inset = resources.displayMetrics.density * 3f
             val availableWidth = (width - paddingLeft - paddingRight - inset * 2).coerceAtLeast(1f)
-            val availableHeight = (height - paddingTop - paddingBottom - inset * 2).coerceAtLeast(1f)
-            val glyphHeight = p.fontMetrics.let { it.bottom - it.top }
-            val scale = minOf(1f, availableWidth / contentWidth.coerceAtLeast(1f),
-                availableHeight / glyphHeight.coerceAtLeast(1f))
-            baseTextSize *= scale
-            overlap *= scale
-            colonGap *= scale
-            contentWidth *= scale
-            p.textSize = baseTextSize
+            val widthScale = availableWidth / contentWidth.coerceAtLeast(1f)
+            val heightScale = if (layoutParams != null && layoutParams.height > 0) {
+                val availableHeight = (height - paddingTop - paddingBottom - inset * 2).coerceAtLeast(1f)
+                val glyphHeight = p.fontMetrics.let { it.bottom - it.top }
+                availableHeight / glyphHeight.coerceAtLeast(1f)
+            } else 1f
+            val scale = minOf(1f, widthScale, heightScale)
+            if (scale < 1f) {
+                baseTextSize *= scale
+                overlap *= scale
+                colonGap *= scale
+                contentWidth *= scale
+                p.textSize = baseTextSize
+            }
         }
         val metrics = p.fontMetrics
         var x = paddingLeft + (width - paddingLeft - paddingRight - contentWidth).coerceAtLeast(0f) / 2f

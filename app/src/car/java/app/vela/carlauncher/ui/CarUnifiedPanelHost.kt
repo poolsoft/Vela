@@ -253,13 +253,12 @@ class CarUnifiedPanelHost(
         val density = context.resources.displayMetrics.density
         val w = width / density
         val h = height / density
-        val clockHeight = ((h * 0.28f).coerceIn(36f, 100f) * clockStyle.scale).coerceAtMost(h * 0.45f)
-        val targetPx = clockHeight * density * 0.94f
+        val clockHeight = (h * clockStyle.scale).coerceIn(24f, h * 0.48f)
+        val targetPx = clockHeight * density * 0.90f
         clockView?.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, targetPx)
-        val targetH = (clockHeight * density).toInt()
         clockView?.let {
-            if (it.layoutParams.height != targetH) {
-                it.layoutParams = it.layoutParams.apply { this.height = targetH }
+            if (it.layoutParams.height != android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {
+                it.layoutParams = it.layoutParams.apply { this.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT }
                 it.requestLayout()
                 musicArea?.requestLayout()
             }
