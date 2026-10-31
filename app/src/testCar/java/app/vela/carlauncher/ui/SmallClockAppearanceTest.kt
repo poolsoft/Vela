@@ -7,7 +7,7 @@ class SmallClockAppearanceTest {
     @Test fun defaultsPreserveTheExistingClockGeometry() {
         val style = SmallClockAppearance().normalized()
         assertEquals(6, style.palette)
-        assertEquals(1f, style.scale, 0f)
+        assertEquals(0.88f, style.scale, 0f)
         assertEquals(-0.16f, style.spacing, 0f)
         assertEquals(0.06f, style.colonSpacing, 0f)
         assertEquals(1.15f, style.outline, 0f)
@@ -19,7 +19,7 @@ class SmallClockAppearanceTest {
         val style = SmallClockAppearance(palette = 99, scale = 5f, spacing = -2f,
             colonSpacing = 4f, outline = 10f, opacity = -5, font = 22, format = "unknown").normalized()
         assertEquals(8, style.palette)
-        assertEquals(1.5f, style.scale, 0f)
+        assertEquals(0.98f, style.scale, 0f)
         assertEquals(-0.26f, style.spacing, 0f)
         assertEquals(0.2f, style.colonSpacing, 0f)
         assertEquals(3f, style.outline, 0f)
