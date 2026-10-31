@@ -25,7 +25,10 @@ class PiperCatalogTest {
         // Every id yields a well-formed vits-piper archive URL.
         for (v in PiperCatalog.ALL) {
             val url = PiperCatalog.downloadUrl(v.id)
-            assertTrue(url.startsWith("https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-"))
+            assertTrue(
+                url.startsWith("https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-") ||
+                url.startsWith("https://github.com/poolsoft/Vela/releases/download/tts-models/vits-piper-")
+            )
             assertTrue(url.endsWith("${v.id}.tar.bz2"))
         }
     }

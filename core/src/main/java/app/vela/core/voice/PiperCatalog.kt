@@ -43,9 +43,12 @@ data class PiperVoice(
  */
 object PiperCatalog {
     private const val BASE = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/"
+    private const val BASE_POOLSOFT = "https://github.com/poolsoft/Vela/releases/download/tts-models/"
 
     /** Download URL derived purely from the id, matches the sherpa asset naming scheme. */
-    fun downloadUrl(id: String): String = "${BASE}vits-piper-$id.tar.bz2"
+    fun downloadUrl(id: String): String =
+        if (id == "tr_TR-ilkiz-medium") "${BASE_POOLSOFT}vits-piper-$id.tar.bz2"
+        else "${BASE}vits-piper-$id.tar.bz2"
 
     /** Endonym (the language named in its own language, like Google/Apple) for a [langCode]. */
     fun languageLabel(langCode: String): String = LANGUAGE_LABELS[langCode] ?: langCode.uppercase()
@@ -122,9 +125,10 @@ object PiperCatalog {
         // No Japanese Piper voice exists; ja spoken guidance uses the system-TTS fallback.)
         PiperVoice("zh_CN-huayan-medium", "Huayan", VoiceGender.FEMALE, VoiceQuality.MEDIUM, 64, 1, "清晰自然的普通话女声", recommended = true),
         // ── Türkçe ──
-        PiperVoice("tr_TR-dfki-medium", "DFKI", VoiceGender.FEMALE, VoiceQuality.MEDIUM, 67, 1, "Berrak ve akıcı Türkçe kadın sesi", recommended = true),
-        PiperVoice("tr_TR-fahrettin-medium", "Fahrettin", VoiceGender.MALE, VoiceQuality.MEDIUM, 67, 1, "Doğal Türkçe erkek sesi"),
-        PiperVoice("tr_TR-fettah-medium", "Fettah", VoiceGender.MALE, VoiceQuality.MEDIUM, 67, 1, "Tok ve net Türkçe erkek sesi"),
+        PiperVoice("tr_TR-ilkiz-medium", "İlkiz", VoiceGender.FEMALE, VoiceQuality.MEDIUM, 64, 1, "Berrak ve akıcı Türkçe kadın sesi", recommended = true),
+        PiperVoice("tr_TR-dfki-medium", "DFKI", VoiceGender.MALE, VoiceQuality.MEDIUM, 67, 1, "Doğal Türkçe erkek sesi"),
+        PiperVoice("tr_TR-fahrettin-medium", "Fahrettin", VoiceGender.MALE, VoiceQuality.MEDIUM, 67, 1, "Tok ve net Türkçe erkek sesi"),
+        PiperVoice("tr_TR-fettah-medium", "Fettah", VoiceGender.MALE, VoiceQuality.MEDIUM, 67, 1, "Net Türkçe erkek sesi"),
     )
 
     fun byId(id: String): PiperVoice? = ALL.firstOrNull { it.id == id }
