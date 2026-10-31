@@ -873,6 +873,7 @@
     <string name="settings_asr_langs_whisper">Every language Vela supports</string>
     <string name="settings_asr_langs_sensevoice">English, Chinese, Japanese, Korean, Cantonese</string>
     <string name="settings_asr_langs_moonshine">English only</string>
+    <string name="settings_asr_langs_seda">Turkish only</string>
     <string name="settings_asr_active">Active</string>
     <string name="settings_asr_use">Use</string>
     <string name="settings_voice_search_engine_title">When you tap the mic</string>

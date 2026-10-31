@@ -17,6 +17,7 @@ import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineMoonshineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineSenseVoiceModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTransducerModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig
@@ -206,6 +207,7 @@ class AsrRecognizer @Inject constructor(
             AsrEngine.WHISPER_TINY -> l.takeIf { it in app.vela.ui.AppLocale.SUPPORTED } ?: ""
             AsrEngine.SENSE_VOICE -> l.takeIf { it in AsrEngine.SENSE_VOICE_LANGS } ?: "auto"
             AsrEngine.MOONSHINE -> ""
+            AsrEngine.SEDA_TINY, AsrEngine.SEDA -> "tr"
         }
     }
 
@@ -308,6 +310,16 @@ class AsrRecognizer @Inject constructor(
                         encoder = p("encode.int8.onnx"),
                         uncachedDecoder = p("uncached_decode.int8.onnx"),
                         cachedDecoder = p("cached_decode.int8.onnx"),
+                    ),
+                    tokens = p("tokens.txt"),
+                    numThreads = 2,
+                    modelType = engine.modelType,
+                )
+                AsrEngine.SEDA_TINY, AsrEngine.SEDA -> OfflineModelConfig(
+                    transducer = OfflineTransducerModelConfig(
+                        encoder = p("encoder.int8.onnx"),
+                        decoder = p("decoder.onnx"),
+                        joiner = p("joiner.int8.onnx"),
                     ),
                     tokens = p("tokens.txt"),
                     numThreads = 2,

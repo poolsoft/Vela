@@ -73,6 +73,24 @@ enum class AsrEngine(
             "cached_decode.int8.onnx", "tokens.txt", VAD_FILE,
         ),
     ),
+    SEDA_TINY(
+        id = "seda-tiny",
+        displayName = "Seda (Hafif)",
+        modelType = "transducer",
+        sizeMb = 9,
+        url = "$ASR_BASE_POOLSOFT/vela-asr-seda-tiny.tar.gz",
+        fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-seda-tiny.tar.gz",
+        files = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt", VAD_FILE),
+    ),
+    SEDA(
+        id = "seda",
+        displayName = "Seda (Kusursuz)",
+        modelType = "transducer",
+        sizeMb = 58,
+        url = "$ASR_BASE_POOLSOFT/vela-asr-seda.tar.gz",
+        fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-seda.tar.gz",
+        files = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt", VAD_FILE),
+    ),
     ;
 
     /** `filesDir/asr/<id>/` - the extracted archive's single top-level folder. */
@@ -92,6 +110,7 @@ enum class AsrEngine(
         WHISPER_TINY -> true
         SENSE_VOICE -> lang in SENSE_VOICE_LANGS
         MOONSHINE -> lang == "en"
+        SEDA_TINY, SEDA -> lang == "tr"
     }
 
     companion object {
@@ -135,6 +154,10 @@ enum class AsrEngine(
         fun forRecognition(context: Context, lang: String): AsrEngine {
             val picked = active(context)
             if (picked.supportsLanguage(lang)) return picked
+            if (lang == "tr") {
+                if (SEDA.isInstalled(context)) return SEDA
+                if (SEDA_TINY.isInstalled(context)) return SEDA_TINY
+            }
             return WHISPER_TINY.takeIf { it.isInstalled(context) } ?: picked
         }
     }

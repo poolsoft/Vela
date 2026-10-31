@@ -776,6 +776,7 @@
     <string name="settings_asr_langs_whisper">Vela\'nın desteklediği tüm diller</string>
     <string name="settings_asr_langs_sensevoice">İngilizce, Çince, Japonca, Korece, Kantonca</string>
     <string name="settings_asr_langs_moonshine">Yalnızca İngilizce</string>
+    <string name="settings_asr_langs_seda">Yalnızca Türkçe</string>
     <string name="settings_asr_active">Etkin</string>
     <string name="settings_asr_use">Kullan</string>
     <string name="settings_voice_search_engine_title">Mikrofona dokunulduğunda</string>
