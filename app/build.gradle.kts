@@ -37,7 +37,7 @@ android {
         buildConfigField("boolean", "DIAGNOSTIC_BUILD", (providers.gradleProperty("diagnosticApk").orNull == "true").toString())
         buildConfigField("boolean", "DIAGNOSTIC_MUSIC_DISABLED", "false")
         // Temporary head-unit safety: no in-process sherpa-onnx ASR, Piper or wake-word JNI.
-        buildConfigField("boolean", "NATIVE_VOICE_ENABLED", "false")
+        buildConfigField("boolean", "NATIVE_VOICE_ENABLED", "true")
         buildConfigField("boolean", "NATIVE_TTS_ENABLED", "true")
         targetSdk = 35
         // Overridable from CI: -PappVersionCode / -PappVersionName (ci.yml derives

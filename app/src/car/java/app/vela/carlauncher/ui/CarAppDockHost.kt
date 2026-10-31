@@ -147,15 +147,22 @@ class CarAppDockHost(
         val density = context.resources.displayMetrics.density
         val cross = if (isVertical) width else height
         val size = dockShortcutSize(cross, density, isVertical)
+        val iconPadding = (size * 0.16f).toInt().coerceIn((4 * density).toInt(), (10 * density).toInt())
         for (button in listOf(btnAppList, btnDesktopMode, rootView.findViewById<ImageButton>(R.id.btn_assistant))) {
             button ?: continue
-            val buttonHeight = if (isVertical) (40 * density).toInt() else size
+            val buttonHeight = size
             if (button.layoutParams.width != size || button.layoutParams.height != buttonHeight)
                 button.layoutParams = button.layoutParams.apply { this.width = size; this.height = buttonHeight }
-            if (isVertical) {
-                val padding = (8 * density).toInt()
-                button.setPadding(padding, padding, padding, padding)
+            button.setPadding(iconPadding, iconPadding, iconPadding, iconPadding)
+        }
+        val dockClock = rootView.findViewById<android.widget.TextClock>(R.id.dock_clock)
+        if (dockClock != null) {
+            val clockSp = if (isVertical) {
+                ((cross / density) * 0.28f).coerceIn(18f, 28f)
+            } else {
+                ((cross / density) * 0.32f).coerceIn(16f, 24f)
             }
+            dockClock.textSize = clockSp
         }
         shortcutAdapter.setItemSize(size)
         fitShortcutRows()
