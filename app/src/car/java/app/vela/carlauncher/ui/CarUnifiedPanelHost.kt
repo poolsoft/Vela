@@ -253,17 +253,12 @@ class CarUnifiedPanelHost(
         val density = context.resources.displayMetrics.density
         val w = width / density
         val h = height / density
-        val targetWidth = width * clockStyle.scale
-        val calculatedPx = clockView?.calculateTextSizeForWidth(targetWidth) ?: (width * 0.35f)
-        val maxAllowedPx = h * density * 0.45f
-        val targetPx = minOf(calculatedPx, maxAllowedPx)
-        clockView?.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, targetPx)
+        clockView?.targetWidthRatio = clockStyle.scale
         clockView?.let {
             if (it.layoutParams.height != android.view.ViewGroup.LayoutParams.WRAP_CONTENT) {
                 it.layoutParams = it.layoutParams.apply { this.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT }
-                it.requestLayout()
-                musicArea?.requestLayout()
             }
+            it.requestLayout()
         }
         val size = minOf((w - 48) / 3f, h * 0.25f).coerceIn(40f, 64f)
         listOf(btnPrev, btnPlay, btnNext).forEach { button ->

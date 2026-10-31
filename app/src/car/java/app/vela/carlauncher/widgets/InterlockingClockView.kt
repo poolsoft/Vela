@@ -39,6 +39,15 @@ class InterlockingClockView @JvmOverloads constructor(
         set(value) { field = value; invalidate() }
     var fitTextToBounds: Boolean = false
         set(value) { field = value; invalidate() }
+    var targetWidthRatio: Float = 0f
+        set(value) {
+            val clamped = if (value.isFinite()) value.coerceIn(0f, 1f) else 0f
+            if (field != clamped) {
+                field = clamped
+                requestLayout()
+                invalidate()
+            }
+        }
 
     var digitSpacingEm: Float = -OVERLAP_EM
         set(value) { field = value.coerceIn(-0.26f, 0.12f); invalidate() }
@@ -87,12 +96,24 @@ class InterlockingClockView @JvmOverloads constructor(
 
         val value = text
         val p = paint
+        val density = resources.displayMetrics.density
+
+        // Kucuk panel enine gore otomatik boyutlandirma (tek pass ve sifir gecikme)
+        if (targetWidthRatio > 0f && widthSize > 0) {
+            val availableW = (widthSize - paddingLeft - paddingRight).coerceAtLeast(1)
+            val targetW = availableW * targetWidthRatio
+            val autoSize = calculateTextSizeForWidth(targetW, value?.toString())
+            if (autoSize > 0f && kotlin.math.abs(p.textSize - autoSize) > 0.5f) {
+                p.textSize = autoSize
+            }
+        }
+
         val metrics = p.fontMetrics
         val textH = (metrics.bottom - metrics.top).coerceAtLeast(1f)
-        val density = resources.displayMetrics.density
+        val outlineExtra = density * outlineWidthDp * 3f
         val minH = (36f * density).toInt()
 
-        val desiredHeight = (textH + paddingTop + paddingBottom + density * 4f).toInt().coerceAtLeast(minH)
+        val desiredHeight = (textH + paddingTop + paddingBottom + outlineExtra + density * 4f).toInt().coerceAtLeast(minH)
         val measuredHeight = when (heightMode) {
             MeasureSpec.EXACTLY -> heightSize
             MeasureSpec.AT_MOST -> minOf(desiredHeight, heightSize)
@@ -157,16 +178,16 @@ class InterlockingClockView @JvmOverloads constructor(
         }
         p.textSize = baseTextSize
 
+        val outlineWidth = (resources.displayMetrics.density * outlineWidthDp).coerceAtLeast(0.5f)
+
         // Measure the actual clock glyphs, including overlap, before fitting the panel.
         if (fitTextToBounds) {
             val inset = resources.displayMetrics.density * 1f
             val availableWidth = (width - paddingLeft - paddingRight - inset * 2).coerceAtLeast(1f)
             val widthScale = availableWidth / contentWidth.coerceAtLeast(1f)
-            val heightScale = if (layoutParams != null && layoutParams.height > 0) {
-                val availableHeight = (height - paddingTop - paddingBottom - inset * 2).coerceAtLeast(1f)
-                val glyphHeight = p.fontMetrics.let { it.bottom - it.top }
-                availableHeight / glyphHeight.coerceAtLeast(1f)
-            } else 1f
+            val availableHeight = (height - paddingTop - paddingBottom - outlineWidth * 2.5f).coerceAtLeast(1f)
+            val glyphHeight = (p.fontMetrics.let { it.bottom - it.top }).coerceAtLeast(1f)
+            val heightScale = if (glyphHeight > 0f && height > 0) availableHeight / glyphHeight else 1f
             val scale = minOf(1f, widthScale, heightScale)
             if (scale < 1f) {
                 baseTextSize *= scale
@@ -178,13 +199,16 @@ class InterlockingClockView @JvmOverloads constructor(
         }
         val metrics = p.fontMetrics
         var x = paddingLeft + (width - paddingLeft - paddingRight - contentWidth).coerceAtLeast(0f) / 2f
-        val baseline = paddingTop + (height - paddingTop - paddingBottom - metrics.bottom - metrics.top) / 2f
+        var baseline = paddingTop + (height - paddingTop - paddingBottom - metrics.bottom - metrics.top) / 2f
+        val minBaseline = paddingTop - metrics.top + (outlineWidth * 1.5f)
+        if (baseline < minBaseline) {
+            baseline = minBaseline
+        }
 
         val oldStyle = p.style
         val oldColor = p.color
         val oldStrokeWidth = p.strokeWidth
         val oldXfermode = p.xfermode
-        val outlineWidth = (resources.displayMetrics.density * outlineWidthDp).coerceAtLeast(0.5f)
         val layer = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
 
         for (i in 0 until value.length) {

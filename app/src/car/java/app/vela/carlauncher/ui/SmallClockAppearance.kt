@@ -73,6 +73,7 @@ internal data class SmallClockAppearance(
         view.setTextColor(outlineColor)
         view.clockFont = font
         view.fitTextToBounds = true
+        view.targetWidthRatio = scale
     }
 
     fun save(prefs: SharedPreferences) {
