@@ -27,6 +27,7 @@ internal object BackupPreferences {
         "map_screen_position" to "String", "map_horizontal_bias" to "Float",
         "parking_lat" to "String", "parking_lng" to "String", "parking_at" to "Long",
         "parking_history" to "String", "voice_model" to "String", "asr_engine" to "String",
+        "voice_speed" to "Float", "voice_volume" to "Float",
         "avoid_tolls" to "Boolean", "avoid_highways" to "Boolean", "avoid_ferries" to "Boolean",
         "wake_word_enabled" to "Boolean", "wake_word_silent_mode" to "Boolean", "wake_word_phrase" to "String",
     )
@@ -82,6 +83,7 @@ internal object BackupPreferences {
                 "Boolean" -> require(value is Boolean)
                 "Long" -> require(value is Number && value.toLong() >= 0 && value.toDouble() == value.toLong().toDouble())
                 "Int" -> require(value is Number && value.toInt() in 0..100 && value.toDouble() == value.toInt().toDouble())
+                "Float" -> require(value is Number && value.toDouble().isFinite())
             }
             when (key) {
                 "parking_lat" -> require((value as String).toDouble() in -90.0..90.0)

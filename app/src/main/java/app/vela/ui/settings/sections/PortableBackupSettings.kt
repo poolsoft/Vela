@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -87,23 +88,26 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
     // ==========================================
     if (showExportDialog) {
         val allExportSelected = exportCategories.isNotEmpty() && selectedExportCategories.size == exportCategories.size
+        val config = LocalConfiguration.current
+        val maxDialogHeight = (config.screenHeightDp * 0.88f).dp
+        val maxDialogWidth = minOf(640.dp, (config.screenWidthDp * 0.94f).dp)
         Dialog(
             onDismissRequest = { showExportDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
                 modifier = Modifier
-                    .widthIn(max = 640.dp)
-                    .fillMaxWidth(0.92f)
-                    .fillMaxHeight(0.92f)
-                    .padding(8.dp),
+                    .width(maxDialogWidth)
+                    .heightIn(max = maxDialogHeight)
+                    .padding(4.dp),
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 6.dp
             ) {
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .heightIn(max = maxDialogHeight)
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     Row(
@@ -116,7 +120,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f, fill = false),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -140,7 +144,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f)
+                            .weight(1f, fill = false)
                     ) {
                         items(exportCategories, key = { it.category.name }) { stat ->
                             val isChecked = stat.category in selectedExportCategories
@@ -172,7 +176,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                                     }
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(modifier = Modifier.weight(1f, fill = false)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             text = stringResource(stat.category.titleRes),
@@ -238,23 +242,26 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
     // ==========================================
     if (status.review) {
         val allRestoreSelected = status.availableRestoreCategories.isNotEmpty() && selectedRestoreCategories.size == status.availableRestoreCategories.size
+        val config = LocalConfiguration.current
+        val maxDialogHeight = (config.screenHeightDp * 0.88f).dp
+        val maxDialogWidth = minOf(640.dp, (config.screenWidthDp * 0.94f).dp)
         Dialog(
             onDismissRequest = PortableBackup::dismissReview,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
                 modifier = Modifier
-                    .widthIn(max = 640.dp)
-                    .fillMaxWidth(0.92f)
-                    .fillMaxHeight(0.92f)
-                    .padding(8.dp),
+                    .width(maxDialogWidth)
+                    .heightIn(max = maxDialogHeight)
+                    .padding(4.dp),
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 6.dp
             ) {
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .heightIn(max = maxDialogHeight)
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     Row(
@@ -262,7 +269,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
                             Text(
                                 text = stringResource(R.string.car_backup_restore_title),
                                 style = MaterialTheme.typography.titleMedium,
@@ -299,7 +306,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f)
+                            .weight(1f, fill = false)
                     ) {
                         items(status.availableRestoreCategories, key = { it.category.name }) { stat ->
                             val isChecked = stat.category in selectedRestoreCategories
@@ -329,7 +336,7 @@ internal fun PortableBackupSettings(onBack: () -> Unit) {
                                     }
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(modifier = Modifier.weight(1f, fill = false)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             text = stringResource(stat.category.titleRes),

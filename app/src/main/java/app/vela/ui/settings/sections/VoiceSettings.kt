@@ -1,5 +1,15 @@
 package app.vela.ui.settings.sections
 
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.RadioButton
+import androidx.compose.runtime.LaunchedEffect
+import app.vela.ui.dpadClickable
+import app.vela.ui.rememberDpadFocusKeeper
+import app.vela.ui.DpadFocusHandoff
+import app.vela.ui.dpadFocusKept
+import androidx.compose.foundation.shape.RoundedCornerShape as DpadShape
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -432,44 +442,89 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
                             style = MaterialTheme.typography.titleSmall,
                         )
                         Spacer(Modifier.height(4.dp))
-                        val isAsrInstalled = state.asrInstalledIds.isNotEmpty()
-                        val isAsrDownloading = state.asrDownloadingId != null
-                        if (isAsrInstalled) {
-                            Text(
-                                stringResource(R.string.settings_voice_asr_installed, app.vela.voice.AsrEngine.DEFAULT.sizeMb),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        } else if (isAsrDownloading) {
-                            val pct = state.asrDownloadPct ?: 0f
-                            if (state.asrInstalling) {
-                                Text(stringResource(R.string.settings_voice_search_installing), style = MaterialTheme.typography.bodyMedium)
-                                Spacer(Modifier.height(6.dp))
-                                app.vela.ui.VelaProgressBar(null)
-                            } else {
-                                Text(
-                                    stringResource(R.string.settings_voice_search_downloading, (pct * 100).toInt()),
-                                    style = MaterialTheme.typography.bodyMedium,
+                        val anyAsrBusy = state.asrDownloadingId != null
+                        SettingsGroup {
+                            app.vela.voice.AsrEngine.entries.forEachIndexed { engineIdx, engine ->
+                                if (engineIdx > 0) GroupDivider()
+                                val installed = engine.id in state.asrInstalledIds
+                                val active = engine.id == state.asrActiveId && installed
+                                val thisDownloading = state.asrDownloadingId == engine.id
+                                val langs = stringResource(
+                                    when (engine) {
+                                        app.vela.voice.AsrEngine.WHISPER_TINY -> R.string.settings_asr_langs_whisper
+                                        app.vela.voice.AsrEngine.SENSE_VOICE -> R.string.settings_asr_langs_sensevoice
+                                        app.vela.voice.AsrEngine.MOONSHINE -> R.string.settings_asr_langs_moonshine
+                                        app.vela.voice.AsrEngine.SEDA_TINY,
+                                        app.vela.voice.AsrEngine.SEDA -> R.string.settings_asr_langs_seda
+                                    },
                                 )
-                                Spacer(Modifier.height(6.dp))
-                                app.vela.ui.VelaProgressBar(pct)
-                                androidx.compose.material3.TextButton(
-                                    onClick = { vm.cancelAsrDownload() },
-                                ) {
-                                    Text(stringResource(R.string.settings_cancel))
+                                val meta = stringResource(R.string.settings_asr_engine_meta, langs, engine.sizeMb)
+                                val keeper = rememberDpadFocusKeeper()
+                                when {
+                                    thisDownloading -> {
+                                        val pct = state.asrDownloadPct ?: 0f
+                                        val queued = state.asrDownloadPct == null
+                                        DpadFocusHandoff(keeper)
+                                        Column(Modifier.fillMaxWidth().dpadFocusKept(keeper).dpadHighlight(DpadShape(6.dp)).focusable().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                            Text(engine.displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                                            Text(
+                                                when {
+                                                    queued -> stringResource(R.string.map_asr_waiting)
+                                                    state.asrInstalling -> stringResource(R.string.settings_voice_search_installing)
+                                                    else -> stringResource(R.string.settings_voice_search_downloading, (pct * 100).toInt())
+                                                },
+                                                style = MaterialTheme.typography.bodyMedium,
+                                            )
+                                            Spacer(Modifier.height(6.dp))
+                                            app.vela.ui.VelaProgressBar(if (queued || state.asrInstalling) null else pct)
+                                            if (!state.asrInstalling) {
+                                                androidx.compose.material3.TextButton(
+                                                    onClick = { vm.cancelAsrDownload() },
+                                                    modifier = Modifier.dpadHighlight(androidx.compose.foundation.shape.CircleShape),
+                                                ) { Text(stringResource(R.string.settings_cancel)) }
+                                            }
+                                        }
+                                    }
+                                    installed -> {
+                                        DpadFocusHandoff(keeper)
+                                        Row(
+                                            Modifier.fillMaxWidth().dpadHighlight(DpadShape(6.dp)).dpadClickable(enabled = !active) { vm.selectAsrEngine(engine) }.dpadFocusKept(keeper).padding(horizontal = 16.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            RadioButton(selected = active, onClick = null)
+                                            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                                                Text(engine.displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                                                Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            Text(
+                                                stringResource(if (active) R.string.settings_asr_active else R.string.settings_asr_use),
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+                                        Row(
+                                            Modifier.fillMaxWidth().dpadHighlight(DpadShape(6.dp)).dpadClickable { vm.deleteAsrEngine(engine) }.padding(start = 56.dp, end = 16.dp, top = 2.dp, bottom = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(stringResource(R.string.settings_voice_search_remove), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                                        }
+                                    }
+                                    else -> {
+                                        DpadFocusHandoff(keeper)
+                                        Row(
+                                            Modifier.fillMaxWidth().dpadHighlight(DpadShape(6.dp)).dpadClickable(enabled = !anyAsrBusy) { vm.downloadAsrEngine(engine) }.dpadFocusKept(keeper).padding(horizontal = 16.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(engine.displayName, style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                                                Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            Text(stringResource(R.string.settings_voice_search_download, engine.sizeMb), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                        }
+                                    }
                                 }
-                            }
-                        } else {
-                            Text(
-                                stringResource(R.string.settings_voice_asr_not_installed),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            FilledTonalButton(
-                                onClick = { vm.downloadAsrModel() },
-                                modifier = Modifier.dpadHighlight(androidx.compose.material3.ButtonDefaults.filledTonalShape),
-                            ) {
-                                Text(stringResource(R.string.settings_voice_asr_download, app.vela.voice.AsrEngine.DEFAULT.sizeMb))
+                                LaunchedEffect(thisDownloading, installed, active) { keeper.retarget() }
+                                Spacer(Modifier.height(4.dp))
                             }
                         }
                         Spacer(Modifier.height(10.dp))

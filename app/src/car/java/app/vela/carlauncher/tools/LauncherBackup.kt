@@ -40,7 +40,8 @@ object LauncherBackup {
         DOCK("dock", R.string.car_backup_cat_dock, R.string.car_backup_cat_dock_desc, false),
         WIDGETS("widgets", R.string.car_backup_cat_widgets, R.string.car_backup_cat_widgets_desc, false),
         MUSIC("music", R.string.car_backup_cat_music, R.string.car_backup_cat_music_desc, false),
-        TOOLS("tools", R.string.car_backup_cat_tools, R.string.car_backup_cat_tools_desc, false);
+        TOOLS("tools", R.string.car_backup_cat_tools, R.string.car_backup_cat_tools_desc, false),
+        VOICE("voice", R.string.settings_voice, R.string.car_backup_cat_voice_desc, true);
 
         companion object {
             fun fromId(id: String): BackupCategory? = values().firstOrNull { it.id == id }
@@ -82,7 +83,7 @@ object LauncherBackup {
             "clock_two_colors" to "Boolean", "clock_embossed" to "Boolean", "clock_scale" to "Float",
             "clock_spacing" to "Float", "clock_colon_spacing" to "Float", "clock_outline" to "Float",
             "clock_outline_color" to "Int", "clock_opacity" to "Int", "clock_font" to "Int",
-            "clock_format" to "String", "clock_seconds" to "Boolean", "visualizer" to "Boolean", "clock_show_colon" to "Boolean", "clock_show_date" to "Boolean"
+            "clock_format" to "String", "clock_seconds" to "Boolean", "visualizer" to "Boolean", "clock_show_colon" to "Boolean", "clock_show_date" to "Boolean", "clock_width_percent" to "Float"
         ),
         "vela_car_launcher_prefs" to mapOf(
             "car_launcher_enabled" to "Boolean", "car_launcher_immersive_mode" to "Boolean",
@@ -139,6 +140,11 @@ object LauncherBackup {
         BackupCategory.PLACES -> listOf(
             File(context.filesDir, "places"),
             File(context.filesDir, "poipacks")
+        )
+        BackupCategory.VOICE -> listOf(
+            File(context.filesDir, "piper"),
+            File(context.filesDir, "asr"),
+            File(context.filesDir, "kws")
         )
         else -> emptyList()
     }
