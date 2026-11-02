@@ -1124,4 +1124,11 @@
     <string name="settings_map_auto_light">Light: limited memory/GLES2 or sustained slow rendering. 30 FPS, flat camera, 3D buildings and terrain shading disabled.</string>
     <string name="settings_map_auto_standard">Standard: device capacity allows normal rendering. Sustained slow rendering switches to Light for this session.</string>
     <string name="settings_map_auto_details">Device heap: %1$d MB; GLES: 0x%2$s. Your custom FPS, tilt and layer preferences remain saved.</string>
+    <string name="settings_asr_test_title">Test Speech Recognition (Mic)</string>
+    <string name="settings_asr_test_desc">Speak into the microphone to see live how the active model hears and transcribes your voice.</string>
+    <string name="settings_asr_test_start">🎤 Test Speech</string>
+    <string name="settings_asr_test_stop">■ Stop Listening</string>
+    <string name="settings_asr_test_listening">Listening, please speak...</string>
+    <string name="settings_asr_test_heard">Recognized Transcript:</string>
+    <string name="settings_voice_wake_multi_hint">You can separate phonetic variations or alternatives with commas (e.g. Hey Car, Hey Kar, Eikar).</string>
 </resources>

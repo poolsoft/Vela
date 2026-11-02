@@ -128,11 +128,27 @@ class VoiceWakeController @Inject constructor(
         startListening()
     }
 
+    fun getWakePhrases(): List<String> {
+        val raw = getWakePhrase()
+        return raw.split(',', ';', '\n')
+            .map { it.trim().lowercase() }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
     private fun writeKeywordsFile(phrase: String): File {
         val dir = File(context.filesDir, "kws").apply { mkdirs() }
         val file = File(dir, "keywords.txt")
-        // Keywords format for sherpa-onnx: phrase with score threshold
-        file.writeText("${phrase.lowercase()} : 1.0\n")
+        val lines = phrase.split(',', ';', '\n')
+            .map { it.trim().lowercase() }
+            .filter { it.isNotBlank() }
+            .distinct()
+        val content = if (lines.isEmpty()) {
+            "${DEFAULT_WAKE_PHRASE.lowercase()} : 1.0\n"
+        } else {
+            lines.joinToString("\n") { "$it : 1.0" } + "\n"
+        }
+        file.writeText(content)
         return file
     }
 

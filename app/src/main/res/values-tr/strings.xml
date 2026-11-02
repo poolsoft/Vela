@@ -1035,4 +1035,11 @@
         <item quantity="one">%1$d sonuç</item>
         <item quantity="other">%1$d sonuç</item>
     </plurals>
+    <string name="settings_asr_test_title">Ses Tanımayı Test Et (Mikrofon)</string>
+    <string name="settings_asr_test_desc">Mikrofona konuşarak seçili modelin sesinizi nasıl algıladığını ve yazıya döktüğünü canlı görün.</string>
+    <string name="settings_asr_test_start">🎤 Konuşmayı Test Et</string>
+    <string name="settings_asr_test_stop">■ Dinlemeyi Durdur</string>
+    <string name="settings_asr_test_listening">Dinleniyor, lütfen konuşun...</string>
+    <string name="settings_asr_test_heard">Duyulan / Algılanan Metin:</string>
+    <string name="settings_voice_wake_multi_hint">Farklı telaffuzlar veya alternatifler için virgülle ayırabilirsiniz (örn: Hey Car, Hey Kar, Eikar).</string>
 </resources>

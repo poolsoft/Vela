@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +56,7 @@ import app.vela.ui.dpadFieldEscape // D-pad-only operation (docs/dpad.md)
 import app.vela.ui.dpadHighlight
 import app.vela.ui.dpadRowSibling
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Voice sub-screen: TTS engine list, the Piper voice library, and the advanced voice options. */
@@ -413,7 +415,7 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
                         )
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("hey vela", "vela", "merhaba vela").forEach { preset ->
+                            listOf("hey vela", "vela", "hey car", "merhaba vela").forEach { preset ->
                                 FilterChip(
                                     selected = customPhrase.trim().equals(preset, ignoreCase = true),
                                     onClick = {
@@ -434,6 +436,8 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
                                 Text(stringResource(R.string.settings_voice_wake_test_chime))
                             }
                         }
+                        Spacer(Modifier.height(4.dp))
+                        Hint(stringResource(R.string.settings_voice_wake_multi_hint))
                         Spacer(Modifier.height(4.dp))
                         Hint(stringResource(R.string.settings_voice_wake_conflict_note))
                         Spacer(Modifier.height(12.dp))
@@ -523,6 +527,100 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
                                 }
                                 LaunchedEffect(thisDownloading, installed, active) { keeper.retarget() }
                                 Spacer(Modifier.height(4.dp))
+                            }
+                        }
+                        // Live ASR test playground: see how the model transcribes user speech in real-time
+                        if (state.asrInstalledIds.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            var isTestingAsr by remember { mutableStateOf(false) }
+                            var testAsrResult by remember { mutableStateOf<String?>(null) }
+                            var testAudioLevel by remember { mutableStateOf(0f) }
+                            val testScope = rememberCoroutineScope()
+
+                            androidx.compose.material3.Surface(
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(
+                                        stringResource(R.string.settings_asr_test_title),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        stringResource(R.string.settings_asr_test_desc),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        FilledTonalButton(
+                                            onClick = {
+                                                if (!isTestingAsr) {
+                                                    isTestingAsr = true
+                                                    testAsrResult = null
+                                                    testScope.launch {
+                                                        val res = vm.voiceListen(
+                                                            onLevel = { testAudioLevel = it },
+                                                            onListening = {},
+                                                            canceled = { !isTestingAsr },
+                                                        )
+                                                        isTestingAsr = false
+                                                        testAsrResult = when (res) {
+                                                            is app.vela.voice.VoiceResult.Text -> res.query
+                                                            app.vela.voice.VoiceResult.NoSpeech -> "—"
+                                                            is app.vela.voice.VoiceResult.Failed -> "Hata: ${res.reason}"
+                                                        }
+                                                    }
+                                                } else {
+                                                    isTestingAsr = false
+                                                }
+                                            },
+                                            modifier = Modifier.dpadHighlight(androidx.compose.material3.ButtonDefaults.filledTonalShape),
+                                        ) {
+                                            Text(
+                                                stringResource(
+                                                    if (isTestingAsr) R.string.settings_asr_test_stop
+                                                    else R.string.settings_asr_test_start
+                                                )
+                                            )
+                                        }
+                                        if (isTestingAsr) {
+                                            Text(
+                                                stringResource(R.string.settings_asr_test_listening),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+                                    }
+                                    testAsrResult?.let { res ->
+                                        Spacer(Modifier.height(8.dp))
+                                        androidx.compose.material3.Surface(
+                                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.surface,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Column(Modifier.padding(10.dp)) {
+                                                Text(
+                                                    stringResource(R.string.settings_asr_test_heard),
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                )
+                                                Spacer(Modifier.height(2.dp))
+                                                Text(
+                                                    res,
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                         Spacer(Modifier.height(10.dp))
