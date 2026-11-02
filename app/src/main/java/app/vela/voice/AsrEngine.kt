@@ -42,6 +42,8 @@ enum class AsrEngine(
     /** Every file that must be present + non-empty for the engine to count as installed. A missing
      *  file reads as not-installed, so a partial or aborted download self-heals (re-download). */
     val files: List<String>,
+    /** True if this is an online streaming model (e.g. Zipformer) requiring OnlineRecognizer. */
+    val isStreaming: Boolean = false,
 ) {
     WHISPER_TINY(
         id = "whisper-tiny",
@@ -51,6 +53,7 @@ enum class AsrEngine(
         url = "$ASR_BASE_POOLSOFT/vela-asr-whisper-tiny.tar.gz",
         fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-whisper-tiny.tar.gz",
         files = listOf("tiny-encoder.int8.onnx", "tiny-decoder.int8.onnx", "tiny-tokens.txt", VAD_FILE),
+        isStreaming = false,
     ),
     SENSE_VOICE(
         id = "sensevoice",
@@ -60,6 +63,7 @@ enum class AsrEngine(
         url = "$ASR_BASE_POOLSOFT/vela-asr-sensevoice.tar.gz",
         fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-sensevoice.tar.gz",
         files = listOf("model.int8.onnx", "tokens.txt", VAD_FILE),
+        isStreaming = false,
     ),
     MOONSHINE(
         id = "moonshine",
@@ -72,24 +76,27 @@ enum class AsrEngine(
             "preprocess.onnx", "encode.int8.onnx", "uncached_decode.int8.onnx",
             "cached_decode.int8.onnx", "tokens.txt", VAD_FILE,
         ),
+        isStreaming = false,
     ),
     SEDA_TINY(
         id = "seda-tiny",
         displayName = "Seda (Hafif)",
-        modelType = "transducer",
+        modelType = "zipformer2",
         sizeMb = 9,
         url = "$ASR_BASE_POOLSOFT/vela-asr-seda-tiny.tar.gz",
         fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-seda-tiny.tar.gz",
         files = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt", VAD_FILE),
+        isStreaming = true,
     ),
     SEDA(
         id = "seda",
         displayName = "Seda (Kusursuz)",
-        modelType = "transducer",
+        modelType = "zipformer2",
         sizeMb = 58,
         url = "$ASR_BASE_POOLSOFT/vela-asr-seda.tar.gz",
         fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-seda.tar.gz",
         files = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt", VAD_FILE),
+        isStreaming = true,
     ),
     ;
 
