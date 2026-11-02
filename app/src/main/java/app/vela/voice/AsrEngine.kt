@@ -19,7 +19,7 @@ private const val VAD_FILE = "silero_vad.onnx"
  *
  * Three engines, because they trade off differently and the user picks:
  *  - [WHISPER_TINY] - the multilingual default. 99-language Whisper tiny (int8); covers every
- *    language Vela's UI supports (incl. Hebrew, Russian, Spanish…). The safe all-rounder.
+ *    language Vela's UI supports (incl. Turkish, Hebrew, Russian, Spanish…). The safe all-rounder.
  *  - [SENSE_VOICE] - FunAudioLLM SenseVoice. More accurate + faster than Whisper tiny, but only for
  *    English, Chinese, Cantonese, Japanese, Korean. Great if you speak one of those.
  *  - [MOONSHINE] - Useful Sensors Moonshine tiny. Lowest latency, but ENGLISH ONLY.
@@ -42,8 +42,6 @@ enum class AsrEngine(
     /** Every file that must be present + non-empty for the engine to count as installed. A missing
      *  file reads as not-installed, so a partial or aborted download self-heals (re-download). */
     val files: List<String>,
-    /** True if this is an online streaming model (e.g. Zipformer) requiring OnlineRecognizer. */
-    val isStreaming: Boolean = false,
 ) {
     WHISPER_TINY(
         id = "whisper-tiny",
@@ -53,7 +51,6 @@ enum class AsrEngine(
         url = "$ASR_BASE_POOLSOFT/vela-asr-whisper-tiny.tar.gz",
         fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-whisper-tiny.tar.gz",
         files = listOf("tiny-encoder.int8.onnx", "tiny-decoder.int8.onnx", "tiny-tokens.txt", VAD_FILE),
-        isStreaming = false,
     ),
     SENSE_VOICE(
         id = "sensevoice",
@@ -63,7 +60,6 @@ enum class AsrEngine(
         url = "$ASR_BASE_POOLSOFT/vela-asr-sensevoice.tar.gz",
         fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-sensevoice.tar.gz",
         files = listOf("model.int8.onnx", "tokens.txt", VAD_FILE),
-        isStreaming = false,
     ),
     MOONSHINE(
         id = "moonshine",
@@ -76,27 +72,6 @@ enum class AsrEngine(
             "preprocess.onnx", "encode.int8.onnx", "uncached_decode.int8.onnx",
             "cached_decode.int8.onnx", "tokens.txt", VAD_FILE,
         ),
-        isStreaming = false,
-    ),
-    SEDA_TINY(
-        id = "seda-tiny",
-        displayName = "Seda (Hafif)",
-        modelType = "zipformer2",
-        sizeMb = 9,
-        url = "$ASR_BASE_POOLSOFT/vela-asr-seda-tiny.tar.gz",
-        fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-seda-tiny.tar.gz",
-        files = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt", VAD_FILE),
-        isStreaming = true,
-    ),
-    SEDA(
-        id = "seda",
-        displayName = "Seda (Kusursuz)",
-        modelType = "zipformer2",
-        sizeMb = 58,
-        url = "$ASR_BASE_POOLSOFT/vela-asr-seda.tar.gz",
-        fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-seda.tar.gz",
-        files = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.int8.onnx", "tokens.txt", VAD_FILE),
-        isStreaming = true,
     ),
     ;
 
@@ -111,13 +86,11 @@ enum class AsrEngine(
     }
 
     /** Whether this engine can actually recognize [lang] (an app language code, e.g. "en"/"he"/"ja").
-     *  Whisper covers everything; SenseVoice only en/zh/ja/ko/yue; Moonshine only English. Used to
-     *  fall back off a picked engine that can't do the current language. */
+     *  Whisper covers everything (including Turkish); SenseVoice only en/zh/ja/ko/yue; Moonshine only English. */
     fun supportsLanguage(lang: String): Boolean = when (this) {
         WHISPER_TINY -> true
         SENSE_VOICE -> lang in SENSE_VOICE_LANGS
         MOONSHINE -> lang == "en"
-        SEDA_TINY, SEDA -> lang == "tr"
     }
 
     companion object {
@@ -154,17 +127,11 @@ enum class AsrEngine(
 
         /** The engine to actually RUN for [lang]: the [active] pick if it supports the language, else
          *  Whisper (the multilingual default) when it's installed, so dictating in a language the
-         *  picked engine can't do (e.g. SenseVoice picked, Hebrew spoken) still works instead of
-         *  returning garbage. Falls back to the pick as a last resort if Whisper isn't installed.
-         *  Note: the Settings picker's "Active" still reflects the user's raw pick ([active]); this
-         *  only changes which model the recognizer loads for the current language. */
+         *  picked engine can't do (e.g. SenseVoice picked, Turkish or Hebrew spoken) still works instead of
+         *  returning garbage. Falls back to the pick as a last resort if Whisper isn't installed. */
         fun forRecognition(context: Context, lang: String): AsrEngine {
             val picked = active(context)
             if (picked.supportsLanguage(lang)) return picked
-            if (lang == "tr") {
-                if (SEDA.isInstalled(context)) return SEDA
-                if (SEDA_TINY.isInstalled(context)) return SEDA_TINY
-            }
             return WHISPER_TINY.takeIf { it.isInstalled(context) } ?: picked
         }
     }
