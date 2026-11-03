@@ -125,8 +125,8 @@ internal class IsolatedMapClient(
             if (connection == null || !active || surface == null) return
             val now = SystemClock.elapsedRealtime()
             when {
-                // A cold secondary process can take several seconds on low-end head units.
-                service == null && now - bindAt > 20_000 -> fail("bind timeout")
+                // A cold secondary process can take longer on low-end head units and emulators.
+                service == null && now - bindAt > 60_000 -> fail("bind timeout")
                 service != null && now - heartbeatAt > (if (mutableState.value.ready) 15_000 else 60_000) -> fail("renderer not responding: $terminalStage")
                 opened && !mutableState.value.ready && now - openAt > 60_000 -> fail("render timeout: $terminalStage")
                 else -> { send(MapRendererTransport.HEARTBEAT); handler.postDelayed(this, 5_000) }
