@@ -14,9 +14,9 @@ import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import app.vela.core.voice.VoiceGuide
 import com.k2fsa.sherpa.onnx.FeatureConfig
-import com.k2fsa.sherpa.onnx.KeywordSpotter
-import com.k2fsa.sherpa.onnx.KeywordSpotterConfig
 import com.k2fsa.sherpa.onnx.OnlineModelConfig
+import com.k2fsa.sherpa.onnx.OnlineRecognizer
+import com.k2fsa.sherpa.onnx.OnlineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OnlineStream
 import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,8 +44,11 @@ import kotlin.math.sin
  * and automatic TTS audio collision protection (pausing/discarding mic input while
  * VoiceGuide is speaking) to prevent false-triggers from speaker audio.
  *
- * Uses Sherpa-ONNX KeywordSpotter with dynamic Turkish BPE tokenization.
+ * Uses Sherpa-ONNX OnlineRecognizer with dynamic Turkish BPE tokenization and hotword boosting.
  * Operates independently from the active ASR engine (Whisper, SenseVoice, Mihuai).
+ *
+ * Not: Bu bilesen ozel egitilmis bir KWS modeli degil, Turkce ASR Transducer (Mihuai)
+ * modelini streaming ve hotwords destegiyle kisitli anahtar kelime tespiti icin kullanir.
  */
 @Singleton
 class VoiceWakeController @Inject constructor(
@@ -60,9 +64,9 @@ class VoiceWakeController @Inject constructor(
     private val isListening = AtomicBoolean(false)
     private var workerJob: Job? = null
 
-    // Spotter and stream lifecycle management
+    // Recognizer and stream lifecycle management
     private val spotterLock = Any()
-    @Volatile private var activeSpotter: KeywordSpotter? = null
+    @Volatile private var activeRecognizer: OnlineRecognizer? = null
     @Volatile private var activeStream: OnlineStream? = null
     @Volatile private var activeTokenizer: TurkishBpeTokenizer? = null
 
@@ -203,14 +207,17 @@ class VoiceWakeController @Inject constructor(
     }
 
     /**
-     * Updates keywords.txt with BPE tokenization and refreshes the spotter stream without reloading ONNX weights.
+     * Updates keywords.txt with BPE tokenization and refreshes the recognizer stream without reloading ONNX weights.
      */
     private fun updateKeywordsAndRefreshStream() {
         writeKeywordsFile(getWakePhrase())
         synchronized(spotterLock) {
-            val spotter = activeSpotter ?: return
-            activeStream?.release()
-            activeStream = runCatching { spotter.createStream() }.getOrNull()
+            val recognizer = activeRecognizer ?: return
+            activeStream?.let { runCatching { it.release() } }
+            val kwsDir = File(context.filesDir, "kws")
+            val keywordsFile = File(kwsDir, "keywords.txt")
+            val hotwords = if (keywordsFile.exists()) keywordsFile.readText() else ""
+            activeStream = runCatching { recognizer.createStream(hotwords) }.getOrNull()
         }
     }
 
@@ -237,7 +244,7 @@ class VoiceWakeController @Inject constructor(
                 lines.add(formatted)
             } else {
                 // Fallback: raw words with boost and threshold
-                lines.add("${p.lowercase()} : $boost # $threshold")
+                lines.add("${p.lowercase(Locale("tr", "TR"))} : $boost # $threshold")
             }
         }
 
@@ -245,9 +252,23 @@ class VoiceWakeController @Inject constructor(
         return file
     }
 
+    private fun normalizeText(text: String): String {
+        val trLocale = Locale("tr", "TR")
+        return text.lowercase(trLocale)
+            .replace('ı', 'i')
+            .replace('ğ', 'g')
+            .replace('ü', 'u')
+            .replace('ş', 's')
+            .replace('ö', 'o')
+            .replace('ç', 'c')
+            .replace(Regex("[^a-z0-9 ]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
     private fun ensureSpotter(): Boolean {
         synchronized(spotterLock) {
-            if (activeSpotter != null && activeStream != null) return true
+            if (activeRecognizer != null && activeStream != null) return true
 
             val modelFiles = findModelFiles() ?: return false
             val kwsDir = File(context.filesDir, "kws")
@@ -256,10 +277,12 @@ class VoiceWakeController @Inject constructor(
                 writeKeywordsFile(getWakePhrase())
             }
 
-            val spotter = runCatching {
-                KeywordSpotter(
-                    assetManager = null, // Mutlak dosya yollari (filesDir) icin null verilmelidir; aksi halde C++ assetManager bekler ve coker
-                    config = KeywordSpotterConfig(
+            val hotwordsContent = if (keywordsFile.exists()) keywordsFile.readText() else ""
+
+            val recognizer = runCatching {
+                OnlineRecognizer(
+                    assetManager = null,
+                    config = OnlineRecognizerConfig(
                         featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
                         modelConfig = OnlineModelConfig(
                             transducer = OnlineTransducerModelConfig(
@@ -271,23 +294,24 @@ class VoiceWakeController @Inject constructor(
                             modelType = modelFiles.modelType,
                             numThreads = 2,
                         ),
-                        keywordsFile = keywordsFile.absolutePath,
-                        keywordsScore = getWakeBoost(),
-                        keywordsThreshold = getWakeThreshold(),
-                        numTrailingBlanks = 1,
+                        enableEndpoint = true,
+                        decodingMethod = "modified_beam_search",
+                        maxActivePaths = 4,
+                        hotwordsFile = keywordsFile.absolutePath,
+                        hotwordsScore = getWakeBoost(),
                     ),
                 )
             }.onFailure {
-                android.util.Log.e("VoiceWake", "KeywordSpotter native init failed: ${it.message}", it)
+                android.util.Log.e("VoiceWake", "OnlineRecognizer native init failed: ${it.message}", it)
             }.getOrNull() ?: return false
 
-            val stream = runCatching { spotter.createStream() }.getOrNull()
+            val stream = runCatching { recognizer.createStream(hotwordsContent) }.getOrNull()
             if (stream == null) {
-                spotter.release()
+                recognizer.release()
                 return false
             }
 
-            activeSpotter = spotter
+            activeRecognizer = recognizer
             activeStream = stream
             return true
         }
@@ -296,9 +320,9 @@ class VoiceWakeController @Inject constructor(
     private fun releaseSpotter() {
         synchronized(spotterLock) {
             runCatching { activeStream?.release() }
-            runCatching { activeSpotter?.release() }
+            runCatching { activeRecognizer?.release() }
             activeStream = null
-            activeSpotter = null
+            activeRecognizer = null
         }
     }
 
@@ -356,21 +380,33 @@ class VoiceWakeController @Inject constructor(
                     continue
                 }
 
-                // 2. Feed audio into KeywordSpotter
+                // 2. Feed audio into OnlineRecognizer stream
                 var spotted = false
                 synchronized(spotterLock) {
-                    val spotter = activeSpotter
+                    val recognizer = activeRecognizer
                     val stream = activeStream
-                    if (spotter != null && stream != null) {
+                    if (recognizer != null && stream != null) {
                         val floats = FloatArray(read) { buf[it] / 32768f }
                         stream.acceptWaveform(floats, SAMPLE_RATE)
-                        while (spotter.isReady(stream)) {
-                            spotter.decode(stream)
+                        while (recognizer.isReady(stream)) {
+                            recognizer.decode(stream)
                         }
-                        val result = spotter.getResult(stream)
-                        if (result.keyword.isNotBlank()) {
-                            spotter.reset(stream)
-                            spotted = true
+
+                        val resultText = recognizer.getResult(stream).text
+                        if (resultText.isNotBlank()) {
+                            val normalizedResult = normalizeText(resultText)
+                            val targetPhrases = getWakePhrases().map { normalizeText(it) }
+
+                            for (target in targetPhrases) {
+                                if (target.isNotBlank() && normalizedResult.contains(target)) {
+                                    spotted = true
+                                    break
+                                }
+                            }
+
+                            if (spotted || recognizer.isEndpoint(stream)) {
+                                recognizer.reset(stream)
+                            }
                         }
                     }
                 }
@@ -448,16 +484,15 @@ class VoiceWakeController @Inject constructor(
         const val KEY_WAKE_THRESHOLD = "wake_word_threshold"
         const val KEY_WAKE_BOOST = "wake_word_boost"
 
-        const val DEFAULT_WAKE_ENABLED = false
-        const val DEFAULT_WAKE_PHRASE = "Hey Kar"
-        const val DEFAULT_WAKE_THRESHOLD = 0.45f
-        const val DEFAULT_WAKE_BOOST = 1.6f
-
         const val KWS_MODEL_URL = "https://github.com/poolsoft/Vela/releases/download/asr-models/vela-kws-turkish.tar.gz"
 
+        const val DEFAULT_WAKE_ENABLED = false
+        const val DEFAULT_WAKE_PHRASE = "Hey Kar, Hey Mola"
+        const val DEFAULT_WAKE_THRESHOLD = 0.35f
+        const val DEFAULT_WAKE_BOOST = 1.6f
+
         private const val SAMPLE_RATE = 16000
-        private const val CHUNK_SIZE = 512
-        // Cooldown after TTS stops talking before microphone listening resumes
-        private const val TTS_COOLDOWN_MS = 350L
+        private const val CHUNK_SIZE = 1600 // 100ms chunks
+        private const val TTS_COOLDOWN_MS = 650L
     }
 }
