@@ -871,6 +871,7 @@
     <string name="settings_asr_engines_hint">Speech becomes a search right on your phone: no other app needed and nothing is uploaded. Download one or more engines and pick which the mic uses.</string>
     <string name="settings_asr_engine_meta">%1$s · %2$d MB</string>  <!-- format: languages · size -->
     <string name="settings_asr_langs_whisper">Every language Vela supports</string>
+    <string name="settings_asr_langs_turkish_66m">Turkish only (Mihu 66M Zipformer)</string>
     <string name="settings_asr_langs_sensevoice">English, Chinese, Japanese, Korean, Cantonese</string>
     <string name="settings_asr_langs_moonshine">English only</string>
     <string name="settings_asr_langs_seda">Turkish only</string>

@@ -773,6 +773,7 @@
     <string name="settings_asr_engines_title">Cihaz içi tanıma motoru</string>
     <string name="settings_asr_engines_hint">Konuşmayı cihazınızda aramaya dönüştürür. İndirip mikrofonun hangi motoru kullanacağını seçin.</string>
     <string name="settings_asr_engine_meta">%1$s · %2$d MB</string>
+    <string name="settings_asr_langs_turkish_66m">Yalnızca Türkçe (Mihu 66M Zipformer)</string>
     <string name="settings_asr_langs_whisper">Vela\'nın desteklediği tüm diller</string>
     <string name="settings_asr_langs_sensevoice">İngilizce, Çince, Japonca, Korece, Kantonca</string>
     <string name="settings_asr_langs_moonshine">Yalnızca İngilizce</string>

@@ -116,6 +116,7 @@ internal fun SearchSettingsScreen(vm: MapViewModel, onBack: () -> Unit) {
             val thisDownloading = state.asrDownloadingId == engine.id
             val langs = stringResource(
                 when (engine) {
+                    app.vela.voice.AsrEngine.TURKISH_66M -> R.string.settings_asr_langs_turkish_66m
                     app.vela.voice.AsrEngine.WHISPER_TINY -> R.string.settings_asr_langs_whisper
                     app.vela.voice.AsrEngine.SENSE_VOICE -> R.string.settings_asr_langs_sensevoice
                     app.vela.voice.AsrEngine.MOONSHINE -> R.string.settings_asr_langs_moonshine

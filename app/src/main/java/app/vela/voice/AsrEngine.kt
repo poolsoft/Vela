@@ -42,7 +42,19 @@ enum class AsrEngine(
     /** Every file that must be present + non-empty for the engine to count as installed. A missing
      *  file reads as not-installed, so a partial or aborted download self-heals (re-download). */
     val files: List<String>,
+    /** True if this is an online streaming model (e.g. Zipformer) requiring OnlineRecognizer. */
+    val isStreaming: Boolean = false,
 ) {
+    TURKISH_66M(
+        id = "turkish-66m",
+        displayName = "Mihu Türkçe 66M",
+        modelType = "zipformer2",
+        sizeMb = 68,
+        url = "$ASR_BASE_POOLSOFT/vela-asr-turkish-66m.tar.gz",
+        fallbackUrl = "$ASR_BASE_FALLBACK/vela-asr-turkish-66m.tar.gz",
+        files = listOf("encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt", VAD_FILE),
+        isStreaming = true,
+    ),
     WHISPER_TINY(
         id = "whisper-tiny",
         displayName = "Whisper tiny",
@@ -88,6 +100,7 @@ enum class AsrEngine(
     /** Whether this engine can actually recognize [lang] (an app language code, e.g. "en"/"he"/"ja").
      *  Whisper covers everything (including Turkish); SenseVoice only en/zh/ja/ko/yue; Moonshine only English. */
     fun supportsLanguage(lang: String): Boolean = when (this) {
+        TURKISH_66M -> lang == "tr"
         WHISPER_TINY -> true
         SENSE_VOICE -> lang in SENSE_VOICE_LANGS
         MOONSHINE -> lang == "en"
@@ -132,6 +145,7 @@ enum class AsrEngine(
         fun forRecognition(context: Context, lang: String): AsrEngine {
             val picked = active(context)
             if (picked.supportsLanguage(lang)) return picked
+            if (lang == "tr" && TURKISH_66M.isInstalled(context)) return TURKISH_66M
             return WHISPER_TINY.takeIf { it.isInstalled(context) } ?: picked
         }
     }
