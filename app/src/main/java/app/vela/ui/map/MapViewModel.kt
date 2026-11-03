@@ -330,6 +330,8 @@ data class MapUiState(
     val isVoiceListening: Boolean = false, // actively listening for voice command
     val voiceAudioLevel: Float = 0f, // current mic input amplitude (0f..1f)
     val wakeWordPhrase: String = "Hey Vela", // customizable wake phrase (e.g. "Hey Vela", "Vela", "Asistan")
+    val wakeWordThreshold: Float = 0.45f,
+    val wakeWordBoost: Float = 1.6f,
     val voiceSpeaker: Int = 0, // chosen speaker # for the multi-speaker Vela voice (playground stepper)
     val voiceSpeed: Float = 1.0f, // spoken-directions speed multiplier (1.0 = normal, >1 = faster)
     val showPsdsTip: Boolean = false,
@@ -638,6 +640,8 @@ class MapViewModel @Inject constructor(
                 wakeWordEnabled = voiceWakeController.isEnabled(),
                 wakeWordSilentMode = voiceWakeController.isSilentMode(),
                 wakeWordPhrase = voiceWakeController.getWakePhrase(),
+                wakeWordThreshold = voiceWakeController.getWakeThreshold(),
+                wakeWordBoost = voiceWakeController.getWakeBoost(),
             )
         }
         if (voiceWakeController.isEnabled()) {
@@ -5747,6 +5751,18 @@ class MapViewModel @Inject constructor(
     fun setWakeWordPhrase(phrase: String) {
         voiceWakeController.setWakePhrase(phrase)
         _state.update { it.copy(wakeWordPhrase = voiceWakeController.getWakePhrase()) }
+    }
+
+    /** Update wake word trigger confidence threshold (e.g. 0.45). */
+    fun setWakeWordThreshold(threshold: Float) {
+        voiceWakeController.setWakeThreshold(threshold)
+        _state.update { it.copy(wakeWordThreshold = voiceWakeController.getWakeThreshold()) }
+    }
+
+    /** Update wake word priority boosting score (e.g. 1.6). */
+    fun setWakeWordBoost(boost: Float) {
+        voiceWakeController.setWakeBoost(boost)
+        _state.update { it.copy(wakeWordBoost = voiceWakeController.getWakeBoost()) }
     }
 
     /** Audition the pleasant wake chime earcon. */

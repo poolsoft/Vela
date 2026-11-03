@@ -436,6 +436,39 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
                                 Text(stringResource(R.string.settings_voice_wake_test_chime))
                             }
                         }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.settings_voice_wake_threshold, state.wakeWordThreshold),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Slider(
+                            value = state.wakeWordThreshold,
+                            onValueChange = { vm.setWakeWordThreshold(it) },
+                            valueRange = 0.20f..0.70f,
+                            steps = 9,
+                            modifier = Modifier.fillMaxWidth().dpadFieldEscape(),
+                        )
+                        Hint(stringResource(R.string.settings_voice_wake_threshold_hint))
+
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.settings_voice_wake_boost, state.wakeWordBoost),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Slider(
+                            value = state.wakeWordBoost,
+                            onValueChange = { vm.setWakeWordBoost(it) },
+                            valueRange = 1.0f..2.5f,
+                            steps = 14,
+                            modifier = Modifier.fillMaxWidth().dpadFieldEscape(),
+                        )
+                        Hint(stringResource(R.string.settings_voice_wake_boost_hint))
+
+                        val hasStreamingModel = app.vela.voice.AsrEngine.TURKISH_66M.id in state.asrInstalledIds
+                        if (!hasStreamingModel) {
+                            Spacer(Modifier.height(8.dp))
+                            Hint(stringResource(R.string.settings_voice_wake_model_needed))
+                        }
                         Spacer(Modifier.height(4.dp))
                         Hint(stringResource(R.string.settings_voice_wake_multi_hint))
                         Spacer(Modifier.height(4.dp))

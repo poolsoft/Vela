@@ -1043,4 +1043,9 @@
     <string name="settings_asr_test_listening">Dinleniyor, lütfen konuşun...</string>
     <string name="settings_asr_test_heard">Duyulan / Algılanan Metin:</string>
     <string name="settings_voice_wake_multi_hint">Farklı telaffuzlar veya alternatifler için virgülle ayırabilirsiniz (örn: Hey Car, Hey Kar, Eikar).</string>
+    <string name="settings_voice_wake_threshold">Tetikleme güven eşiği: %1$.2f</string>
+    <string name="settings_voice_wake_threshold_hint">Düşük değer daha kolay tetiklenir; yüksek değer net telaffuz ister.</string>
+    <string name="settings_voice_wake_boost">Öncelik kuvvetlendirme: %1$.1fx</string>
+    <string name="settings_voice_wake_boost_hint">Uyandırma kelimesine verilen seçim önceliği. Tepki vermiyorsa artırın.</string>
+    <string name="settings_voice_wake_model_needed">Çevrimdışı uyandırma kelimesi algılaması için akışlı Zipformer modeli (Mihu Türkçe 66M) kullanılır. Lütfen aşağıdaki listeden indirin.</string>
 </resources>

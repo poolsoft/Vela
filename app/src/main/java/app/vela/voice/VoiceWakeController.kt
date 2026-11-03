@@ -35,7 +35,6 @@ import javax.inject.Singleton
 import kotlin.math.PI
 import kotlin.math.min
 import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
  * Controller for hands-free wake word detection (KWS - Keyword Spotting).
@@ -44,7 +43,7 @@ import kotlin.math.sqrt
  * and automatic TTS audio collision protection (pausing/discarding mic input while
  * VoiceGuide is speaking) to prevent false-triggers from speaker audio.
  *
- * The wake phrase is customizable by the user (persisted in vela_settings).
+ * The wake phrase, trigger threshold and boosting score are customizable by the user.
  */
 @Singleton
 class VoiceWakeController @Inject constructor(
@@ -101,9 +100,41 @@ class VoiceWakeController @Inject constructor(
         }
     }
 
+    fun getWakeThreshold(): Float = prefs.getFloat(KEY_WAKE_THRESHOLD, DEFAULT_WAKE_THRESHOLD)
+
+    fun setWakeThreshold(threshold: Float) {
+        val clamped = threshold.coerceIn(0.20f, 0.80f)
+        prefs.edit().putFloat(KEY_WAKE_THRESHOLD, clamped).apply()
+        writeKeywordsFile(getWakePhrase())
+        if (isListening.get()) {
+            restartListening()
+        }
+    }
+
+    fun getWakeBoost(): Float = prefs.getFloat(KEY_WAKE_BOOST, DEFAULT_WAKE_BOOST)
+
+    fun setWakeBoost(boost: Float) {
+        val clamped = boost.coerceIn(1.0f, 3.0f)
+        prefs.edit().putFloat(KEY_WAKE_BOOST, clamped).apply()
+        writeKeywordsFile(getWakePhrase())
+        if (isListening.get()) {
+            restartListening()
+        }
+    }
+
     fun hasMicPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
+
+    fun isWakeModelAvailable(): Boolean {
+        val streamingEngine = AsrEngine.installed(context).firstOrNull { it.isStreaming }
+        if (streamingEngine != null && streamingEngine.isInstalled(context)) return true
+        val kwsDir = File(context.filesDir, "kws")
+        return File(kwsDir, "encoder.int8.onnx").exists() &&
+            File(kwsDir, "decoder.int8.onnx").exists() &&
+            File(kwsDir, "joiner.int8.onnx").exists() &&
+            File(kwsDir, "tokens.txt").exists()
+    }
 
     @Synchronized
     fun startListening() {
@@ -139,14 +170,16 @@ class VoiceWakeController @Inject constructor(
     private fun writeKeywordsFile(phrase: String): File {
         val dir = File(context.filesDir, "kws").apply { mkdirs() }
         val file = File(dir, "keywords.txt")
+        val boost = getWakeBoost()
+        val threshold = getWakeThreshold()
         val lines = phrase.split(',', ';', '\n')
             .map { it.trim().lowercase() }
             .filter { it.isNotBlank() }
             .distinct()
         val content = if (lines.isEmpty()) {
-            "${DEFAULT_WAKE_PHRASE.lowercase()} : 1.0\n"
+            "${DEFAULT_WAKE_PHRASE.lowercase()} : $boost # $threshold\n"
         } else {
-            lines.joinToString("\n") { "$it : 1.0" } + "\n"
+            lines.joinToString("\n") { "$it : $boost # $threshold" } + "\n"
         }
         file.writeText(content)
         return file
@@ -242,15 +275,42 @@ class VoiceWakeController @Inject constructor(
             writeKeywordsFile(getWakePhrase())
         }
 
-        // Look for model in filesDir/kws/ (or downloaded zipformer models)
-        val encoder = File(kwsDir, "encoder.int8.onnx")
-        val decoder = File(kwsDir, "decoder.int8.onnx")
-        val joiner = File(kwsDir, "joiner.int8.onnx")
-        val tokens = File(kwsDir, "tokens.txt")
+        // Check active/installed streaming ASR (e.g. Mihu Turkish 66M) or fallback to filesDir/kws/
+        val streamingEngine = AsrEngine.installed(context).firstOrNull { it.isStreaming }
+        val searchDirs = listOfNotNull(
+            streamingEngine?.dir(context),
+            kwsDir,
+        )
 
-        if (!encoder.exists() || !decoder.exists() || !joiner.exists() || !tokens.exists()) {
+        var encoder: File? = null
+        var decoder: File? = null
+        var joiner: File? = null
+        var tokens: File? = null
+        var modelType = "zipformer"
+
+        for (dir in searchDirs) {
+            val enc = File(dir, "encoder.int8.onnx")
+            val dec = File(dir, "decoder.int8.onnx")
+            val jn = File(dir, "joiner.int8.onnx")
+            val tok = File(dir, "tokens.txt")
+            if (enc.exists() && dec.exists() && jn.exists() && tok.exists()) {
+                encoder = enc
+                decoder = dec
+                joiner = jn
+                tokens = tok
+                if (streamingEngine != null && dir == streamingEngine.dir(context)) {
+                    modelType = streamingEngine.modelType
+                }
+                break
+            }
+        }
+
+        if (encoder == null || decoder == null || joiner == null || tokens == null) {
             return null
         }
+
+        val boost = getWakeBoost()
+        val threshold = getWakeThreshold()
 
         return runCatching {
             val spotter = KeywordSpotter(
@@ -264,12 +324,12 @@ class VoiceWakeController @Inject constructor(
                             joiner = joiner.absolutePath,
                         ),
                         tokens = tokens.absolutePath,
-                        modelType = "zipformer",
+                        modelType = modelType,
                         numThreads = 2,
                     ),
                     keywordsFile = keywordsFile.absolutePath,
-                    keywordsScore = 1.0f,
-                    keywordsThreshold = 0.25f,
+                    keywordsScore = boost,
+                    keywordsThreshold = threshold,
                     numTrailingBlanks = 1,
                 ),
             )
@@ -333,7 +393,12 @@ class VoiceWakeController @Inject constructor(
         const val KEY_WAKE_ENABLED = "wake_word_enabled"
         const val KEY_WAKE_SILENT_MODE = "wake_word_silent_mode"
         const val KEY_WAKE_PHRASE = "wake_word_phrase"
+        const val KEY_WAKE_THRESHOLD = "wake_word_threshold"
+        const val KEY_WAKE_BOOST = "wake_word_boost"
+
         const val DEFAULT_WAKE_PHRASE = "Hey Vela"
+        const val DEFAULT_WAKE_THRESHOLD = 0.45f
+        const val DEFAULT_WAKE_BOOST = 1.6f
 
         private const val SAMPLE_RATE = 16000
         private const val CHUNK_SIZE = 512
