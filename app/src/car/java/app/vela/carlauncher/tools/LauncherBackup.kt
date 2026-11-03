@@ -35,6 +35,7 @@ object LauncherBackup {
         ROUTING_DATA("routing", R.string.car_backup_cat_routing, R.string.car_backup_cat_routing_desc, true),
         MAPS("maps", R.string.car_backup_cat_maps, R.string.car_backup_cat_maps_desc, true),
         PLACES("places", R.string.car_backup_cat_places, R.string.car_backup_cat_places_desc, false),
+        POI("poi", R.string.car_backup_cat_poi, R.string.car_backup_cat_poi_desc, true),
         NAV_SETTINGS("nav_settings", R.string.car_backup_cat_nav_settings, R.string.car_backup_cat_nav_settings_desc, false),
         LAUNCHER("launcher", R.string.car_backup_cat_launcher, R.string.car_backup_cat_launcher_desc, false),
         DOCK("dock", R.string.car_backup_cat_dock, R.string.car_backup_cat_dock_desc, false),
@@ -138,7 +139,9 @@ object LauncherBackup {
             File(context.filesDir, "overlays")
         )
         BackupCategory.PLACES -> listOf(
-            File(context.filesDir, "places"),
+            File(context.filesDir, "places")
+        )
+        BackupCategory.POI -> listOf(
             File(context.filesDir, "poipacks")
         )
         BackupCategory.VOICE -> listOf(
@@ -250,7 +253,7 @@ object LauncherBackup {
                     }
                 }
             }
-            if (BackupCategory.PLACES in selectedCategories) {
+            if (BackupCategory.POI in selectedCategories) {
                 app.vela.backup.OfflineSearchSnapshot.create(context)?.let { snapshot ->
                     try {
                         zipOut.putNextEntry(ZipEntry("files/poipacks/${snapshot.name}"))
@@ -373,7 +376,8 @@ object LauncherBackup {
                                 "trips" -> BackupCategory.ROUTES
                                 "obf" -> BackupCategory.ROUTING_DATA
                                 "basemap", "sprites", "glyphs", "overlays" -> BackupCategory.MAPS
-                                "places", "poipacks" -> BackupCategory.PLACES
+                                "places" -> BackupCategory.PLACES
+                                "poipacks" -> BackupCategory.POI
                                 else -> null
                             }
                             if (cat != null) {
@@ -460,7 +464,8 @@ object LauncherBackup {
                             "trips" -> BackupCategory.ROUTES
                             "obf" -> BackupCategory.ROUTING_DATA
                             "basemap", "sprites", "glyphs", "overlays" -> BackupCategory.MAPS
-                            "places", "poipacks" -> BackupCategory.PLACES
+                            "places" -> BackupCategory.PLACES
+                            "poipacks" -> BackupCategory.POI
                             else -> null
                         }
                         if (cat != null && cat in categoriesToRestore) {

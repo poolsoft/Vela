@@ -40,7 +40,8 @@ object PortableBackup {
         MAPS("maps", R.string.car_backup_cat_maps, R.string.car_backup_cat_maps_desc, setOf("basemap", "glyphs", "sprites", "overlays")),
         ROUTING("routing", R.string.car_backup_cat_routing, R.string.car_backup_cat_routing_desc, setOf("obf")),
         ROUTES("routes", R.string.car_backup_cat_routes, R.string.car_backup_cat_routes_desc, setOf("trips")),
-        PLACES("places", R.string.car_backup_cat_places, R.string.car_backup_cat_places_desc, setOf("places", "poipacks"), isPersonalMeta = true),
+        PLACES("places", R.string.car_backup_cat_places, R.string.car_backup_cat_places_desc, setOf("places"), isPersonalMeta = true),
+        POI("poi", R.string.car_backup_cat_poi, R.string.car_backup_cat_poi_desc, setOf("poipacks")),
         LAUNCHER("launcher", R.string.car_backup_cat_launcher, R.string.car_backup_cat_launcher_desc, emptySet(), isLauncherMeta = true),
         VOICE("voice", R.string.settings_voice, R.string.car_backup_cat_voice_desc, setOf("piper", "asr", "kws"));
 
@@ -168,7 +169,7 @@ object PortableBackup {
         val revision = DownloadService.workRevision()
         val targetRoots = selectedCategories.flatMap { it.roots }.toSet()
         val original = inventory(app, targetRoots)
-        val snapshot = if (ModularCategory.PLACES in selectedCategories) OfflineSearchSnapshot.create(app) else null
+        val snapshot = if (ModularCategory.POI in selectedCategories) OfflineSearchSnapshot.create(app) else null
         val dirs = (targetRoots.filter { File(app.filesDir, it).isDirectory } +
             if (snapshot != null) listOf("poipacks") else emptyList()).distinct().sorted()
         

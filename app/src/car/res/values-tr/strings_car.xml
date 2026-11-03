@@ -217,7 +217,9 @@
     <string name="car_backup_cat_maps">Çevrimdışı Vektör Haritalar (Basemap)</string>
     <string name="car_backup_cat_maps_desc">İndirilen PMTiles altlık haritaları ve katmanlar</string>
     <string name="car_backup_cat_places">Kayıtlı Konumlar ve Favoriler</string>
-    <string name="car_backup_cat_places_desc">Yer imleri, Ev/İş kısayolları ve özel konum listeleri</string>
+    <string name="car_backup_cat_places_desc">Yer imleri, Ev/İş kısayolları ve kişisel konum listeleri</string>
+    <string name="car_backup_cat_poi">Çevrimdışı Mekan Arama Paketleri (POI)</string>
+    <string name="car_backup_cat_poi_desc">İndirilen çevrimdışı yer ve ilgi noktası arama veri tabanları</string>
     <string name="car_backup_cat_nav_settings">Navigasyon ve Kaçınma Ayarları</string>
     <string name="car_backup_cat_nav_settings_desc">Ücretli yol/otoyol kaçınmaları, son aramalar ve park yeri geçmişi</string>
     <string name="car_backup_cat_launcher">Car Launcher Düzeni ve Görünümü</string>

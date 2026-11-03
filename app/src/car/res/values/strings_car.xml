@@ -223,7 +223,9 @@
     <string name="car_backup_cat_maps">Offline Vector Maps (Basemap)</string>
     <string name="car_backup_cat_maps_desc">Downloaded PMTiles basemap and overlay layers</string>
     <string name="car_backup_cat_places">Saved Places &amp; Favorites</string>
-    <string name="car_backup_cat_places_desc">Bookmarks, Home/Work shortcuts and place lists</string>
+    <string name="car_backup_cat_places_desc">Bookmarks, Home/Work shortcuts and personal place lists</string>
+    <string name="car_backup_cat_poi">Offline POI Search Packages</string>
+    <string name="car_backup_cat_poi_desc">Downloaded offline place search databases and indices</string>
     <string name="car_backup_cat_nav_settings">Navigation &amp; Avoidance Settings</string>
     <string name="car_backup_cat_nav_settings_desc">Toll/highway avoidances, recent searches and parking history</string>
     <string name="car_backup_cat_launcher">Car Launcher Layout &amp; Appearance</string>
