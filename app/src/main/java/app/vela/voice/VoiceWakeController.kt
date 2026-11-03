@@ -258,7 +258,7 @@ class VoiceWakeController @Inject constructor(
 
             val spotter = runCatching {
                 KeywordSpotter(
-                    assetManager = context.assets,
+                    assetManager = null, // Mutlak dosya yollari (filesDir) icin null verilmelidir; aksi halde C++ assetManager bekler ve coker
                     config = KeywordSpotterConfig(
                         featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
                         modelConfig = OnlineModelConfig(
@@ -277,6 +277,8 @@ class VoiceWakeController @Inject constructor(
                         numTrailingBlanks = 1,
                     ),
                 )
+            }.onFailure {
+                android.util.Log.e("VoiceWake", "KeywordSpotter native init failed: ${it.message}", it)
             }.getOrNull() ?: return false
 
             val stream = runCatching { spotter.createStream() }.getOrNull()
@@ -446,7 +448,7 @@ class VoiceWakeController @Inject constructor(
         const val KEY_WAKE_THRESHOLD = "wake_word_threshold"
         const val KEY_WAKE_BOOST = "wake_word_boost"
 
-        const val DEFAULT_WAKE_ENABLED = true
+        const val DEFAULT_WAKE_ENABLED = false
         const val DEFAULT_WAKE_PHRASE = "Hey Kar"
         const val DEFAULT_WAKE_THRESHOLD = 0.45f
         const val DEFAULT_WAKE_BOOST = 1.6f

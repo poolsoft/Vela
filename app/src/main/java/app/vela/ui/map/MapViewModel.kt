@@ -5755,9 +5755,8 @@ class MapViewModel @Inject constructor(
             _state.update { it.copy(asrDownloadPct = null, asrInstalling = false, asrDownloadingId = null) }
             refreshAsr()
             if (ok) {
-                voiceWakeController.writeKeywordsFile(voiceWakeController.getWakePhrase())
-                if (voiceWakeController.isEnabled()) {
-                    voiceWakeController.startListening()
+                runCatching {
+                    voiceWakeController.writeKeywordsFile(voiceWakeController.getWakePhrase())
                 }
                 flashStatus(appContext.getString(R.string.settings_voice_wake_model_ready))
             } else {
