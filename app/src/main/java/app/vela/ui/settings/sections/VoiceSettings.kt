@@ -464,10 +464,30 @@ internal fun VoiceSettingsScreen(vm: MapViewModel, onBack: () -> Unit, openLibra
                         )
                         Hint(stringResource(R.string.settings_voice_wake_boost_hint))
 
-                        val hasStreamingModel = app.vela.voice.AsrEngine.TURKISH_66M.id in state.asrInstalledIds
-                        if (!hasStreamingModel) {
+                        val isKwsModelReady = vm.isWakeModelAvailable()
+                        val isKwsDownloading = state.asrDownloadingId == "kws-model"
+                        if (!isKwsModelReady) {
                             Spacer(Modifier.height(8.dp))
                             Hint(stringResource(R.string.settings_voice_wake_model_needed))
+                            Spacer(Modifier.height(6.dp))
+                            if (isKwsDownloading) {
+                                val pct = state.asrDownloadPct ?: 0f
+                                Text(
+                                    if (state.asrInstalling) stringResource(R.string.settings_voice_search_installing)
+                                    else stringResource(R.string.settings_voice_search_downloading, (pct * 100).toInt()),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                app.vela.ui.VelaProgressBar(if (state.asrInstalling) null else pct)
+                            } else {
+                                FilledTonalButton(
+                                    onClick = { vm.downloadKwsModel() },
+                                    enabled = state.asrDownloadingId == null,
+                                    modifier = Modifier.dpadHighlight(androidx.compose.material3.ButtonDefaults.filledTonalShape),
+                                ) {
+                                    Text(stringResource(R.string.settings_voice_wake_download_model, 54))
+                                }
+                            }
                         }
                         Spacer(Modifier.height(4.dp))
                         Hint(stringResource(R.string.settings_voice_wake_multi_hint))

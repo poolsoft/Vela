@@ -5737,6 +5737,35 @@ class MapViewModel @Inject constructor(
     }
 
     /** Enable or disable silent mode (shows pulsing border on car dock mic instead of fullscreen dialog). */
+    fun isWakeModelAvailable(): Boolean = voiceWakeController.isWakeModelAvailable()
+
+    /** Download dedicated offline wake-word model archive (vela-kws-turkish.tar.gz) into filesDir/kws/. */
+    fun downloadKwsModel() {
+        if (_state.value.asrDownloadPct != null) return
+        val kwsDir = java.io.File(appContext.filesDir, "kws")
+        val bytes = 54L * 1024 * 1024
+        asrCancel.set(false)
+        _state.update { it.copy(asrDownloadPct = 0f, asrInstalling = false, asrDownloadingId = "kws-model") }
+        downloadLaunch("KWS Modeli") {
+            val ok = kokoroInstaller.download(
+                app.vela.voice.VoiceWakeController.KWS_MODEL_URL, kwsDir, bytes,
+                onExtracting = { _state.update { it.copy(asrInstalling = true) } },
+                active = { !asrCancel.get() },
+            ) { p -> _state.update { it.copy(asrDownloadPct = p) } }
+            _state.update { it.copy(asrDownloadPct = null, asrInstalling = false, asrDownloadingId = null) }
+            refreshAsr()
+            if (ok) {
+                voiceWakeController.writeKeywordsFile(voiceWakeController.getWakePhrase())
+                if (voiceWakeController.isEnabled()) {
+                    voiceWakeController.startListening()
+                }
+                flashStatus(appContext.getString(R.string.settings_voice_wake_model_ready))
+            } else {
+                showStatus(appContext.getString(R.string.mapvm_asr_download_failed))
+            }
+        }
+    }
+
     fun setWakeWordSilentMode(silent: Boolean) {
         voiceWakeController.setSilentMode(silent)
         _state.update { it.copy(wakeWordSilentMode = silent) }

@@ -1137,4 +1137,6 @@
     <string name="settings_voice_wake_boost">Keyword boosting score: %1$.1fx</string>
     <string name="settings_voice_wake_boost_hint">Priority given to the wake words. Increase if the model ignores the wake phrase.</string>
     <string name="settings_voice_wake_model_needed">Offline wake-word detection uses the streaming Zipformer model (Mihu Turkish 66M). Please install it from the models list below.</string>
+    <string name="settings_voice_wake_model_ready">Wake-word model installed and ready.</string>
+    <string name="settings_voice_wake_download_model">Download Wake-Word Model (%1$d MB)</string>
 </resources>
