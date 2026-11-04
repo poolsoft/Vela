@@ -212,6 +212,16 @@ class AsrRecognizer @Inject constructor(
             prefs.edit().putInt(strikesKey, strikes + 1).apply()
 
             val dir = engine.dir(context)
+            // Model dosyalarinin diskte var ve boyutlarinin sifirdan buyuk oldugunu dogrula
+            val missingOrEmpty = engine.files.filter { it != AsrEngine.VAD }.any {
+                val f = File(dir, it)
+                !f.exists() || f.length() == 0L
+            }
+            if (missingOrEmpty) {
+                android.util.Log.e(TAG, "offline ASR model files missing or empty for ${engine.id}")
+                return null
+            }
+
             fun p(name: String) = File(dir, name).absolutePath
             val modelConfig = when (engine) {
                 AsrEngine.WHISPER_TINY -> OfflineModelConfig(
@@ -297,6 +307,19 @@ class AsrRecognizer @Inject constructor(
 
             val dir = engine.dir(context)
             fun p(name: String) = File(dir, name).absolutePath
+
+            // Online ASR model dosyalarinin diskte var ve boyutlarinin sifirdan buyuk oldugunu dogrula
+            val requiredFiles = listOf(
+                File(dir, "encoder.int8.onnx"),
+                File(dir, "decoder.int8.onnx"),
+                File(dir, "joiner.int8.onnx"),
+                File(dir, "tokens.txt")
+            )
+            if (requiredFiles.any { !it.exists() || it.length() == 0L }) {
+                android.util.Log.e(TAG, "online ASR model files missing or empty for ${engine.id}")
+                return null
+            }
+
             val modelConfig = OnlineModelConfig(
                 transducer = OnlineTransducerModelConfig(
                     encoder = p("encoder.int8.onnx"),
@@ -310,8 +333,8 @@ class AsrRecognizer @Inject constructor(
 
             val r = runCatching {
                 OnlineRecognizer(
-                    context.assets,
-                    OnlineRecognizerConfig(
+                    assetManager = null,
+                    config = OnlineRecognizerConfig(
                         featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
                         modelConfig = modelConfig,
                         enableEndpoint = true,
