@@ -325,4 +325,20 @@ object CarIntegration {
         )
         return true
     }
+
+    @Composable
+    fun RenderFreeDriveStreetBar(
+        landscape: Boolean,
+        streetName: String?,
+        modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
+    ): Boolean {
+        val carMode by CarLauncherSettings.carModeEtkin.collectAsState()
+        val streetBarEnabled by CarLauncherSettings.serbestSurusCaddeBar.collectAsState()
+        if (!carMode || !landscape || !streetBarEnabled || streetName.isNullOrBlank()) return false
+        app.vela.carlauncher.ui.CarFreeDriveStreetBar(
+            streetName = streetName,
+            modifier = modifier
+        )
+        return true
+    }
 }

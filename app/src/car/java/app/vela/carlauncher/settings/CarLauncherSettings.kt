@@ -45,6 +45,7 @@ object CarLauncherSettings {
     private const val KEY_DESKTOP_IN_MODE_CYCLE = "car_launcher_desktop_in_mode_cycle"
     private const val KEY_WORKSPACE_SWIPE_THRESHOLD = "car_launcher_workspace_swipe_threshold"
     private const val KEY_WORKSPACE_INDICATOR_SECONDS = "car_launcher_workspace_indicator_seconds"
+    private const val KEY_SERBEST_SURUS_CADDE_BAR = "car_launcher_free_drive_street_bar"
     private const val KEY_STARTUP_SCREEN = "car_launcher_startup_screen"
     private const val KEY_WEATHER_ENABLED = "car_launcher_weather_enabled"
     private const val KEY_EQUALIZER_APP = "car_launcher_equalizer_app"
@@ -148,6 +149,9 @@ object CarLauncherSettings {
     private val _workspaceIndicatorSeconds = MutableStateFlow(2)
     val workspaceIndicatorSeconds: StateFlow<Int> = _workspaceIndicatorSeconds.asStateFlow()
 
+    private val _serbestSurusCaddeBar = MutableStateFlow(true)
+    val serbestSurusCaddeBar: StateFlow<Boolean> = _serbestSurusCaddeBar.asStateFlow()
+
     private val _baslangicEkrani = MutableStateFlow("normal") // normal, map_only, desktop
     val baslangicEkrani: StateFlow<String> = _baslangicEkrani.asStateFlow()
     private val _homeScreenRequest = MutableStateFlow(0L)
@@ -235,6 +239,7 @@ object CarLauncherSettings {
             _desktopDongudeEtkin.value = prefs.getBoolean(KEY_DESKTOP_IN_MODE_CYCLE, true)
             _workspaceSwipeThreshold.value = prefs.getFloat(KEY_WORKSPACE_SWIPE_THRESHOLD, 0.35f).coerceIn(0f, 0.6f)
             _workspaceIndicatorSeconds.value = prefs.getInt(KEY_WORKSPACE_INDICATOR_SECONDS, 2).coerceIn(1, 5)
+            _serbestSurusCaddeBar.value = prefs.getBoolean(KEY_SERBEST_SURUS_CADDE_BAR, true)
             _baslangicEkrani.value = prefs.getString(KEY_STARTUP_SCREEN, "normal") ?: "normal"
             _floatingButtonModu.value = prefs.getString(KEY_FLOATING_BUTTON_MODE, "always") ?: "always"
             _floatingButtonBoyutu.value = prefs.getInt(KEY_FLOATING_BUTTON_SIZE, 86)
@@ -436,6 +441,11 @@ object CarLauncherSettings {
     fun setWorkspaceIndicatorSeconds(seconds: Int) {
         _workspaceIndicatorSeconds.value = seconds.coerceIn(1, 5)
         if (::prefs.isInitialized) prefs.edit().putInt(KEY_WORKSPACE_INDICATOR_SECONDS, _workspaceIndicatorSeconds.value).apply()
+    }
+
+    fun setSerbestSurusCaddeBar(etkin: Boolean) {
+        _serbestSurusCaddeBar.value = etkin
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_SERBEST_SURUS_CADDE_BAR, etkin).apply()
     }
 
     fun setBaslangicEkrani(ekran: String) {

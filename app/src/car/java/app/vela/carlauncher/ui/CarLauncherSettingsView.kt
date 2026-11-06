@@ -443,6 +443,14 @@ private fun CarAppearanceSettingsScreen(
                     checked = dikeydeSadeceHarita,
                     onCheckedChange = { CarLauncherSettings.setDikeydeSadeceHarita(it) }
                 )
+                GroupDivider()
+                val serbestSurusCaddeBar by CarLauncherSettings.serbestSurusCaddeBar.collectAsState()
+                ToggleRow(
+                    label = "Serbest Sürüşte Cadde Adı Çubuğu",
+                    hint = "Navigasyon rotası yokken bulunulan cadde ve sokak adını haritanın altında şık bir bar olarak gösterir",
+                    checked = serbestSurusCaddeBar,
+                    onCheckedChange = { CarLauncherSettings.setSerbestSurusCaddeBar(it) }
+                )
             }
 
             Spacer(Modifier.height(16.dp))

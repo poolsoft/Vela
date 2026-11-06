@@ -408,4 +408,43 @@ fun CarCompactEtaBar(
         }
     }
 }
+
+/**
+ * Serbest surus modunda bulunulan sokak/cadde adini haritanin altinda gosteren kompakt bar.
+ */
+@Composable
+fun CarFreeDriveStreetBar(
+    streetName: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color(0xE614161D),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, Color(0x33448AFF)),
+        shadowElevation = 4.dp,
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                Icons.Default.KeyboardArrowUp,
+                contentDescription = null,
+                tint = Color(0xFF00FFC4),
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = streetName,
+                style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
 }

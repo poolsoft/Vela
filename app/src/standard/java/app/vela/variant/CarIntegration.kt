@@ -91,4 +91,11 @@ object CarIntegration {
         imperial: Boolean,
         modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
     ): Boolean = false
+
+    @Composable
+    fun RenderFreeDriveStreetBar(
+        landscape: Boolean,
+        streetName: String?,
+        modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier
+    ): Boolean = false
 }

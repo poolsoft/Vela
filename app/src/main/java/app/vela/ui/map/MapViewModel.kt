@@ -387,6 +387,7 @@ data class MapUiState(
     val poiPackInstalledRevs: Map<String, Int> = emptyMap(),                // installed pack revision per region
     val downloadStepText: String? = null,                                   // e.g. "1/3: Rota verisi indiriliyor (%45)"
     val basemapInstalledIds: Set<String> = emptySet(),                      // region ids whose basemap pmtiles are on disk
+    val freeDriveStreet: String? = null,                                      // serbest surus modunda bulunulan cadde/sokak adi
 )
 
 /**
@@ -890,6 +891,11 @@ class MapViewModel @Inject constructor(
                 } else if (_state.value.navigating && nowMs - nav.lastNavFedMs > NAV_STARVED_MS && !_state.value.navStarved) {
                     _state.update { it.copy(navStarved = true) }
                 }
+
+                // Serbest surus modunda (rotasiz) bulunulan cadde/sokak adini guncelle
+                if (!_state.value.navigating) {
+                    updateFreeDriveStreet(here)
+                }
             }
         }
     }
@@ -985,6 +991,36 @@ class MapViewModel @Inject constructor(
                 val hit = lastLimitHitLoc
                 if (hit == null || hit.distanceTo(here) > SPEED_LIMIT_FORGET_M) {
                     _state.update { it.copy(speedLimitKmh = null) }
+                }
+            }
+        }
+    }
+
+    private var freeDriveStreetJob: Job? = null
+    private var lastFreeDriveStreetLoc: LatLng? = null
+
+    /**
+     * Serbest surus modunda aracin uzerinde bulundugu sokak veya cadde adini cevirimdisi ve cevrimici
+     * cozer. Verimsiz sorgulari onlemek icin 25 metreden az yer degistirmelerde tekrar sorgulanmaz.
+     */
+    private fun updateFreeDriveStreet(here: LatLng) {
+        val last = lastFreeDriveStreetLoc
+        if (last != null && last.distanceTo(here) < 25.0) return
+        if (freeDriveStreetJob?.isActive == true) return
+        lastFreeDriveStreetLoc = here
+        freeDriveStreetJob = viewModelScope.launch(Dispatchers.IO) {
+            // Once yerel cevrimdisi veritabanindan hizlica cozmeyi dene
+            var street: String? = runCatching { addressStore.reverseGeocode(here) }.getOrNull()
+            // Eger cevrimdisi bulunamadiysa ve online isek dataSource reverseGeocode'u dene
+            if (street.isNullOrBlank() && isOnline()) {
+                val place = runCatching { dataSource.reverseGeocode(here) }.getOrNull()
+                street = place?.name?.takeUnless { it.startsWith("Dropped pin") || it.startsWith("pin:") }
+                    ?: place?.address?.split(",")?.firstOrNull()?.trim()
+            }
+            coroutineContext.ensureActive()
+            if (!street.isNullOrBlank()) {
+                if (street != _state.value.freeDriveStreet) {
+                    _state.update { it.copy(freeDriveStreet = street) }
                 }
             }
         }

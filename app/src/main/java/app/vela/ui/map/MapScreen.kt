@@ -1788,6 +1788,18 @@ fun MapScreen(
             }
         }
 
+        // Serbest surus modunda (rota yokken) altta cadde/sokak adi cubugu
+        if (!state.navigating && state.selected == null && !searchOpen && !resultsShown && !state.directionsOpen) {
+            CarIntegration.RenderFreeDriveStreetBar(
+                landscape = landscapeChrome,
+                streetName = state.freeDriveStreet,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 12.dp + chromeLift)
+            )
+        }
+
         // Resume-navigation prompt — a drive was cut off by a process-kill (GrapheneOS reaping the
         // backgrounded nav process); offer to pick it back up (re-routes from the current fix).
         if (state.resumeNavLabel != null && !state.navigating && state.selected == null && !searchOpen) {
