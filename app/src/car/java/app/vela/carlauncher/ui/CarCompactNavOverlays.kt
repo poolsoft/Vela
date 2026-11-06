@@ -408,6 +408,7 @@ fun CarCompactEtaBar(
         }
     }
 }
+}
 
 /**
  * Serbest surus modunda bulunulan sokak/cadde adini haritanin altinda gosteren kompakt bar.
