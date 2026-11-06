@@ -716,7 +716,8 @@ private fun CarMusicSettingsScreen(
     val buyukGorsellestirici by CarLauncherSettings.largeVisualizer.collectAsState()
     val visualizerFps by CarLauncherSettings.visualizerFps.collectAsState()
     val ambiyans by CarLauncherSettings.ambiyansGorsellestirici.collectAsState()
-    val otomatikOynat by CarLauncherSettings.otomatikOynat.collectAsState()
+    val otomatikOynatModu by CarLauncherSettings.muzikOtomatikOynatModu.collectAsState()
+    val otomatikOynatZamanAsimi by CarLauncherSettings.muzikOtomatikOynatZamanAsimiDk.collectAsState()
 
     Scaffold(
         topBar = {
@@ -753,12 +754,39 @@ private fun CarMusicSettingsScreen(
                     }
                 )
                 GroupDivider()
-                ToggleRow(
+                ChoicePillRow(
                     label = "Açılışta Otomatik Müzik Çal",
-                    hint = "Launcher açıldığında son çalınan parçayı otomatik olarak başlatır",
-                    checked = otomatikOynat,
-                    onCheckedChange = { CarLauncherSettings.setOtomatikOynat(it) }
+                    detail = when (otomatikOynatModu) {
+                        "always" -> "Her açılışta müzik otomatik çalmaya başlar"
+                        "last_state" -> "Sadece son kapatıldığında müzik çalıyorsa devam eder"
+                        "timed_last_state" -> "Kısa duraklamalarda devam eder (${otomatikOynatZamanAsimi} dk içinde)"
+                        else -> "Açılışta müzik otomatik başlatılmaz"
+                    },
+                    selectedKey = otomatikOynatModu,
+                    options = listOf(
+                        "disabled" to "Kapalı",
+                        "always" to "Her Zaman",
+                        "last_state" to "Son Durum",
+                        "timed_last_state" to "Zaman Ayarlı"
+                    ),
+                    onSelect = { CarLauncherSettings.setMuzikOtomatikOynatModu(it) }
                 )
+                if (otomatikOynatModu == "timed_last_state") {
+                    GroupDivider()
+                    ChoicePillRow(
+                        label = "Zaman Aşımı Süresi",
+                        detail = "Belirlenen süreden daha uzun kontak kapalılıklarında müzik başlamaz",
+                        selectedKey = otomatikOynatZamanAsimi.toString(),
+                        options = listOf(
+                            "5" to "5 dk",
+                            "10" to "10 dk",
+                            "15" to "15 dk",
+                            "30" to "30 dk",
+                            "60" to "1 saat"
+                        ),
+                        onSelect = { it.toIntOrNull()?.let { dk -> CarLauncherSettings.setMuzikOtomatikOynatZamanAsimiDk(dk) } }
+                    )
+                }
                 GroupDivider()
                 ActionRow(
                     label = "Müzik Kitaplığını Yeniden Tara",

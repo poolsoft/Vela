@@ -105,6 +105,8 @@ class MusicManager private constructor(private val context: Context) : InternalM
                 when (value) {
                     is Boolean -> editor.putBoolean(key, value)
                     is String -> editor.putString(key, value)
+                    is Long -> editor.putLong(key, value)
+                    is Int -> editor.putInt(key, value)
                 }
             }
             editor.apply()
@@ -382,9 +384,24 @@ class MusicManager private constructor(private val context: Context) : InternalM
         if (!startupScheduled) {
             startupScheduled = true
             val version = userCommandVersion
-            if (autoPlay && savedFocus["was_playing"] == true && version == 0) {
+            val autoPlayMode = app.vela.carlauncher.settings.CarLauncherSettings.muzikOtomatikOynatModu.value
+            val wasPlaying = savedFocus["was_playing"] == true
+            val lastPlayedTime = (savedFocus["last_played_time"] as? Long) ?: 0L
+            val timeoutMins = app.vela.carlauncher.settings.CarLauncherSettings.muzikOtomatikOynatZamanAsimiDk.value
+            val now = System.currentTimeMillis()
+            val timeDiffMinutes = if (lastPlayedTime > 0L) (now - lastPlayedTime) / (1000L * 60L) else Long.MAX_VALUE
+
+            val shouldAutoPlay = when (autoPlayMode) {
+                "always" -> true
+                "last_state" -> wasPlaying
+                "timed_last_state" -> wasPlaying && timeDiffMinutes <= timeoutMins
+                else -> false // "disabled"
+            }
+
+            if (shouldAutoPlay && version == 0) {
                 anaHandler.postDelayed({
-                    if (version == userCommandVersion && app.vela.carlauncher.settings.CarLauncherSettings.otomatikOynat.value &&
+                    if (version == userCommandVersion &&
+                        app.vela.carlauncher.settings.CarLauncherSettings.muzikOtomatikOynatModu.value != "disabled" &&
                         adapters.none { it.caliyorMu() }) {
                         val profile = savedFocus["startup_source"] as? String ?: "last"
                         val key = if (profile == "last") savedFocus["last_source"] as? String ?: "internal" else profile
@@ -635,7 +652,13 @@ class MusicManager private constructor(private val context: Context) : InternalM
         val mediaChanged = _medyaDurumu.value != yeniMedya
         _medyaDurumu.value = yeniMedya
         if (userCommandVersion > 0 || yeniMedya.caliyorMu) {
-            saveFocus("last_source" to sourceKey(selectedAdapter), "was_playing" to (yeniMedya.caliyorMu && !userPaused))
+            val wasPlaying = yeniMedya.caliyorMu && !userPaused
+            val nowMs = System.currentTimeMillis()
+            if (wasPlaying) {
+                saveFocus("last_source" to sourceKey(selectedAdapter), "was_playing" to true, "last_played_time" to nowMs)
+            } else {
+                saveFocus("last_source" to sourceKey(selectedAdapter), "was_playing" to false)
+            }
         }
         if (mediaChanged) listeners.forEach { listener ->
             listener.onParcaDegisti(yeniMedya)

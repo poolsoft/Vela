@@ -32,6 +32,8 @@ object CarLauncherSettings {
     private const val KEY_PANEL_WIDTH_PERCENT = "widget_panel_width_percent"
     private const val KEY_PANEL_HEIGHT_PERCENT = "widget_panel_height_portrait"
     private const val KEY_AUTO_PLAY = "car_launcher_auto_play_music"
+    private const val KEY_AUTO_PLAY_MODE = "car_launcher_music_autoplay_mode"
+    private const val KEY_AUTO_PLAY_TIMEOUT_MINUTES = "car_launcher_music_autoplay_timeout_mins"
     private const val KEY_VISUALIZER_TYPE = "car_launcher_visualizer_type"
     private const val KEY_VISUALIZER_LARGE = "car_launcher_visualizer_type_large"
     private const val KEY_VISUALIZER_FPS = "car_launcher_visualizer_fps"
@@ -105,6 +107,14 @@ object CarLauncherSettings {
 
     private val _otomatikOynat = MutableStateFlow(false)
     val otomatikOynat: StateFlow<Boolean> = _otomatikOynat.asStateFlow()
+
+    // Muzik Otomatik Oynatma Modlari: "disabled", "always", "last_state", "timed_last_state"
+    private val _muzikOtomatikOynatModu = MutableStateFlow("disabled")
+    val muzikOtomatikOynatModu: StateFlow<String> = _muzikOtomatikOynatModu.asStateFlow()
+
+    // Zaman ayarli son durum icin zaman asimi suresi (dakika cinsinden, varsayilan: 15)
+    private val _muzikOtomatikOynatZamanAsimiDk = MutableStateFlow(15)
+    val muzikOtomatikOynatZamanAsimiDk: StateFlow<Int> = _muzikOtomatikOynatZamanAsimiDk.asStateFlow()
 
     private val _gorsellestiriciTipi = MutableStateFlow(2) // 0: klasik ... 7: halkalar
     val gorsellestiriciTipi: StateFlow<Int> = _gorsellestiriciTipi.asStateFlow()
@@ -210,6 +220,9 @@ object CarLauncherSettings {
             _panelGenislikYuzdesi.value = prefs.getFloat(KEY_PANEL_WIDTH_PERCENT, 0.35f)
             _panelYukseklikYuzdesi.value = prefs.getFloat(KEY_PANEL_HEIGHT_PERCENT, _panelGenislikYuzdesi.value).coerceIn(0.15f, 0.65f)
             _otomatikOynat.value = prefs.getBoolean(KEY_AUTO_PLAY, false)
+            val defaultMode = if (_otomatikOynat.value) "always" else "disabled"
+            _muzikOtomatikOynatModu.value = prefs.getString(KEY_AUTO_PLAY_MODE, defaultMode) ?: defaultMode
+            _muzikOtomatikOynatZamanAsimiDk.value = prefs.getInt(KEY_AUTO_PLAY_TIMEOUT_MINUTES, 15).coerceIn(1, 1440)
             _gorsellestiriciTipi.value = prefs.getInt(KEY_VISUALIZER_TYPE, 2)
             _largeVisualizer.value = prefs.getInt(KEY_VISUALIZER_LARGE, _gorsellestiriciTipi.value).coerceIn(0, 7)
             _visualizerFps.value = prefs.getInt(KEY_VISUALIZER_FPS, 30).coerceIn(15, 60)
@@ -337,7 +350,37 @@ object CarLauncherSettings {
 
     fun setOtomatikOynat(otomatik: Boolean) {
         _otomatikOynat.value = otomatik
-        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_AUTO_PLAY, otomatik).apply()
+        _muzikOtomatikOynatModu.value = if (otomatik) "always" else "disabled"
+        if (::prefs.isInitialized) {
+            prefs.edit()
+                .putBoolean(KEY_AUTO_PLAY, otomatik)
+                .putString(KEY_AUTO_PLAY_MODE, _muzikOtomatikOynatModu.value)
+                .apply()
+        }
+    }
+
+    fun setMuzikOtomatikOynatModu(mod: String) {
+        val validMode = when (mod) {
+            "always", "last_state", "timed_last_state" -> mod
+            else -> "disabled"
+        }
+        _muzikOtomatikOynatModu.value = validMode
+        val isAuto = validMode != "disabled"
+        _otomatikOynat.value = isAuto
+        if (::prefs.isInitialized) {
+            prefs.edit()
+                .putString(KEY_AUTO_PLAY_MODE, validMode)
+                .putBoolean(KEY_AUTO_PLAY, isAuto)
+                .apply()
+        }
+    }
+
+    fun setMuzikOtomatikOynatZamanAsimiDk(dakika: Int) {
+        val dk = dakika.coerceIn(1, 1440)
+        _muzikOtomatikOynatZamanAsimiDk.value = dk
+        if (::prefs.isInitialized) {
+            prefs.edit().putInt(KEY_AUTO_PLAY_TIMEOUT_MINUTES, dk).apply()
+        }
     }
 
     fun setGorsellestiriciTipi(tip: Int) {

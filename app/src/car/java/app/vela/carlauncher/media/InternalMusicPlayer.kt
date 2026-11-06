@@ -669,6 +669,7 @@ class InternalMusicPlayer private constructor(private val context: Context) :
         val base = _calismaListesi.map { it.libraryKey() }
         val position = _anlikKonumMs.value
         val playing = _caliyorMu.value || pendingPlay
+        val nowMs = System.currentTimeMillis()
         preferenceScope.launch {
             val editor = prefs.edit()
             track?.let { editor.putString(KEY_LAST_PATH, it) } ?: editor.remove(KEY_LAST_PATH)
@@ -676,6 +677,9 @@ class InternalMusicPlayer private constructor(private val context: Context) :
             editor.putString("last_base_queue", org.json.JSONArray(base).toString())
             editor.putLong(KEY_LAST_POS, position)
             editor.putBoolean("was_playing", playing)
+            if (playing) {
+                editor.putLong("last_played_time", nowMs)
+            }
             editor.apply()
         }
     }
