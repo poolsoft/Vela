@@ -212,16 +212,30 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         val rows = mutableListOf<LibraryRow>()
         when {
             tab == Tab.FOLDERS && folder == null -> tracks.groupBy(::folderOf).toSortedMap().forEach { (key, items) ->
-                if (matches(key)) rows += LibraryRow(File(key).name.ifBlank { context.getString(R.string.car_music_unknown_folder) },
+                if (matches(key)) rows += LibraryRow(
+                    File(key).name.ifBlank { context.getString(R.string.car_music_unknown_folder) },
                     context.getString(R.string.car_music_track_count, items.size),
-                    onClick = { folder = key; search.setText(""); render() })
+                    iconRes = R.drawable.ic_folder_music,
+                    showChevron = true,
+                    onClick = { folder = key; search.setText(""); render() }
+                )
             }
             tab == Tab.PLAYLISTS && playlistId == null -> {
-                rows += LibraryRow(context.getString(R.string.car_music_new_playlist), onClick = { createPlaylist() })
+                rows += LibraryRow(
+                    context.getString(R.string.car_music_new_playlist),
+                    iconRes = R.drawable.ic_music_playlist,
+                    showChevron = true,
+                    onClick = { createPlaylist() }
+                )
                 store.displayedPlaylists().filter { matches(name(it)) }.forEach { item ->
-                    rows += LibraryRow(name(item), context.getString(R.string.car_music_track_count, item.trackKeys.size),
+                    rows += LibraryRow(
+                        name(item),
+                        context.getString(R.string.car_music_track_count, item.trackKeys.size),
+                        iconRes = R.drawable.ic_music_playlist,
+                        showChevron = true,
                         onClick = { playlistId = item.id; search.setText(""); render() },
-                        onLongClick = if (readOnly(item)) null else { anchor -> playlistMenu(anchor, item) })
+                        onLongClick = if (readOnly(item)) null else { anchor -> playlistMenu(anchor, item) }
+                    )
                 }
             }
             else -> {
@@ -432,6 +446,7 @@ class MusicLibraryController(private val context: Context, private val root: Vie
 
 private data class LibraryRow(
     val title: String, val subtitle: String = "", val playing: Boolean = false,
+    val iconRes: Int? = null, val showChevron: Boolean = false,
     val favorite: Boolean = false, val onFavorite: (() -> Unit)? = null,
     val onClick: (() -> Unit)? = null, val onLongClick: ((View) -> Unit)? = null
 )
@@ -441,8 +456,10 @@ private class LibraryAdapter : RecyclerView.Adapter<LibraryAdapter.Holder>() {
     class Holder(view: View) : RecyclerView.ViewHolder(view) {
         val title: TextView = view.findViewById(R.id.music_title)
         val subtitle: TextView = view.findViewById(R.id.music_artist)
+        val art: ImageView = view.findViewById(R.id.track_art)
         val playing: ImageView = view.findViewById(R.id.track_playing_indicator)
         val favorite: ImageButton = view.findViewById(R.id.btn_favorite)
+        val chevron: ImageView? = view.findViewById(R.id.item_chevron)
     }
     fun submit(items: List<LibraryRow>) { rows = items; notifyDataSetChanged() }
     override fun getItemCount() = rows.size
@@ -452,11 +469,17 @@ private class LibraryAdapter : RecyclerView.Adapter<LibraryAdapter.Holder>() {
         holder.title.text = row.title
         holder.title.setTextColor(if (row.playing) 0xFF00FFFF.toInt() else 0xFFFFFFFF.toInt())
         holder.subtitle.text = row.subtitle
+        if (row.iconRes != null) {
+            holder.art.setImageResource(row.iconRes)
+        } else {
+            holder.art.setImageResource(R.drawable.bg_playlist_default_art)
+        }
         holder.playing.visibility = if (row.playing) View.VISIBLE else View.GONE
         holder.favorite.visibility = if (row.onFavorite != null) View.VISIBLE else View.GONE
         holder.favorite.setImageResource(if (row.favorite) android.R.drawable.star_on else android.R.drawable.star_off)
         holder.favorite.contentDescription = holder.itemView.context.getString(if (row.favorite) R.string.car_music_unfavorite else R.string.car_music_favorite)
         holder.favorite.setOnClickListener { row.onFavorite?.invoke() }
+        holder.chevron?.visibility = if (row.showChevron) View.VISIBLE else View.GONE
         holder.itemView.setOnClickListener { row.onClick?.invoke() }
         holder.itemView.setOnLongClickListener { view -> row.onLongClick?.let { it(view); true } ?: false }
     }

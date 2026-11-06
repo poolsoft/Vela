@@ -78,4 +78,13 @@
         android:scaleType="centerInside"
         android:contentDescription="Favorilere Ekle" />
 
+    <ImageView
+        android:id="@+id/item_chevron"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:src="@drawable/ic_chevron_right"
+        android:tint="#66FFFFFF"
+        android:layout_marginStart="4dp"
+        android:visibility="gone"/>
+
 </LinearLayout>
