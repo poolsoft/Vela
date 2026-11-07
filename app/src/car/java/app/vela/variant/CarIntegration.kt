@@ -193,14 +193,16 @@ object CarIntegration {
     ) {
         // Mapless mode replaces the whole map composition, so no renderer or EGL surface starts.
         val mapless by CarLauncherSettings.maplessMode.collectAsState()
+        val dikeydeSadeceHarita by CarLauncherSettings.dikeydeSadeceHarita.collectAsState()
         val context = androidx.compose.ui.platform.LocalContext.current
         val failureHost = remember { app.vela.carlauncher.map.MapRendererFailureHost() }
         val enabled by CarLauncherSettings.carModeEtkin.collectAsState()
         val configuration = androidx.compose.ui.platform.LocalConfiguration.current
         val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT ||
             (configuration.screenWidthDp < configuration.screenHeightDp)
+        val passthroughMode = !enabled || (isPortrait && dikeydeSadeceHarita && !mapless)
         CarLauncherLayout(
-            passthrough = !enabled || (isPortrait && !mapless),
+            passthrough = passthroughMode,
             onOpenSettings = onOpenSettings,
             onAsistanTiklandi = onVoiceClick,
             isVoiceListening = isVoiceListening,
