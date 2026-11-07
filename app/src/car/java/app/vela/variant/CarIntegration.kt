@@ -306,6 +306,7 @@ object CarIntegration {
     }
 
     fun isCarMode(): Boolean = CarLauncherSettings.carModeEtkin.value
+    fun isFreeDriveStreetBarEnabled(): Boolean = CarLauncherSettings.carModeEtkin.value && CarLauncherSettings.serbestSurusCaddeBar.value
 
     @Composable
     fun RenderSpeedWidget(

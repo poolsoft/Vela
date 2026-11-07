@@ -42,6 +42,7 @@ import app.vela.voice.KokoroInstaller
 import app.vela.voice.PiperSynth
 import app.vela.voice.VoiceInstaller
 import app.vela.service.NavigationService
+import app.vela.variant.CarIntegration
 import app.vela.core.model.TransitItinerary
 import app.vela.core.model.TransitStep
 import app.vela.web.WebDirectionsFetcher
@@ -387,7 +388,6 @@ data class MapUiState(
     val poiPackInstalledRevs: Map<String, Int> = emptyMap(),                // installed pack revision per region
     val downloadStepText: String? = null,                                   // e.g. "1/3: Rota verisi indiriliyor (%45)"
     val basemapInstalledIds: Set<String> = emptySet(),                      // region ids whose basemap pmtiles are on disk
-    val freeDriveStreet: String? = null,                                      // serbest surus modunda bulunulan cadde/sokak adi
 )
 
 /**
@@ -441,6 +441,9 @@ class MapViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(MapUiState())
     val state: StateFlow<MapUiState> = _state.asStateFlow()
+
+    private val _freeDriveStreet = MutableStateFlow<String?>(null)
+    val freeDriveStreet: StateFlow<String?> = _freeDriveStreet.asStateFlow()
 
     private var destination: LatLng? = null
     private var mapCenter: LatLng? = null
@@ -893,7 +896,7 @@ class MapViewModel @Inject constructor(
                 }
 
                 // Serbest surus modunda (rotasiz) bulunulan cadde/sokak adini guncelle
-                if (!_state.value.navigating) {
+                if (!_state.value.navigating && CarIntegration.isFreeDriveStreetBarEnabled()) {
                     updateFreeDriveStreet(here)
                 }
             }
@@ -998,29 +1001,29 @@ class MapViewModel @Inject constructor(
 
     private var freeDriveStreetJob: Job? = null
     private var lastFreeDriveStreetLoc: LatLng? = null
+    private var lastFreeDriveStreetMs: Long = 0L
 
     /**
-     * Serbest surus modunda aracin uzerinde bulundugu sokak veya cadde adini cevirimdisi ve cevrimici
-     * cozer. Verimsiz sorgulari onlemek icin 25 metreden az yer degistirmelerde tekrar sorgulanmaz.
+     * Serbest surus modunda aracin uzerinde bulundugu sokak veya cadde adini yalnizca yerel
+     * cevrimdisi veritabanindan cozer.
+     * Asla ag (network) uzerinden sorgu yapmaz; 50 metreden az hareketlerde ve 5 saniyeden
+     * sik araliklarla calismaz. UI ve audio visualizer performansini korur.
      */
     private fun updateFreeDriveStreet(here: LatLng) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastFreeDriveStreetMs < 5000L) return
         val last = lastFreeDriveStreetLoc
-        if (last != null && last.distanceTo(here) < 25.0) return
+        if (last != null && last.distanceTo(here) < 50.0) return
         if (freeDriveStreetJob?.isActive == true) return
         lastFreeDriveStreetLoc = here
+        lastFreeDriveStreetMs = now
         freeDriveStreetJob = viewModelScope.launch(Dispatchers.IO) {
-            // Once yerel cevrimdisi veritabanindan hizlica cozmeyi dene
-            var street: String? = runCatching { addressStore.reverseGeocode(here) }.getOrNull()
-            // Eger cevrimdisi bulunamadiysa ve online isek dataSource reverseGeocode'u dene
-            if (street.isNullOrBlank() && isOnline()) {
-                val place = runCatching { dataSource.reverseGeocode(here) }.getOrNull()
-                street = place?.name?.takeUnless { it.startsWith("Dropped pin") || it.startsWith("pin:") }
-                    ?: place?.address?.split(",")?.firstOrNull()?.trim()
-            }
+            // Yalnizca yerel cevrimdisi SQLite veritabanindan anlik cozumleme yap (ag I/O'su yok)
+            val street = runCatching { addressStore.reverseGeocode(here) }.getOrNull()
             coroutineContext.ensureActive()
             if (!street.isNullOrBlank()) {
-                if (street != _state.value.freeDriveStreet) {
-                    _state.update { it.copy(freeDriveStreet = street) }
+                if (street != _freeDriveStreet.value) {
+                    _freeDriveStreet.value = street
                 }
             }
         }

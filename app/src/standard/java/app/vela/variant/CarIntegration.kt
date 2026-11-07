@@ -82,6 +82,7 @@ object CarIntegration {
     ): Boolean = false
 
     fun isCarMode(): Boolean = false
+    fun isFreeDriveStreetBarEnabled(): Boolean = false
 
     @Composable
     fun RenderSpeedWidget(

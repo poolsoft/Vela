@@ -291,6 +291,7 @@ fun MapScreen(
     onOpenVoiceSettings: () -> Unit = {},
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val freeDriveStreetName by vm.freeDriveStreet.collectAsStateWithLifecycle()
     var mapViewportSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     var mapViewportOrigin by remember { mutableStateOf(Offset.Zero) }
     var navControlsRightEdgePx by remember { mutableStateOf(0) }
@@ -1792,7 +1793,7 @@ fun MapScreen(
         if (!state.navigating && state.selected == null && !searchOpen && !resultsShown && !state.directionsOpen) {
             CarIntegration.RenderFreeDriveStreetBar(
                 landscape = landscapeChrome,
-                streetName = state.freeDriveStreet,
+                streetName = freeDriveStreetName,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
