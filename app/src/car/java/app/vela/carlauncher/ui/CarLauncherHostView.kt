@@ -262,6 +262,7 @@ fun CarLauncherHostView(
                         }.also { panel.addView(it) }
                     }
                     "DUAL_CARD" -> {
+                        panel.background = null
                         val dual = binding.dualCardHost ?: CarDualCardPanelHost(
                             root.context, telemetri, medya,
                             { latestPlay() }, { latestNext() }, { latestPrevious() },
@@ -362,6 +363,7 @@ private class LauncherHostBinding(
         drawerHost = null
         panelCompose = null
         panel.removeAllViews()
+        panel.setBackgroundResource(R.drawable.bg_panel_rounded)
     }
 
     fun release() {
