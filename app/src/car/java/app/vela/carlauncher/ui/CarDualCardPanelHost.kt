@@ -48,6 +48,7 @@ class CarDualCardPanelHost(
     // Muzik Karti Elemanlari
     private val cardMusic: View = rootView.findViewById(R.id.card_music)
     private val musicArt: ImageView = rootView.findViewById(R.id.dual_music_art)
+    private val musicAlbumBg: ImageView = rootView.findViewById(R.id.dual_music_album_bg)
     private val musicTitle: TextView = rootView.findViewById(R.id.dual_music_title)
     private val musicArtist: TextView = rootView.findViewById(R.id.dual_music_artist)
     private val musicVisualizer: MusicVisualizerView = rootView.findViewById(R.id.dual_music_visualizer)
@@ -55,6 +56,8 @@ class CarDualCardPanelHost(
     private val btnPlay: ImageButton = rootView.findViewById(R.id.dual_music_btn_play)
     private val btnNext: ImageButton = rootView.findViewById(R.id.dual_music_btn_next)
     private val btnPrev: ImageButton = rootView.findViewById(R.id.dual_music_btn_prev)
+
+    private var appliedVisualizerType: Int? = null
 
     init {
         cardTelemetry.setOnClickListener { onDashboardAc() }
@@ -66,16 +69,16 @@ class CarDualCardPanelHost(
 
         menuBtn.setOnClickListener { v ->
             PopupMenu(context, v).apply {
-                menu.add(0, 1, 0, R.string.car_nav_dashboard)
-                menu.add(0, 2, 1, R.string.car_nav_music)
-                menu.add(0, 3, 2, R.string.car_nav_settings)
+                menu.add(0, 1, 0, "Gösterge / Telemetri")
+                menu.add(0, 2, 1, "Müzik Çalar")
+                menu.add(0, 3, 2, "Ayarlar")
                 setOnMenuItemClickListener { item ->
                     when (item.itemId) {
-                        1 -> onDashboardAc()
-                        2 -> onMuzikPaneliAc()
-                        3 -> onAyarlarAc()
+                        1 -> { onDashboardAc(); true }
+                        2 -> { onMuzikPaneliAc(); true }
+                        3 -> { onAyarlarAc(); true }
+                        else -> false
                     }
-                    true
                 }
                 show()
             }
@@ -86,11 +89,11 @@ class CarDualCardPanelHost(
     }
 
     fun updateTelemetri(t: HizTelemetrisi) {
-        val speed = t.anlikHizKmh.toInt().coerceAtLeast(0)
+        val speed = t.anlikHizKmh.coerceAtLeast(0)
         speedValueText.text = speed.toString()
 
         val speedLimit = t.hizSiniriKmh
-        if (speedLimit != null && speedLimit > 0) {
+        if (speedLimit > 0) {
             speedLimitContainer.visibility = View.VISIBLE
             speedLimitText.text = speedLimit.toString()
             if (speed > speedLimit) {
@@ -103,45 +106,58 @@ class CarDualCardPanelHost(
             speedValueText.setTextColor(Color.WHITE)
         }
 
-        compassText.text = pusulaMetni(t.pusulaDerece)
+        compassText.text = pusulaMetni(t.pusulaYonu)
     }
 
     fun updateMedia(m: MedyaParcasi) {
-        musicTitle.text = if (m.baslik.isNotBlank()) m.baslik else context.getString(R.string.car_music_no_track)
-        musicArtist.text = if (m.sanatci.isNotBlank()) m.sanatci else context.getString(R.string.car_music_idle)
+        musicTitle.text = if (m.baslik.isNotBlank() && m.baslik != "Müzik Çalınmıyor") {
+            m.baslik
+        } else {
+            "Parça Adı"
+        }
 
-        if (m.albumKapagiUri != null) {
-            try {
-                musicArt.setImageURI(android.net.Uri.parse(m.albumKapagiUri))
-                musicArt.imageTintList = null
-            } catch (ignored: Exception) {
-                musicArt.setImageResource(R.drawable.ic_default_album_art)
-                musicArt.setColorFilter(Color.parseColor("#88FFFFFF"))
-            }
+        musicArtist.text = if (m.sanatci.isNotBlank() && m.sanatci != "Dokunun veya Çalın") {
+            m.sanatci
+        } else {
+            "Sanatçı"
+        }
+
+        if (m.albumKapagi != null) {
+            musicArt.setImageBitmap(m.albumKapagi)
+            musicArt.imageTintList = null
+            musicAlbumBg.setImageBitmap(m.albumKapagi)
         } else {
             musicArt.setImageResource(R.drawable.ic_default_album_art)
             musicArt.setColorFilter(Color.parseColor("#88FFFFFF"))
+            musicAlbumBg.setImageResource(R.drawable.bg_default_music_art)
         }
 
         btnPlay.setImageResource(
-            if (m.oynatiliyor) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+            if (m.caliyorMu) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         )
 
-        if (m.sureMs > 0) {
-            val progress = ((m.pozisyonMs.toFloat() / m.sureMs.toFloat()) * 1000).toInt()
+        if (m.toplamSureMs > 0) {
+            val progress = ((m.anlikKonumMs.coerceIn(0, m.toplamSureMs).toDouble() / m.toplamSureMs) * 1000).toInt()
             musicProgress.progress = progress.coerceIn(0, 1000)
+            musicProgress.visibility = View.VISIBLE
         } else {
             musicProgress.progress = 0
+            musicProgress.visibility = View.INVISIBLE
         }
+
+        musicVisualizer.setPlaying(m.caliyorMu)
     }
 
     fun updateVisualizerType(tip: Int, fps: Int) {
-        musicVisualizer.setVisualizerType(tip)
-        musicVisualizer.setTargetFps(fps)
+        musicVisualizer.setFrameRate(fps)
+        if (appliedVisualizerType != tip) {
+            appliedVisualizerType = tip
+            musicVisualizer.setVisualizerType(tip)
+        }
     }
 
     fun release() {
-        musicVisualizer.release()
+        musicVisualizer.setPlaying(false)
     }
 
     private fun pusulaMetni(derece: Float): String {
