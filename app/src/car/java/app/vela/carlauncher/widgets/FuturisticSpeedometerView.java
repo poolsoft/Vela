@@ -165,9 +165,16 @@ public class FuturisticSpeedometerView extends View {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        float padding = dpToPx(60);
-        arcBounds.set(padding, padding, w - padding, h - padding);
-        outerBounds.set(padding - dpToPx(35), padding - dpToPx(35), w - padding + dpToPx(35), h - padding + dpToPx(35));
+        float cx = w / 2f;
+        float cy = h / 2f;
+        float side = Math.min(w, h);
+        float padding = dpToPx(36);
+        float radius = (side / 2f) - padding;
+
+        arcBounds.set(cx - radius, cy - radius, cx + radius, cy + radius);
+        float outerExtra = dpToPx(16);
+        outerBounds.set(arcBounds.left - outerExtra, arcBounds.top - outerExtra,
+                arcBounds.right + outerExtra, arcBounds.bottom + outerExtra);
 
         // Çok daha canli ve parlak gradient
         int[] colors = {
@@ -178,9 +185,9 @@ public class FuturisticSpeedometerView extends View {
         };
         float[] positions = {0f, 0.3f, 0.6f, 1f};
 
-        SweepGradient gradient = new SweepGradient(w / 2f, h / 2f, colors, positions);
+        SweepGradient gradient = new SweepGradient(cx, cy, colors, positions);
         android.graphics.Matrix matrix = new android.graphics.Matrix();
-        matrix.setRotate(135f, w / 2f, h / 2f);
+        matrix.setRotate(135f, cx, cy);
         gradient.setLocalMatrix(matrix);
 
         progressArcPaint.setShader(gradient);

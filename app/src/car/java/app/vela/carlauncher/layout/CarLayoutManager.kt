@@ -150,7 +150,7 @@ class CarLayoutManager(
         return if (carSettings.getEffectiveDockPosition(portrait) == "bottom") {
             val scale = 0.3f + carSettings.getEffectiveDockSize(portrait) / 100f * 1.4f
             val base = context.resources.getDimension(R.dimen.dock_height)
-            (base * scale).toInt().coerceIn((64 * density).toInt(), (104 * density).toInt())
+            (base * scale).toInt().coerceIn((64 * density).toInt(), (140 * density).toInt())
         } else {
             app.vela.carlauncher.ui.dockSidebarWidth(carSettings.getEffectiveDockSize(portrait), density)
         }

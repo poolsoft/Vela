@@ -3,6 +3,7 @@ package app.vela.carlauncher.ui
 import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.TextView
 import app.vela.carlauncher.ui.VelaPopupMenu as PopupMenu
@@ -166,6 +167,40 @@ class CarAppDockHost(
         }
         shortcutAdapter.setItemSize(size)
         fitShortcutRows()
+
+        // Mini muzik kutusu yukseklik ve buton olceklemesi
+        if (!isVertical) {
+            miniMusicContainer?.let { container ->
+                val miniHeight = (size * 0.72f).toInt().coerceIn((36 * density).toInt(), (58 * density).toInt())
+                val miniIconSize = (miniHeight * 0.5f).toInt().coerceAtLeast((18 * density).toInt())
+                container.layoutParams = container.layoutParams.apply {
+                    this.height = miniHeight
+                }
+                rootView.findViewById<View>(R.id.mini_music_icon)?.let { v ->
+                    v.layoutParams = (v.layoutParams as? android.widget.LinearLayout.LayoutParams
+                        ?: android.widget.LinearLayout.LayoutParams(miniIconSize, miniIconSize)).apply {
+                        this.width = miniIconSize
+                        this.height = miniIconSize
+                    }
+                }
+                val btnSize = (miniHeight * 0.7f).toInt()
+                rootView.findViewById<View>(R.id.mini_btn_play)?.let { v ->
+                    v.layoutParams = (v.layoutParams as? android.widget.LinearLayout.LayoutParams
+                        ?: android.widget.LinearLayout.LayoutParams(btnSize, btnSize)).apply {
+                        this.width = btnSize
+                        this.height = btnSize
+                    }
+                }
+                rootView.findViewById<View>(R.id.mini_btn_next)?.let { v ->
+                    v.layoutParams = (v.layoutParams as? android.widget.LinearLayout.LayoutParams
+                        ?: android.widget.LinearLayout.LayoutParams(btnSize, btnSize)).apply {
+                        this.width = btnSize
+                        this.height = btnSize
+                    }
+                }
+            }
+        }
+
         miniMusicContainer?.visibility = if (!isVertical && width / density >= 640) View.VISIBLE else View.GONE
         rootView.findViewById<View>(R.id.btn_assistant)?.visibility =
             if (isVertical || width / density >= 480) View.VISIBLE else View.GONE
