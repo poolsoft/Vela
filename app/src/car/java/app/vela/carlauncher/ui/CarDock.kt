@@ -182,11 +182,9 @@ class DynamicDockShortcutAdapter(
         val size = itemSizePx.takeIf { it > 0 } ?: (48 * density).toInt()
 
         val button = ImageButton(parent.context).apply {
-            layoutParams = ViewGroup.MarginLayoutParams(size, size).apply {
-                topMargin = (2 * density).toInt()
-                bottomMargin = (2 * density).toInt()
-                leftMargin = (2 * density).toInt()
-                rightMargin = (2 * density).toInt()
+            layoutParams = RecyclerView.LayoutParams(size, size).apply {
+                val margin = (2 * density).toInt()
+                setMargins(margin, margin, margin, margin)
             }
             setBackgroundResource(R.drawable.bg_dock_item_ripple)
             scaleType = ImageView.ScaleType.FIT_CENTER

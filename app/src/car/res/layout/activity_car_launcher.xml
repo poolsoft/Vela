@@ -61,8 +61,7 @@
         android:elevation="8dp"
         android:clipToPadding="false"
         android:paddingHorizontal="4dp"
-        android:paddingTop="2dp"
-        android:paddingBottom="0dp"
+        android:paddingVertical="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">

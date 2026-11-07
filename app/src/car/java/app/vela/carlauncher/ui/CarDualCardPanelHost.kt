@@ -16,6 +16,7 @@ import app.vela.carlauncher.model.MedyaParcasi
 import app.vela.carlauncher.ui.VelaPopupMenu as PopupMenu
 import app.vela.carlauncher.widgets.InterlockingClockView
 import app.vela.carlauncher.widgets.MusicVisualizerView
+import app.vela.carlauncher.widgets.FuturisticSpeedometerView
 
 /**
  * Genis / Ultra-genis ekranlar icin (w800dp+) Ustte Telemetri, Altta Muzik Calar iceren
@@ -39,8 +40,9 @@ class CarDualCardPanelHost(
 
     // Telemetri Karti Elemanlari
     private val cardTelemetry: View = rootView.findViewById(R.id.card_telemetry)
+    private val futuristicSpeed: FuturisticSpeedometerView? = rootView.findViewById(R.id.futuristic_speed)
     private val compassText: TextView = rootView.findViewById(R.id.telemetry_compass)
-    private val speedValueText: TextView = rootView.findViewById(R.id.telemetry_speed_value)
+    private val speedValueText: TextView? = rootView.findViewById(R.id.telemetry_speed_value)
     private val speedLimitContainer: FrameLayout = rootView.findViewById(R.id.telemetry_speed_limit_container)
     private val speedLimitText: TextView = rootView.findViewById(R.id.telemetry_speed_limit_text)
     private val menuBtn: ImageButton = rootView.findViewById(R.id.dual_panel_menu_btn)
@@ -90,20 +92,21 @@ class CarDualCardPanelHost(
 
     fun updateTelemetri(t: HizTelemetrisi) {
         val speed = t.anlikHizKmh.coerceAtLeast(0)
-        speedValueText.text = speed.toString()
+        futuristicSpeed?.setSpeed(speed.toFloat())
+        speedValueText?.text = speed.toString()
 
         val speedLimit = t.hizSiniriKmh
         if (speedLimit > 0) {
             speedLimitContainer.visibility = View.VISIBLE
             speedLimitText.text = speedLimit.toString()
             if (speed > speedLimit) {
-                speedValueText.setTextColor(Color.parseColor("#FF5252"))
+                speedValueText?.setTextColor(Color.parseColor("#FF5252"))
             } else {
-                speedValueText.setTextColor(Color.WHITE)
+                speedValueText?.setTextColor(Color.WHITE)
             }
         } else {
             speedLimitContainer.visibility = View.GONE
-            speedValueText.setTextColor(Color.WHITE)
+            speedValueText?.setTextColor(Color.WHITE)
         }
 
         compassText.text = pusulaMetni(t.pusulaYonu)
