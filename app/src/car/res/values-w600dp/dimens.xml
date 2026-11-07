@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Orta Genislik Ekranlar (w600dp+) -->
+    <dimen name="dock_height">58dp</dimen>
+    <dimen name="dock_icon_size">40dp</dimen>
+    <dimen name="dock_icon_padding">6dp</dimen>
+    <dimen name="dock_clock_text_size">20sp</dimen>
+    <dimen name="dock_music_height">44dp</dimen>
+    <dimen name="dock_music_min_width">130dp</dimen>
+
+    <dimen name="map_margin_top">6dp</dimen>
+    <dimen name="map_margin_side">6dp</dimen>
+    <dimen name="widget_panel_width">360dp</dimen>
+</resources>

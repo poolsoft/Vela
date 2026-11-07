@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Genis / Ultra-Genis Ekranlar (w800dp+ Landscape) -->
+    <dimen name="dock_height">72dp</dimen>
+    <dimen name="dock_icon_size">48dp</dimen>
+    <dimen name="dock_icon_padding">8dp</dimen>
+    <dimen name="dock_clock_text_size">24sp</dimen>
+    <dimen name="dock_music_height">52dp</dimen>
+    <dimen name="dock_music_min_width">160dp</dimen>
+
+    <dimen name="map_margin_top">8dp</dimen>
+    <dimen name="map_margin_side">8dp</dimen>
+    <dimen name="widget_panel_width">420dp</dimen>
+</resources>

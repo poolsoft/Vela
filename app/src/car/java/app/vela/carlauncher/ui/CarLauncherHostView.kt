@@ -173,12 +173,16 @@ fun CarLauncherHostView(
                 binding.dockHost?.updateMedia(medya)
                 binding.musicHost?.updateMediaState(medya)
                 binding.unifiedHost?.updateMedia(medya)
+                binding.dualCardHost?.updateMedia(medya)
             }
             binding.dockHost?.updateModeButton(desktop, fullScreenMap)
             binding.dockHost?.setVoiceListening(isVoiceListening, voiceAudioLevel)
 
+            val isWideScreen = !portrait && configuration.screenWidthDp >= 800
             val effectiveMode = if (desktop) "DESKTOP" else if (mapless && contentMode == "UNIFIED") {
                 when (maplessMain) { "dashboard" -> "DASHBOARD"; "speedometer" -> "NEON_DASHBOARD"; else -> "MUSIC" }
+            } else if (contentMode == "UNIFIED" && isWideScreen) {
+                "DUAL_CARD"
             } else contentMode
             if (panelReady && binding.contentMode != effectiveMode) {
                 binding.releasePanel(keepUnified = effectiveMode == "CLOCK" ||
@@ -257,6 +261,15 @@ fun CarLauncherHostView(
                             }
                         }.also { panel.addView(it) }
                     }
+                    "DUAL_CARD" -> {
+                        val dual = binding.dualCardHost ?: CarDualCardPanelHost(
+                            root.context, telemetri, medya,
+                            { latestPlay() }, { latestNext() }, { latestPrevious() },
+                            { latestPanel("MUSIC") }, { latestPanel("NEON_DASHBOARD") },
+                            { latestSettings() }
+                        ).also { binding.dualCardHost = it }
+                        panel.addView(dual.rootView, FrameLayout.LayoutParams(-1, -1))
+                    }
                     else -> {
                         val clock = binding.unifiedHost ?: CarUnifiedPanelHost(
                             root.context, telemetri, medya,
@@ -270,11 +283,13 @@ fun CarLauncherHostView(
             }
             binding.setMapContentVisible(effectiveMode != "CLOCK")
             binding.musicHost?.updateVisualizerType(largeVisualizer, visualizerFps)
-            if (binding.dashboardHost != null && binding.lastTelemetry != telemetri) {
+            if (binding.lastTelemetry != telemetri) {
                 binding.lastTelemetry = telemetri
                 binding.dashboardHost?.updateTelemetri(telemetri)
+                binding.dualCardHost?.updateTelemetri(telemetri)
             }
             binding.unifiedHost?.updateVisualizerType(visualizerType, visualizerFps)
+            binding.dualCardHost?.updateVisualizerType(visualizerType, visualizerFps)
             map.setInterceptTouch(!mapless && contentMode != "UNIFIED" && contentMode != "CLOCK" && !fullScreenMap) { latestPanel("UNIFIED") }
 
             binding.nightDimOverlay?.let { overlay ->
@@ -315,6 +330,7 @@ private class LauncherHostBinding(
     var musicHost: CarMusicPlayerHost? = null
     var dashboardHost: CarDashboardHost? = null
     var unifiedHost: CarUnifiedPanelHost? = null
+    var dualCardHost: CarDualCardPanelHost? = null
     var drawerHost: CarAppDrawerHost? = null
     var panelCompose: ComposeView? = null
     var contentMode: String? = null
@@ -337,10 +353,12 @@ private class LauncherHostBinding(
         drawerHost?.release()
         unifiedHost?.rootView?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
         if (!keepUnified) unifiedHost?.release()
+        dualCardHost?.release()
         panelCompose?.disposeComposition()
         musicHost = null
         dashboardHost = null
         if (!keepUnified) unifiedHost = null
+        dualCardHost = null
         drawerHost = null
         panelCompose = null
         panel.removeAllViews()
