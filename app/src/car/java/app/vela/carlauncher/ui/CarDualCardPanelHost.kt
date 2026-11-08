@@ -53,11 +53,16 @@ class CarDualCardPanelHost(
     private val musicAlbumBg: ImageView = rootView.findViewById(R.id.dual_music_album_bg)
     private val musicTitle: TextView = rootView.findViewById(R.id.dual_music_title)
     private val musicArtist: TextView = rootView.findViewById(R.id.dual_music_artist)
+    private val musicSourceIcon: ImageView? = rootView.findViewById(R.id.dual_music_source_icon)
     private val musicVisualizer: MusicVisualizerView = rootView.findViewById(R.id.dual_music_visualizer)
     private val musicProgress: ProgressBar = rootView.findViewById(R.id.dual_music_progress)
+    private val timeCurrentText: TextView? = rootView.findViewById(R.id.dual_music_time_current)
+    private val timeTotalText: TextView? = rootView.findViewById(R.id.dual_music_time_total)
     private val btnPlay: ImageButton = rootView.findViewById(R.id.dual_music_btn_play)
     private val btnNext: ImageButton = rootView.findViewById(R.id.dual_music_btn_next)
     private val btnPrev: ImageButton = rootView.findViewById(R.id.dual_music_btn_prev)
+    private val btnShuffle: ImageButton? = rootView.findViewById(R.id.dual_music_btn_shuffle)
+    private val btnRepeat: ImageButton? = rootView.findViewById(R.id.dual_music_btn_repeat)
 
     private var appliedVisualizerType: Int? = null
 
@@ -68,6 +73,15 @@ class CarDualCardPanelHost(
         btnPlay.setOnClickListener { onOynatDuraklat() }
         btnNext.setOnClickListener { onSonraki() }
         btnPrev.setOnClickListener { onOnceki() }
+        btnShuffle?.setOnClickListener {
+            val mm = app.vela.carlauncher.media.MusicManager.getInstance(context)
+            mm.setKarisikCal(!mm.internalPlayer.karisikCal.value)
+        }
+        btnRepeat?.setOnClickListener {
+            val mm = app.vela.carlauncher.media.MusicManager.getInstance(context)
+            val yeniMod = (mm.internalPlayer.tekrarModu.value + 1) % 3
+            mm.setTekrarModu(yeniMod)
+        }
 
         menuBtn.setOnClickListener { v ->
             PopupMenu(context, v).apply {
@@ -135,6 +149,8 @@ class CarDualCardPanelHost(
             musicAlbumBg.setImageResource(R.drawable.bg_default_music_art)
         }
 
+        MediaSourceIcon.bind(musicSourceIcon, m)
+
         btnPlay.setImageResource(
             if (m.caliyorMu) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         )
@@ -143,12 +159,25 @@ class CarDualCardPanelHost(
             val progress = ((m.anlikKonumMs.coerceIn(0, m.toplamSureMs).toDouble() / m.toplamSureMs) * 1000).toInt()
             musicProgress.progress = progress.coerceIn(0, 1000)
             musicProgress.visibility = View.VISIBLE
+            timeCurrentText?.text = formatSure(m.anlikKonumMs)
+            timeTotalText?.text = formatSure(m.toplamSureMs)
+            timeCurrentText?.visibility = View.VISIBLE
+            timeTotalText?.visibility = View.VISIBLE
         } else {
             musicProgress.progress = 0
             musicProgress.visibility = View.INVISIBLE
+            timeCurrentText?.visibility = View.INVISIBLE
+            timeTotalText?.visibility = View.INVISIBLE
         }
 
         musicVisualizer.setPlaying(m.caliyorMu)
+    }
+
+    private fun formatSure(sureMs: Long): String {
+        val totalSec = (sureMs / 1000).coerceAtLeast(0)
+        val min = totalSec / 60
+        val sec = totalSec % 60
+        return String.format(java.util.Locale.US, "%d:%02d", min, sec)
     }
 
     fun updateVisualizerType(tip: Int, fps: Int) {

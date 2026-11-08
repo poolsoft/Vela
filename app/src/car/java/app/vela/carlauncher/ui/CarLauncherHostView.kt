@@ -184,6 +184,11 @@ fun CarLauncherHostView(
             } else if (contentMode == "UNIFIED" && isWideScreen) {
                 "DUAL_CARD"
             } else contentMode
+
+            // Ekranda muzik paneli (kucuk panel veya tam player) gorunuyor mu?
+            // Eger harita tam ekran (fullScreenMap) ise veya panel acik degilse ekranda muzik paneli yoktur.
+            val hasMusicPanelOnScreen = !fullScreenMap && (effectiveMode == "DUAL_CARD" || effectiveMode == "UNIFIED" || effectiveMode == "MUSIC")
+            binding.dockHost?.setMusicPanelVisible(hasMusicPanelOnScreen)
             if (panelReady && binding.contentMode != effectiveMode) {
                 binding.releasePanel(keepUnified = effectiveMode == "CLOCK" ||
                     (binding.contentMode == "CLOCK" && effectiveMode == "UNIFIED"))

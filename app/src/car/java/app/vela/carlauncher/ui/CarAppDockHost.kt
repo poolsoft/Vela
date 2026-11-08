@@ -3,7 +3,6 @@ package app.vela.carlauncher.ui
 import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.TextView
 import app.vela.carlauncher.ui.VelaPopupMenu as PopupMenu
@@ -90,9 +89,11 @@ class CarAppDockHost(
         if (isVertical) {
             miniMusicContainer?.visibility = View.GONE
             dockClock?.format24Hour = "HH\nmm"
-            dockClock?.format12Hour = "h\nmm"
+            dockClock?.format12Hour = "hh\nmm"
         } else {
             miniMusicContainer?.visibility = View.VISIBLE
+            dockClock?.format24Hour = "HH:mm"
+            dockClock?.format12Hour = "hh:mm"
         }
 
         dockRecycler?.let { recycler ->
@@ -159,51 +160,43 @@ class CarAppDockHost(
         val dockClock = rootView.findViewById<android.widget.TextClock>(R.id.dock_clock)
         if (dockClock != null) {
             val clockSp = if (isVertical) {
-                ((cross / density) * 0.28f).coerceIn(18f, 28f)
+                ((cross / density) * 0.40f).coerceIn(24f, 40f)
             } else {
-                ((cross / density) * 0.32f).coerceIn(16f, 24f)
+                ((cross / density) * 0.46f).coerceIn(28f, 46f)
             }
             dockClock.textSize = clockSp
+            if (isVertical) {
+                dockClock.format24Hour = "HH\nmm"
+                dockClock.format12Hour = "hh\nmm"
+            } else {
+                dockClock.format24Hour = "HH:mm"
+                dockClock.format12Hour = "hh:mm"
+            }
         }
         shortcutAdapter.setItemSize(size)
         fitShortcutRows()
-
-        // Mini muzik kutusu yukseklik ve buton olceklemesi
-        if (!isVertical) {
-            miniMusicContainer?.let { container ->
-                val miniHeight = (size * 0.72f).toInt().coerceIn((36 * density).toInt(), (58 * density).toInt())
-                val miniIconSize = (miniHeight * 0.5f).toInt().coerceAtLeast((18 * density).toInt())
-                container.layoutParams = container.layoutParams.apply {
-                    this.height = miniHeight
-                }
-                rootView.findViewById<View>(R.id.mini_music_icon)?.let { v ->
-                    v.layoutParams = (v.layoutParams as? android.widget.LinearLayout.LayoutParams
-                        ?: android.widget.LinearLayout.LayoutParams(miniIconSize, miniIconSize)).apply {
-                        this.width = miniIconSize
-                        this.height = miniIconSize
-                    }
-                }
-                val btnSize = (miniHeight * 0.7f).toInt()
-                rootView.findViewById<View>(R.id.mini_btn_play)?.let { v ->
-                    v.layoutParams = (v.layoutParams as? android.widget.LinearLayout.LayoutParams
-                        ?: android.widget.LinearLayout.LayoutParams(btnSize, btnSize)).apply {
-                        this.width = btnSize
-                        this.height = btnSize
-                    }
-                }
-                rootView.findViewById<View>(R.id.mini_btn_next)?.let { v ->
-                    v.layoutParams = (v.layoutParams as? android.widget.LinearLayout.LayoutParams
-                        ?: android.widget.LinearLayout.LayoutParams(btnSize, btnSize)).apply {
-                        this.width = btnSize
-                        this.height = btnSize
-                    }
-                }
-            }
-        }
-
-        miniMusicContainer?.visibility = if (!isVertical && width / density >= 640) View.VISIBLE else View.GONE
+        updateMiniMusicVisibility()
         rootView.findViewById<View>(R.id.btn_assistant)?.visibility =
             if (isVertical || width / density >= 480) View.VISIBLE else View.GONE
+    }
+
+    private var hasActiveScreenMusicPanel = false
+
+    fun setMusicPanelVisible(hasPanel: Boolean) {
+        if (hasActiveScreenMusicPanel == hasPanel) return
+        hasActiveScreenMusicPanel = hasPanel
+        updateMiniMusicVisibility()
+    }
+
+    private fun updateMiniMusicVisibility() {
+        val width = rootView.width
+        val density = context.resources.displayMetrics.density
+        miniMusicContainer?.visibility =
+            if (!isVertical && !hasActiveScreenMusicPanel && (width <= 0 || width / density >= 640)) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
     }
 
     private fun fitShortcutRows() {
