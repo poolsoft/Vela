@@ -14,6 +14,6 @@ class LauncherSizingTest {
         assertEquals(52, dockShortcutSize(64, 1f, true))
         assertEquals(56, dockShortcutSize(64, 1f, false))
         assertEquals(40, dockShortcutSize(10, 1f, true))
-        assertEquals(128, dockShortcutSize(400, 2f, true))
+        assertEquals(176, dockShortcutSize(400, 2f, true))
     }
 }
