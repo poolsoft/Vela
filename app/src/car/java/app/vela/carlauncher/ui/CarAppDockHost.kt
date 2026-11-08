@@ -160,7 +160,7 @@ class CarAppDockHost(
         val dockClock = rootView.findViewById<android.widget.TextClock>(R.id.dock_clock)
         if (dockClock != null) {
             val clockSp = if (isVertical) {
-                ((cross / density) * 0.40f).coerceIn(24f, 40f)
+                ((cross / density) * 0.30f).coerceIn(20f, 30f)
             } else {
                 ((cross / density) * 0.46f).coerceIn(28f, 46f)
             }

@@ -20,8 +20,9 @@
             android:orientation="vertical"
             android:gravity="center"
             android:background="?android:attr/selectableItemBackground"
-            android:paddingTop="2dp"
-            android:paddingBottom="0dp">
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:layout_marginBottom="4dp">
 
             <TextClock
                 android:id="@+id/dock_clock"
@@ -29,12 +30,12 @@
                 android:layout_height="wrap_content"
                 android:text=""
                 android:textColor="@color/cl_m3_light_blue"
-                android:textSize="18sp"
+                android:textSize="22sp"
                 android:includeFontPadding="false"
                 android:textStyle="bold"
                 android:gravity="center"
                 android:fontFamily="sans-serif-black"
-                android:lineSpacingMultiplier="0.8"
+                android:lineSpacingMultiplier="0.9"
                 android:format24Hour="@string/car_dock_clock_24h"
                 android:format12Hour="@string/car_dock_clock_12h"/>
 
