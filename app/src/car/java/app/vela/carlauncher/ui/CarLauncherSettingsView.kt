@@ -525,6 +525,7 @@ private fun CarDockPanelSettingsScreen(
     val panelGenislik by CarLauncherSettings.panelGenislikYuzdesi.collectAsState()
     val panelYukseklik by CarLauncherSettings.panelYukseklikYuzdesi.collectAsState()
     val genislemeDavranisi by CarLauncherSettings.panelGenislemeDavranisi.collectAsState()
+    val dualCardModu by CarLauncherSettings.dualCardModu.collectAsState()
 
     Scaffold(
         topBar = {
@@ -623,6 +624,18 @@ private fun CarDockPanelSettingsScreen(
                         "overlay" to "Haritanın Üzerine Bin"
                     ),
                     onSelect = { CarLauncherSettings.setPanelGenislemeDavranisi(it) }
+                )
+                GroupDivider()
+                ChoicePillRow(
+                    label = "Geniş Ekran Panel Modu",
+                    detail = "Yatay ekranda çift kart (hız göstergesi + müzik) kullanımı",
+                    selectedKey = dualCardModu,
+                    options = listOf(
+                        "auto" to "Otomatik",
+                        "always" to "Çift Kart",
+                        "never" to "Klasik Tek Panel"
+                    ),
+                    onSelect = { CarLauncherSettings.setDualCardModu(it) }
                 )
             }
 

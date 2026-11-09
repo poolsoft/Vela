@@ -71,6 +71,7 @@ fun CarLauncherHostView(
     val dimEnabled by CarLauncherSettings.geceKarartmaEtkin.collectAsState()
     val dimLevel by CarLauncherSettings.geceKarartmaSeviyesi.collectAsState()
     val desktop by CarLauncherSettings.desktopModu.collectAsState()
+    val dualCardSetting by CarLauncherSettings.dualCardModu.collectAsState()
     val mapless by CarLauncherSettings.maplessMode.collectAsState()
     val maplessMain by CarLauncherSettings.maplessMainScreen.collectAsState()
     val visualizerType by CarLauncherSettings.gorsellestiriciTipi.collectAsState()
@@ -178,7 +179,12 @@ fun CarLauncherHostView(
             binding.dockHost?.updateModeButton(desktop, fullScreenMap)
             binding.dockHost?.setVoiceListening(isVoiceListening, voiceAudioLevel)
 
-            val isWideScreen = !portrait && configuration.screenWidthDp >= 800
+            val autoWideScreen = !portrait && configuration.screenWidthDp >= 800 && configuration.screenHeightDp >= 520
+            val isWideScreen = when (dualCardSetting) {
+                "always" -> !portrait
+                "never" -> false
+                else -> autoWideScreen
+            }
             val effectiveMode = if (desktop) "DESKTOP" else if (mapless && contentMode == "UNIFIED") {
                 when (maplessMain) { "dashboard" -> "DASHBOARD"; "speedometer" -> "NEON_DASHBOARD"; else -> "MUSIC" }
             } else if (contentMode == "UNIFIED" && isWideScreen) {

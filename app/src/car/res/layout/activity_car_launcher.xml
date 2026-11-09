@@ -21,7 +21,7 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toTopOf="@+id/app_dock"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@+id/widget_panel"
+        app:layout_constraintEnd_toEndOf="parent"
         android:elevation="4dp"/>
 
     <!-- WIDGET PANEL CONTAINER (Icerik Paneli) -->
