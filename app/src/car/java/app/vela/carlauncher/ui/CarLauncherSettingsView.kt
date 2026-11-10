@@ -365,7 +365,12 @@ private fun CarAppearanceSettingsScreen(
                         label = "Büyük panel",
                         detail = "Harita kapalıyken açılacak ana ekran",
                         selectedKey = maplessMain,
-                        options = listOf("music" to "Müzik player", "speedometer" to "Speedo", "dashboard" to "Dashboard"),
+                        options = listOf(
+                            "music" to "Müzik player",
+                            "speedometer" to "Speedo",
+                            "dashboard" to "Dashboard",
+                            "desktop" to "Masaüstü (Widget)"
+                        ),
                         onSelect = { CarLauncherSettings.setMaplessMainScreen(it) }
                     )
                     GroupDivider()

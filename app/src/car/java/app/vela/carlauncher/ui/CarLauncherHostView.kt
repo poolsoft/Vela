@@ -186,7 +186,12 @@ fun CarLauncherHostView(
                 else -> autoWideScreen
             }
             val effectiveMode = if (desktop) "DESKTOP" else if (mapless && contentMode == "UNIFIED") {
-                when (maplessMain) { "dashboard" -> "DASHBOARD"; "speedometer" -> "NEON_DASHBOARD"; else -> "MUSIC" }
+                when (maplessMain) {
+                    "dashboard" -> "DASHBOARD"
+                    "speedometer" -> "NEON_DASHBOARD"
+                    "desktop" -> "DESKTOP"
+                    else -> "MUSIC"
+                }
             } else if (contentMode == "UNIFIED" && isWideScreen) {
                 "DUAL_CARD"
             } else contentMode

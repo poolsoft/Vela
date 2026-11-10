@@ -213,7 +213,7 @@ object CarLauncherSettings {
                 sessionInitialized = true
             }
             _maplessMainScreen.value = prefs.getString("car_launcher_mapless_main", "music")
-                ?.takeIf { it in setOf("music", "speedometer", "dashboard") } ?: "music"
+                ?.takeIf { it in setOf("music", "speedometer", "dashboard", "desktop") } ?: "music"
             _maplessScreen.value = prefs.getString("car_launcher_mapless_screen", "speedometer")
                 ?.takeIf { it in setOf("speedometer", "dashboard") } ?: "speedometer"
             _carModeEtkin.value = prefs.getBoolean(KEY_CAR_MODE_ENABLED, true)
@@ -267,7 +267,7 @@ object CarLauncherSettings {
     private val _maplessMainScreen = MutableStateFlow("music")
     val maplessMainScreen = _maplessMainScreen.asStateFlow()
     fun setMaplessMainScreen(screen: String) {
-        require(screen in setOf("music", "speedometer", "dashboard"))
+        require(screen in setOf("music", "speedometer", "dashboard", "desktop"))
         _maplessMainScreen.value = screen
         if (::prefs.isInitialized) prefs.edit().putString("car_launcher_mapless_main", screen).apply()
     }
