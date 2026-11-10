@@ -159,9 +159,15 @@ fun DesktopWidgetPicker(
                                                 ?.toBitmap(240, 130)?.asImageBitmap()
                                         }.getOrNull()
                                     }
+                                    val minW = info.minWidth.coerceAtLeast(1)
+                                    val minH = info.minHeight.coerceAtLeast(1)
+                                    // Android widget standart hucre (grid) tahmini hesabi: cols = (w + 30) / 70
+                                    val cols = ((minW + 30) / 70).coerceIn(1, 6)
+                                    val rows = ((minH + 30) / 70).coerceIn(1, 4)
+                                    val sizeLabel = "${cols}x${rows} ($minW × $minH)"
                                     WidgetChoiceCard(
                                         title = title,
-                                        subtitle = "${info.minWidth.coerceAtLeast(1)} × ${info.minHeight.coerceAtLeast(1)}",
+                                        subtitle = sizeLabel,
                                         preview = {
                                             if (preview != null) Image(preview, title, Modifier.fillMaxWidth().height(82.dp))
                                             else Icon(Icons.Default.Widgets, null, tint = Color(0xFF00E5FF), modifier = Modifier.size(44.dp))
@@ -197,24 +203,50 @@ private fun WidgetChoiceCard(
     Surface(
         color = Color(0xFF24252A),
         shape = RoundedCornerShape(18.dp),
-        modifier = Modifier.width(190.dp).height(205.dp)
+        modifier = Modifier.width(190.dp).height(220.dp)
     ) {
-        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Box(
                 Modifier.fillMaxWidth().height(92.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF33343A)),
                 contentAlignment = Alignment.Center
             ) { preview() }
             Spacer(Modifier.height(8.dp))
-            Text(title, color = if (disabled) Color.Gray else Color.White, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
-            Text(subtitle, color = Color(0xFF9A9CA5), fontSize = 11.sp)
+            Text(
+                text = title,
+                color = if (disabled) Color.Gray else Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp
+            )
+            Text(
+                text = subtitle,
+                color = Color(0xFF9A9CA5),
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             Spacer(Modifier.weight(1f))
             Button(
                 onClick = onAdd,
                 enabled = !disabled,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF45464C)),
-                modifier = Modifier.fillMaxWidth().height(40.dp)
-            ) { Text(if (disabled) "Eklendi" else "Ekle") }
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF00E5FF),
+                    disabledContainerColor = Color(0xFF45464C)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().height(38.dp)
+            ) {
+                Text(
+                    text = if (disabled) "Eklendi" else "Ekle",
+                    color = if (disabled) Color(0xFF9A9CA5) else Color(0xFF0D0E11),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
         }
     }
 }

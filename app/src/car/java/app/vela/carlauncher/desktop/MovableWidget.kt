@@ -104,11 +104,9 @@ fun MovableWidget(
         if (dragging && edge != 0) {
             while (true) {
                 delay(650)
-                val next = pageEdge(edge)
-                if (next != dragPage) {
-                    dragPage = next
-                    edge = 0
-                }
+                val target = pageEdge(edge)
+                dragPage = target
+                edge = 0
             }
         }
     }
@@ -147,9 +145,9 @@ fun MovableWidget(
     }
 
     fun finishDrag() {
-        commitSnapped()
         dragging = false
         edge = 0
+        commitSnapped()
         draggingCallback(false)
     }
 

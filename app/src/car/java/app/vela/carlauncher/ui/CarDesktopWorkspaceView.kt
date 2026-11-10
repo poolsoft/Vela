@@ -293,12 +293,12 @@ fun CarDesktopWorkspaceView(
                                     onEnterEdit = { isEditMode = true },
                                     onDragging = { draggingWidgetId = if (it) widgetId else null },
                                     onPageEdge = { direction ->
-                                        val nextPage = (currentPage + direction).coerceIn(0, lastPage)
-                                        if (nextPage != currentPage) {
-                                            currentPage = nextPage
-                                            coroutineScope.launch { pagerState.animateScrollToPage(nextPage) }
+                                        val targetPage = (currentPage + direction).coerceIn(0, lastPage)
+                                        if (targetPage != currentPage) {
+                                            currentPage = targetPage
+                                            coroutineScope.launch { pagerState.animateScrollToPage(targetPage) }
                                         }
-                                        currentPage
+                                        targetPage
                                     },
                                     workspaceWidth = workspaceWidth,
                                     workspaceHeight = workspaceHeight,
