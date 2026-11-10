@@ -46,8 +46,10 @@ import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 
 private const val SNAP_STEP_DP = 16f
-private const val MIN_SCALE = 0.6f
-private const val MAX_SCALE = 2.2f
+private const val MIN_SCALE = 0.5f
+private const val MAX_SCALE = 2.5f
+private const val MIN_WIDTH_DP = 120f
+private const val MIN_HEIGHT_DP = 60f
 
 /**
  * UmainLauncher tabanli serbest tasinabilir ve boyutlandirilabilir widget saricisi (MovableWidget).
@@ -261,8 +263,11 @@ fun MovableWidget(
                         .pointerInput(Unit) {
                             detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
                                 change.consume()
-                                widthScale = (widthScale + drag.x.toDp().value / 180f)
-                                    .coerceIn(MIN_SCALE, MAX_SCALE)
+                                val baseW = widgetWidth.coerceAtLeast(MIN_WIDTH_DP)
+                                val minWScale = maxOf(MIN_SCALE, MIN_WIDTH_DP / baseW)
+                                val maxWScale = minOf(MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
+                                val delta = (drag.x / density) / baseW
+                                widthScale = (widthScale + delta).coerceIn(minWScale, maxWScale)
                             }
                         }
                 )
@@ -277,8 +282,11 @@ fun MovableWidget(
                         .pointerInput(Unit) {
                             detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
                                 change.consume()
-                                heightScale = (heightScale + drag.y.toDp().value / 180f)
-                                    .coerceIn(MIN_SCALE, MAX_SCALE)
+                                val baseH = widgetHeight.coerceAtLeast(MIN_HEIGHT_DP)
+                                val minHScale = maxOf(MIN_SCALE, MIN_HEIGHT_DP / baseH)
+                                val maxHScale = minOf(MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
+                                val delta = (drag.y / density) / baseH
+                                heightScale = (heightScale + delta).coerceIn(minHScale, maxHScale)
                             }
                         }
                 )
@@ -292,9 +300,22 @@ fun MovableWidget(
                         .pointerInput(Unit) {
                             detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
                                 change.consume()
-                                val delta = (drag.x + drag.y).toDp().value / 180f
-                                widthScale = (widthScale + delta).coerceIn(MIN_SCALE, MAX_SCALE)
-                                heightScale = (heightScale + delta).coerceIn(MIN_SCALE, MAX_SCALE)
+                                val baseW = widgetWidth.coerceAtLeast(MIN_WIDTH_DP)
+                                val baseH = widgetHeight.coerceAtLeast(MIN_HEIGHT_DP)
+                                val minWScale = maxOf(MIN_SCALE, MIN_WIDTH_DP / baseW)
+                                val minHScale = maxOf(MIN_SCALE, MIN_HEIGHT_DP / baseH)
+                                val minCommonScale = maxOf(minWScale, minHScale)
+                                val maxWScale = minOf(MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
+                                val maxHScale = minOf(MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
+                                val maxCommonScale = minOf(maxWScale, maxHScale).coerceAtLeast(minCommonScale)
+
+                                val deltaX = (drag.x / density) / baseW
+                                val deltaY = (drag.y / density) / baseH
+                                val delta = (deltaX + deltaY) / 2f
+
+                                val newScale = (widthScale + delta).coerceIn(minCommonScale, maxCommonScale)
+                                widthScale = newScale
+                                heightScale = newScale
                             }
                         }
                 )
