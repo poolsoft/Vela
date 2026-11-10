@@ -160,11 +160,12 @@ class CarAppDockHost(
         val dockClock = rootView.findViewById<android.widget.TextClock>(R.id.dock_clock)
         if (dockClock != null) {
             val clockSp = if (isVertical) {
-                ((cross / density) * 0.30f).coerceIn(20f, 30f)
+                ((cross / density) * 0.28f).coerceIn(18f, 26f)
             } else {
-                ((cross / density) * 0.46f).coerceIn(28f, 46f)
+                ((cross / density) * 0.36f).coerceIn(20f, 32f)
             }
             dockClock.textSize = clockSp
+            dockClock.includeFontPadding = false
             if (isVertical) {
                 dockClock.format24Hour = "HH\nmm"
                 dockClock.format12Hour = "hh\nmm"

@@ -416,7 +416,7 @@ private fun CarAppearanceSettingsScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            SettingsGroup(title = "Ekran Yönü ve Yerleşim") {
+            SettingsGroup(title = "Harita ve Navigasyon Görünümü") {
                 val context = androidx.compose.ui.platform.LocalContext.current
                 ChoicePillRow(
                     label = "Ekran konumu",
@@ -434,6 +434,18 @@ private fun CarAppearanceSettingsScreen(
                     onValueChange = { app.vela.ui.MapScreenPosition.setHorizontalBias(context, it / 100) }
                 )
                 GroupDivider()
+                val serbestSurusCaddeBar by CarLauncherSettings.serbestSurusCaddeBar.collectAsState()
+                ToggleRow(
+                    label = "Serbest Sürüşte Cadde Adı Çubuğu",
+                    hint = "Navigasyon rotası yokken bulunulan cadde ve sokak adını haritanın altında şık bir bar olarak gösterir",
+                    checked = serbestSurusCaddeBar,
+                    onCheckedChange = { CarLauncherSettings.setSerbestSurusCaddeBar(it) }
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            SettingsGroup(title = "Ekran Yönü ve Davranışı") {
                 ChoicePillRow(
                     label = "Ekran Yönlendirmesi",
                     detail = "Aracın baş ünitesine göre varsayılan ekran oryantasyonu",
@@ -451,14 +463,6 @@ private fun CarAppearanceSettingsScreen(
                     hint = "Ekran dikey konumdayken widget panelini gizleyip haritayı tam ekran yapar",
                     checked = dikeydeSadeceHarita,
                     onCheckedChange = { CarLauncherSettings.setDikeydeSadeceHarita(it) }
-                )
-                GroupDivider()
-                val serbestSurusCaddeBar by CarLauncherSettings.serbestSurusCaddeBar.collectAsState()
-                ToggleRow(
-                    label = "Serbest Sürüşte Cadde Adı Çubuğu",
-                    hint = "Navigasyon rotası yokken bulunulan cadde ve sokak adını haritanın altında şık bir bar olarak gösterir",
-                    checked = serbestSurusCaddeBar,
-                    onCheckedChange = { CarLauncherSettings.setSerbestSurusCaddeBar(it) }
                 )
             }
 

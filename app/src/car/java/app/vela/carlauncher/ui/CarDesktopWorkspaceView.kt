@@ -381,18 +381,19 @@ fun CarDesktopWorkspaceView(
                 }
             }
 
-            // 2. YUZEN KONTROL CUBUGU (Edit / Lock / Add / Reset)
-            FloatingDesktopControls(
-                isEditMode = isEditMode,
-                onToggleEditMode = { isEditMode = !isEditMode },
-                onOpenWidgetPicker = { showWidgetPicker = true },
-                onOpenWallpaperPicker = { showWallpaperDialog = true },
-                onResetLayout = { layoutStore.resetLayout(); currentPage = 0 },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-                    .zIndex(200f)
-            )
+            // 2. YUZEN KONTROL CUBUGU (Sadece Edit Modunda Gorunur: Ekle / Duvar Kagidi / Sifirla / Kaydet)
+            if (isEditMode) {
+                FloatingDesktopControls(
+                    onExitEditMode = { isEditMode = false },
+                    onOpenWidgetPicker = { showWidgetPicker = true },
+                    onOpenWallpaperPicker = { showWallpaperDialog = true },
+                    onResetLayout = { layoutStore.resetLayout(); currentPage = 0 },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                        .zIndex(200f)
+                )
+            }
 
             // 3. WIDGET EKLEME DIYALOGU (Kullanicinin 7-8 Widget'i)
             if (showWidgetPicker) {
@@ -1020,8 +1021,7 @@ private fun DesktopWidgetSettingsDialog(
 
 @Composable
 private fun FloatingDesktopControls(
-    isEditMode: Boolean,
-    onToggleEditMode: () -> Unit,
+    onExitEditMode: () -> Unit,
     onOpenWidgetPicker: () -> Unit,
     onOpenWallpaperPicker: () -> Unit,
     onResetLayout: () -> Unit,
@@ -1032,49 +1032,47 @@ private fun FloatingDesktopControls(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (isEditMode) {
-            FloatingActionButton(
-                onClick = onResetLayout,
-                containerColor = Color(0xFF2A2D40),
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size(42.dp)
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Sıfırla", modifier = Modifier.size(18.dp))
-            }
-
-            FloatingActionButton(
-                onClick = onOpenWallpaperPicker,
-                containerColor = Color(0xFF2A2D40),
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size(42.dp)
-            ) {
-                Icon(Icons.Default.Wallpaper, contentDescription = "Duvar Kağıdı", modifier = Modifier.size(18.dp))
-            }
-
-            FloatingActionButton(
-                onClick = onOpenWidgetPicker,
-                containerColor = Color(0xFF00E5FF),
-                contentColor = Color.Black,
-                shape = CircleShape,
-                modifier = Modifier.size(46.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Widget Ekle", modifier = Modifier.size(24.dp))
-            }
+        FloatingActionButton(
+            onClick = onResetLayout,
+            containerColor = Color(0xFF2A2D40),
+            contentColor = Color.White,
+            shape = CircleShape,
+            modifier = Modifier.size(42.dp)
+        ) {
+            Icon(Icons.Default.Refresh, contentDescription = "Sıfırla", modifier = Modifier.size(18.dp))
         }
 
         FloatingActionButton(
-            onClick = onToggleEditMode,
-            containerColor = if (isEditMode) Color(0xFF30D158) else Color(0x991E2132),
-            contentColor = if (isEditMode) Color.Black else Color.White,
+            onClick = onOpenWallpaperPicker,
+            containerColor = Color(0xFF2A2D40),
+            contentColor = Color.White,
+            shape = CircleShape,
+            modifier = Modifier.size(42.dp)
+        ) {
+            Icon(Icons.Default.Wallpaper, contentDescription = "Duvar Kağıdı", modifier = Modifier.size(18.dp))
+        }
+
+        FloatingActionButton(
+            onClick = onOpenWidgetPicker,
+            containerColor = Color(0xFF00E5FF),
+            contentColor = Color.Black,
+            shape = CircleShape,
+            modifier = Modifier.size(46.dp)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Widget Ekle", modifier = Modifier.size(24.dp))
+        }
+
+        FloatingActionButton(
+            onClick = onExitEditMode,
+            containerColor = Color(0xFF30D158),
+            contentColor = Color.Black,
             shape = CircleShape,
             modifier = Modifier.size(46.dp)
         ) {
             Icon(
-                imageVector = if (isEditMode) Icons.Default.Check else Icons.Default.Edit,
-                contentDescription = if (isEditMode) "Kaydet" else "Düzenle",
-                modifier = Modifier.size(20.dp)
+                imageVector = Icons.Default.Check,
+                contentDescription = "Kaydet",
+                modifier = Modifier.size(22.dp)
             )
         }
     }
