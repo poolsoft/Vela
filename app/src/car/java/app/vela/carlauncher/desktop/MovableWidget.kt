@@ -126,6 +126,8 @@ fun MovableWidget(
     val baseHeight = (if (initialBaseHeight > 0f) initialBaseHeight else widgetHeight).coerceAtLeast(MIN_HEIGHT_DP)
     val currentPixelWidth = (baseWidth * widthScale).coerceAtLeast(MIN_WIDTH_DP)
     val currentPixelHeight = (baseHeight * heightScale).coerceAtLeast(MIN_HEIGHT_DP)
+    // Non-uniform uzamayi/sundurulmeyi onlemek icin icerige uygulanan en-boy dengeli olcek
+    val contentScale = minOf(widthScale, heightScale)
 
     fun commitSnapped() {
         val snappedDx = (if (currentSnapToGrid) (dx / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP else dx)
@@ -210,8 +212,8 @@ fun MovableWidget(
                     }
                 }
                 .graphicsLayer {
-                    scaleX = widthScale
-                    scaleY = heightScale
+                    scaleX = contentScale
+                    scaleY = contentScale
                     transformOrigin = TransformOrigin(0f, 0f)
                 }
         ) {
@@ -290,7 +292,7 @@ fun MovableWidget(
                 HandleSurface(
                     icon = Icons.Default.OpenInFull,
                     description = "Dikey boyutlandir",
-                    rotation = 45f,
+                    rotation = 135f,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .offset(0.dp, 6.dp)
