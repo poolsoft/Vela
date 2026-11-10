@@ -20,7 +20,7 @@ class WorkspaceGridTest {
             val right = placement.dx + widths.getValue(id) * placement.scale
             val bottom = placement.dy + heights.getValue(id) * placement.scale
             assertTrue(placement.dx >= 0f && right <= 400f)
-            assertTrue(placement.dy >= 0f && bottom <= 704f)
+            assertTrue(placement.dy >= 0f && bottom <= 760f)
         }
         result.entries.forEach { (id, a) ->
             result.entries.filter { it.key != id && it.value.page == a.page }.forEach { (otherId, b) ->
@@ -41,7 +41,7 @@ class WorkspaceGridTest {
 
         assertEquals(2, result.page)
         assertTrue(result.dx <= 100f)
-        assertTrue(result.dy <= 384f)
+        assertTrue(result.dy <= 600f)
     }
 
     @Test

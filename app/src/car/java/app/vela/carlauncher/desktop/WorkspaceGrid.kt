@@ -7,7 +7,7 @@ import kotlin.math.roundToInt
 object WorkspaceGrid {
     private const val STEP = 16f
 
-    private fun size(id: String): Pair<Float, Float> = when {
+    fun size(id: String): Pair<Float, Float> = when {
         id.startsWith(WidgetIds.APP_PREFIX) -> 80f to 96f
         id == WidgetIds.CLOCK -> 260f to 100f
         id == WidgetIds.STATUS -> 280f to 140f
@@ -30,7 +30,7 @@ object WorkspaceGrid {
         if (width <= 0f || height <= 0f) return emptyMap()
         val occupied = mutableMapOf<Int, MutableList<Rect>>()
         val result = linkedMapOf<String, WidgetPlacement>()
-        val usableHeight = (height - 56f).coerceAtLeast(80f)
+        val usableHeight = (height - 8f).coerceAtLeast(80f)
         ids.sortedWith(compareBy<String> { saved[it]?.page ?: 0 }.thenBy {
             listOf(WidgetIds.CLOCK, WidgetIds.STATUS, WidgetIds.SPEEDOMETER, WidgetIds.MUSIC,
                 WidgetIds.DOCK).indexOf(it).let { rank -> if (rank < 0) 100 else rank }

@@ -594,10 +594,10 @@ private fun CarDockPanelSettingsScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            SettingsGroup(title = "Yan Panel (Widget & Medya)") {
+            SettingsGroup(title = "Bölünmüş Ekran Paneli (Küçük Panel)") {
                 ChoicePillRow(
                     label = "Panel Yerleşim Kenarı",
-                    detail = "Küçük panelin haritaya göre bulunacağı taraf",
+                    detail = "Küçük panelin yatay ekranda haritaya göre duracağı taraf",
                     selectedKey = panelKonumu,
                     options = listOf(
                         "left" to "Sol Taraf",
@@ -608,7 +608,7 @@ private fun CarDockPanelSettingsScreen(
                 GroupDivider()
                 SliderRow(
                     label = "Yatay Ekran Panel Genişliği",
-                    detail = "Yatay modda panelin ekran genişliğine oranı",
+                    detail = "Yatay modda küçük panelin ekran genişliğine oranı",
                     value = panelGenislik * 100f,
                     valueRange = 0f..60f,
                     unit = "%",
@@ -626,10 +626,10 @@ private fun CarDockPanelSettingsScreen(
                 GroupDivider()
                 ChoicePillRow(
                     label = "Genişleme Davranışı",
-                    detail = "Panel büyütüldüğünde haritanın nasıl tepki vereceği",
+                    detail = "Panel büyütüldüğünde haritanın nasıl tepki vereceği (takas veya üzerine binme)",
                     selectedKey = genislemeDavranisi,
                     options = listOf(
-                        "swap" to "Haritayı Küçült",
+                        "swap" to "Haritayı Küçült (Takas)",
                         "overlay" to "Haritanın Üzerine Bin"
                     ),
                     onSelect = { CarLauncherSettings.setPanelGenislemeDavranisi(it) }

@@ -96,6 +96,8 @@ fun MovableWidget(
     var heightScale by remember { mutableFloatStateOf(placement.heightScale) }
     var widgetWidth by remember { mutableFloatStateOf(0f) }
     var widgetHeight by remember { mutableFloatStateOf(0f) }
+    var initialBaseWidth by remember { mutableFloatStateOf(0f) }
+    var initialBaseHeight by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(edge, dragging) {
         if (dragging && edge != 0) {
@@ -189,8 +191,12 @@ fun MovableWidget(
             modifier = Modifier
                 .onSizeChanged {
                     if (it.width > 0 && it.height > 0) {
-                        widgetWidth = it.width / density
-                        widgetHeight = it.height / density
+                        val w = it.width / density
+                        val h = it.height / density
+                        widgetWidth = w
+                        widgetHeight = h
+                        if (initialBaseWidth <= 0f) initialBaseWidth = w
+                        if (initialBaseHeight <= 0f) initialBaseHeight = h
                     }
                 }
                 .graphicsLayer {
@@ -263,7 +269,7 @@ fun MovableWidget(
                         .pointerInput(Unit) {
                             detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
                                 change.consume()
-                                val baseW = widgetWidth.coerceAtLeast(MIN_WIDTH_DP)
+                                val baseW = (if (initialBaseWidth > 0f) initialBaseWidth else widgetWidth).coerceAtLeast(MIN_WIDTH_DP)
                                 val minWScale = maxOf(MIN_SCALE, MIN_WIDTH_DP / baseW)
                                 val maxWScale = minOf(MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
                                 val delta = (drag.x / density) / baseW
@@ -282,7 +288,7 @@ fun MovableWidget(
                         .pointerInput(Unit) {
                             detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
                                 change.consume()
-                                val baseH = widgetHeight.coerceAtLeast(MIN_HEIGHT_DP)
+                                val baseH = (if (initialBaseHeight > 0f) initialBaseHeight else widgetHeight).coerceAtLeast(MIN_HEIGHT_DP)
                                 val minHScale = maxOf(MIN_SCALE, MIN_HEIGHT_DP / baseH)
                                 val maxHScale = minOf(MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
                                 val delta = (drag.y / density) / baseH
@@ -300,8 +306,8 @@ fun MovableWidget(
                         .pointerInput(Unit) {
                             detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
                                 change.consume()
-                                val baseW = widgetWidth.coerceAtLeast(MIN_WIDTH_DP)
-                                val baseH = widgetHeight.coerceAtLeast(MIN_HEIGHT_DP)
+                                val baseW = (if (initialBaseWidth > 0f) initialBaseWidth else widgetWidth).coerceAtLeast(MIN_WIDTH_DP)
+                                val baseH = (if (initialBaseHeight > 0f) initialBaseHeight else widgetHeight).coerceAtLeast(MIN_HEIGHT_DP)
                                 val minWScale = maxOf(MIN_SCALE, MIN_WIDTH_DP / baseW)
                                 val minHScale = maxOf(MIN_SCALE, MIN_HEIGHT_DP / baseH)
                                 val minCommonScale = maxOf(minWScale, minHScale)
