@@ -12,6 +12,9 @@ import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -38,6 +41,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 
@@ -147,10 +151,15 @@ fun MovableWidget(
         }
     }
 
-    Box(modifier = modifier.offset(
-        dx.coerceIn(0f, (workspaceWidth - widgetWidth * widthScale).coerceAtLeast(0f)).dp,
-        dy.coerceIn(0f, (workspaceHeight - widgetHeight * heightScale).coerceAtLeast(0f)).dp
-    ).pointerInput(Unit) {
+    Box(
+        modifier = modifier
+            .offset(
+                dx.coerceIn(0f, (workspaceWidth - widgetWidth * widthScale).coerceAtLeast(0f)).dp,
+                dy.coerceIn(0f, (workspaceHeight - widgetHeight * heightScale).coerceAtLeast(0f)).dp
+            )
+            .width((widgetWidth * widthScale).takeIf { it > 0f }?.dp ?: Dp.Unspecified)
+            .height((widgetHeight * heightScale).takeIf { it > 0f }?.dp ?: Dp.Unspecified)
+            .pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             if (!editing) {
@@ -177,8 +186,10 @@ fun MovableWidget(
         Box(
             modifier = Modifier
                 .onSizeChanged {
-                    widgetWidth = it.width / density
-                    widgetHeight = it.height / density
+                    if (it.width > 0 && it.height > 0) {
+                        widgetWidth = it.width / density
+                        widgetHeight = it.height / density
+                    }
                 }
                 .graphicsLayer {
                     scaleX = widthScale
@@ -190,23 +201,21 @@ fun MovableWidget(
         }
 
         if (showControls) {
-            if (widgetWidth > 0f && widgetHeight > 0f) {
-                Box(
-                    Modifier
-                        .size((widgetWidth * widthScale).dp, (widgetHeight * heightScale).dp)
-                        .border(1.dp, Color(0xAA00E5FF), RoundedCornerShape(10.dp))
-                        .pointerInput(Unit) {
-                            detectDragGestures(
-                                onDragStart = { dragging = true; draggingCallback(true) },
-                                onDragEnd = { finishDrag() },
-                                onDragCancel = { finishDrag() }
-                            ) { change, drag ->
-                                change.consume()
-                                moveBy(drag.x, drag.y)
-                            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .border(1.dp, Color(0xAA00E5FF), RoundedCornerShape(10.dp))
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { dragging = true; draggingCallback(true) },
+                            onDragEnd = { finishDrag() },
+                            onDragCancel = { finishDrag() }
+                        ) { change, drag ->
+                            change.consume()
+                            moveBy(drag.x, drag.y)
                         }
-                )
-            }
+                    }
+            )
             if (dragViaHandle) {
                 HandleSurface(
                     icon = Icons.Default.OpenWith,

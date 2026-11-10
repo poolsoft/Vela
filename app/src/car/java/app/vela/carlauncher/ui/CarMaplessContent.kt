@@ -15,12 +15,34 @@ import app.vela.carlauncher.telemetry.CarTelemetryManager
 fun CarMaplessContent(onSettings: () -> Unit) {
     val context = LocalContext.current
     val telemetry = remember(context) { CarTelemetryManager.getInstance(context) }
+    val mediaManager = remember(context) { app.vela.carlauncher.media.CarMediaManager.getInstance(context) }
     val state by telemetry.telemetriDurumu.collectAsStateWithLifecycle()
+    val media by mediaManager.medyaDurumu.collectAsStateWithLifecycle()
     val screen by CarLauncherSettings.maplessScreen.collectAsState()
     val settings by rememberUpdatedState(onSettings)
     Box(Modifier.fillMaxSize()) {
         when (screen) {
             "dashboard" -> CarDashboardView(state, onKapat = null, Modifier.fillMaxSize())
+            "music" -> {
+                val host = remember(context) {
+                    CarUnifiedPanelHost(
+                        context, state, media,
+                        onOynatDuraklat = { mediaManager.oynatVeyaDuraklat() },
+                        onSonraki = { mediaManager.sonrakiParca() },
+                        onOnceki = { mediaManager.oncekiParca() },
+                        onMuzikPaneliAc = {},
+                        onDashboardAc = {},
+                        onAyarlarAc = { settings() }
+                    )
+                }
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { host.rootView },
+                    update = {
+                        host.updateMedia(media)
+                    }
+                )
+            }
             else -> {
                 val host = remember(context) { CarDashboardHost(context, onCloseClick = { settings() }, isMapless = true) }
                 AndroidView(

@@ -215,7 +215,7 @@ object CarLauncherSettings {
             _maplessMainScreen.value = prefs.getString("car_launcher_mapless_main", "music")
                 ?.takeIf { it in setOf("music", "speedometer", "dashboard", "desktop") } ?: "music"
             _maplessScreen.value = prefs.getString("car_launcher_mapless_screen", "speedometer")
-                ?.takeIf { it in setOf("speedometer", "dashboard") } ?: "speedometer"
+                ?.takeIf { it in setOf("speedometer", "dashboard", "music") } ?: "speedometer"
             _carModeEtkin.value = prefs.getBoolean(KEY_CAR_MODE_ENABLED, true)
             _tamEkranModu.value = prefs.getBoolean(KEY_IMMERSIVE_MODE, true)
             _durumCubuguGoster.value = !_tamEkranModu.value && prefs.getBoolean(KEY_STATUS_BAR, true)
@@ -302,7 +302,7 @@ object CarLauncherSettings {
         if (::prefs.isInitialized) prefs.edit().putBoolean("car_launcher_mapless_mode", enabled).apply()
     }
     fun setMaplessScreen(screen: String) {
-        require(screen in setOf("speedometer", "dashboard"))
+        require(screen in setOf("speedometer", "dashboard", "music"))
         _maplessScreen.value = screen
         if (::prefs.isInitialized) prefs.edit().putString("car_launcher_mapless_screen", screen).apply()
     }

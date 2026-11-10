@@ -14,6 +14,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.heightIn
@@ -254,79 +258,79 @@ fun CarDesktopWorkspaceView(
             // 0. MASAUSTU ARKA PLANI (Sistem Duvar Kagidi veya Tema)
             DesktopWallpaperView(modifier = Modifier.fillMaxSize())
 
-            // 1. MASAUSTU WIDGETLARI (UmainLauncher MovableWidget Mimarisi)
-            val latestPage by androidx.compose.runtime.rememberUpdatedState(currentPage)
-            val latestLastPage by androidx.compose.runtime.rememberUpdatedState(lastPage)
-            val latestEditing by androidx.compose.runtime.rememberUpdatedState(isEditMode)
-            val latestThreshold by androidx.compose.runtime.rememberUpdatedState(swipeThresholdFraction)
-            Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                var dragDistance = 0f
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        val now = SystemClock.elapsedRealtime()
-                        val thresholdPx = workspaceWidth * density * latestThreshold
-                        if (!latestEditing && now - lastPageChangeAt >= 450L) {
-                            if (dragDistance < -thresholdPx && latestPage < latestLastPage) {
-                                currentPage++
-                                lastPageChangeAt = now
-                            } else if (dragDistance > thresholdPx && latestPage > 0) {
-                                currentPage--
-                                lastPageChangeAt = now
-                            }
-                        }
-                        dragDistance = 0f
-                    },
-                    onHorizontalDrag = { _, amount -> dragDistance += amount }
-                )
-            }) {
-                activeWidgets.forEach { widgetId ->
-                    key(widgetId) {
-                    if (resolvedLayout[widgetId]?.page == currentPage || draggingWidgetId == widgetId) {
-                    val placement = resolvedLayout.getValue(widgetId)
+            val totalPages = (lastPage + 1).coerceAtLeast(1)
+            val pagerState = rememberPagerState(initialPage = currentPage.coerceIn(0, totalPages - 1)) { totalPages }
+            val coroutineScope = rememberCoroutineScope()
 
-                    MovableWidget(
-                        placement = placement,
-                        modifier = Modifier.zIndex(if (draggingWidgetId == widgetId) 100f else 0f),
-                        resizable = true,
-                        dragViaHandle = true,
-                        showControls = isEditMode,
-                        snapToGrid = snapToGrid,
-                        onEnterEdit = { isEditMode = true },
-                        onDragging = { draggingWidgetId = if (it) widgetId else null },
-                        onPageEdge = { direction ->
-                            currentPage = (currentPage + direction).coerceIn(0, lastPage)
-                            currentPage
-                        },
-                        workspaceWidth = workspaceWidth,
-                        workspaceHeight = workspaceHeight,
-                        onRemove = {
-                            if (widgetId.startsWith(WidgetIds.AW_PREFIX)) {
-                                val awId = widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()
-                                if (awId != null) hostController.deleteId(awId)
-                            }
-                            layoutStore.removePlacement(widgetId)
-                        },
-                        onSettings = { selectedWidgetId = widgetId },
-                        onCommit = { newPlacement ->
-                            layoutStore.setPlacement(widgetId, newPlacement)
-                        }
-                    ) {
-                        CompositionLocalProvider(LocalDesktopCardColor provides Color(placement.backgroundColor).let { it.copy(alpha = it.alpha * placement.opacity) }) {
-                        RenderDesktopWidgetContent(
-                            widgetId = WidgetIds.type(widgetId),
-                            saatMetni = saatMetni,
-                            tarihMetni = tarihMetni,
-                            telemetri = telemetri,
-                            medya = medya,
-                            onOynatDuraklat = onOynatDuraklat,
-                            onSonraki = onSonraki,
-                            onOnceki = onOnceki,
-                            onMuzikPaneliAc = onMuzikPaneliAc,
-                            onLaunchApp = onLaunchApp
-                        )
-                        }
-                    }
+            LaunchedEffect(currentPage) {
+                if (pagerState.currentPage != currentPage && currentPage in 0 until totalPages) {
+                    pagerState.animateScrollToPage(currentPage)
                 }
+            }
+            LaunchedEffect(pagerState.currentPage) {
+                if (currentPage != pagerState.currentPage) {
+                    currentPage = pagerState.currentPage
+                }
+            }
+
+            HorizontalPager(
+                state = pagerState,
+                userScrollEnabled = !isEditMode && draggingWidgetId == null,
+                modifier = Modifier.fillMaxSize()
+            ) { pageIndex ->
+                Box(modifier = Modifier.fillMaxSize()) {
+                    activeWidgets.forEach { widgetId ->
+                        key(widgetId) {
+                            val placement = resolvedLayout[widgetId]
+                            if (placement != null && (placement.page == pageIndex || (draggingWidgetId == widgetId && pageIndex == currentPage))) {
+                                MovableWidget(
+                                    placement = placement,
+                                    modifier = Modifier.zIndex(if (draggingWidgetId == widgetId) 100f else 0f),
+                                    resizable = true,
+                                    dragViaHandle = true,
+                                    showControls = isEditMode,
+                                    snapToGrid = snapToGrid,
+                                    onEnterEdit = { isEditMode = true },
+                                    onDragging = { draggingWidgetId = if (it) widgetId else null },
+                                    onPageEdge = { direction ->
+                                        val nextPage = (currentPage + direction).coerceIn(0, lastPage)
+                                        if (nextPage != currentPage) {
+                                            currentPage = nextPage
+                                            coroutineScope.launch { pagerState.animateScrollToPage(nextPage) }
+                                        }
+                                        currentPage
+                                    },
+                                    workspaceWidth = workspaceWidth,
+                                    workspaceHeight = workspaceHeight,
+                                    onRemove = {
+                                        if (widgetId.startsWith(WidgetIds.AW_PREFIX)) {
+                                            val awId = widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()
+                                            if (awId != null) hostController.deleteId(awId)
+                                        }
+                                        layoutStore.removePlacement(widgetId)
+                                    },
+                                    onSettings = { selectedWidgetId = widgetId },
+                                    onCommit = { newPlacement ->
+                                        layoutStore.setPlacement(widgetId, newPlacement)
+                                    }
+                                ) {
+                                    CompositionLocalProvider(LocalDesktopCardColor provides Color(placement.backgroundColor).let { it.copy(alpha = it.alpha * placement.opacity) }) {
+                                        RenderDesktopWidgetContent(
+                                            widgetId = WidgetIds.type(widgetId),
+                                            saatMetni = saatMetni,
+                                            tarihMetni = tarihMetni,
+                                            telemetri = telemetri,
+                                            medya = medya,
+                                            onOynatDuraklat = onOynatDuraklat,
+                                            onSonraki = onSonraki,
+                                            onOnceki = onOnceki,
+                                            onMuzikPaneliAc = onMuzikPaneliAc,
+                                            onLaunchApp = onLaunchApp
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

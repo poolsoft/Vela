@@ -378,7 +378,11 @@ private fun CarAppearanceSettingsScreen(
                         label = "Küçük panel",
                         detail = "Seçim sonraki açılışta da korunur",
                         selectedKey = maplessScreen,
-                        options = listOf("speedometer" to "Hız göstergesi (Speedo)", "dashboard" to "Dashboard"),
+                        options = listOf(
+                            "speedometer" to "Hız göstergesi (Speedo)",
+                            "dashboard" to "Dashboard",
+                            "music" to "Müzik / Saat Paneli"
+                        ),
                         onSelect = { CarLauncherSettings.setMaplessScreen(it) }
                     )
                 }
