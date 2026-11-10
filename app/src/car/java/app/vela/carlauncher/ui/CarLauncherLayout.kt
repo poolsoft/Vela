@@ -170,15 +170,23 @@ fun CarLauncherLayout(
             voiceAudioLevel = voiceAudioLevel,
             onPanelChange = ::showPanel,
             onToggleMode = {
-                when {
-                    desktop -> showSplit()
-                    fullMap && CarLauncherSettings.isDesktopInModeCycleEnabled() -> {
-                        fullMap = false
-                        contentMode = "UNIFIED"
+                if (mapless) {
+                    if (desktop) {
+                        showSplit()
+                    } else {
                         CarLauncherSettings.setDesktopModu(true)
                     }
-                    fullMap -> showSplit()
-                    else -> { contentMode = "UNIFIED"; fullMap = true }
+                } else {
+                    when {
+                        desktop -> showSplit()
+                        fullMap && CarLauncherSettings.isDesktopInModeCycleEnabled() -> {
+                            fullMap = false
+                            contentMode = "UNIFIED"
+                            CarLauncherSettings.setDesktopModu(true)
+                        }
+                        fullMap -> showSplit()
+                        else -> { contentMode = "UNIFIED"; fullMap = true }
+                    }
                 }
             },
             onLaunchApp = ::launchApp,
