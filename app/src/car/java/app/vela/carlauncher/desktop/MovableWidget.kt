@@ -14,7 +14,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -121,11 +122,16 @@ fun MovableWidget(
         heightScale = placement.heightScale
     }
 
+    val baseWidth = (if (initialBaseWidth > 0f) initialBaseWidth else widgetWidth).coerceAtLeast(MIN_WIDTH_DP)
+    val baseHeight = (if (initialBaseHeight > 0f) initialBaseHeight else widgetHeight).coerceAtLeast(MIN_HEIGHT_DP)
+    val currentPixelWidth = (baseWidth * widthScale).coerceAtLeast(MIN_WIDTH_DP)
+    val currentPixelHeight = (baseHeight * heightScale).coerceAtLeast(MIN_HEIGHT_DP)
+
     fun commitSnapped() {
         val snappedDx = (if (currentSnapToGrid) (dx / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP else dx)
-            .coerceIn(0f, (workspaceWidth - widgetWidth * widthScale).coerceAtLeast(0f))
+            .coerceIn(0f, (workspaceWidth - currentPixelWidth).coerceAtLeast(0f))
         val snappedDy = (if (currentSnapToGrid) (dy / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP else dy)
-            .coerceIn(0f, (workspaceHeight - widgetHeight * heightScale).coerceAtLeast(0f))
+            .coerceIn(0f, (workspaceHeight - currentPixelHeight).coerceAtLeast(0f))
         dx = snappedDx
         dy = snappedDy
         onCommit(currentPlacement.copy(
@@ -146,11 +152,11 @@ fun MovableWidget(
     }
 
     fun moveBy(x: Float, y: Float) {
-        dx = (dx + x / density).coerceIn(0f, (workspaceWidth - widgetWidth * widthScale).coerceAtLeast(0f))
-        dy = (dy + y / density).coerceIn(0f, (workspaceHeight - widgetHeight * heightScale).coerceAtLeast(0f))
+        dx = (dx + x / density).coerceIn(0f, (workspaceWidth - currentPixelWidth).coerceAtLeast(0f))
+        dy = (dy + y / density).coerceIn(0f, (workspaceHeight - currentPixelHeight).coerceAtLeast(0f))
         edge = when {
             dx < 12f -> -1
-            dx + widgetWidth * widthScale > workspaceWidth - 12f -> 1
+            dx + currentPixelWidth > workspaceWidth - 12f -> 1
             else -> 0
         }
     }
@@ -158,11 +164,10 @@ fun MovableWidget(
     Box(
         modifier = modifier
             .offset(
-                dx.coerceIn(0f, (workspaceWidth - widgetWidth * widthScale).coerceAtLeast(0f)).dp,
-                dy.coerceIn(0f, (workspaceHeight - widgetHeight * heightScale).coerceAtLeast(0f)).dp
+                dx.coerceIn(0f, (workspaceWidth - currentPixelWidth).coerceAtLeast(0f)).dp,
+                dy.coerceIn(0f, (workspaceHeight - currentPixelHeight).coerceAtLeast(0f)).dp
             )
-            .width((widgetWidth * widthScale).takeIf { it > 0f }?.dp ?: Dp.Unspecified)
-            .height((widgetHeight * heightScale).takeIf { it > 0f }?.dp ?: Dp.Unspecified)
+            .requiredSize(currentPixelWidth.dp, currentPixelHeight.dp)
             .pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -189,14 +194,19 @@ fun MovableWidget(
     }) {
         Box(
             modifier = Modifier
+                .wrapContentSize(unbounded = true, align = Alignment.TopStart)
                 .onSizeChanged {
                     if (it.width > 0 && it.height > 0) {
                         val w = it.width / density
                         val h = it.height / density
-                        widgetWidth = w
-                        widgetHeight = h
-                        if (initialBaseWidth <= 0f) initialBaseWidth = w
-                        if (initialBaseHeight <= 0f) initialBaseHeight = h
+                        if (initialBaseWidth <= 0f) {
+                            initialBaseWidth = w
+                            widgetWidth = w
+                        }
+                        if (initialBaseHeight <= 0f) {
+                            initialBaseHeight = h
+                            widgetHeight = h
+                        }
                     }
                 }
                 .graphicsLayer {
@@ -211,7 +221,7 @@ fun MovableWidget(
         if (showControls) {
             Box(
                 Modifier
-                    .fillMaxSize()
+                    .requiredSize(currentPixelWidth.dp, currentPixelHeight.dp)
                     .border(1.dp, Color(0xAA00E5FF), RoundedCornerShape(10.dp))
                     .pointerInput(Unit) {
                         detectDragGestures(
