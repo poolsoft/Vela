@@ -73,6 +73,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -147,6 +148,11 @@ fun CarDesktopWorkspaceView(
     val swipeThresholdFraction by CarLauncherSettings.workspaceSwipeThreshold.collectAsState()
     val indicatorSeconds by CarLauncherSettings.workspaceIndicatorSeconds.collectAsState()
     val density = LocalDensity.current.density
+    // Perf: hiz telemetrisi ve medya durumu sik degisir; workspace kokunde okunurlarsa
+    // tum pager ve widget'lar recompose olurdu. rememberUpdatedState ile deger yalnizca
+    // icerigini cizen widget lambda'sinda okunur; recompose o widget'la sinirli kalir.
+    val latestTelemetri by rememberUpdatedState(telemetri)
+    val latestMedya by rememberUpdatedState(medya)
 
     // Sistem Duvar Kagidinin arkadan gorunebilmesi icin Activity pencere bayragi
     LaunchedEffect(Unit) {
@@ -164,6 +170,7 @@ fun CarDesktopWorkspaceView(
     var isEditMode by remember { mutableStateOf(false) }
     var showWidgetPicker by remember { mutableStateOf(false) }
     var showWallpaperDialog by remember { mutableStateOf(false) }
+    var showPageDeleteConfirm by remember { mutableStateOf(false) }
     var currentPage by remember { mutableStateOf(0) }
     var draggingWidgetId by remember { mutableStateOf<String?>(null) }
     var selectedWidgetId by remember { mutableStateOf<String?>(null) }
@@ -240,13 +247,19 @@ fun CarDesktopWorkspaceView(
                     )
                 }
         ) {
-            val workspaceWidth = maxWidth.value
-            val workspaceHeight = maxHeight.value
+            // Birim duzeltmesi: maxWidth.value piksel cinsindendir; yerlesim matematigi dp varsayar.
+            // Karisiklik widget'in ekran disina tasinarak sonuc uretiyordu.
+            val workspaceWidth = maxWidth.value / density
+            val workspaceHeight = maxHeight.value / density
             val isPortrait = workspaceHeight > workspaceWidth
             LaunchedEffect(isPortrait) {
                 layoutStore.updateOrientation(isPortrait)
             }
-            val resolvedLayout = WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid)
+            // Perf: resolve O(hucre x widget) maliyetlidir; telemetri/medya guncellemelerinde
+            // yeniden calismamasi icin girislere bagli olarak cache'lenir.
+            val resolvedLayout = remember(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid) {
+                WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid)
+            }
             val lastPage = maxOf(pageCount - 1, resolvedLayout.values.maxOfOrNull { it.page } ?: 0)
             LaunchedEffect(lastPage) { layoutStore.ensurePageCount(lastPage + 1) }
             LaunchedEffect(lastPage, isEditMode) {
@@ -286,7 +299,10 @@ fun CarDesktopWorkspaceView(
                     activeWidgets.forEach { widgetId ->
                         key(widgetId) {
                             val placement = resolvedLayout[widgetId]
-                            if (placement != null && (placement.page == pageIndex || (draggingWidgetId == widgetId && pageIndex == currentPage))) {
+                            // Surukleme sirasinda widget yalnizca hedef sayfada cizilir; eski
+                            // sayfada hayalet kopya birakmak yerine Launcher davranisi uygulanir.
+                            val isDraggingThis = draggingWidgetId == widgetId
+                            if (placement != null && (if (isDraggingThis) pageIndex == currentPage else placement.page == pageIndex)) {
                                 MovableWidget(
                                     placement = placement,
                                     modifier = Modifier.zIndex(if (draggingWidgetId == widgetId) 100f else 0f),
@@ -323,8 +339,8 @@ fun CarDesktopWorkspaceView(
                                             widgetId = WidgetIds.type(widgetId),
                                             saatMetni = saatMetni,
                                             tarihMetni = tarihMetni,
-                                            telemetri = telemetri,
-                                            medya = medya,
+                                            telemetri = latestTelemetri,
+                                            medya = latestMedya,
                                             onOynatDuraklat = onOynatDuraklat,
                                             onSonraki = onSonraki,
                                             onOnceki = onOnceki,
@@ -371,14 +387,30 @@ fun CarDesktopWorkspaceView(
                         if (isEditMode && lastPage > 0) item {
                             Icon(
                                 Icons.Default.Delete, "Sayfayı sil", tint = Color(0xFFFF6B6B),
-                                modifier = Modifier.size(22.dp).clickable {
-                                    val nextPage = (currentPage - 1).coerceAtLeast(0)
-                                    if (layoutStore.removePage(currentPage)) currentPage = nextPage
-                                }
+                                modifier = Modifier.size(22.dp).clickable { showPageDeleteConfirm = true }
                             )
                         }
                     }
                 }
+            }
+
+            // Sayfa silme onayi: kazara dokunmada widget'larin dagilmamasi icin once sorulur.
+            if (showPageDeleteConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showPageDeleteConfirm = false },
+                    title = { Text("Sayfa silinsin mi?") },
+                    text = { Text("Bu sayfadaki widget'lar bir onceki sayfaya tasinir. Islem geri alinamaz.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showPageDeleteConfirm = false
+                            val nextPage = (currentPage - 1).coerceAtLeast(0)
+                            if (layoutStore.removePage(currentPage)) currentPage = nextPage
+                        }) { Text("Sil") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showPageDeleteConfirm = false }) { Text("Vazgec") }
+                    }
+                )
             }
 
             // 2. YUZEN KONTROL CUBUGU (Sadece Edit Modunda Gorunur: Ekle / Duvar Kagidi / Sifirla / Kaydet)

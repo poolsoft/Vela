@@ -47,8 +47,6 @@ import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 
 private const val SNAP_STEP_DP = 16f
-private const val MIN_SCALE = 0.5f
-private const val MAX_SCALE = 2.5f
 private const val MIN_WIDTH_DP = 120f
 private const val MIN_HEIGHT_DP = 60f
 
@@ -58,7 +56,9 @@ private const val MIN_HEIGHT_DP = 60f
  * - dragViaHandle: true yapildiginda widget govdesi tum dokunmalari icerige birakir
  *   (muzik dugmeleri, tiklamalar, harita vb. kisisel dokunmalarini kaybetmez).
  * - Sol ust tutamac: Surukleyerek serbest tasima.
- * - Sag alt tutamac: Boyutlandirma (scale).
+ * - Sag alt tutamac: Boyutlandirma (en + boy birlikte).
+ * - Sag kenar ortasi tutamagi: Yalnizca genislik.
+ * - Alt kenar ortasi tutamagi: Yalnizca yukseklik.
  * - Sag ust tutamac: Silme (kapatma).
  *
  * Kod icerisinde Turkce karakter kullanilmamistir (identifier ve degiskenlerde).
@@ -101,13 +101,14 @@ fun MovableWidget(
     var initialBaseHeight by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(edge, dragging) {
-        if (dragging && edge != 0) {
-            while (true) {
-                delay(650)
-                val target = pageEdge(edge)
-                dragPage = target
-                edge = 0
-            }
+        // Tek atisli sayfa flip'i: kenarda 650ms beklenir, sonra sayfa cevrilir ve edge sifirlanir.
+        // Eski while(true) dongusu edge==0 iken de pageEdge(0) cagirip bos yere donuyordu.
+        if (!dragging || edge == 0) return@LaunchedEffect
+        val dir = edge
+        delay(650)
+        if (dragging && edge == dir) {
+            dragPage = pageEdge(dir)
+            edge = 0
         }
     }
 
@@ -268,34 +269,91 @@ fun MovableWidget(
             }
 
             if (resizable) {
-                HandleSurface(
+                fun baseDims(): Pair<Float, Float> {
+                    val baseW = (if (initialBaseWidth > 0f) initialBaseWidth else widgetWidth).coerceAtLeast(MIN_WIDTH_DP)
+                    val baseH = (if (initialBaseHeight > 0f) initialBaseHeight else widgetHeight).coerceAtLeast(MIN_HEIGHT_DP)
+                    return baseW to baseH
+                }
+                // Sag alt kose: en + boy birlikte (capraz olcek, Launcher tarzi).
+                ResizeHandle(
                     icon = Icons.Default.OpenInFull,
+                    iconRotation = 0f,
                     description = "Boyutlandir",
+                    axis = ResizeAxis.BOTH,
+                    sizeDp = 28.dp,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .offset(6.dp, 6.dp)
-                        .zIndex(10f)
-                        .pointerInput(Unit) {
-                            detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
-                                change.consume()
-                                val baseW = (if (initialBaseWidth > 0f) initialBaseWidth else widgetWidth).coerceAtLeast(MIN_WIDTH_DP)
-                                val baseH = (if (initialBaseHeight > 0f) initialBaseHeight else widgetHeight).coerceAtLeast(MIN_HEIGHT_DP)
-                                val minWScale = maxOf(MIN_SCALE, MIN_WIDTH_DP / baseW)
-                                val minHScale = maxOf(MIN_SCALE, MIN_HEIGHT_DP / baseH)
-                                val minCommonScale = maxOf(minWScale, minHScale)
-                                val maxWScale = minOf(MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
-                                val maxHScale = minOf(MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
-                                val maxCommonScale = minOf(maxWScale, maxHScale).coerceAtLeast(minCommonScale)
-
-                                val deltaX = (drag.x / density) / baseW
-                                val deltaY = (drag.y / density) / baseH
-                                val delta = (deltaX + deltaY) / 2f
-
+                        .zIndex(10f),
+                    onResize = { axis, dragX, dragY ->
+                        val (baseW, baseH) = baseDims()
+                        val minWScale = maxOf(PlacementBounds.MIN_SCALE, MIN_WIDTH_DP / baseW)
+                        val minHScale = maxOf(PlacementBounds.MIN_SCALE, MIN_HEIGHT_DP / baseH)
+                        val minCommonScale = maxOf(minWScale, minHScale)
+                        val maxWScale = minOf(PlacementBounds.MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
+                        val maxHScale = minOf(PlacementBounds.MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
+                        val maxCommonScale = minOf(maxWScale, maxHScale).coerceAtLeast(minCommonScale)
+                        when (axis) {
+                            ResizeAxis.WIDTH ->
+                                widthScale = (widthScale + (dragX / density) / baseW).coerceIn(minWScale, maxWScale)
+                            ResizeAxis.HEIGHT ->
+                                heightScale = (heightScale + (dragY / density) / baseH).coerceIn(minHScale, maxHScale)
+                            ResizeAxis.BOTH -> {
+                                // En ve boy birlikte; her eksenin kendi payiyla olceklendirilir.
+                                val delta = ((dragX / density) / baseW + (dragY / density) / baseH) / 2f
                                 val newScale = (widthScale + delta).coerceIn(minCommonScale, maxCommonScale)
                                 widthScale = newScale
                                 heightScale = newScale
                             }
                         }
+                    },
+                    onEnd = { commitSnapped() }
+                )
+                // Sag kenar ortasi: yalnizca genislik.
+                ResizeHandle(
+                    icon = Icons.Default.OpenInFull,
+                    iconRotation = 90f,
+                    description = "Genislik",
+                    axis = ResizeAxis.WIDTH,
+                    sizeDp = 22.dp,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .offset(6.dp, 0.dp)
+                        .zIndex(10f),
+                    onResize = { axis, dragX, dragY ->
+                        val (baseW, baseH) = baseDims()
+                        val minWScale = maxOf(PlacementBounds.MIN_SCALE, MIN_WIDTH_DP / baseW)
+                        val maxWScale = minOf(PlacementBounds.MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
+                        when (axis) {
+                            ResizeAxis.WIDTH ->
+                                widthScale = (widthScale + (dragX / density) / baseW).coerceIn(minWScale, maxWScale)
+                            else -> {}
+                        }
+                    },
+                    onEnd = { commitSnapped() }
+                )
+                // Alt kenar ortasi: yalnizca yukseklik.
+                ResizeHandle(
+                    icon = Icons.Default.OpenInFull,
+                    iconRotation = 45f,
+                    description = "Yukseklik",
+                    axis = ResizeAxis.HEIGHT,
+                    sizeDp = 22.dp,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .offset(0.dp, 6.dp)
+                        .zIndex(10f),
+                    onResize = { axis, dragX, dragY ->
+                        val (baseW, baseH) = baseDims()
+                        val minHScale = maxOf(PlacementBounds.MIN_SCALE, MIN_HEIGHT_DP / baseH)
+                        val maxHScale = minOf(PlacementBounds.MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
+                        when (axis) {
+                            ResizeAxis.HEIGHT ->
+                                heightScale = (heightScale + (dragY / density) / baseH).coerceIn(minHScale, maxHScale)
+                            else -> {}
+                        }
+                    },
+                    onEnd = { commitSnapped() }
                 )
             }
 
@@ -333,6 +391,49 @@ private fun HandleSurface(
                 imageVector = icon,
                 contentDescription = description,
                 modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = rotation }
+            )
+        }
+    }
+}
+
+/** Resize tutamacinin hangi eksen(ler)i etkiledigi. */
+private enum class ResizeAxis { WIDTH, HEIGHT, BOTH }
+
+/**
+ * Suruklenerek boyutlandirma tutamacı; drag px cinsinden onResize'a iletilir.
+ * Birakildiginda onEnd ile grid snap'li commit yapilir.
+ */
+@Composable
+private fun ResizeHandle(
+    icon: ImageVector,
+    iconRotation: Float,
+    description: String,
+    axis: ResizeAxis,
+    sizeDp: Dp,
+    modifier: Modifier = Modifier,
+    onResize: (ResizeAxis, Float, Float) -> Unit,
+    onEnd: () -> Unit
+) {
+    Surface(
+        color = Color(0xCC1A1D2E),
+        contentColor = Color(0xFF00E5FF),
+        shape = CircleShape,
+        shadowElevation = 4.dp,
+        modifier = modifier.size(sizeDp)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.pointerInput(Unit) {
+                detectDragGestures(onDragEnd = { onEnd() }, onDragCancel = { onEnd() }) { change, drag ->
+                    change.consume()
+                    onResize(axis, drag.x, drag.y)
+                }
+            }
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                modifier = Modifier.size(14.dp).graphicsLayer { rotationZ = iconRotation }
             )
         }
     }

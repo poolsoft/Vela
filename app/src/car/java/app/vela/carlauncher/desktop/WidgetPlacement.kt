@@ -18,6 +18,15 @@ data class WidgetPlacement(
     val backgroundColor: Long = 0xF0141624
 )
 
+/**
+ * Olcek sinirlari (PlacementBounds). MovableWidget ve WorkspaceGrid ayni sinirlari
+ * kullanmak zorunda; aksi halde buyutulen widget resolve sonrasi geri kuculur.
+ */
+object PlacementBounds {
+    const val MIN_SCALE = 0.5f
+    const val MAX_SCALE = 2.5f
+}
+
 object WidgetIds {
     fun type(id: String): String = id.substringBefore("#")
     const val CLOCK = "clock"
@@ -29,7 +38,6 @@ object WidgetIds {
     const val WEATHER = "weather"
     const val COMPASS = "compass"
     const val OBD = "obd"
-    const val MINIMAP = "minimap"
     const val AW_PREFIX = "aw_"
     const val APP_PREFIX = "app_"
 }

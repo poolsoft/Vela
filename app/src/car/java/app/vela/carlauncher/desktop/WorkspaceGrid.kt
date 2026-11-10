@@ -37,8 +37,10 @@ object WorkspaceGrid {
         }.thenBy { it }).forEach { id ->
             val preferred = saved[id] ?: DesktopWidgetLayoutStore.DEFAULT_PLACEMENTS[id] ?: WidgetPlacement()
             val (baseWidth, baseHeight) = size(WidgetIds.type(id))
-            val widthScale = preferred.widthScale.coerceIn(0.6f, 2.2f).coerceAtMost(width / baseWidth)
-            val heightScale = preferred.heightScale.coerceIn(0.6f, 2.2f).coerceAtMost(usableHeight / baseHeight)
+            val widthScale = preferred.widthScale.coerceIn(PlacementBounds.MIN_SCALE, PlacementBounds.MAX_SCALE)
+                .coerceAtMost(width / baseWidth)
+            val heightScale = preferred.heightScale.coerceIn(PlacementBounds.MIN_SCALE, PlacementBounds.MAX_SCALE)
+                .coerceAtMost(usableHeight / baseHeight)
             val cardWidth = baseWidth * widthScale
             val cardHeight = baseHeight * heightScale
             if (!snapToGrid) {
