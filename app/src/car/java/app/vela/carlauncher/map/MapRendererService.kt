@@ -81,7 +81,7 @@ open class MapRendererService : Service() {
                     }
                     output?.release()
                     output = surface
-                    if (resized) presentation?.window?.setLayout(width, height)
+                    if (resized) presentation?.relayout(width, height)
                     // DisplayManager applies the new output projection during traversal.
                     // A synchronous detach/attach can be coalesced into one transaction,
                     // retaining the old clip. Let a traversal finish before reconnecting.
@@ -89,7 +89,10 @@ open class MapRendererService : Service() {
                     Choreographer.getInstance().postFrameCallback {
                         Choreographer.getInstance().postFrameCallback {
                             if (binding == outputGeneration && output === surface && surface.isValid) {
-                                try { display?.surface = surface }
+                                try {
+                                    display?.surface = surface
+                                    if (resized) presentation?.requestLayout()
+                                }
                                 catch (error: Exception) { fail("display", error) }
                             }
                         }
@@ -330,6 +333,18 @@ open class MapRendererService : Service() {
         fun setRenderingActive(active: Boolean) {
             if (life.currentState == Lifecycle.State.DESTROYED) return
             life.currentState = if (active) Lifecycle.State.RESUMED else Lifecycle.State.CREATED
+        }
+        fun relayout(width: Int, height: Int) {
+            window?.setLayout(width, height)
+            if (::compose.isInitialized) {
+                compose.requestLayout()
+            }
+        }
+        fun requestLayout() {
+            if (::compose.isInitialized) {
+                compose.requestLayout()
+                window?.decorView?.requestLayout()
+            }
         }
         override fun onStart() {
             super.onStart()
