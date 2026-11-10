@@ -270,45 +270,7 @@ fun MovableWidget(
             if (resizable) {
                 HandleSurface(
                     icon = Icons.Default.OpenInFull,
-                    description = "Yatay boyutlandir",
-                    rotation = 45f,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .offset(6.dp, 0.dp)
-                        .zIndex(10f)
-                        .pointerInput(Unit) {
-                            detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
-                                change.consume()
-                                val baseW = (if (initialBaseWidth > 0f) initialBaseWidth else widgetWidth).coerceAtLeast(MIN_WIDTH_DP)
-                                val minWScale = maxOf(MIN_SCALE, MIN_WIDTH_DP / baseW)
-                                val maxWScale = minOf(MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
-                                val delta = (drag.x / density) / baseW
-                                widthScale = (widthScale + delta).coerceIn(minWScale, maxWScale)
-                            }
-                        }
-                )
-                HandleSurface(
-                    icon = Icons.Default.OpenInFull,
-                    description = "Dikey boyutlandir",
-                    rotation = 135f,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .offset(0.dp, 6.dp)
-                        .zIndex(10f)
-                        .pointerInput(Unit) {
-                            detectDragGestures(onDragEnd = { commitSnapped() }) { change, drag ->
-                                change.consume()
-                                val baseH = (if (initialBaseHeight > 0f) initialBaseHeight else widgetHeight).coerceAtLeast(MIN_HEIGHT_DP)
-                                val minHScale = maxOf(MIN_SCALE, MIN_HEIGHT_DP / baseH)
-                                val maxHScale = minOf(MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
-                                val delta = (drag.y / density) / baseH
-                                heightScale = (heightScale + delta).coerceIn(minHScale, maxHScale)
-                            }
-                        }
-                )
-                HandleSurface(
-                    icon = Icons.Default.OpenInFull,
-                    description = "Orantili boyutlandir",
+                    description = "Boyutlandir",
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .offset(6.dp, 6.dp)

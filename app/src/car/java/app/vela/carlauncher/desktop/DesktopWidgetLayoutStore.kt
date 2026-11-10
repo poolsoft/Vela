@@ -18,7 +18,8 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
 
     companion object {
         private const val PREFS_NAME = "vela_desktop_widget_layout"
-        private const val KEY_LAYOUT = "widget_layout"
+        private const val KEY_LAYOUT_LANDSCAPE = "widget_layout_landscape"
+        private const val KEY_LAYOUT_PORTRAIT = "widget_layout_portrait"
         private const val KEY_ACTIVE_WIDGETS = "active_widgets"
         private const val KEY_PAGE_COUNT = "page_count"
 
@@ -46,7 +47,9 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val _layout = MutableStateFlow<Map<String, WidgetPlacement>>(loadLayout())
+    private var currentOrientationKey = KEY_LAYOUT_LANDSCAPE
+
+    private val _layout = MutableStateFlow<Map<String, WidgetPlacement>>(loadLayout(KEY_LAYOUT_LANDSCAPE))
     val layout: StateFlow<Map<String, WidgetPlacement>> = _layout.asStateFlow()
 
     private val _activeWidgets = MutableStateFlow<Set<String>>(loadActiveWidgets())
@@ -57,8 +60,22 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
     )
     val pageCount: StateFlow<Int> = _pageCount.asStateFlow()
 
-    private fun loadLayout(): Map<String, WidgetPlacement> {
-        val raw = prefs.getString(KEY_LAYOUT, null)
+    fun updateOrientation(isPortrait: Boolean) {
+        val targetKey = if (isPortrait) KEY_LAYOUT_PORTRAIT else KEY_LAYOUT_LANDSCAPE
+        if (targetKey != currentOrientationKey) {
+            currentOrientationKey = targetKey
+            val loaded = loadLayout(targetKey)
+            _layout.value = loaded
+            val maxPage = (loaded.values.maxOfOrNull { it.page } ?: 0) + 1
+            if (maxPage > _pageCount.value) {
+                ensurePageCount(maxPage)
+            }
+        }
+    }
+
+    private fun loadLayout(key: String): Map<String, WidgetPlacement> {
+        val raw = prefs.getString(key, null)
+            ?: if (key == KEY_LAYOUT_LANDSCAPE) prefs.getString("widget_layout", null) else null
         val loaded = parseLayout(raw)
         return if (loaded.isEmpty()) DEFAULT_PLACEMENTS else loaded
     }
@@ -71,7 +88,7 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
     fun setPlacement(id: String, placement: WidgetPlacement) {
         val current = _layout.value.toMutableMap()
         current[id] = placement
-        prefs.edit().putString(KEY_LAYOUT, formatLayout(current)).apply()
+        prefs.edit().putString(currentOrientationKey, formatLayout(current)).apply()
         _layout.value = current
         ensurePageCount(placement.page + 1)
     }
@@ -100,7 +117,7 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
         }
         val newCount = _pageCount.value - 1
         prefs.edit()
-            .putString(KEY_LAYOUT, formatLayout(current))
+            .putString(currentOrientationKey, formatLayout(current))
             .putInt(KEY_PAGE_COUNT, newCount)
             .apply()
         _layout.value = current
@@ -111,7 +128,7 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
     fun removePlacement(id: String) {
         val current = _layout.value.toMutableMap()
         current.remove(id)
-        prefs.edit().putString(KEY_LAYOUT, formatLayout(current)).apply()
+        prefs.edit().putString(currentOrientationKey, formatLayout(current)).apply()
         _layout.value = current
 
         val active = _activeWidgets.value.toMutableSet()
@@ -135,7 +152,13 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
     }
 
     fun resetLayout() {
-        prefs.edit().remove(KEY_LAYOUT).remove(KEY_ACTIVE_WIDGETS).putInt(KEY_PAGE_COUNT, 1).apply()
+        prefs.edit()
+            .remove(KEY_LAYOUT_LANDSCAPE)
+            .remove(KEY_LAYOUT_PORTRAIT)
+            .remove("widget_layout")
+            .remove(KEY_ACTIVE_WIDGETS)
+            .putInt(KEY_PAGE_COUNT, 1)
+            .apply()
         _layout.value = DEFAULT_PLACEMENTS
         _activeWidgets.value = setOf(WidgetIds.CLOCK, WidgetIds.STATUS, WidgetIds.SPEEDOMETER, WidgetIds.MUSIC, WidgetIds.DOCK)
         _pageCount.value = 1

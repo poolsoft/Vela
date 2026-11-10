@@ -242,6 +242,10 @@ fun CarDesktopWorkspaceView(
         ) {
             val workspaceWidth = maxWidth.value
             val workspaceHeight = maxHeight.value
+            val isPortrait = workspaceHeight > workspaceWidth
+            LaunchedEffect(isPortrait) {
+                layoutStore.updateOrientation(isPortrait)
+            }
             val resolvedLayout = WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid)
             val lastPage = maxOf(pageCount - 1, resolvedLayout.values.maxOfOrNull { it.page } ?: 0)
             LaunchedEffect(lastPage) { layoutStore.ensurePageCount(lastPage + 1) }
