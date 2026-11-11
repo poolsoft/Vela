@@ -423,8 +423,8 @@ fun MovableWidget(
                     dragAccumulatorX += dragX / density
                     dragAccumulatorY += dragY / density
 
-                    val stepX = g.cellWidth * 0.45f
-                    val stepY = g.cellHeight * 0.45f
+                    val stepX = (g.cellWidth * 0.25f).coerceIn(16f, 32f)
+                    val stepY = (g.cellHeight * 0.25f).coerceIn(16f, 32f)
 
                     when (axis) {
                         ResizeAxis.WIDTH -> {
@@ -459,11 +459,11 @@ fun MovableWidget(
                 ResizeHandle(
                     description = "Boyutlandir",
                     axis = ResizeAxis.BOTH,
-                    sizeDp = 18.dp,
+                    sizeDp = 24.dp,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .offset(4.dp, 4.dp)
-                        .zIndex(10f),
+                        .offset(12.dp, 12.dp)
+                        .zIndex(20f),
                     onResize = { axis, dragX, dragY ->
                         val g = activeGrid()
                         if (g != null) {
@@ -496,11 +496,11 @@ fun MovableWidget(
                 ResizeHandle(
                     description = "Genislik",
                     axis = ResizeAxis.WIDTH,
-                    sizeDp = 14.dp,
+                    sizeDp = 20.dp,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .offset(4.dp, 0.dp)
-                        .zIndex(10f),
+                        .offset(10.dp, 0.dp)
+                        .zIndex(20f),
                     onResize = { axis, dragX, dragY ->
                         val g = activeGrid()
                         if (g != null) {
@@ -520,11 +520,11 @@ fun MovableWidget(
                 ResizeHandle(
                     description = "Yukseklik",
                     axis = ResizeAxis.HEIGHT,
-                    sizeDp = 14.dp,
+                    sizeDp = 20.dp,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .offset(0.dp, 4.dp)
-                        .zIndex(10f),
+                        .offset(0.dp, 10.dp)
+                        .zIndex(20f),
                     onResize = { axis, dragX, dragY ->
                         val g = activeGrid()
                         if (g != null) {
@@ -598,13 +598,12 @@ private fun ResizeHandle(
     onResize: (ResizeAxis, Float, Float) -> Unit,
     onEnd: () -> Unit
 ) {
-    Surface(
-        color = Color(0xFF00E5FF),
-        shape = CircleShape,
-        shadowElevation = 6.dp,
-        border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF0D0E11)),
+    // Dokunma alanini artirmak icin en az 44dp'lik dokunma hedefi (touch target)
+    val touchTargetSize = maxOf(44.dp, sizeDp)
+    Box(
+        contentAlignment = Alignment.Center,
         modifier = modifier
-            .size(sizeDp)
+            .size(touchTargetSize)
             .pointerInput(Unit) {
                 detectDragGestures(onDragEnd = { onEnd() }, onDragCancel = { onEnd() }) { change, drag ->
                     change.consume()
@@ -612,7 +611,15 @@ private fun ResizeHandle(
                 }
             }
     ) {
-        // Dolu daire (Fill circle): Icine ikon konulmaz, konumu yonunu bildirir.
-        Box(modifier = Modifier.size(sizeDp))
+        Surface(
+            color = Color.White,
+            shape = CircleShape,
+            shadowElevation = 8.dp,
+            border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF141624)),
+            modifier = Modifier.size(sizeDp)
+        ) {
+            // Beyaz Dolu daire (Fill circle): Icine ikon konulmaz, konumu yonunu bildirir.
+            Box(modifier = Modifier.size(sizeDp))
+        }
     }
 }

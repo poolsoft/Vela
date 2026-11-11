@@ -116,14 +116,17 @@ object CellGrid {
             var placedPage = -1
             var placedX = 0
             var placedY = 0
-            // Sayfadan sayfaya garanti yerlesim: tercih edilen sayfadan baslanir,
-            // sonraki sayfalar taranir; hücreler en yakin bos bolgeye gore siralanir.
-            // Guvenli yerlesim: Oncelikle tercih edilen sayfada aranir. Eger sigmiyorsa
-            // sonraki sayfalara bakilir.
-            val maxPageSearch = maxOf(prefPage + 2, ids.size)
-            for (page in prefPage..maxPageSearch) {
-                val b = board(page)
-                val cells = sequence {
+            // Tercih edilen sayfada tam istenen hucre bossa doğrudan oraya yerlesir.
+            // Sayfa gecisi veya tasimada widget'in baska bir bosluga savrulmasi engellenir.
+            val prefBoard = board(prefPage)
+            if (fits(prefBoard, prefCellX, prefCellY, spanX, spanY)) {
+                placedPage = prefPage
+                placedX = prefCellX
+                placedY = prefCellY
+                mark(prefBoard, placedX, placedY, spanX, spanY)
+            } else {
+                // Eger tam o hucre doluysa, oncelikle AYNI sayfada en yakin bosluk aranir.
+                val samePageCells = sequence {
                     for (y in 0 until grid.rows) {
                         for (x in 0 until grid.cols) {
                             yield(x to y)
@@ -134,13 +137,17 @@ object CellGrid {
                     val dy = y - prefCellY
                     dx * dx + dy * dy
                 }
-                val spot = cells.firstOrNull { (x, y) -> fits(b, x, y, spanX, spanY) }
-                if (spot != null) {
-                    placedPage = page
-                    placedX = spot.first
-                    placedY = spot.second
-                    mark(b, placedX, placedY, spanX, spanY)
-                    break
+                val samePageSpot = samePageCells.firstOrNull { (x, y) -> fits(prefBoard, x, y, spanX, spanY) }
+                if (samePageSpot != null) {
+                    placedPage = prefPage
+                    placedX = samePageSpot.first
+                    placedY = samePageSpot.second
+                    mark(prefBoard, placedX, placedY, spanX, spanY)
+                } else {
+                    // Sayfada hic yer yoksa bile widget baska sayfaya atilmaz; ayni sayfada prefCell'e konur.
+                    placedPage = prefPage
+                    placedX = prefCellX
+                    placedY = prefCellY
                 }
             }
             // Sayfada hic yer yoksa bile widget ASLA kaybolmaz: tercih edilen sayfada,
