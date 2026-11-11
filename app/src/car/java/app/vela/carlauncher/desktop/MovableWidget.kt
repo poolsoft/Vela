@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
@@ -20,12 +21,13 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.OpenWith
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,11 +59,10 @@ private const val MIN_HEIGHT_DP = 60f
  *
  * - dragViaHandle: true yapildiginda widget govdesi tum dokunmalari icerige birakir
  *   (muzik dugmeleri, tiklamalar, harita vb. kisisel dokunmalarini kaybetmez).
- * - Sol ust tutamac: Surukleyerek serbest tasima.
- * - Sag alt tutamac: Boyutlandirma (en + boy birlikte).
- * - Sag kenar ortasi tutamagi: Yalnizca genislik.
- * - Alt kenar ortasi tutamagi: Yalnizca yukseklik.
- * - Sag ust tutamac: Silme (kapatma).
+ * - Edit modunda widget'a dokunus: Launcher tarzi popup menu (Boyutlandir / Ayarlar / Kaldir).
+ * - Sol ust tutamac: Surukleyerek tasi (her zaman görünür).
+ * - Boyutlandirma tutamaclari: menudeki "Boyutlandir" secilince görünur
+ *   (sag alt kose = en+boy, sag kenar = genislik, alt kenar = yukseklik).
  *
  * Kod icerisinde Turkce karakter kullanilmamistir (identifier ve degiskenlerde).
  */
@@ -96,6 +97,10 @@ fun MovableWidget(
     var dragging by remember { mutableStateOf(false) }
     var edge by remember { mutableStateOf(0) }
     var dragPage by remember { mutableStateOf(placement.page) }
+    // Edit modunda widget'a dokununca acilan Launcher tarzi popup menu ve menuyle
+    // acilan boyutlandirma modu; kalici tutamac kalabaligini azaltir.
+    var menuOpen by remember { mutableStateOf(false) }
+    var resizing by remember { mutableStateOf(false) }
     val pageEdge by rememberUpdatedState(onPageEdge)
     val draggingCallback by rememberUpdatedState(onDragging)
     var dx by remember { mutableFloatStateOf(placement.dx) }
@@ -112,6 +117,14 @@ fun MovableWidget(
     val latestGrid by rememberUpdatedState(grid)
     val latestMinSpanX by rememberUpdatedState(minSpanX)
     val latestMinSpanY by rememberUpdatedState(minSpanY)
+
+    // Edit moddan cikinca menu ve boyutlandirma modu kapatilir.
+    LaunchedEffect(showControls) {
+        if (!showControls) {
+            menuOpen = false
+            resizing = false
+        }
+    }
 
     /** Grid modu: snap ayari aciksa ve grid bilgisi geldiyse hucre modeli kullanilir. */
     fun activeGrid(): CellGrid.Grid? = if (currentSnapToGrid) latestGrid else null
@@ -312,6 +325,13 @@ fun MovableWidget(
                             moveBy(drag.x, drag.y)
                         }
                     }
+                    .pointerInput(editing) {
+                        // Edit modunda kisa dokunus popup menuyu acar; surukleme drag
+                        // dedektoru tarafindan tuketildigi icin tap olarak algilanmaz.
+                        if (editing) {
+                            detectTapGestures(onTap = { menuOpen = true })
+                        }
+                    }
             )
             if (dragViaHandle) {
                 HandleSurface(
@@ -334,19 +354,30 @@ fun MovableWidget(
                 )
             }
 
-            if (onRemove != null) {
-                HandleSurface(
-                    icon = Icons.Default.Close,
-                    description = "Kaldir",
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .offset(6.dp, (-6).dp)
-                        .zIndex(10f)
-                        .clickable { onRemove() }
-                )
+            if (onRemove != null || onSettings != null || resizable) {
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    if (resizable) {
+                        DropdownMenuItem(
+                            text = { Text(if (resizing) "Boyutlandirmayi bitir" else "Boyutlandir") },
+                            onClick = { resizing = !resizing; menuOpen = false }
+                        )
+                    }
+                    if (onSettings != null) {
+                        DropdownMenuItem(
+                            text = { Text("Ayarlar") },
+                            onClick = { menuOpen = false; onSettings() }
+                        )
+                    }
+                    if (onRemove != null) {
+                        DropdownMenuItem(
+                            text = { Text("Kaldir") },
+                            onClick = { menuOpen = false; onRemove() }
+                        )
+                    }
+                }
             }
 
-            if (resizable) {
+            if (resizable && resizing) {
                 fun baseDims(): Pair<Float, Float> {
                     val baseW = (if (initialBaseWidth > 0f) initialBaseWidth else widgetWidth).coerceAtLeast(MIN_WIDTH_DP)
                     val baseH = (if (initialBaseHeight > 0f) initialBaseHeight else widgetHeight).coerceAtLeast(MIN_HEIGHT_DP)
@@ -476,18 +507,6 @@ fun MovableWidget(
                         }
                     },
                     onEnd = { commitSnapped() }
-                )
-            }
-
-            if (onSettings != null) {
-                HandleSurface(
-                    icon = Icons.Default.Settings,
-                    description = "Widget ayarlari",
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .offset((-6).dp, 6.dp)
-                        .zIndex(10f)
-                        .clickable { onSettings() }
                 )
             }
         }

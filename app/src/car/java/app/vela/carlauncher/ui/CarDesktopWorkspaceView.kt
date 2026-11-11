@@ -273,6 +273,36 @@ fun CarDesktopWorkspaceView(
             }
             val lastPage = maxOf(pageCount - 1, resolvedLayout.values.maxOfOrNull { it.page } ?: 0)
             LaunchedEffect(lastPage) { layoutStore.ensurePageCount(lastPage + 1) }
+            // Grid modunda dolu hucreye birakilan widget Launcher tarzi SWAP yapar:
+            // hedefi tam kaplayan tek widget varsa ve o, eski bolgemize sigiyorsa iki
+            // widget yer degistirir; aksi halde solver en yakin bos hucreye tasir.
+            fun commitPlacement(id: String, target: WidgetPlacement) {
+                if (!snapToGrid) {
+                    layoutStore.setPlacement(id, target)
+                    return
+                }
+                val old = resolvedLayout[id]
+                if (old == null || old.cellX < 0 || target.cellX < 0) {
+                    layoutStore.setPlacement(id, target)
+                    return
+                }
+                val otherEntry = resolvedLayout.entries.firstOrNull { (wid, pl) ->
+                    wid != id && pl.page == target.page &&
+                        pl.cellX < target.cellX + target.spanX && pl.cellX + pl.spanX > target.cellX &&
+                        pl.cellY < target.cellY + target.spanY && pl.cellY + pl.spanY > target.cellY
+                }
+                val other = otherEntry?.value
+                if (other == null || other.spanX > old.spanX || other.spanY > old.spanY) {
+                    layoutStore.setPlacement(id, target)
+                    return
+                }
+                val (originX, originY) = cellGrid.originDp(old.cellX, old.cellY)
+                layoutStore.setPlacement(id, target)
+                layoutStore.setPlacement(
+                    otherEntry.key,
+                    other.copy(page = old.page, cellX = old.cellX, cellY = old.cellY, dx = originX, dy = originY)
+                )
+            }
             LaunchedEffect(lastPage, isEditMode) {
                 if (!isEditMode && currentPage > lastPage) currentPage = lastPage
             }
@@ -368,7 +398,7 @@ fun CarDesktopWorkspaceView(
                                     },
                                     onSettings = { selectedWidgetId = widgetId },
                                     onCommit = { newPlacement ->
-                                        layoutStore.setPlacement(widgetId, newPlacement)
+                                        commitPlacement(widgetId, newPlacement)
                                     }
                                 ) {
                                     CompositionLocalProvider(LocalDesktopCardColor provides Color(placement.backgroundColor).let { it.copy(alpha = it.alpha * placement.opacity) }) {
