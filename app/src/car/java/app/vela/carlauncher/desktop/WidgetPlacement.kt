@@ -15,7 +15,13 @@ data class WidgetPlacement(
     val widthScale: Float = scale,
     val heightScale: Float = scale,
     val opacity: Float = 1f,
-    val backgroundColor: Long = 0xF0141624
+    val backgroundColor: Long = 0xF0141624,
+    // Hucre modu alanlari (Launcher tarzi grid): cellX/Y -1 ise henuz yerlesmemistir,
+    // solver en yakin bos hucreye yerlestirir. Serbest modda kullanilmaz.
+    val cellX: Int = -1,
+    val cellY: Int = -1,
+    val spanX: Int = 0,
+    val spanY: Int = 0
 )
 
 /**

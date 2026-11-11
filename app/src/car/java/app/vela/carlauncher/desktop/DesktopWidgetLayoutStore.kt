@@ -180,7 +180,12 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
                 val heightScale = coords.getOrNull(5)?.toFloatOrNull() ?: scale
                 val opacity = coords.getOrNull(6)?.toFloatOrNull()?.coerceIn(0.1f, 1f) ?: 1f
                 val background = coords.getOrNull(7)?.toLongOrNull() ?: 0xF0141624
-                id to WidgetPlacement(dx, dy, scale, page, widthScale, heightScale, opacity, background)
+                // Hucre modu alanlari; eski kayitlarda bulunmazsa unset varsayilanlari kullanilir.
+                val cellX = coords.getOrNull(8)?.toIntOrNull() ?: -1
+                val cellY = coords.getOrNull(9)?.toIntOrNull() ?: -1
+                val spanX = coords.getOrNull(10)?.toIntOrNull() ?: 0
+                val spanY = coords.getOrNull(11)?.toIntOrNull() ?: 0
+                id to WidgetPlacement(dx, dy, scale, page, widthScale, heightScale, opacity, background, cellX, cellY, spanX, spanY)
             }.getOrNull()
         }.toMap()
     }
@@ -189,7 +194,7 @@ class DesktopWidgetLayoutStore private constructor(context: Context) {
         // Id ayraclar icerebilir (paket adi, URI vb.); kayit formati bozulmasin diye kacirilir.
         // Eski kayitlar kacirma karakteri icermediginden decode geriye uyumludur.
         return map.entries.joinToString(";") { (id, p) ->
-            "${encodeId(id)}:${p.dx},${p.dy},${p.scale},${p.page},${p.widthScale},${p.heightScale},${p.opacity},${p.backgroundColor}"
+            "${encodeId(id)}:${p.dx},${p.dy},${p.scale},${p.page},${p.widthScale},${p.heightScale},${p.opacity},${p.backgroundColor},${p.cellX},${p.cellY},${p.spanX},${p.spanY}"
         }
     }
 

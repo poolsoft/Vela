@@ -92,6 +92,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import app.vela.carlauncher.desktop.CarAppWidgetHostController
+import app.vela.carlauncher.desktop.CellGrid
 import app.vela.carlauncher.desktop.DesktopWidgetLayoutStore
 import app.vela.carlauncher.desktop.HostedAppWidgetView
 import app.vela.carlauncher.desktop.LocalCarAppWidgetHost
@@ -256,10 +257,19 @@ fun CarDesktopWorkspaceView(
             LaunchedEffect(isPortrait) {
                 layoutStore.updateOrientation(isPortrait)
             }
+            // Grid modu: snap ayari acikken Launcher tarzi hucre grid'i kullanilir;
+            // kapaliyken serbest float mod devreye girer. Hucre sayisi yon bagimlidir.
+            val cellGrid = remember(workspaceWidth, workspaceHeight, isPortrait) {
+                CellGrid.build(workspaceWidth, workspaceHeight, isPortrait)
+            }
             // Perf: resolve O(hucre x widget) maliyetlidir; telemetri/medya guncellemelerinde
             // yeniden calismamasi icin girislere bagli olarak cache'lenir.
-            val resolvedLayout = remember(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid) {
-                WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid)
+            val resolvedLayout = remember(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid, cellGrid) {
+                if (snapToGrid) {
+                    CellGrid.solve(activeWidgets, layout, cellGrid)
+                } else {
+                    WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid = false)
+                }
             }
             val lastPage = maxOf(pageCount - 1, resolvedLayout.values.maxOfOrNull { it.page } ?: 0)
             LaunchedEffect(lastPage) { layoutStore.ensurePageCount(lastPage + 1) }
@@ -334,6 +344,9 @@ fun CarDesktopWorkspaceView(
                                     dragViaHandle = true,
                                     showControls = isEditMode,
                                     snapToGrid = snapToGrid,
+                                    grid = cellGrid,
+                                    minSpanX = CellGrid.spanOf(WidgetIds.type(widgetId), cellGrid).first,
+                                    minSpanY = CellGrid.spanOf(WidgetIds.type(widgetId), cellGrid).second,
                                     onEnterEdit = { isEditMode = true },
                                     onDragging = { draggingWidgetId = if (it) widgetId else null },
                                     onPageEdge = { direction ->

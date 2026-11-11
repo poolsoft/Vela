@@ -1,0 +1,135 @@
+package app.vela.carlauncher.desktop
+
+import kotlin.math.ceil
+
+/**
+ * Launcher tarzi hucre grid'i (CellGrid). Masaustu sabit hucre sayisindan olusan bir
+ * tahta olarak modellenir; her widget bir hucre bolgesini (cellX, cellY, spanX, spanY)
+ * kaplar. Yon basina hucre sayisi farklidir: donen ekranlar icin landscape genis,
+ * portrait dik grid kullanilir.
+ *
+ * Kod icerisinde Turkce karakter kullanilmamistir (identifier ve degiskenlerde).
+ */
+object CellGrid {
+    private const val LANDSCAPE_COLS = 10
+    private const val LANDSCAPE_ROWS = 5
+    private const val PORTRAIT_COLS = 5
+    private const val PORTRAIT_ROWS = 8
+
+    /** Hesaplanmis grid: hucre olculeri dp cinsindendir. */
+    data class Grid(
+        val cols: Int,
+        val rows: Int,
+        val cellWidth: Float,
+        val cellHeight: Float
+    ) {
+        fun originDp(cellX: Int, cellY: Int): Pair<Float, Float> =
+            cellX * cellWidth to cellY * cellHeight
+    }
+
+    fun build(workspaceWidthDp: Float, workspaceHeightDp: Float, isPortrait: Boolean): Grid {
+        val cols = if (isPortrait) PORTRAIT_COLS else LANDSCAPE_COLS
+        val rows = if (isPortrait) PORTRAIT_ROWS else LANDSCAPE_ROWS
+        val safeW = workspaceWidthDp.coerceAtLeast(1f)
+        val safeH = workspaceHeightDp.coerceAtLeast(1f)
+        return Grid(cols, rows, safeW / cols, safeH / rows)
+    }
+
+    /** Widget turunun taban boyutundan span hesabi. */
+    fun spanOf(typeId: String, grid: Grid): Pair<Int, Int> {
+        val (minW, minH) = WorkspaceGrid.size(typeId)
+        val sx = ceil(minW / grid.cellWidth).toInt().coerceIn(1, grid.cols)
+        val sy = ceil(minH / grid.cellHeight).toInt().coerceIn(1, grid.rows)
+        return sx to sy
+    }
+
+    /**
+     * Launcher tarzi yerlesim cozumu: kayitli hucresi bosa oturur, doluysa en yakin
+     * bos hucreye itilir; sayfa doluysa sonraki sayfaya gecer (widget hicbir zaman
+     * kaybolmaz). Sonuc: her id icin hucre koordinatli placement.
+     */
+    fun solve(
+        ids: Set<String>,
+        saved: Map<String, WidgetPlacement>,
+        grid: Grid
+    ): Map<String, WidgetPlacement> {
+        val boards = HashMap<Int, BooleanArray>()
+        fun board(page: Int): BooleanArray = boards.getOrPut(page) { BooleanArray(grid.cols * grid.rows) }
+
+        fun fits(b: BooleanArray, cx: Int, cy: Int, sx: Int, sy: Int): Boolean {
+            if (cx < 0 || cy < 0 || cx + sx > grid.cols || cy + sy > grid.rows) return false
+            for (y in cy until cy + sy) {
+                for (x in cx until cx + sx) {
+                    if (b[y * grid.cols + x]) return false
+                }
+            }
+            return true
+        }
+
+        fun mark(b: BooleanArray, cx: Int, cy: Int, sx: Int, sy: Int) {
+            for (y in cy until cy + sy) {
+                for (x in cx until cx + sx) {
+                    b[y * grid.cols + x] = true
+                }
+            }
+        }
+
+        val result = linkedMapOf<String, WidgetPlacement>()
+        val ordered = ids.sortedWith(
+            compareBy<String>({ saved[it]?.page ?: 0 }, { saved[it]?.cellY ?: 0 }, { saved[it]?.cellX ?: 0 })
+        )
+        for (id in ordered) {
+            val preferred = saved[id] ?: WidgetPlacement()
+            val (baseSx, baseSy) = spanOf(WidgetIds.type(id), grid)
+            val spanX = preferred.spanX.takeIf { it > 0 }?.coerceIn(1, grid.cols) ?: baseSx
+            val spanY = preferred.spanY.takeIf { it > 0 }?.coerceIn(1, grid.rows) ?: baseSy
+
+            val prefCellX = preferred.cellX.coerceIn(0, grid.cols - spanX)
+            val prefCellY = preferred.cellY.coerceIn(0, grid.rows - spanY)
+            val prefPage = preferred.page.coerceAtLeast(0)
+
+            var placedPage = -1
+            var placedX = 0
+            var placedY = 0
+            // Sayfadan sayfaya garanti yerlesim: tercih edilen sayfadan baslanir,
+            // sonraki sayfalar taranir; hücreler en yakin bos bolgeye gore siralanir.
+            for (page in prefPage..prefPage + ids.size) {
+                val b = board(page)
+                val cells = sequence {
+                    for (y in 0 until grid.rows) {
+                        for (x in 0 until grid.cols) {
+                            yield(x to y)
+                        }
+                    }
+                }.sortedBy { (x, y) ->
+                    val dx = x - prefCellX
+                    val dy = y - prefCellY
+                    dx * dx + dy * dy
+                }
+                val spot = cells.firstOrNull { (x, y) -> fits(b, x, y, spanX, spanY) }
+                if (spot != null) {
+                    placedPage = page
+                    placedX = spot.first
+                    placedY = spot.second
+                    mark(b, placedX, placedY, spanX, spanY)
+                    break
+                }
+            }
+            if (placedPage < 0) continue
+
+            val (originX, originY) = grid.originDp(placedX, placedY)
+            result[id] = preferred.copy(
+                page = placedPage,
+                dx = originX,
+                dy = originY,
+                scale = 1f,
+                cellX = placedX,
+                cellY = placedY,
+                spanX = spanX,
+                spanY = spanY,
+                widthScale = 1f,
+                heightScale = 1f
+            )
+        }
+        return result
+    }}

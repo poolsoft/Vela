@@ -1,6 +1,7 @@
 package app.vela.carlauncher.desktop
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -29,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -72,6 +74,11 @@ fun MovableWidget(
     workspaceWidth: Float = Float.MAX_VALUE,
     workspaceHeight: Float = Float.MAX_VALUE,
     snapToGrid: Boolean = true,
+    // Hucre grid modu: grid null degilse ve snap aciksa Launcher tarzi hucre yerlesimi
+    // kullanilir; aksi halde serbest float mod (eski davranis) gecerlidir.
+    grid: CellGrid.Grid? = null,
+    minSpanX: Int = 1,
+    minSpanY: Int = 1,
     onEnterEdit: () -> Unit = {},
     onDragging: (Boolean) -> Unit = {},
     onPageEdge: (Int) -> Int = { placement.page },
@@ -95,10 +102,19 @@ fun MovableWidget(
     var dy by remember { mutableFloatStateOf(placement.dy) }
     var widthScale by remember { mutableFloatStateOf(placement.widthScale) }
     var heightScale by remember { mutableFloatStateOf(placement.heightScale) }
+    // Hucre modu span'i; resize tutamacindan canli guncellenir.
+    var spanX by remember { mutableIntStateOf(placement.spanX.coerceAtLeast(1)) }
+    var spanY by remember { mutableIntStateOf(placement.spanY.coerceAtLeast(1)) }
     var widgetWidth by remember { mutableFloatStateOf(0f) }
     var widgetHeight by remember { mutableFloatStateOf(0f) }
     var initialBaseWidth by remember { mutableFloatStateOf(0f) }
     var initialBaseHeight by remember { mutableFloatStateOf(0f) }
+    val latestGrid by rememberUpdatedState(grid)
+    val latestMinSpanX by rememberUpdatedState(minSpanX)
+    val latestMinSpanY by rememberUpdatedState(minSpanY)
+
+    /** Grid modu: snap ayari aciksa ve grid bilgisi geldiyse hucre modeli kullanilir. */
+    fun activeGrid(): CellGrid.Grid? = if (currentSnapToGrid) latestGrid else null
 
     LaunchedEffect(edge, dragging) {
         // Tek atisli sayfa flip'i: kenarda 650ms beklenir, sonra sayfa cevrilir ve edge sifirlanir.
@@ -119,30 +135,72 @@ fun MovableWidget(
         dy = placement.dy
         widthScale = placement.widthScale
         heightScale = placement.heightScale
+        spanX = placement.spanX.takeIf { it > 0 } ?: 1
+        spanY = placement.spanY.takeIf { it > 0 } ?: 1
     }
 
     val baseWidth = (if (initialBaseWidth > 0f) initialBaseWidth else widgetWidth).coerceAtLeast(MIN_WIDTH_DP)
     val baseHeight = (if (initialBaseHeight > 0f) initialBaseHeight else widgetHeight).coerceAtLeast(MIN_HEIGHT_DP)
-    val currentPixelWidth = (baseWidth * widthScale).coerceAtLeast(MIN_WIDTH_DP)
-    val currentPixelHeight = (baseHeight * heightScale).coerceAtLeast(MIN_HEIGHT_DP)
+    val gridForCompose = activeGrid()
+    val currentPixelWidth = if (gridForCompose != null) {
+        (spanX * gridForCompose.cellWidth).coerceAtLeast(MIN_WIDTH_DP)
+    } else {
+        (baseWidth * widthScale).coerceAtLeast(MIN_WIDTH_DP)
+    }
+    val currentPixelHeight = if (gridForCompose != null) {
+        (spanY * gridForCompose.cellHeight).coerceAtLeast(MIN_HEIGHT_DP)
+    } else {
+        (baseHeight * heightScale).coerceAtLeast(MIN_HEIGHT_DP)
+    }
     // Non-uniform uzamayi/sundurulmeyi onlemek icin icerige uygulanan en-boy dengeli olcek
-    val contentScale = minOf(widthScale, heightScale)
+    val contentScale = if (gridForCompose != null && initialBaseWidth > 0f && initialBaseHeight > 0f) {
+        minOf(currentPixelWidth / initialBaseWidth, currentPixelHeight / initialBaseHeight)
+    } else {
+        minOf(widthScale, heightScale)
+    }
 
     fun commitSnapped() {
-        val snappedDx = (if (currentSnapToGrid) (dx / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP else dx)
-            .coerceIn(0f, (workspaceWidth - currentPixelWidth).coerceAtLeast(0f))
-        val snappedDy = (if (currentSnapToGrid) (dy / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP else dy)
-            .coerceIn(0f, (workspaceHeight - currentPixelHeight).coerceAtLeast(0f))
-        dx = snappedDx
-        dy = snappedDy
-        onCommit(currentPlacement.copy(
-            page = dragPage,
-            dx = snappedDx,
-            dy = snappedDy,
-            scale = minOf(widthScale, heightScale),
-            widthScale = widthScale,
-            heightScale = heightScale
-        ))
+        val g = activeGrid()
+        if (g != null) {
+            // Hucre modu: konumu ve boyutu hucre agina oturt; span'i kaydet.
+            val sx = spanX.coerceIn(latestMinSpanX, g.cols)
+            val sy = spanY.coerceIn(latestMinSpanY, g.rows)
+            val cx = (dx / g.cellWidth).roundToInt().coerceIn(0, g.cols - sx)
+            val cy = (dy / g.cellHeight).roundToInt().coerceIn(0, g.rows - sy)
+            val snappedDx = cx * g.cellWidth
+            val snappedDy = cy * g.cellHeight
+            dx = snappedDx
+            dy = snappedDy
+            spanX = sx
+            spanY = sy
+            onCommit(currentPlacement.copy(
+                page = dragPage,
+                dx = snappedDx,
+                dy = snappedDy,
+                scale = 1f,
+                widthScale = 1f,
+                heightScale = 1f,
+                cellX = cx,
+                cellY = cy,
+                spanX = sx,
+                spanY = sy
+            ))
+        } else {
+            val snappedDx = (if (currentSnapToGrid) (dx / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP else dx)
+                .coerceIn(0f, (workspaceWidth - currentPixelWidth).coerceAtLeast(0f))
+            val snappedDy = (if (currentSnapToGrid) (dy / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP else dy)
+                .coerceIn(0f, (workspaceHeight - currentPixelHeight).coerceAtLeast(0f))
+            dx = snappedDx
+            dy = snappedDy
+            onCommit(currentPlacement.copy(
+                page = dragPage,
+                dx = snappedDx,
+                dy = snappedDy,
+                scale = minOf(widthScale, heightScale),
+                widthScale = widthScale,
+                heightScale = heightScale
+            ))
+        }
     }
 
     fun finishDrag() {
@@ -220,6 +278,26 @@ fun MovableWidget(
         }
 
         if (showControls) {
+            // Hucre modunda surukleme sirasinda hedef hucre bolgesi vurgulanir (Launcher davranisi).
+            val previewGrid = activeGrid()
+            if (previewGrid != null && dragging) {
+                val previewSpanX = spanX.coerceIn(1, previewGrid.cols)
+                val previewSpanY = spanY.coerceIn(1, previewGrid.rows)
+                val previewCellX = (dx / previewGrid.cellWidth).roundToInt()
+                    .coerceIn(0, previewGrid.cols - previewSpanX)
+                val previewCellY = (dy / previewGrid.cellHeight).roundToInt()
+                    .coerceIn(0, previewGrid.rows - previewSpanY)
+                Box(
+                    Modifier
+                        .offset((previewCellX * previewGrid.cellWidth - dx).dp, (previewCellY * previewGrid.cellHeight - dy).dp)
+                        .requiredSize(
+                            (previewSpanX * previewGrid.cellWidth).dp,
+                            (previewSpanY * previewGrid.cellHeight).dp
+                        )
+                        .background(Color(0x2200E5FF), RoundedCornerShape(10.dp))
+                        .border(1.dp, Color(0x8800E5FF), RoundedCornerShape(10.dp))
+                )
+            }
             Box(
                 Modifier
                     .requiredSize(currentPixelWidth.dp, currentPixelHeight.dp)
@@ -274,11 +352,33 @@ fun MovableWidget(
                     val baseH = (if (initialBaseHeight > 0f) initialBaseHeight else widgetHeight).coerceAtLeast(MIN_HEIGHT_DP)
                     return baseW to baseH
                 }
-                // Resize'i grid adimlarina oturtur: olcek yerine resulting boyut 16dp'nin
-                // katina yuvarlanir (Launcher grid resize davranisi). Sinir asiminda clamp devreye girer.
+                // Serbest mod: olcek yerine resulting boyut 16dp'nin katina yuvarlanir.
+                // Sinir asiminda clamp devreye girer.
                 fun snapScale(base: Float, raw: Float, minS: Float, maxS: Float): Float {
                     val snapped = ((base * raw / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP) / base
                     return snapped.coerceIn(minS, maxS)
+                }
+                // Hucre modunda span degisimi; sinirlar min span ve kalan hucre sayisidir.
+                fun resizeSpan(axis: ResizeAxis, dragX: Float, dragY: Float) {
+                    val g = activeGrid() ?: return
+                    val cellXNow = (dx / g.cellWidth).roundToInt().coerceIn(0, g.cols - 1)
+                    val cellYNow = (dy / g.cellHeight).roundToInt().coerceIn(0, g.rows - 1)
+                    val maxSpanX = (g.cols - cellXNow).coerceAtLeast(latestMinSpanX)
+                    val maxSpanY = (g.rows - cellYNow).coerceAtLeast(latestMinSpanY)
+                    when (axis) {
+                        ResizeAxis.WIDTH ->
+                            spanX = ((spanX * g.cellWidth + dragX / density) / g.cellWidth).roundToInt()
+                                .coerceIn(latestMinSpanX, maxSpanX)
+                        ResizeAxis.HEIGHT ->
+                            spanY = ((spanY * g.cellHeight + dragY / density) / g.cellHeight).roundToInt()
+                                .coerceIn(latestMinSpanY, maxSpanY)
+                        ResizeAxis.BOTH -> {
+                            spanX = ((spanX * g.cellWidth + dragX / density) / g.cellWidth).roundToInt()
+                                .coerceIn(latestMinSpanX, maxSpanX)
+                            spanY = ((spanY * g.cellHeight + dragY / density) / g.cellHeight).roundToInt()
+                                .coerceIn(latestMinSpanY, maxSpanY)
+                        }
+                    }
                 }
                 // Sag alt kose: en + boy birlikte (capraz olcek, Launcher tarzi).
                 ResizeHandle(
@@ -292,25 +392,30 @@ fun MovableWidget(
                         .offset(6.dp, 6.dp)
                         .zIndex(10f),
                     onResize = { axis, dragX, dragY ->
-                        val (baseW, baseH) = baseDims()
-                        val minWScale = maxOf(PlacementBounds.MIN_SCALE, MIN_WIDTH_DP / baseW)
-                        val minHScale = maxOf(PlacementBounds.MIN_SCALE, MIN_HEIGHT_DP / baseH)
-                        val minCommonScale = maxOf(minWScale, minHScale)
-                        val maxWScale = minOf(PlacementBounds.MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
-                        val maxHScale = minOf(PlacementBounds.MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
-                        val maxCommonScale = minOf(maxWScale, maxHScale).coerceAtLeast(minCommonScale)
-                        when (axis) {
-                            ResizeAxis.WIDTH ->
-                                widthScale = snapScale(baseW, widthScale + (dragX / density) / baseW, minWScale, maxWScale)
-                            ResizeAxis.HEIGHT ->
-                                heightScale = snapScale(baseH, heightScale + (dragY / density) / baseH, minHScale, maxHScale)
-                            ResizeAxis.BOTH -> {
-                                // En ve boy birlikte; her eksenin kendi payiyla olceklendirilir.
-                                val delta = ((dragX / density) / baseW + (dragY / density) / baseH) / 2f
-                                // Tek olcek oldugu icin genisligi grid'e oturtur; boy buna yakin hizada kalir.
-                                val newScale = snapScale(baseW, widthScale + delta, minCommonScale, maxCommonScale)
-                                widthScale = newScale
-                                heightScale = newScale
+                        val g = activeGrid()
+                        if (g != null) {
+                            resizeSpan(axis, dragX, dragY)
+                        } else {
+                            val (baseW, baseH) = baseDims()
+                            val minWScale = maxOf(PlacementBounds.MIN_SCALE, MIN_WIDTH_DP / baseW)
+                            val minHScale = maxOf(PlacementBounds.MIN_SCALE, MIN_HEIGHT_DP / baseH)
+                            val minCommonScale = maxOf(minWScale, minHScale)
+                            val maxWScale = minOf(PlacementBounds.MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
+                            val maxHScale = minOf(PlacementBounds.MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
+                            val maxCommonScale = minOf(maxWScale, maxHScale).coerceAtLeast(minCommonScale)
+                            when (axis) {
+                                ResizeAxis.WIDTH ->
+                                    widthScale = snapScale(baseW, widthScale + (dragX / density) / baseW, minWScale, maxWScale)
+                                ResizeAxis.HEIGHT ->
+                                    heightScale = snapScale(baseH, heightScale + (dragY / density) / baseH, minHScale, maxHScale)
+                                ResizeAxis.BOTH -> {
+                                    // En ve boy birlikte; her eksenin kendi payiyla olceklendirilir.
+                                    val delta = ((dragX / density) / baseW + (dragY / density) / baseH) / 2f
+                                    // Tek olcek oldugu icin genisligi grid'e oturtur; boy buna yakin hizada kalir.
+                                    val newScale = snapScale(baseW, widthScale + delta, minCommonScale, maxCommonScale)
+                                    widthScale = newScale
+                                    heightScale = newScale
+                                }
                             }
                         }
                     },
@@ -328,13 +433,18 @@ fun MovableWidget(
                         .offset(6.dp, 0.dp)
                         .zIndex(10f),
                     onResize = { axis, dragX, dragY ->
-                        val (baseW, baseH) = baseDims()
-                        val minWScale = maxOf(PlacementBounds.MIN_SCALE, MIN_WIDTH_DP / baseW)
-                        val maxWScale = minOf(PlacementBounds.MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
-                        when (axis) {
-                            ResizeAxis.WIDTH ->
-                                widthScale = snapScale(baseW, widthScale + (dragX / density) / baseW, minWScale, maxWScale)
-                            else -> {}
+                        val g = activeGrid()
+                        if (g != null) {
+                            resizeSpan(axis, dragX, dragY)
+                        } else {
+                            val (baseW, baseH) = baseDims()
+                            val minWScale = maxOf(PlacementBounds.MIN_SCALE, MIN_WIDTH_DP / baseW)
+                            val maxWScale = minOf(PlacementBounds.MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
+                            when (axis) {
+                                ResizeAxis.WIDTH ->
+                                    widthScale = snapScale(baseW, widthScale + (dragX / density) / baseW, minWScale, maxWScale)
+                                else -> {}
+                            }
                         }
                     },
                     onEnd = { commitSnapped() }
@@ -351,13 +461,18 @@ fun MovableWidget(
                         .offset(0.dp, 6.dp)
                         .zIndex(10f),
                     onResize = { axis, dragX, dragY ->
-                        val (baseW, baseH) = baseDims()
-                        val minHScale = maxOf(PlacementBounds.MIN_SCALE, MIN_HEIGHT_DP / baseH)
-                        val maxHScale = minOf(PlacementBounds.MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
-                        when (axis) {
-                            ResizeAxis.HEIGHT ->
-                                heightScale = snapScale(baseH, heightScale + (dragY / density) / baseH, minHScale, maxHScale)
-                            else -> {}
+                        val g = activeGrid()
+                        if (g != null) {
+                            resizeSpan(axis, dragX, dragY)
+                        } else {
+                            val (baseW, baseH) = baseDims()
+                            val minHScale = maxOf(PlacementBounds.MIN_SCALE, MIN_HEIGHT_DP / baseH)
+                            val maxHScale = minOf(PlacementBounds.MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
+                            when (axis) {
+                                ResizeAxis.HEIGHT ->
+                                    heightScale = snapScale(baseH, heightScale + (dragY / density) / baseH, minHScale, maxHScale)
+                                else -> {}
+                            }
                         }
                     },
                     onEnd = { commitSnapped() }
