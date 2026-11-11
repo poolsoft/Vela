@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.Widgets
 import app.vela.ui.VelaWindowAlertDialog as AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -84,7 +85,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -149,7 +149,6 @@ fun CarDesktopWorkspaceView(
     val snapToGrid by CarLauncherSettings.workspaceSnapToGrid.collectAsState()
     val swipeThresholdFraction by CarLauncherSettings.workspaceSwipeThreshold.collectAsState()
     val indicatorSeconds by CarLauncherSettings.workspaceIndicatorSeconds.collectAsState()
-    val density = LocalDensity.current.density
     // Perf: hiz telemetrisi ve medya durumu sik degisir; workspace kokunde okunurlarsa
     // tum pager ve widget'lar recompose olurdu. rememberUpdatedState ile deger yalnizca
     // icerigini cizen widget lambda'sinda okunur; recompose o widget'la sinirli kalir.
@@ -557,6 +556,7 @@ fun CarDesktopWorkspaceView(
                     widgetId = widgetId,
                     placement = resolvedLayout[widgetId] ?: layout[widgetId] ?: WidgetPlacement(page = currentPage),
                     pageCount = lastPage + 1,
+                    gridMode = snapToGrid,
                     providerInfo = widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()?.let(hostController::info),
                     onDismiss = { selectedWidgetId = null },
                     onSave = { placement -> layoutStore.setPlacement(widgetId, placement); selectedWidgetId = null },
@@ -1072,6 +1072,7 @@ private fun DesktopWidgetSettingsDialog(
     widgetId: String,
     placement: WidgetPlacement,
     pageCount: Int,
+    gridMode: Boolean,
     providerInfo: AppWidgetProviderInfo?,
     onDismiss: () -> Unit,
     onSave: (WidgetPlacement) -> Unit,
@@ -1095,16 +1096,27 @@ private fun DesktopWidgetSettingsDialog(
         title = { Text("$title ayarları", color = Color.White, fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Boyut", color = Color.White, fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(0.75f to "Küçük", 1f to "Normal", 1.35f to "Büyük").forEach { (scale, label) ->
-                        TextButton(
-                            onClick = { draft = draft.copy(scale = scale, widthScale = scale, heightScale = scale) },
-                            modifier = Modifier.background(
-                                if (kotlin.math.abs(draft.widthScale - scale) < 0.05f && kotlin.math.abs(draft.heightScale - scale) < 0.05f) ClPrimary.copy(alpha = 0.25f) else Color.Transparent,
-                                RoundedCornerShape(10.dp)
-                            )
-                        ) { Text(label, color = Color.White) }
+                if (gridMode) {
+                    // Grid modunda boyut hucre span'i ile belirlenir; olcek alanlari
+                    // resolve sirasinda 1f'ye cevrildigi icin butonlar etkisiz kalirdi.
+                    Text("Boyut", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Grid modunda widget boyutu hücre dilimleriyle belirlenir. Değiştirmek için sağ alt / kenar resize tutamaçlarını sürükleyin.",
+                        color = Color(0xFFB0B3C6),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    Text("Boyut", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(0.75f to "Küçük", 1f to "Normal", 1.35f to "Büyük").forEach { (scale, label) ->
+                            TextButton(
+                                onClick = { draft = draft.copy(scale = scale, widthScale = scale, heightScale = scale) },
+                                modifier = Modifier.background(
+                                    if (kotlin.math.abs(draft.widthScale - scale) < 0.05f && kotlin.math.abs(draft.heightScale - scale) < 0.05f) ClPrimary.copy(alpha = 0.25f) else Color.Transparent,
+                                    RoundedCornerShape(10.dp)
+                                )
+                            ) { Text(label, color = Color.White) }
+                        }
                     }
                 }
                 Text("Arka plan opaklığı: ${(draft.opacity * 100).roundToInt()}%", color = Color.White)

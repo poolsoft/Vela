@@ -1,6 +1,7 @@
 package app.vela.carlauncher.desktop
 
 import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 /**
  * Launcher tarzi hucre grid'i (CellGrid). Masaustu sabit hucre sayisindan olusan bir
@@ -97,8 +98,19 @@ object CellGrid {
             val spanX = if (savedUsable) preferred.spanX.coerceIn(1, grid.cols) else baseSx
             val spanY = if (savedUsable) preferred.spanY.coerceIn(1, grid.rows) else baseSy
 
-            val prefCellX = if (savedUsable) preferred.cellX.coerceIn(0, grid.cols - spanX) else 0
-            val prefCellY = if (savedUsable) preferred.cellY.coerceIn(0, grid.rows - spanY) else 0
+            // Hucre alani olmayan kayitlar (serbest moddan gelen, yeni eklenen veya bozuk
+            // kayit) icin eski dp konumu en yakin hucreye cevrilir; boylece serbest moddan
+            // grid moduna geciste widget'lar bulunduklari yerde kalir, tepeye yigilmaz.
+            val prefCellX = if (savedUsable) {
+                preferred.cellX.coerceIn(0, grid.cols - spanX)
+            } else {
+                (preferred.dx / grid.cellWidth).roundToInt().coerceIn(0, grid.cols - spanX)
+            }
+            val prefCellY = if (savedUsable) {
+                preferred.cellY.coerceIn(0, grid.rows - spanY)
+            } else {
+                (preferred.dy / grid.cellHeight).roundToInt().coerceIn(0, grid.rows - spanY)
+            }
             val prefPage = preferred.page.coerceAtLeast(0)
 
             var placedPage = -1
