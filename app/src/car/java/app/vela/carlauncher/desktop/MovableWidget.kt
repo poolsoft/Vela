@@ -1,6 +1,7 @@
 package app.vela.carlauncher.desktop
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -21,8 +22,10 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.OpenWith
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -59,10 +62,10 @@ private const val MIN_HEIGHT_DP = 60f
  *
  * - dragViaHandle: true yapildiginda widget govdesi tum dokunmalari icerige birakir
  *   (muzik dugmeleri, tiklamalar, harita vb. kisisel dokunmalarini kaybetmez).
- * - Edit modunda widget'a dokunus: Launcher tarzi popup menu (Boyutlandir / Ayarlar / Kaldir).
- * - Sol ust tutamac: Surukleyerek tasi (her zaman görünür).
- * - Boyutlandirma tutamaclari: menudeki "Boyutlandir" secilince görünur
- *   (sag alt kose = en+boy, sag kenar = genislik, alt kenar = yukseklik).
+ * - Edit modunda: sol ust tutamac tasi, sag ust X kaldirir, sol alt gear ayarlari acar;
+ *   boyutlandirma tutamaclari (kose/sag kenar/alt kenar) varsayilan gorunurdur.
+ * - Widget'a dokunus veya uzun basma: Launcher tarzi popup menu (Boyutlandir ac/kapa,
+ *   Ayarlar, Kaldir).
  *
  * Kod icerisinde Turkce karakter kullanilmamistir (identifier ve degiskenlerde).
  */
@@ -97,10 +100,11 @@ fun MovableWidget(
     var dragging by remember { mutableStateOf(false) }
     var edge by remember { mutableStateOf(0) }
     var dragPage by remember { mutableStateOf(placement.page) }
-    // Edit modunda widget'a dokununca acilan Launcher tarzi popup menu ve menuyle
-    // acilan boyutlandirma modu; kalici tutamac kalabaligini azaltir.
+    // Edit modunda widget'a dokununca acilan Launcher tarzi popup menu. Boyutlandirma
+    // tutamaclari edit modunda VARSAYILAN gorunurdur (arayuz kesfedilebilir olsun);
+    // menuden kapatilabilir.
     var menuOpen by remember { mutableStateOf(false) }
-    var resizing by remember { mutableStateOf(false) }
+    var resizing by remember { mutableStateOf(true) }
     val pageEdge by rememberUpdatedState(onPageEdge)
     val draggingCallback by rememberUpdatedState(onDragging)
     var dx by remember { mutableFloatStateOf(placement.dx) }
@@ -118,11 +122,13 @@ fun MovableWidget(
     val latestMinSpanX by rememberUpdatedState(minSpanX)
     val latestMinSpanY by rememberUpdatedState(minSpanY)
 
-    // Edit moddan cikinca menu ve boyutlandirma modu kapatilir.
+    // Edit moda giriste boyutlandirma tutamaclari yeniden acilir; cikista menu kapatilir.
     LaunchedEffect(showControls) {
-        if (!showControls) {
+        if (showControls) {
+            resizing = true
+        } else {
             menuOpen = false
-            resizing = false
+            resizing = true
         }
     }
 
@@ -326,10 +332,13 @@ fun MovableWidget(
                         }
                     }
                     .pointerInput(editing) {
-                        // Edit modunda kisa dokunus popup menuyu acar; surukleme drag
-                        // dedektoru tarafindan tuketildigi icin tap olarak algilanmaz.
+                        // Edit modunda kisa dokunus veya uzun basma popup menuyu acar;
+                        // surukleme drag dedektoru tarafindan tuketildigi icin tap olarak algilanmaz.
                         if (editing) {
-                            detectTapGestures(onTap = { menuOpen = true })
+                            detectTapGestures(
+                                onTap = { menuOpen = true },
+                                onLongPress = { menuOpen = true }
+                            )
                         }
                     }
             )
@@ -351,6 +360,18 @@ fun MovableWidget(
                                 moveBy(drag.x, drag.y)
                             }
                         }
+                )
+            }
+
+            if (onRemove != null) {
+                HandleSurface(
+                    icon = Icons.Default.Close,
+                    description = "Kaldir",
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(6.dp, (-6).dp)
+                        .zIndex(10f)
+                        .clickable { onRemove() }
                 )
             }
 
@@ -507,6 +528,18 @@ fun MovableWidget(
                         }
                     },
                     onEnd = { commitSnapped() }
+                )
+            }
+
+            if (onSettings != null) {
+                HandleSurface(
+                    icon = Icons.Default.Settings,
+                    description = "Widget ayarlari",
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .offset((-6).dp, 6.dp)
+                        .zIndex(10f)
+                        .clickable { onSettings() }
                 )
             }
         }
