@@ -274,6 +274,12 @@ fun MovableWidget(
                     val baseH = (if (initialBaseHeight > 0f) initialBaseHeight else widgetHeight).coerceAtLeast(MIN_HEIGHT_DP)
                     return baseW to baseH
                 }
+                // Resize'i grid adimlarina oturtur: olcek yerine resulting boyut 16dp'nin
+                // katina yuvarlanir (Launcher grid resize davranisi). Sinir asiminda clamp devreye girer.
+                fun snapScale(base: Float, raw: Float, minS: Float, maxS: Float): Float {
+                    val snapped = ((base * raw / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP) / base
+                    return snapped.coerceIn(minS, maxS)
+                }
                 // Sag alt kose: en + boy birlikte (capraz olcek, Launcher tarzi).
                 ResizeHandle(
                     icon = Icons.Default.OpenInFull,
@@ -295,13 +301,14 @@ fun MovableWidget(
                         val maxCommonScale = minOf(maxWScale, maxHScale).coerceAtLeast(minCommonScale)
                         when (axis) {
                             ResizeAxis.WIDTH ->
-                                widthScale = (widthScale + (dragX / density) / baseW).coerceIn(minWScale, maxWScale)
+                                widthScale = snapScale(baseW, widthScale + (dragX / density) / baseW, minWScale, maxWScale)
                             ResizeAxis.HEIGHT ->
-                                heightScale = (heightScale + (dragY / density) / baseH).coerceIn(minHScale, maxHScale)
+                                heightScale = snapScale(baseH, heightScale + (dragY / density) / baseH, minHScale, maxHScale)
                             ResizeAxis.BOTH -> {
                                 // En ve boy birlikte; her eksenin kendi payiyla olceklendirilir.
                                 val delta = ((dragX / density) / baseW + (dragY / density) / baseH) / 2f
-                                val newScale = (widthScale + delta).coerceIn(minCommonScale, maxCommonScale)
+                                // Tek olcek oldugu icin genisligi grid'e oturtur; boy buna yakin hizada kalir.
+                                val newScale = snapScale(baseW, widthScale + delta, minCommonScale, maxCommonScale)
                                 widthScale = newScale
                                 heightScale = newScale
                             }
@@ -326,7 +333,7 @@ fun MovableWidget(
                         val maxWScale = minOf(PlacementBounds.MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
                         when (axis) {
                             ResizeAxis.WIDTH ->
-                                widthScale = (widthScale + (dragX / density) / baseW).coerceIn(minWScale, maxWScale)
+                                widthScale = snapScale(baseW, widthScale + (dragX / density) / baseW, minWScale, maxWScale)
                             else -> {}
                         }
                     },
@@ -349,7 +356,7 @@ fun MovableWidget(
                         val maxHScale = minOf(PlacementBounds.MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
                         when (axis) {
                             ResizeAxis.HEIGHT ->
-                                heightScale = (heightScale + (dragY / density) / baseH).coerceIn(minHScale, maxHScale)
+                                heightScale = snapScale(baseH, heightScale + (dragY / density) / baseH, minHScale, maxHScale)
                             else -> {}
                         }
                     },
