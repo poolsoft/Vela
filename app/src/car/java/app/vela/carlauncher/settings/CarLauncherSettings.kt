@@ -108,6 +108,17 @@ object CarLauncherSettings {
         if (::prefs.isInitialized) prefs.edit().putInt("workspace_grid_portrait_rows", _workspaceGridPortraitRows.value).apply()
     }
 
+    // Serbest mod davranisi: eski "Grid'e Yapis ve Cakismayi Onle" ayarinin gorevi.
+    // Grid modu kapaliyken gecerlidir: acikken 16dp yerlesime yapisma + cakisma onleme,
+    // kapaliyken tamamen serbest yerlesim.
+    private val _workspaceFreeSnap = MutableStateFlow(true)
+    val workspaceFreeSnap: StateFlow<Boolean> = _workspaceFreeSnap.asStateFlow()
+
+    fun setWorkspaceFreeSnap(enabled: Boolean) {
+        _workspaceFreeSnap.value = enabled
+        if (::prefs.isInitialized) prefs.edit().putBoolean("workspace_free_snap", enabled).apply()
+    }
+
     private lateinit var prefs: SharedPreferences
 
     // StateFlow'lar
@@ -275,6 +286,7 @@ object CarLauncherSettings {
             _workspaceGridLandscapeRows.value = prefs.getInt("workspace_grid_landscape_rows", 5).coerceIn(3, 8)
             _workspaceGridPortraitCols.value = prefs.getInt("workspace_grid_portrait_cols", 5).coerceIn(3, 8)
             _workspaceGridPortraitRows.value = prefs.getInt("workspace_grid_portrait_rows", 8).coerceIn(4, 12)
+            _workspaceFreeSnap.value = prefs.getBoolean("workspace_free_snap", true)
             _desktopModu.value = prefs.getBoolean(KEY_DESKTOP_MODE, false)
             _desktopDongudeEtkin.value = prefs.getBoolean(KEY_DESKTOP_IN_MODE_CYCLE, true)
             _workspaceSwipeThreshold.value = prefs.getFloat(KEY_WORKSPACE_SWIPE_THRESHOLD, 0.35f).coerceIn(0f, 0.6f)

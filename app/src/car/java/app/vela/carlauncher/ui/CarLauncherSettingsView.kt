@@ -675,6 +675,7 @@ private fun CarWidgetsSettingsScreen(
     val gridLandscapeRows by CarLauncherSettings.workspaceGridLandscapeRows.collectAsState()
     val gridPortraitCols by CarLauncherSettings.workspaceGridPortraitCols.collectAsState()
     val gridPortraitRows by CarLauncherSettings.workspaceGridPortraitRows.collectAsState()
+    val freeSnap by CarLauncherSettings.workspaceFreeSnap.collectAsState()
 
     Scaffold(
         topBar = {
@@ -740,6 +741,14 @@ private fun CarWidgetsSettingsScreen(
                         valueRange = 4f..12f,
                         unit = " satır",
                         onValueChange = { CarLauncherSettings.setWorkspaceGridPortraitRows(it.roundToInt()) }
+                    )
+                } else {
+                    GroupDivider()
+                    ToggleRow(
+                        label = "Serbest Modda 16 dp Yerleşim Kılavuzu",
+                        hint = "Grid modu kapalıyken geçerlidir: widget'lar 16 dp yerleşime yapışır ve çakışmalar en yakın boş alana taşınarak önlenir (eski 'Grid'e Yapış' davranışı). Kapalıyken tamamen serbest yerleşim kullanılır",
+                        checked = freeSnap,
+                        onCheckedChange = { CarLauncherSettings.setWorkspaceFreeSnap(it) }
                     )
                 }
                 GroupDivider()

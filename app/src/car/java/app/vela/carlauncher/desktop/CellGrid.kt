@@ -83,14 +83,22 @@ object CellGrid {
         val ordered = ids.sortedWith(
             compareBy<String>({ saved[it]?.page ?: 0 }, { saved[it]?.cellY ?: 0 }, { saved[it]?.cellX ?: 0 })
         )
+        // Hucre olculeri anormal kucukse (olcu henuz gelmemis vb.) kayitli hucre alanlarina
+        // guvenilmez; aksi halde span'ler tum sayfayi kaplayarak widget'lari sayfa basina
+        // bir tane dusurur.
+        val trustSavedCells = grid.cellWidth >= 16f && grid.cellHeight >= 16f
         for (id in ordered) {
             val preferred = saved[id] ?: WidgetPlacement()
             val (baseSx, baseSy) = spanOf(WidgetIds.type(id), grid)
-            val spanX = preferred.spanX.takeIf { it > 0 }?.coerceIn(1, grid.cols) ?: baseSx
-            val spanY = preferred.spanY.takeIf { it > 0 }?.coerceIn(1, grid.rows) ?: baseSy
+            // Tum sayfayi kaplayan kayitlar bozuk kabul edilir ve taban span ile yeniden turetilir.
+            val savedUsable = trustSavedCells &&
+                preferred.spanX > 0 && preferred.spanY > 0 &&
+                preferred.spanX < grid.cols && preferred.spanY < grid.rows
+            val spanX = if (savedUsable) preferred.spanX.coerceIn(1, grid.cols) else baseSx
+            val spanY = if (savedUsable) preferred.spanY.coerceIn(1, grid.rows) else baseSy
 
-            val prefCellX = preferred.cellX.coerceIn(0, grid.cols - spanX)
-            val prefCellY = preferred.cellY.coerceIn(0, grid.rows - spanY)
+            val prefCellX = if (savedUsable) preferred.cellX.coerceIn(0, grid.cols - spanX) else 0
+            val prefCellY = if (savedUsable) preferred.cellY.coerceIn(0, grid.rows - spanY) else 0
             val prefPage = preferred.page.coerceAtLeast(0)
 
             var placedPage = -1

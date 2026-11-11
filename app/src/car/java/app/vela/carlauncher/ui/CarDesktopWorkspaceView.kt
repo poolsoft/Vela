@@ -249,10 +249,12 @@ fun CarDesktopWorkspaceView(
                     )
                 }
         ) {
-            // Birim duzeltmesi: maxWidth.value piksel cinsindendir; yerlesim matematigi dp varsayar.
-            // Karisiklik widget'in ekran disina tasinarak sonuc uretiyordu.
-            val workspaceWidth = maxWidth.value / density
-            val workspaceHeight = maxHeight.value / density
+            // BoxWithConstraints maxWidth/maxHeight zaten dp cinsindendir; density'ye bolmek
+            // calisma alanini kuculturdu (widget'larin tek sayfaya dusmesinin ve ust uste
+            // binmesinin kok nedeni buydu). Yerlesim matematigi (SNAP_STEP_DP, base boyutlar)
+            // dp uzerinde calisir; burada donusum YAPILMAZ.
+            val workspaceWidth = maxWidth.value
+            val workspaceHeight = maxHeight.value
             val isPortrait = workspaceHeight > workspaceWidth
             LaunchedEffect(isPortrait) {
                 layoutStore.updateOrientation(isPortrait)
@@ -264,18 +266,29 @@ fun CarDesktopWorkspaceView(
             val gridLandscapeRows by CarLauncherSettings.workspaceGridLandscapeRows.collectAsState()
             val gridPortraitCols by CarLauncherSettings.workspaceGridPortraitCols.collectAsState()
             val gridPortraitRows by CarLauncherSettings.workspaceGridPortraitRows.collectAsState()
+            // Serbest mod davranisi: eski "grid'e yapis ve cakismayi onle" gorevi.
+            // Grid modu kapaliyken gecerlidir.
+            val freeSnap by CarLauncherSettings.workspaceFreeSnap.collectAsState()
             val gridCols = if (isPortrait) gridPortraitCols else gridLandscapeCols
             val gridRows = if (isPortrait) gridPortraitRows else gridLandscapeRows
-            val cellGrid = remember(workspaceWidth, workspaceHeight, gridCols, gridRows) {
-                CellGrid.build(workspaceWidth, workspaceHeight, gridCols, gridRows)
+            // Olcu henuz gelmemisse (0) hucre grid'i kurulmaz; kayitsiz garapan yazim engellenir.
+            val gridHealthy = workspaceWidth > 0f && workspaceHeight > 0f
+            val cellGrid = if (gridHealthy) {
+                remember(workspaceWidth, workspaceHeight, gridCols, gridRows) {
+                    CellGrid.build(workspaceWidth, workspaceHeight, gridCols, gridRows)
+                }
+            } else {
+                null
             }
             // Perf: resolve O(hucre x widget) maliyetlidir; telemetri/medya guncellemelerinde
             // yeniden calismamasi icin girislere bagli olarak cache'lenir.
-            val resolvedLayout = remember(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid, cellGrid) {
-                if (snapToGrid) {
+            val resolvedLayout = remember(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid, freeSnap, cellGrid) {
+                if (snapToGrid && cellGrid != null) {
                     CellGrid.solve(activeWidgets, layout, cellGrid)
                 } else {
-                    WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid = false)
+                    // Serbest mod: freeSnap acikken eski davranis (16dp yapisma + cakisma onleme),
+                    // kapaliyken tamamen serbest yerlesim.
+                    WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid = freeSnap)
                 }
             }
             val lastPage = maxOf(pageCount - 1, resolvedLayout.values.maxOfOrNull { it.page } ?: 0)
@@ -303,7 +316,12 @@ fun CarDesktopWorkspaceView(
                     layoutStore.setPlacement(id, target)
                     return
                 }
-                val (originX, originY) = cellGrid.originDp(old.cellX, old.cellY)
+                val origin = cellGrid?.originDp(old.cellX, old.cellY)
+                if (origin == null) {
+                    layoutStore.setPlacement(id, target)
+                    return
+                }
+                val (originX, originY) = origin
                 layoutStore.setPlacement(id, target)
                 layoutStore.setPlacement(
                     otherEntry.key,
@@ -323,25 +341,26 @@ fun CarDesktopWorkspaceView(
             // 0. MASAUSTU ARKA PLANI (Sistem Duvar Kagidi veya Tema)
             DesktopWallpaperView(modifier = Modifier.fillMaxSize())
 
-            // Edit modunda snap grid'ini gorunur kilar; kullanici widget'larin hangi
-            // cizgilere hizalanacagini somut olarak gorur (Launcher duvar grid'i gibi).
-            if (isEditMode && snapToGrid) {
+            // Edit modunda yerlesim kilavuzunu gorunur kilar. Grid modunda cizgiler hucre
+            // kenarlaridir; serbest snap'te 16dp adim cizgileri cizilir.
+            if (isEditMode && (snapToGrid || freeSnap)) {
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
                         .zIndex(0.5f)
                 ) {
-                    val step = 16.dp.toPx()
+                    val gridStep = if (snapToGrid && cellGrid != null) cellGrid.cellWidth.dp.toPx() else 16.dp.toPx()
+                    val gridStepY = if (snapToGrid && cellGrid != null) cellGrid.cellHeight.dp.toPx() else gridStep
                     val lineColor = Color(0x12FFFFFF)
                     var x = 0f
                     while (x <= size.width) {
                         drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
-                        x += step
+                        x += gridStep
                     }
                     var y = 0f
                     while (y <= size.height) {
                         drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
-                        y += step
+                        y += gridStepY
                     }
                 }
             }
@@ -380,10 +399,10 @@ fun CarDesktopWorkspaceView(
                                     resizable = true,
                                     dragViaHandle = true,
                                     showControls = isEditMode,
-                                    snapToGrid = snapToGrid,
-                                    grid = cellGrid,
-                                    minSpanX = CellGrid.spanOf(WidgetIds.type(widgetId), cellGrid).first,
-                                    minSpanY = CellGrid.spanOf(WidgetIds.type(widgetId), cellGrid).second,
+                                    snapToGrid = snapToGrid || freeSnap,
+                                    grid = if (snapToGrid) cellGrid else null,
+                                    minSpanX = cellGrid?.let { CellGrid.spanOf(WidgetIds.type(widgetId), it).first } ?: 1,
+                                    minSpanY = cellGrid?.let { CellGrid.spanOf(WidgetIds.type(widgetId), it).second } ?: 1,
                                     onEnterEdit = { isEditMode = true },
                                     onDragging = { draggingWidgetId = if (it) widgetId else null },
                                     onPageEdge = { direction ->
