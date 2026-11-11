@@ -196,7 +196,7 @@ jobs:
 
 
       - name: Publish Canary build (rolling release)
-        if: steps.ver.outputs.channel == 'canary' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary')
+        if: steps.ver.outputs.channel == 'canary' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary' || github.event_name == 'workflow_dispatch')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
