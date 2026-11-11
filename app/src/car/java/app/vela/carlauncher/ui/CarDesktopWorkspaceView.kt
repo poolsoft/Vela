@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
@@ -274,6 +275,29 @@ fun CarDesktopWorkspaceView(
             }
             // 0. MASAUSTU ARKA PLANI (Sistem Duvar Kagidi veya Tema)
             DesktopWallpaperView(modifier = Modifier.fillMaxSize())
+
+            // Edit modunda snap grid'ini gorunur kilar; kullanici widget'larin hangi
+            // cizgilere hizalanacagini somut olarak gorur (Launcher duvar grid'i gibi).
+            if (isEditMode && snapToGrid) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(0.5f)
+                ) {
+                    val step = 16.dp.toPx()
+                    val lineColor = Color(0x12FFFFFF)
+                    var x = 0f
+                    while (x <= size.width) {
+                        drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+                        x += step
+                    }
+                    var y = 0f
+                    while (y <= size.height) {
+                        drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+                        y += step
+                    }
+                }
+            }
 
             val totalPages = (lastPage + 1).coerceAtLeast(1)
             val pagerState = rememberPagerState(initialPage = currentPage.coerceIn(0, totalPages - 1)) { totalPages }
