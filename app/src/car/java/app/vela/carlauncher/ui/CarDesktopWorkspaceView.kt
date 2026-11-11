@@ -258,9 +258,16 @@ fun CarDesktopWorkspaceView(
                 layoutStore.updateOrientation(isPortrait)
             }
             // Grid modu: snap ayari acikken Launcher tarzi hucre grid'i kullanilir;
-            // kapaliyken serbest float mod devreye girer. Hucre sayisi yon bagimlidir.
-            val cellGrid = remember(workspaceWidth, workspaceHeight, isPortrait) {
-                CellGrid.build(workspaceWidth, workspaceHeight, isPortrait)
+            // kapaliyken serbest float mod devreye girer. Hucre sayisi ayarlardan
+            // yon bagimli olarak okunur (donen ekranlarda dik/yatay farkli grid).
+            val gridLandscapeCols by CarLauncherSettings.workspaceGridLandscapeCols.collectAsState()
+            val gridLandscapeRows by CarLauncherSettings.workspaceGridLandscapeRows.collectAsState()
+            val gridPortraitCols by CarLauncherSettings.workspaceGridPortraitCols.collectAsState()
+            val gridPortraitRows by CarLauncherSettings.workspaceGridPortraitRows.collectAsState()
+            val gridCols = if (isPortrait) gridPortraitCols else gridLandscapeCols
+            val gridRows = if (isPortrait) gridPortraitRows else gridLandscapeRows
+            val cellGrid = remember(workspaceWidth, workspaceHeight, gridCols, gridRows) {
+                CellGrid.build(workspaceWidth, workspaceHeight, gridCols, gridRows)
             }
             // Perf: resolve O(hucre x widget) maliyetlidir; telemetri/medya guncellemelerinde
             // yeniden calismamasi icin girislere bagli olarak cache'lenir.

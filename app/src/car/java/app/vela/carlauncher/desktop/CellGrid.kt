@@ -11,10 +11,11 @@ import kotlin.math.ceil
  * Kod icerisinde Turkce karakter kullanilmamistir (identifier ve degiskenlerde).
  */
 object CellGrid {
-    private const val LANDSCAPE_COLS = 10
-    private const val LANDSCAPE_ROWS = 5
-    private const val PORTRAIT_COLS = 5
-    private const val PORTRAIT_ROWS = 8
+    // Varsayilan hucre sayilari; kullanicinin ayarindan override edilir.
+    const val DEFAULT_LANDSCAPE_COLS = 10
+    const val DEFAULT_LANDSCAPE_ROWS = 5
+    const val DEFAULT_PORTRAIT_COLS = 5
+    const val DEFAULT_PORTRAIT_ROWS = 8
 
     /** Hesaplanmis grid: hucre olculeri dp cinsindendir. */
     data class Grid(
@@ -27,12 +28,16 @@ object CellGrid {
             cellX * cellWidth to cellY * cellHeight
     }
 
-    fun build(workspaceWidthDp: Float, workspaceHeightDp: Float, isPortrait: Boolean): Grid {
-        val cols = if (isPortrait) PORTRAIT_COLS else LANDSCAPE_COLS
-        val rows = if (isPortrait) PORTRAIT_ROWS else LANDSCAPE_ROWS
+    /**
+     * Grid kurulumu; hucre sayisi cagiran taraf tarafindan yon ayarina gore verilir
+     * (ayarlanabilir grid yogunlugu).
+     */
+    fun build(workspaceWidthDp: Float, workspaceHeightDp: Float, cols: Int, rows: Int): Grid {
+        val safeCols = cols.coerceAtLeast(1)
+        val safeRows = rows.coerceAtLeast(1)
         val safeW = workspaceWidthDp.coerceAtLeast(1f)
         val safeH = workspaceHeightDp.coerceAtLeast(1f)
-        return Grid(cols, rows, safeW / cols, safeH / rows)
+        return Grid(safeCols, safeRows, safeW / safeCols, safeH / safeRows)
     }
 
     /** Widget turunun taban boyutundan span hesabi. */

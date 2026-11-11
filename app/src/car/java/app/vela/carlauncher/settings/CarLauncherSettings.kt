@@ -77,6 +77,37 @@ object CarLauncherSettings {
         if (::prefs.isInitialized) prefs.edit().putBoolean("workspace_snap_to_grid", enabled).apply()
     }
 
+    // Grid yogunlugu (hucre sayisi): yon basina ayridir; donen ekranlarda dik ve yatay
+    // masaustu farkli hucre yapisindadir. Grid modu (snap acik) bu degerleri kullanir.
+    private val _workspaceGridLandscapeCols = MutableStateFlow(10)
+    val workspaceGridLandscapeCols: StateFlow<Int> = _workspaceGridLandscapeCols.asStateFlow()
+    private val _workspaceGridLandscapeRows = MutableStateFlow(5)
+    val workspaceGridLandscapeRows: StateFlow<Int> = _workspaceGridLandscapeRows.asStateFlow()
+    private val _workspaceGridPortraitCols = MutableStateFlow(5)
+    val workspaceGridPortraitCols: StateFlow<Int> = _workspaceGridPortraitCols.asStateFlow()
+    private val _workspaceGridPortraitRows = MutableStateFlow(8)
+    val workspaceGridPortraitRows: StateFlow<Int> = _workspaceGridPortraitRows.asStateFlow()
+
+    fun setWorkspaceGridLandscapeCols(count: Int) {
+        _workspaceGridLandscapeCols.value = count.coerceIn(4, 14)
+        if (::prefs.isInitialized) prefs.edit().putInt("workspace_grid_landscape_cols", _workspaceGridLandscapeCols.value).apply()
+    }
+
+    fun setWorkspaceGridLandscapeRows(count: Int) {
+        _workspaceGridLandscapeRows.value = count.coerceIn(3, 8)
+        if (::prefs.isInitialized) prefs.edit().putInt("workspace_grid_landscape_rows", _workspaceGridLandscapeRows.value).apply()
+    }
+
+    fun setWorkspaceGridPortraitCols(count: Int) {
+        _workspaceGridPortraitCols.value = count.coerceIn(3, 8)
+        if (::prefs.isInitialized) prefs.edit().putInt("workspace_grid_portrait_cols", _workspaceGridPortraitCols.value).apply()
+    }
+
+    fun setWorkspaceGridPortraitRows(count: Int) {
+        _workspaceGridPortraitRows.value = count.coerceIn(4, 12)
+        if (::prefs.isInitialized) prefs.edit().putInt("workspace_grid_portrait_rows", _workspaceGridPortraitRows.value).apply()
+    }
+
     private lateinit var prefs: SharedPreferences
 
     // StateFlow'lar
@@ -240,6 +271,10 @@ object CarLauncherSettings {
             _geceKarartmaEtkin.value = prefs.getBoolean(KEY_NIGHT_DIM_ENABLED, false)
             _geceKarartmaSeviyesi.value = prefs.getFloat(KEY_NIGHT_DIM_LEVEL, 0.40f)
             _workspaceSnapToGrid.value = prefs.getBoolean("workspace_snap_to_grid", true)
+            _workspaceGridLandscapeCols.value = prefs.getInt("workspace_grid_landscape_cols", 10).coerceIn(4, 14)
+            _workspaceGridLandscapeRows.value = prefs.getInt("workspace_grid_landscape_rows", 5).coerceIn(3, 8)
+            _workspaceGridPortraitCols.value = prefs.getInt("workspace_grid_portrait_cols", 5).coerceIn(3, 8)
+            _workspaceGridPortraitRows.value = prefs.getInt("workspace_grid_portrait_rows", 8).coerceIn(4, 12)
             _desktopModu.value = prefs.getBoolean(KEY_DESKTOP_MODE, false)
             _desktopDongudeEtkin.value = prefs.getBoolean(KEY_DESKTOP_IN_MODE_CYCLE, true)
             _workspaceSwipeThreshold.value = prefs.getFloat(KEY_WORKSPACE_SWIPE_THRESHOLD, 0.35f).coerceIn(0f, 0.6f)
