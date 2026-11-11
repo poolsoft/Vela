@@ -122,6 +122,9 @@ fun MovableWidget(
     val latestMinSpanY by rememberUpdatedState(minSpanY)
 
     // Edit moda giriste boyutlandirma tutamaclari yeniden acilir; cikista menu kapatilir.
+    var dragAccumulatorX by remember { mutableFloatStateOf(0f) }
+    var dragAccumulatorY by remember { mutableFloatStateOf(0f) }
+
     LaunchedEffect(showControls) {
         if (showControls) {
             resizing = true
@@ -416,31 +419,50 @@ fun MovableWidget(
                     val cellYNow = (dy / g.cellHeight).roundToInt().coerceIn(0, g.rows - 1)
                     val maxSpanX = (g.cols - cellXNow).coerceAtLeast(latestMinSpanX)
                     val maxSpanY = (g.rows - cellYNow).coerceAtLeast(latestMinSpanY)
+
+                    dragAccumulatorX += dragX / density
+                    dragAccumulatorY += dragY / density
+
+                    val stepX = g.cellWidth * 0.45f
+                    val stepY = g.cellHeight * 0.45f
+
                     when (axis) {
-                        ResizeAxis.WIDTH ->
-                            spanX = ((spanX * g.cellWidth + dragX / density) / g.cellWidth).roundToInt()
-                                .coerceIn(latestMinSpanX, maxSpanX)
-                        ResizeAxis.HEIGHT ->
-                            spanY = ((spanY * g.cellHeight + dragY / density) / g.cellHeight).roundToInt()
-                                .coerceIn(latestMinSpanY, maxSpanY)
+                        ResizeAxis.WIDTH -> {
+                            if (kotlin.math.abs(dragAccumulatorX) >= stepX) {
+                                val change = if (dragAccumulatorX > 0) 1 else -1
+                                spanX = (spanX + change).coerceIn(latestMinSpanX, maxSpanX)
+                                dragAccumulatorX = 0f
+                            }
+                        }
+                        ResizeAxis.HEIGHT -> {
+                            if (kotlin.math.abs(dragAccumulatorY) >= stepY) {
+                                val change = if (dragAccumulatorY > 0) 1 else -1
+                                spanY = (spanY + change).coerceIn(latestMinSpanY, maxSpanY)
+                                dragAccumulatorY = 0f
+                            }
+                        }
                         ResizeAxis.BOTH -> {
-                            spanX = ((spanX * g.cellWidth + dragX / density) / g.cellWidth).roundToInt()
-                                .coerceIn(latestMinSpanX, maxSpanX)
-                            spanY = ((spanY * g.cellHeight + dragY / density) / g.cellHeight).roundToInt()
-                                .coerceIn(latestMinSpanY, maxSpanY)
+                            if (kotlin.math.abs(dragAccumulatorX) >= stepX) {
+                                val changeX = if (dragAccumulatorX > 0) 1 else -1
+                                spanX = (spanX + changeX).coerceIn(latestMinSpanX, maxSpanX)
+                                dragAccumulatorX = 0f
+                            }
+                            if (kotlin.math.abs(dragAccumulatorY) >= stepY) {
+                                val changeY = if (dragAccumulatorY > 0) 1 else -1
+                                spanY = (spanY + changeY).coerceIn(latestMinSpanY, maxSpanY)
+                                dragAccumulatorY = 0f
+                            }
                         }
                     }
                 }
-                // Sag alt kose: en + boy birlikte (capraz olcek, Launcher tarzi).
+                // Sag alt kose: en + boy birlikte (Launcher tarzi dolu daire / fill circle tutamac).
                 ResizeHandle(
-                    icon = Icons.Default.OpenInFull,
-                    iconRotation = 0f,
                     description = "Boyutlandir",
                     axis = ResizeAxis.BOTH,
-                    sizeDp = 28.dp,
+                    sizeDp = 18.dp,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .offset(6.dp, 6.dp)
+                        .offset(4.dp, 4.dp)
                         .zIndex(10f),
                     onResize = { axis, dragX, dragY ->
                         val g = activeGrid()
@@ -460,9 +482,7 @@ fun MovableWidget(
                                 ResizeAxis.HEIGHT ->
                                     heightScale = snapScale(baseH, heightScale + (dragY / density) / baseH, minHScale, maxHScale)
                                 ResizeAxis.BOTH -> {
-                                    // En ve boy birlikte; her eksenin kendi payiyla olceklendirilir.
                                     val delta = ((dragX / density) / baseW + (dragY / density) / baseH) / 2f
-                                    // Tek olcek oldugu icin genisligi grid'e oturtur; boy buna yakin hizada kalir.
                                     val newScale = snapScale(baseW, widthScale + delta, minCommonScale, maxCommonScale)
                                     widthScale = newScale
                                     heightScale = newScale
@@ -472,57 +492,49 @@ fun MovableWidget(
                     },
                     onEnd = { commitSnapped() }
                 )
-                // Sag kenar ortasi: yalnizca genislik.
+                // Sag kenar ortasi: yalnizca genislik (Launcher tarzi dolu daire).
                 ResizeHandle(
-                    icon = Icons.Default.OpenInFull,
-                    iconRotation = 90f,
                     description = "Genislik",
                     axis = ResizeAxis.WIDTH,
-                    sizeDp = 22.dp,
+                    sizeDp = 14.dp,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .offset(6.dp, 0.dp)
+                        .offset(4.dp, 0.dp)
                         .zIndex(10f),
                     onResize = { axis, dragX, dragY ->
                         val g = activeGrid()
                         if (g != null) {
                             resizeSpan(axis, dragX, dragY)
                         } else {
-                            val (baseW, baseH) = baseDims()
+                            val (baseW, _) = baseDims()
                             val minWScale = maxOf(PlacementBounds.MIN_SCALE, MIN_WIDTH_DP / baseW)
                             val maxWScale = minOf(PlacementBounds.MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
-                            when (axis) {
-                                ResizeAxis.WIDTH ->
-                                    widthScale = snapScale(baseW, widthScale + (dragX / density) / baseW, minWScale, maxWScale)
-                                else -> {}
+                            if (axis == ResizeAxis.WIDTH) {
+                                widthScale = snapScale(baseW, widthScale + (dragX / density) / baseW, minWScale, maxWScale)
                             }
                         }
                     },
                     onEnd = { commitSnapped() }
                 )
-                // Alt kenar ortasi: yalnizca yukseklik.
+                // Alt kenar ortasi: yalnizca yukseklik (Launcher tarzi dolu daire).
                 ResizeHandle(
-                    icon = Icons.Default.OpenInFull,
-                    iconRotation = 45f,
                     description = "Yukseklik",
                     axis = ResizeAxis.HEIGHT,
-                    sizeDp = 22.dp,
+                    sizeDp = 14.dp,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .offset(0.dp, 6.dp)
+                        .offset(0.dp, 4.dp)
                         .zIndex(10f),
                     onResize = { axis, dragX, dragY ->
                         val g = activeGrid()
                         if (g != null) {
                             resizeSpan(axis, dragX, dragY)
                         } else {
-                            val (baseW, baseH) = baseDims()
+                            val (_, baseH) = baseDims()
                             val minHScale = maxOf(PlacementBounds.MIN_SCALE, MIN_HEIGHT_DP / baseH)
                             val maxHScale = minOf(PlacementBounds.MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
-                            when (axis) {
-                                ResizeAxis.HEIGHT ->
-                                    heightScale = snapScale(baseH, heightScale + (dragY / density) / baseH, minHScale, maxHScale)
-                                else -> {}
+                            if (axis == ResizeAxis.HEIGHT) {
+                                heightScale = snapScale(baseH, heightScale + (dragY / density) / baseH, minHScale, maxHScale)
                             }
                         }
                     },
@@ -573,13 +585,12 @@ private fun HandleSurface(
 private enum class ResizeAxis { WIDTH, HEIGHT, BOTH }
 
 /**
- * Suruklenerek boyutlandirma tutamacı; drag px cinsinden onResize'a iletilir.
+ * Suruklenerek boyutlandirma tutamacı (Launcher tarzi dolu daire / fill circle).
+ * Drag px cinsinden onResize'a iletilir.
  * Birakildiginda onEnd ile grid snap'li commit yapilir.
  */
 @Composable
 private fun ResizeHandle(
-    icon: ImageVector,
-    iconRotation: Float,
     description: String,
     axis: ResizeAxis,
     sizeDp: Dp,
@@ -588,26 +599,20 @@ private fun ResizeHandle(
     onEnd: () -> Unit
 ) {
     Surface(
-        color = Color(0xCC1A1D2E),
-        contentColor = Color(0xFF00E5FF),
+        color = Color(0xFF00E5FF),
         shape = CircleShape,
-        shadowElevation = 4.dp,
-        modifier = modifier.size(sizeDp)
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.pointerInput(Unit) {
+        shadowElevation = 6.dp,
+        border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF0D0E11)),
+        modifier = modifier
+            .size(sizeDp)
+            .pointerInput(Unit) {
                 detectDragGestures(onDragEnd = { onEnd() }, onDragCancel = { onEnd() }) { change, drag ->
                     change.consume()
                     onResize(axis, drag.x, drag.y)
                 }
             }
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = description,
-                modifier = Modifier.size(14.dp).graphicsLayer { rotationZ = iconRotation }
-            )
-        }
+    ) {
+        // Dolu daire (Fill circle): Icine ikon konulmaz, konumu yonunu bildirir.
+        Box(modifier = Modifier.size(sizeDp))
     }
 }

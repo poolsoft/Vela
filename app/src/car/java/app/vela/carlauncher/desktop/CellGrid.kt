@@ -118,7 +118,10 @@ object CellGrid {
             var placedY = 0
             // Sayfadan sayfaya garanti yerlesim: tercih edilen sayfadan baslanir,
             // sonraki sayfalar taranir; hücreler en yakin bos bolgeye gore siralanir.
-            for (page in prefPage..prefPage + ids.size) {
+            // Guvenli yerlesim: Oncelikle tercih edilen sayfada aranir. Eger sigmiyorsa
+            // sonraki sayfalara bakilir.
+            val maxPageSearch = maxOf(prefPage + 2, ids.size)
+            for (page in prefPage..maxPageSearch) {
                 val b = board(page)
                 val cells = sequence {
                     for (y in 0 until grid.rows) {
@@ -140,7 +143,13 @@ object CellGrid {
                     break
                 }
             }
-            if (placedPage < 0) continue
+            // Sayfada hic yer yoksa bile widget ASLA kaybolmaz: tercih edilen sayfada,
+            // prefCellX/prefCellY koordinatina zorla yerlesir (disari atilmaz).
+            if (placedPage < 0) {
+                placedPage = prefPage
+                placedX = prefCellX
+                placedY = prefCellY
+            }
 
             val (originX, originY) = grid.originDp(placedX, placedY)
             result[id] = preferred.copy(
