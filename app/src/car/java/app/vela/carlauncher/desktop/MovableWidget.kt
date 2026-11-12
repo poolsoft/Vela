@@ -59,6 +59,15 @@ private const val MIN_HEIGHT_DP = 60f
 // Hucre modunda komsu cerceveler birbirine degmesin diye birakilan ic bosluk (dp).
 private const val CELL_GAP_DP = 4f
 
+/** Surukleme sirasinda hedeflenen hucre onizlemesi. ok=false: buraya birakilamaz. */
+private data class DropPreview(
+    val cellX: Int,
+    val cellY: Int,
+    val spanX: Int,
+    val spanY: Int,
+    val ok: Boolean
+)
+
 /**
  * UmainLauncher tabanli serbest tasinabilir ve boyutlandirilabilir widget saricisi (MovableWidget).
  *
@@ -87,7 +96,10 @@ fun MovableWidget(
     minSpanY: Int = 1,
     onEnterEdit: () -> Unit = {},
     onDragging: (Boolean) -> Unit = {},
-    onPageEdge: (Int) -> Int = { placement.page },
+    // Kenarda beklenince hedef sayfayi bir adim kaydirir: (mevcut hedef, yon) -> yeni hedef.
+    onPageEdge: (from: Int, direction: Int) -> Int = { from, _ -> from },
+    // Hedef sayfada bu boyutta widget icin yer var mi? Yer yoksa sayfa gecisi yapilmaz.
+    canTakePage: (page: Int, spanX: Int, spanY: Int) -> Boolean = { _, _, _ -> true },
     onRemove: (() -> Unit)? = null,
     onSettings: (() -> Unit)? = null,
     // true: birakma kabul edildi. false: hedefte yer yok, widget eski yerine doner.
@@ -114,6 +126,7 @@ fun MovableWidget(
     val pageEdge by rememberUpdatedState(onPageEdge)
     val draggingCallback by rememberUpdatedState(onDragging)
     val dropAllowed by rememberUpdatedState(canDrop)
+    val fitsPage by rememberUpdatedState(canTakePage)
     // Widget composition'i surukleme sirasinda elden cikarilirsa (sayfa degisimi, edit modu
     // kapanmasi, widget silinmesi) ust katmandaki "surukleniyor" bayragi takili kalmasin;
     // aksi halde pager kalici olarak kilitlenir.
@@ -124,13 +137,16 @@ fun MovableWidget(
     }
     var dx by remember { mutableFloatStateOf(placement.dx) }
     var dy by remember { mutableFloatStateOf(placement.dy) }
-    // Kenarda sayfa cevirme: parmak kenarda kaldigi surece tekrar tekrar cevirmesin.
-    var edgeLatched by remember { mutableStateOf(false) }
     var widthScale by remember { mutableFloatStateOf(placement.widthScale) }
     var heightScale by remember { mutableFloatStateOf(placement.heightScale) }
     // Hucre modu span'i; resize tutamacindan canli guncellenir.
     var spanX by remember { mutableIntStateOf(placement.spanX.coerceAtLeast(1)) }
     var spanY by remember { mutableIntStateOf(placement.spanY.coerceAtLeast(1)) }
+    // Reddedilen birakma sonrasi kisa sureli kirmizi cerceve (sozel bildirim yerine).
+    var rejectFlash by remember { mutableStateOf(false) }
+    // Hedef sayfa dolu oldugu icin kenar adimlamasi kilitlendi mi? (parmak kenardan
+    // uzaklasinca tekrar denenir)
+    var edgeBlocked by remember { mutableStateOf(false) }
     var widgetWidth by remember { mutableFloatStateOf(0f) }
     var widgetHeight by remember { mutableFloatStateOf(0f) }
     var initialBaseWidth by remember { mutableFloatStateOf(0f) }
@@ -156,16 +172,36 @@ fun MovableWidget(
     fun activeGrid(): CellGrid.Grid? = if (currentSnapToGrid) latestGrid else null
 
     LaunchedEffect(edge, dragging) {
-        // Tek atisli sayfa flip'i: kenarda 650ms beklenir, sonra sayfa cevrilir ve edge sifirlanir.
-        // Eski while(true) dongusu edge==0 iken de pageEdge(0) cagirip bos yere donuyordu.
+        // Parmak kenarda bekleyince (650ms) hedef sayfa bir adim kayar; parmak kenarda
+        // kaldikca adimlama surer (2-3 sayfa uzağa gidilebilir). Pager kaydirilmadigi icin
+        // bu yalnizca hedef secimidir: ekranda sayfa ileri-geri ziplamaz, widget parmagin
+        // altinda yuzmeye devam eder.
         if (!dragging || edge == 0) return@LaunchedEffect
         val dir = edge
         delay(650)
         if (dragging && edge == dir) {
-            dragPage = pageEdge(dir)
-            edge = 0
-            // Parmak hala kenardayken ikinci kez cevirme; edge 0'a donece re-arm olur.
-            edgeLatched = true
+            val target = pageEdge(dragPage, dir)
+            val sx = spanX.coerceAtLeast(1)
+            val sy = spanY.coerceAtLeast(1)
+            if (target == dragPage) {
+                edge = 0
+            } else if (fitsPage(target, sx, sy)) {
+                dragPage = target
+                edge = 0
+            } else {
+                // Hedef sayfa bu boyutta widget'i alacak boslukta degil: sayfaya gecme,
+                // kirmizi cerceveyle bildir.
+                rejectFlash = true
+                edge = 0
+                edgeBlocked = true
+            }
+        }
+    }
+
+    LaunchedEffect(rejectFlash) {
+        if (rejectFlash) {
+            delay(900)
+            rejectFlash = false
         }
     }
 
@@ -206,6 +242,17 @@ fun MovableWidget(
         minOf(widthScale, heightScale)
     }
 
+    // Surukleme sirasinda hedeflenen hucre ve buraya birakilip birakilamayacagi.
+    val dropPreview = if (dragging && gridForCompose != null) {
+        val sx = spanX.coerceIn(1, gridForCompose.cols)
+        val sy = spanY.coerceIn(1, gridForCompose.rows)
+        val cx = (dx / gridForCompose.cellWidth).roundToInt().coerceIn(0, gridForCompose.cols - sx)
+        val cy = (dy / gridForCompose.cellHeight).roundToInt().coerceIn(0, gridForCompose.rows - sy)
+        DropPreview(cx, cy, sx, sy, dropAllowed(dragPage, cx, cy, sx, sy))
+    } else null
+    // Kirmizi cerceve: hedefte yer yok (suruklerken) veya birakma reddedildi (kisa yanip sonme).
+    val blocked = rejectFlash || (dropPreview != null && !dropPreview.ok)
+
     /** Basarisiz birakmayi geri al: widget eski kayitli yerine/sayfasina doner. */
     fun revertToPlacement() {
         dx = currentPlacement.dx
@@ -215,7 +262,9 @@ fun MovableWidget(
         spanX = currentPlacement.spanX.takeIf { it > 0 } ?: 1
         spanY = currentPlacement.spanY.takeIf { it > 0 } ?: 1
         dragPage = currentPlacement.page
-        edgeLatched = false
+        edgeBlocked = false
+        // Kirmizi cerceve yanip soner: "buraya yerlesemedi" bildirimi.
+        rejectFlash = true
     }
 
     fun commitSnapped() {
@@ -267,7 +316,7 @@ fun MovableWidget(
     fun finishDrag() {
         dragging = false
         edge = 0
-        edgeLatched = false
+        edgeBlocked = false
         commitSnapped()
         draggingCallback(false)
     }
@@ -280,9 +329,9 @@ fun MovableWidget(
             dx + currentPixelWidth > workspaceWidth - 12f -> 1
             else -> 0
         }
-        // Parmak kenardan uzaklastikca yeniden dolasabilir (re-arm).
-        if (nextEdge == 0) edgeLatched = false
-        edge = if (edgeLatched) 0 else nextEdge
+        // Kenardan uzaklasinca adimlama kilidi (dolu sayfa) yeniden denenebilir.
+        if (nextEdge == 0) edgeBlocked = false
+        edge = if (edgeBlocked) 0 else nextEdge
     }
 
     Box(
@@ -341,24 +390,18 @@ fun MovableWidget(
 
         if (showControls) {
             // Hucre modunda surukleme sirasinda hedef hucre bolgesi vurgulanir (Launcher davranisi).
-            val previewGrid = activeGrid()
-            if (previewGrid != null && dragging) {
-                val previewSpanX = spanX.coerceIn(1, previewGrid.cols)
-                val previewSpanY = spanY.coerceIn(1, previewGrid.rows)
-                val previewCellX = (dx / previewGrid.cellWidth).roundToInt()
-                    .coerceIn(0, previewGrid.cols - previewSpanX)
-                val previewCellY = (dy / previewGrid.cellHeight).roundToInt()
-                    .coerceIn(0, previewGrid.rows - previewSpanY)
-                // Hedefte yer yoksa onizleme kirmizi: birakmanin reddedilecegi onceden gorunur.
-                val previewOk = dropAllowed(dragPage, previewCellX, previewCellY, previewSpanX, previewSpanY)
-                val previewFill = if (previewOk) Color(0x2200E5FF) else Color(0x33FF5252)
-                val previewLine = if (previewOk) Color(0x8800E5FF) else Color(0xCCFF5252)
+            val previewGrid = if (dragging) gridForCompose else null
+            val preview = dropPreview
+            if (previewGrid != null && preview != null) {
+                // Yer varsa camgobegi "buraya oturabilir" cercevesi; yer yoksa kirmizi.
+                val previewFill = if (preview.ok) Color(0x2200E5FF) else Color(0x33FF5252)
+                val previewLine = if (preview.ok) Color(0x8800E5FF) else Color(0xCCFF5252)
                 Box(
                     Modifier
-                        .offset((previewCellX * previewGrid.cellWidth - dx).dp, (previewCellY * previewGrid.cellHeight - dy).dp)
+                        .offset((preview.cellX * previewGrid.cellWidth - dx).dp, (preview.cellY * previewGrid.cellHeight - dy).dp)
                         .requiredSize(
-                            (previewSpanX * previewGrid.cellWidth - cellGap * 2f).coerceAtLeast(1f).dp,
-                            (previewSpanY * previewGrid.cellHeight - cellGap * 2f).coerceAtLeast(1f).dp
+                            (preview.spanX * previewGrid.cellWidth - cellGap * 2f).coerceAtLeast(1f).dp,
+                            (preview.spanY * previewGrid.cellHeight - cellGap * 2f).coerceAtLeast(1f).dp
                         )
                         .background(previewFill, RoundedCornerShape(10.dp))
                         .border(1.dp, previewLine, RoundedCornerShape(10.dp))
@@ -367,7 +410,17 @@ fun MovableWidget(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .border(1.dp, Color(0xAA00E5FF), RoundedCornerShape(10.dp))
+                    // Cerceve rengi ayni zamanda bildirimdir: kirmizi = buraya birakilamaz.
+                    .background(if (blocked) Color(0x2EFF5252) else Color.Transparent, RoundedCornerShape(10.dp))
+                    .border(
+                        width = if (dragging || blocked) 2.dp else 1.dp,
+                        color = when {
+                            blocked -> Color(0xFFE53935)
+                            dragging -> Color(0xFF00E5FF)
+                            else -> Color(0xAA00E5FF)
+                        },
+                        shape = RoundedCornerShape(10.dp)
+                    )
                     .pointerInput(Unit) {
                         detectDragGestures(
                             onDragStart = { dragging = true; draggingCallback(true) },

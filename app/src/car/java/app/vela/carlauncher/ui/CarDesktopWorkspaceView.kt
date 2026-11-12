@@ -55,7 +55,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Wallpaper
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Widgets
 import app.vela.ui.VelaWindowAlertDialog as AlertDialog
 import androidx.compose.material3.FloatingActionButton
@@ -179,8 +178,6 @@ fun CarDesktopWorkspaceView(
     // Surukleme sirasinda sayfa kaydirilmaz (widget composition'i imha olmasin); sadece
     // hedeflenen sayfa burada tutulur ve birakma kabul edilirse oraya gidilir.
     var dragTargetPage by remember { mutableStateOf<Int?>(null) }
-    // Birakma reddedildiginde kisa sureli gorsel uyari metni.
-    var dropNotice by remember { mutableStateOf<String?>(null) }
     var selectedWidgetId by remember { mutableStateOf<String?>(null) }
     var showPageIndicator by remember { mutableStateOf(true) }
     var lastPageChangeAt by remember { mutableStateOf(0L) }
@@ -329,6 +326,30 @@ fun CarDesktopWorkspaceView(
                 return fits && oldRegionClear(id, occupant.key, old)
             }
 
+            /** Bu sayfada bu boyutta widget icin (swap dahil) yer var mi? */
+            fun pageHasRoom(id: String, page: Int, spanX: Int, spanY: Int): Boolean {
+                val grid = cellGrid ?: return true
+                if (!snapToGrid) return true
+                val base = resolvedLayout[id] ?: return true
+                val sx = spanX.coerceIn(1, grid.cols)
+                val sy = spanY.coerceIn(1, grid.rows)
+                for (cy in 0..(grid.rows - sy)) {
+                    for (cx in 0..(grid.cols - sx)) {
+                        val candidate = base.copy(
+                            page = page,
+                            cellX = cx,
+                            cellY = cy,
+                            dx = cx * grid.cellWidth,
+                            dy = cy * grid.cellHeight,
+                            spanX = sx,
+                            spanY = sy
+                        )
+                        if (placementAllowed(id, candidate)) return true
+                    }
+                }
+                return false
+            }
+
             fun commitPlacement(id: String, target: WidgetPlacement): Boolean {
                 if (!snapToGrid) {
                     layoutStore.setPlacement(id, target)
@@ -406,13 +427,6 @@ fun CarDesktopWorkspaceView(
                 if (!isEditMode) draggingWidgetId = null
                 dragTargetPage = null
             }
-            // Reddedilen birakma uyarisi kendiliginden kaybolur.
-            LaunchedEffect(dropNotice) {
-                if (dropNotice != null) {
-                    delay(2600)
-                    dropNotice = null
-                }
-            }
 
             HorizontalPager(
                 state = pagerState,
@@ -440,18 +454,20 @@ fun CarDesktopWorkspaceView(
                                     onEnterEdit = { isEditMode = true },
                                     onDragging = { isDragging ->
                                         draggingWidgetId = if (isDragging) widgetId else null
-                                        if (!isDragging) dragTargetPage = null
+                                        dragTargetPage = if (isDragging) currentPage else null
+                                        if (isDragging) showPageIndicator = true
                                     },
                                     // Surukleme sirasinda sayfa KAYDIRILMAZ: HorizontalPager'in
                                     // sayfasi degisince bu widget'in composition'i imha olup
                                     // surukleme durumu kayboluyordu (sayfa kilitlenmesi ve
-                                    // ust uste binme buradan kaynaklaniyordu). Kenara gelince
-                                    // yalnizca hedef sayfa secilir; birakma kabul edilirse
-                                    // onCommit icinde oraya gidilir.
-                                    onPageEdge = { direction ->
-                                        (currentPage + direction).coerceIn(0, lastPage).also {
-                                            dragTargetPage = it
-                                        }
+                                    // ust uste binme buradan kaynaklaniyordu). Parmak kenarda
+                                    // bekleyince yalnizca HEDEF sayfa adimlar; hedefte yer yoksa
+                                    // adim atlanmaz ve widget kirmizi cerceveyle uyarir.
+                                    onPageEdge = { from, direction ->
+                                        (from + direction).coerceIn(0, lastPage).also { dragTargetPage = it }
+                                    },
+                                    canTakePage = { page, sx, sy ->
+                                        pageHasRoom(widgetId, page, sx, sy)
                                     },
                                     workspaceWidth = workspaceWidth,
                                     workspaceHeight = workspaceHeight,
@@ -464,20 +480,12 @@ fun CarDesktopWorkspaceView(
                                     },
                                     onSettings = { selectedWidgetId = widgetId },
                                     onCommit = { newPlacement ->
+                                        // Kabul edilirse yerlesir (farkli sayfaya tasindiysa oraya
+                                        // gecilir); reddedilirse widget kendi konumunda kalir ve
+                                        // kirmizi cerceve yanip soner.
                                         val accepted = commitPlacement(widgetId, newPlacement)
-                                        if (accepted) {
-                                            // Farkli sayfaya tasindiysa birakma sonrasi oraya gec.
-                                            if (newPlacement.page != currentPage) {
-                                                currentPage = newPlacement.page
-                                            }
-                                        } else {
-                                            // Yer yok: widget eski konumuna doner ve kullaniciya
-                                            // gorsel olarak bildirilir.
-                                            dropNotice = if (newPlacement.page != currentPage) {
-                                                "Sayfa ${newPlacement.page + 1} doluydu, widget taşınmadı"
-                                            } else {
-                                                "Bu alanda yeterli boş yer yok"
-                                            }
+                                        if (accepted && newPlacement.page != currentPage) {
+                                            currentPage = newPlacement.page
                                         }
                                         accepted
                                     },
@@ -517,49 +525,8 @@ fun CarDesktopWorkspaceView(
                 }
             }
 
-            // Surukleme sirasinda sayfa kaydirilmadigi icin hedef sayfa burada gosterilir.
-            AnimatedVisibility(
-                visible = draggingWidgetId != null && dragTargetPage != null &&
-                    dragTargetPage != currentPage,
-                enter = fadeIn(), exit = fadeOut(),
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
-            ) {
-                Surface(color = Color(0xCC1A1D2E), shape = RoundedCornerShape(16.dp)) {
-                    Text(
-                        text = "Bırakınca: Sayfa ${(dragTargetPage ?: currentPage) + 1}",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                    )
-                }
-            }
-
-            // Yer olmadigi icin birakma reddedildiginde gorsel bildirim.
-            AnimatedVisibility(
-                visible = dropNotice != null,
-                enter = fadeIn(), exit = fadeOut(),
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
-            ) {
-                val notice = dropNotice
-                if (notice != null) {
-                    Surface(color = Color(0xE6B3261E), shape = RoundedCornerShape(18.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(text = notice, color = Color.White, fontSize = 13.sp)
-                        }
-                    }
-                }
-            }
-
+            // Surukleme sirasinda hedef sayfa nokta gostergesinde isaretlenir:
+            // camgobegi = oraya birakilabilir, kirmizi = yer yok (o sayfaya gecilmez).
             AnimatedVisibility(
                 visible = showPageIndicator,
                 enter = fadeIn(), exit = fadeOut(),
@@ -573,11 +540,31 @@ fun CarDesktopWorkspaceView(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         items(lastPage + 1) { page ->
+                            // Surukleme sirasinda hedef sayfinin noktasi isiklanir:
+                            // camgobegi = yer var, kirmizi = yer yok (gecilmez).
+                            val targetId = if (dragTargetPage == page) draggingWidgetId else null
+                            val targetRoom = targetId?.let { id ->
+                                val pl = resolvedLayout[id]
+                                pl == null || pageHasRoom(id, page, pl.spanX, pl.spanY)
+                            } ?: false
                             Box(
                                 Modifier
-                                    .size(if (page == currentPage) 10.dp else 7.dp)
+                                    .size(
+                                        when {
+                                            targetId != null -> 15.dp
+                                            page == currentPage -> 10.dp
+                                            else -> 7.dp
+                                        }
+                                    )
                                     .clip(CircleShape)
-                                    .background(if (page == currentPage) Color.White else Color(0x66FFFFFF))
+                                    .background(
+                                        when {
+                                            targetId != null && !targetRoom -> Color(0xFFFF5252)
+                                            targetId != null -> Color(0xFF00E5FF)
+                                            page == currentPage -> Color.White
+                                            else -> Color(0x66FFFFFF)
+                                        }
+                                    )
                                     .clickable(enabled = isEditMode && draggingWidgetId == null) { currentPage = page }
                             )
                         }
@@ -670,15 +657,22 @@ fun CarDesktopWorkspaceView(
                     placement = resolvedLayout[widgetId] ?: layout[widgetId] ?: WidgetPlacement(page = currentPage),
                     pageCount = lastPage + 1,
                     gridMode = snapToGrid,
+                    pageHasRoom = { page ->
+                        val pl = resolvedLayout[widgetId]
+                        pl == null || pageHasRoom(
+                            widgetId,
+                            page,
+                            pl.spanX.coerceAtLeast(1),
+                            pl.spanY.coerceAtLeast(1)
+                        )
+                    },
                     providerInfo = widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()?.let(hostController::info),
                     onDismiss = { selectedWidgetId = null },
                     onSave = { placement ->
                         // Sayfa/boyut degisikligi de birakma kurallarindan gecer: hedef
-                        // sayfada yer yoksa yazilmaz ve kullanici bildirilir.
-                        if (commitPlacement(widgetId, placement)) {
-                            if (placement.page != currentPage) currentPage = placement.page
-                        } else {
-                            dropNotice = "Sayfa ${placement.page + 1} doluydu, widget taşınmadı"
+                        // sayfada yer yoksa yazilmaz (widget eski sayfasinda kalir).
+                        if (commitPlacement(widgetId, placement) && placement.page != currentPage) {
+                            currentPage = placement.page
                         }
                         selectedWidgetId = null
                     },
@@ -1195,6 +1189,7 @@ private fun DesktopWidgetSettingsDialog(
     placement: WidgetPlacement,
     pageCount: Int,
     gridMode: Boolean,
+    pageHasRoom: (Int) -> Boolean,
     providerInfo: AppWidgetProviderInfo?,
     onDismiss: () -> Unit,
     onSave: (WidgetPlacement) -> Unit,
@@ -1254,11 +1249,26 @@ private fun DesktopWidgetSettingsDialog(
                 Text("Sayfa", color = Color.White, fontWeight = FontWeight.SemiBold)
                 LazyColumn(modifier = Modifier.height(120.dp)) {
                     items(pageCount) { page ->
-                        Text(
-                            "Sayfa ${page + 1}",
-                            color = if (draft.page == page) ClPrimary else Color.White,
-                            modifier = Modifier.fillMaxWidth().clickable { draft = draft.copy(page = page) }.padding(10.dp)
-                        )
+                        val room = pageHasRoom(page)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = room) { draft = draft.copy(page = page) }
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Sayfa ${page + 1}",
+                                color = when {
+                                    !room -> Color(0xFF6B6F85)
+                                    draft.page == page -> ClPrimary
+                                    else -> Color.White
+                                }
+                            )
+                            // Yer yoksa sayfa secilemez: widget oraya tasinamaz.
+                            if (!room) Text("yer yok", color = Color(0xFFFF8A80), fontSize = 11.sp)
+                        }
                     }
                 }
                 if (providerInfo?.configure != null) {
