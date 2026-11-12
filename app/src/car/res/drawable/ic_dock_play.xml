@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Dock oynat simgesi: android.R.drawable.ic_media_play yerine kullanilir;
+         cerceve simgesi Android surumune gore degistigi icin sabit surum buraya konur.
+         Tema attr tint verilmez: rengi dugmenin android:tint degeri belirler. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8,5.14V19.14L19,12.14L8,5.14Z"/>
+</vector>

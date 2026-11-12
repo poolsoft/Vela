@@ -261,6 +261,7 @@
     <string name="car_settings_panel_width_ratio">Panel Width Ratio</string>
     <string name="car_settings_panel_width_ratio_desc">Ratio covered by the small panel relative to screen width</string>
     <string name="car_settings_desktop_mode">Desktop Mode</string>
+    <string name="car_dock_desktop_mode_desc">Masaüstü modunu değiştir</string>
     <string name="car_settings_desktop_mode_desc">Hides map and displays a single large desktop panel</string>
     <string name="car_settings_desktop_loop">Include Desktop in Toggle Loop</string>
     <string name="car_settings_desktop_loop_desc">Includes Desktop Mode as 3rd step when toggling layout button</string>

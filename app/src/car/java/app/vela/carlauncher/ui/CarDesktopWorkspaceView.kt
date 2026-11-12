@@ -80,7 +80,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -451,11 +450,10 @@ fun CarDesktopWorkspaceView(
                             if (placement != null && placement.page == pageIndex) {
                                 MovableWidget(
                                     placement = placement,
-                                    modifier = Modifier
-                                        .zIndex(if (draggingWidgetId == widgetId) 100f else 0f)
-                                        // Surukleme sirasinda diger widget'lar soluklasin:
-                                        // hangi alanin bos oldugu daha iyi gorunur.
-                                        .alpha(if (draggingWidgetId == null || isDraggingThis) 1f else 0.45f),
+                                    // NOT: Surukleme sirasinda diger widget'lara alpha/graphicsLayer
+                                    // uygulamayin: AppWidgetHostView (AndroidView) icerigi
+                                    // alpha < 1 ile bazi surumlerde hic cizilmiyor.
+                                    modifier = Modifier.zIndex(if (draggingWidgetId == widgetId) 100f else 0f),
                                     resizable = true,
                                     dragViaHandle = true,
                                     showControls = isEditMode,
@@ -1288,8 +1286,8 @@ private fun FloatingDesktopControls(
     onResetLayout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Edit modu kontrolleri tek bir yuzucu buton + "daha fazla" menusu olarak toparlanir;
-    // boylece masaustunde cok daha az yer kaplar.
+    // Edit modu kontrolleri: ana yuzucu buton "duzenlemeyi bitir", diger eylemler
+    // simgeli acilir menude. Boylece masaustunde cok daha az yer kaplar.
     var menuOpen by remember { mutableStateOf(false) }
     Column(
         modifier = modifier,
@@ -1308,6 +1306,11 @@ private fun FloatingDesktopControls(
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
+                    text = { Text("Widget ekle") },
+                    leadingIcon = { Icon(Icons.Default.Widgets, contentDescription = null) },
+                    onClick = { menuOpen = false; onOpenWidgetPicker() }
+                )
+                DropdownMenuItem(
                     text = { Text("Duvar kâğıdı") },
                     leadingIcon = { Icon(Icons.Default.Wallpaper, contentDescription = null) },
                     onClick = { menuOpen = false; onOpenWallpaperPicker() }
@@ -1317,22 +1320,17 @@ private fun FloatingDesktopControls(
                     leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
                     onClick = { menuOpen = false; onResetLayout() }
                 )
-                DropdownMenuItem(
-                    text = { Text("Düzenlemeyi bitir") },
-                    leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
-                    onClick = { menuOpen = false; onExitEditMode() }
-                )
             }
         }
 
         FloatingActionButton(
-            onClick = onOpenWidgetPicker,
+            onClick = onExitEditMode,
             containerColor = Color(0xFF00E5FF),
             contentColor = Color.Black,
             shape = CircleShape,
             modifier = Modifier.size(52.dp)
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Widget Ekle", modifier = Modifier.size(26.dp))
+            Icon(Icons.Default.Check, contentDescription = "Düzenlemeyi bitir", modifier = Modifier.size(26.dp))
         }
     }
 }

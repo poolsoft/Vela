@@ -86,6 +86,12 @@ fun CarDock(
             val recycler = view.findViewById<RecyclerView>(R.id.dock_recycler)
 
             btnDesktop?.setOnClickListener { onDesktopToggle() }
+            // Boya tonu kodda da sabitlenir: bu layout framework inflater ile (AppCompat
+            // factory olmadan) sisirildiginda android:tint uygulanabilir ama cihaz ve tema
+            // farklari yine farkli gorunume yol acabilir; tek kaynak koddur.
+            btnDesktop?.imageTintList = android.content.res.ColorStateList.valueOf(
+                androidx.core.content.ContextCompat.getColor(ctx, R.color.cl_dock_icon)
+            )
             btnAppList?.setOnClickListener { onAppListClick() }
             miniContainer?.setOnClickListener { onMuzikPaneliAc() }
             miniBtnPlay?.setOnClickListener { onMuzikOynatDuraklat() }
@@ -117,7 +123,7 @@ fun CarDock(
             }
 
             miniBtnPlay?.setImageResource(
-                if (medya.caliyorMu) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+                if (medya.caliyorMu) R.drawable.ic_dock_pause else R.drawable.ic_dock_play
             )
 
             dockClock?.text = saatMetni

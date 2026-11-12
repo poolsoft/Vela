@@ -77,6 +77,12 @@ class CarAppDockHost(
     init {
         btnAppList?.setOnClickListener { onAppDrawerClick() }
         btnDesktopMode?.setOnClickListener { onDesktopClick() }
+        // Mod dugmesinin tonu kodda sabitlenir: layout hem framework hem AppCompat inflater
+        // ile sisirilebiliyor ve Android surumu/tema tint varsayilanlarini degistirebiliyor;
+        // boylece butun cihazlarda ayni gorunur.
+        btnDesktopMode?.imageTintList = android.content.res.ColorStateList.valueOf(
+            androidx.core.content.ContextCompat.getColor(context, R.color.cl_dock_icon)
+        )
         btnAssistant?.setOnClickListener { onAssistantClick() }
         rootView.findViewById<View>(R.id.clock_settings_container)?.setOnClickListener { onSettingsClick() }
         miniMusicContainer?.setOnClickListener { onMiniMusicClick() }
@@ -286,8 +292,10 @@ class CarAppDockHost(
         if (previous != null && previous.baslik == medya.baslik && previous.caliyorMu == medya.caliyorMu) return
         appliedMedia = medya
         miniMusicTitle?.text = if (medya.baslik.isNotBlank()) medya.baslik else "Müzik"
+        // Cerceveden gelen (android.R.drawable.ic_media_*) simgeler Android surumune gore
+        // farkli ciziliyor; uygulamayla paketlenan sabit vector'lar kullanilir.
         miniMusicPlay?.setImageResource(
-            if (medya.caliyorMu) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+            if (medya.caliyorMu) R.drawable.ic_dock_pause else R.drawable.ic_dock_play
         )
     }
 

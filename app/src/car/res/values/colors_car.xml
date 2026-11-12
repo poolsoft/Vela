@@ -22,6 +22,9 @@
     <color name="cl_text_primary_light">#1A1A1A</color>      <!-- Gunduz ana metin -->
     <color name="cl_text_secondary">#99EBEBF5</color>       <!-- Açıklamalar (Opak beyaz) -->
     <color name="cl_text_hint">#48484A</color>              <!-- Pasif/Etiket -->
+    <!-- Dock ikonleri: bes dock layoutunda da ayni kullanilir; boylece mod dugmesi
+         cihaza veya Android surumune gore farkli gorunmez. -->
+    <color name="cl_dock_icon">#D9FFFFFF</color>
     <color name="cl_m3_light_blue">#D2E3FC</color>          <!-- M3 Acik Mavi -->
 
     <!-- Alias (Eski/Eksik Tanımlar) -->
