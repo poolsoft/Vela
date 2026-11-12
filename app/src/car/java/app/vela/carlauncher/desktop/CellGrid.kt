@@ -88,13 +88,35 @@ object CellGrid {
         // guvenilmez; aksi halde span'ler tum sayfayi kaplayarak widget'lari sayfa basina
         // bir tane dusurur.
         val trustSavedCells = grid.cellWidth >= 16f && grid.cellHeight >= 16f
+
+        /** Tercih edilen hucreye en yakin bos yer; yoksa null. */
+        fun nearestFree(
+            b: BooleanArray,
+            fromX: Int,
+            fromY: Int,
+            sx: Int,
+            sy: Int
+        ): Pair<Int, Int>? = sequence {
+            for (y in 0 until grid.rows) {
+                for (x in 0 until grid.cols) {
+                    yield(x to y)
+                }
+            }
+        }.sortedBy { (x, y) ->
+            val dx = x - fromX
+            val dy = y - fromY
+            dx * dx + dy * dy
+        }.firstOrNull { (x, y) -> fits(b, x, y, sx, sy) }
+
         for (id in ordered) {
             val preferred = saved[id] ?: WidgetPlacement()
             val (baseSx, baseSy) = spanOf(WidgetIds.type(id), grid)
-            // Tum sayfayi kaplayan kayitlar bozuk kabul edilir ve taban span ile yeniden turetilir.
+            // Bozuk kayit: span eksi/sifir ya da tahtanin tamamini kaplayan deger (eski hatali
+            // donemde yazilan "tum sayfa" span'leri). Tam genislik/yukseklik (tek eksen) ise
+            // gecerli bir kullanici secimidir, bozuk sayilmaz.
             val savedUsable = trustSavedCells &&
                 preferred.spanX > 0 && preferred.spanY > 0 &&
-                preferred.spanX < grid.cols && preferred.spanY < grid.rows
+                !(preferred.spanX >= grid.cols && preferred.spanY >= grid.rows)
             val spanX = if (savedUsable) preferred.spanX.coerceIn(1, grid.cols) else baseSx
             val spanY = if (savedUsable) preferred.spanY.coerceIn(1, grid.rows) else baseSy
 
@@ -113,45 +135,36 @@ object CellGrid {
             }
             val prefPage = preferred.page.coerceAtLeast(0)
 
+            // Yerlesim sirasi (Launcher davranisi):
+            // 1) Tercih edilen sayfada tam istenen hucre bossa dogrudan oraya (savrulma yok).
+            // 2) Degilse ayni sayfada en yakin bos hucre.
+            // 3) O sayfa doluysa sonraki sayfalara tasinir (kalici ust uste binme olmaz).
+            // 4) Hic yer yoksa tercih edilen hucreye zorlanir; widget ASLA kaybolmaz.
             var placedPage = -1
             var placedX = 0
             var placedY = 0
-            // Tercih edilen sayfada tam istenen hucre bossa doğrudan oraya yerlesir.
-            // Sayfa gecisi veya tasimada widget'in baska bir bosluga savrulmasi engellenir.
             val prefBoard = board(prefPage)
-            if (fits(prefBoard, prefCellX, prefCellY, spanX, spanY)) {
+            val exactSpot = if (fits(prefBoard, prefCellX, prefCellY, spanX, spanY)) {
+                prefCellX to prefCellY
+            } else {
+                nearestFree(prefBoard, prefCellX, prefCellY, spanX, spanY)
+            }
+            if (exactSpot != null) {
                 placedPage = prefPage
-                placedX = prefCellX
-                placedY = prefCellY
+                placedX = exactSpot.first
+                placedY = exactSpot.second
                 mark(prefBoard, placedX, placedY, spanX, spanY)
             } else {
-                // Eger tam o hucre doluysa, oncelikle AYNI sayfada en yakin bosluk aranir.
-                val samePageCells = sequence {
-                    for (y in 0 until grid.rows) {
-                        for (x in 0 until grid.cols) {
-                            yield(x to y)
-                        }
-                    }
-                }.sortedBy { (x, y) ->
-                    val dx = x - prefCellX
-                    val dy = y - prefCellY
-                    dx * dx + dy * dy
-                }
-                val samePageSpot = samePageCells.firstOrNull { (x, y) -> fits(prefBoard, x, y, spanX, spanY) }
-                if (samePageSpot != null) {
-                    placedPage = prefPage
-                    placedX = samePageSpot.first
-                    placedY = samePageSpot.second
-                    mark(prefBoard, placedX, placedY, spanX, spanY)
-                } else {
-                    // Sayfada hic yer yoksa bile widget baska sayfaya atilmaz; ayni sayfada prefCell'e konur.
-                    placedPage = prefPage
-                    placedX = prefCellX
-                    placedY = prefCellY
+                for (page in prefPage + 1..prefPage + ids.size) {
+                    val b = board(page)
+                    val spot = nearestFree(b, prefCellX, prefCellY, spanX, spanY) ?: continue
+                    placedPage = page
+                    placedX = spot.first
+                    placedY = spot.second
+                    mark(b, placedX, placedY, spanX, spanY)
+                    break
                 }
             }
-            // Sayfada hic yer yoksa bile widget ASLA kaybolmaz: tercih edilen sayfada,
-            // prefCellX/prefCellY koordinatina zorla yerlesir (disari atilmaz).
             if (placedPage < 0) {
                 placedPage = prefPage
                 placedX = prefCellX

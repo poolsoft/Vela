@@ -378,11 +378,6 @@ fun CarDesktopWorkspaceView(
                     currentPage = pagerState.currentPage
                 }
             }
-            LaunchedEffect(pagerState.currentPage) {
-                if (currentPage != pagerState.currentPage) {
-                    currentPage = pagerState.currentPage
-                }
-            }
 
             HorizontalPager(
                 state = pagerState,

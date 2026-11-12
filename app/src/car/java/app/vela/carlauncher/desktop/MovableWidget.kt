@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DropdownMenu
@@ -407,12 +406,16 @@ fun MovableWidget(
                     return baseW to baseH
                 }
                 // Serbest mod: olcek yerine resulting boyut 16dp'nin katina yuvarlanir.
-                // Sinir asiminda clamp devreye girer.
+                // Sinir asiminda clamp devreye girer. Tamamen serbest modda (16dp kilavuzu
+                // kapali) yuvarlama yapilmaz; boyut surekli degisir.
                 fun snapScale(base: Float, raw: Float, minS: Float, maxS: Float): Float {
+                    if (!currentSnapToGrid) return raw.coerceIn(minS, maxS)
                     val snapped = ((base * raw / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP) / base
                     return snapped.coerceIn(minS, maxS)
                 }
                 // Hucre modunda span degisimi; sinirlar min span ve kalan hucre sayisidir.
+                // Birikimli delta yalnizca ilgili eksende toplanir; boylece kullanilmayan
+                // eksendeki artik deger sonraki bir resize'ta span'i ziplatmaz.
                 fun resizeSpan(axis: ResizeAxis, dragX: Float, dragY: Float) {
                     val g = activeGrid() ?: return
                     val cellXNow = (dx / g.cellWidth).roundToInt().coerceIn(0, g.cols - 1)
@@ -420,14 +423,12 @@ fun MovableWidget(
                     val maxSpanX = (g.cols - cellXNow).coerceAtLeast(latestMinSpanX)
                     val maxSpanY = (g.rows - cellYNow).coerceAtLeast(latestMinSpanY)
 
-                    dragAccumulatorX += dragX / density
-                    dragAccumulatorY += dragY / density
-
                     val stepX = (g.cellWidth * 0.25f).coerceIn(16f, 32f)
                     val stepY = (g.cellHeight * 0.25f).coerceIn(16f, 32f)
 
                     when (axis) {
                         ResizeAxis.WIDTH -> {
+                            dragAccumulatorX += dragX / density
                             if (kotlin.math.abs(dragAccumulatorX) >= stepX) {
                                 val change = if (dragAccumulatorX > 0) 1 else -1
                                 spanX = (spanX + change).coerceIn(latestMinSpanX, maxSpanX)
@@ -435,6 +436,7 @@ fun MovableWidget(
                             }
                         }
                         ResizeAxis.HEIGHT -> {
+                            dragAccumulatorY += dragY / density
                             if (kotlin.math.abs(dragAccumulatorY) >= stepY) {
                                 val change = if (dragAccumulatorY > 0) 1 else -1
                                 spanY = (spanY + change).coerceIn(latestMinSpanY, maxSpanY)
@@ -442,6 +444,8 @@ fun MovableWidget(
                             }
                         }
                         ResizeAxis.BOTH -> {
+                            dragAccumulatorX += dragX / density
+                            dragAccumulatorY += dragY / density
                             if (kotlin.math.abs(dragAccumulatorX) >= stepX) {
                                 val changeX = if (dragAccumulatorX > 0) 1 else -1
                                 spanX = (spanX + changeX).coerceIn(latestMinSpanX, maxSpanX)
@@ -460,6 +464,7 @@ fun MovableWidget(
                     description = "Boyutlandir",
                     axis = ResizeAxis.BOTH,
                     sizeDp = 24.dp,
+                    onStart = { dragAccumulatorX = 0f; dragAccumulatorY = 0f },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .offset(12.dp, 12.dp)
@@ -497,6 +502,7 @@ fun MovableWidget(
                     description = "Genislik",
                     axis = ResizeAxis.WIDTH,
                     sizeDp = 20.dp,
+                    onStart = { dragAccumulatorX = 0f; dragAccumulatorY = 0f },
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .offset(10.dp, 0.dp)
@@ -521,6 +527,7 @@ fun MovableWidget(
                     description = "Yukseklik",
                     axis = ResizeAxis.HEIGHT,
                     sizeDp = 20.dp,
+                    onStart = { dragAccumulatorX = 0f; dragAccumulatorY = 0f },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .offset(0.dp, 10.dp)
@@ -595,6 +602,7 @@ private fun ResizeHandle(
     axis: ResizeAxis,
     sizeDp: Dp,
     modifier: Modifier = Modifier,
+    onStart: () -> Unit = {},
     onResize: (ResizeAxis, Float, Float) -> Unit,
     onEnd: () -> Unit
 ) {
@@ -605,7 +613,11 @@ private fun ResizeHandle(
         modifier = modifier
             .size(touchTargetSize)
             .pointerInput(Unit) {
-                detectDragGestures(onDragEnd = { onEnd() }, onDragCancel = { onEnd() }) { change, drag ->
+                detectDragGestures(
+                    onDragStart = { onStart() },
+                    onDragEnd = { onEnd() },
+                    onDragCancel = { onEnd() }
+                ) { change, drag ->
                     change.consume()
                     onResize(axis, drag.x, drag.y)
                 }
