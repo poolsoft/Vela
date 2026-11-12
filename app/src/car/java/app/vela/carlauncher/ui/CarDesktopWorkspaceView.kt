@@ -80,6 +80,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -175,9 +176,6 @@ fun CarDesktopWorkspaceView(
     var showPageDeleteConfirm by remember { mutableStateOf(false) }
     var currentPage by remember { mutableStateOf(0) }
     var draggingWidgetId by remember { mutableStateOf<String?>(null) }
-    // Surukleme sirasinda sayfa kaydirilmaz (widget composition'i imha olmasin); sadece
-    // hedeflenen sayfa burada tutulur ve birakma kabul edilirse oraya gidilir.
-    var dragTargetPage by remember { mutableStateOf<Int?>(null) }
     var selectedWidgetId by remember { mutableStateOf<String?>(null) }
     var showPageIndicator by remember { mutableStateOf(true) }
     var lastPageChangeAt by remember { mutableStateOf(0L) }
@@ -421,29 +419,43 @@ fun CarDesktopWorkspaceView(
                     currentPage = pagerState.currentPage
                 }
             }
-            // Guvenlik agi: edit modundan cikilinca veya sayfa sayisi degisince takili kalan
-            // surukleme bayragi pager'i kalici olarak kilitlemesin.
+            // Guvenlik agi: edit modundan cikilinca takili kalan surukleme bayragi
+            // pager'i kalici olarak kilitlemesin.
             LaunchedEffect(isEditMode, lastPage) {
                 if (!isEditMode) draggingWidgetId = null
-                dragTargetPage = null
             }
 
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = draggingWidgetId == null,
+                // Surukleme sirasinda butun sayfalar canli tutulur: widget kendi sayfasi
+                // icinde cizilmeye devam ettigi icin surukleme durumu kaybolmaz, pager ise
+                // hedef sayfayi gostererek bos alanlari gorunur kilir.
+                beyondViewportPageCount = if (draggingWidgetId == null) 1 else maxOf(lastPage, 1),
                 modifier = Modifier.fillMaxSize()
             ) { pageIndex ->
-                Box(modifier = Modifier.fillMaxSize()) {
+                val draggingHere = draggingWidgetId != null &&
+                    resolvedLayout[draggingWidgetId]?.page == pageIndex
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // Suruklenen widget'in sayfasi ustte cizilmeye calisilir; pager
+                        // sayfalar arasi cizim sirasini garanti etmedigi icin asil koruma
+                        // birakmanin yalnizca bos hucreye yapabilmesidir.
+                        .zIndex(if (draggingHere) 1f else 0f)
+                ) {
                     activeWidgets.forEach { widgetId ->
                         key(widgetId) {
                             val placement = resolvedLayout[widgetId]
-                            // Surukleme sirasinda widget yalnizca hedef sayfada cizilir; eski
-                            // sayfada hayalet kopya birakmak yerine Launcher davranisi uygulanir.
                             val isDraggingThis = draggingWidgetId == widgetId
-                            if (placement != null && (if (isDraggingThis) pageIndex == currentPage else placement.page == pageIndex)) {
+                            if (placement != null && placement.page == pageIndex) {
                                 MovableWidget(
                                     placement = placement,
-                                    modifier = Modifier.zIndex(if (draggingWidgetId == widgetId) 100f else 0f),
+                                    modifier = Modifier
+                                        .zIndex(if (draggingWidgetId == widgetId) 100f else 0f)
+                                        // Surukleme sirasinda diger widget'lar soluklasin:
+                                        // hangi alanin bos oldugu daha iyi gorunur.
+                                        .alpha(if (draggingWidgetId == null || isDraggingThis) 1f else 0.45f),
                                     resizable = true,
                                     dragViaHandle = true,
                                     showControls = isEditMode,
@@ -454,21 +466,21 @@ fun CarDesktopWorkspaceView(
                                     onEnterEdit = { isEditMode = true },
                                     onDragging = { isDragging ->
                                         draggingWidgetId = if (isDragging) widgetId else null
-                                        dragTargetPage = if (isDragging) currentPage else null
                                         if (isDragging) showPageIndicator = true
                                     },
-                                    // Surukleme sirasinda sayfa KAYDIRILMAZ: HorizontalPager'in
-                                    // sayfasi degisince bu widget'in composition'i imha olup
-                                    // surukleme durumu kayboluyordu (sayfa kilitlenmesi ve
-                                    // ust uste binme buradan kaynaklaniyordu). Parmak kenarda
-                                    // bekleyince yalnizca HEDEF sayfa adimlar; hedefte yer yoksa
-                                    // adim atlanmaz ve widget kirmizi cerceveyle uyarir.
+                                    // Parmak kenarda beklenince hedef sayfa adimlar; sayfa
+                                    // gercekten kaydirilir ve widget parmagin altinda kalir.
+                                    // Hedef sayfada yer yoksa adim atlanmaz (kirmizi cerceve).
                                     onPageEdge = { from, direction ->
-                                        (from + direction).coerceIn(0, lastPage).also { dragTargetPage = it }
+                                        (from + direction).coerceIn(0, lastPage)
                                     },
                                     canTakePage = { page, sx, sy ->
                                         pageHasRoom(widgetId, page, sx, sy)
                                     },
+                                    onPageTarget = { page -> currentPage = page },
+                                    pageShiftTarget = if (isDraggingThis) {
+                                        (currentPage - placement.page) * workspaceWidth
+                                    } else 0f,
                                     workspaceWidth = workspaceWidth,
                                     workspaceHeight = workspaceHeight,
                                     onRemove = {
@@ -540,31 +552,11 @@ fun CarDesktopWorkspaceView(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         items(lastPage + 1) { page ->
-                            // Surukleme sirasinda hedef sayfinin noktasi isiklanir:
-                            // camgobegi = yer var, kirmizi = yer yok (gecilmez).
-                            val targetId = if (dragTargetPage == page) draggingWidgetId else null
-                            val targetRoom = targetId?.let { id ->
-                                val pl = resolvedLayout[id]
-                                pl == null || pageHasRoom(id, page, pl.spanX, pl.spanY)
-                            } ?: false
                             Box(
                                 Modifier
-                                    .size(
-                                        when {
-                                            targetId != null -> 15.dp
-                                            page == currentPage -> 10.dp
-                                            else -> 7.dp
-                                        }
-                                    )
+                                    .size(if (page == currentPage) 10.dp else 7.dp)
                                     .clip(CircleShape)
-                                    .background(
-                                        when {
-                                            targetId != null && !targetRoom -> Color(0xFFFF5252)
-                                            targetId != null -> Color(0xFF00E5FF)
-                                            page == currentPage -> Color.White
-                                            else -> Color(0x66FFFFFF)
-                                        }
-                                    )
+                                    .background(if (page == currentPage) Color.White else Color(0x66FFFFFF))
                                     .clickable(enabled = isEditMode && draggingWidgetId == null) { currentPage = page }
                             )
                         }
