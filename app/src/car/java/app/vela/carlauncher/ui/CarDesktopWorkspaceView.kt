@@ -53,12 +53,15 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Widgets
 import app.vela.ui.VelaWindowAlertDialog as AlertDialog
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -292,40 +295,56 @@ fun CarDesktopWorkspaceView(
             }
             val lastPage = maxOf(pageCount - 1, resolvedLayout.values.maxOfOrNull { it.page } ?: 0)
             LaunchedEffect(lastPage) { layoutStore.ensurePageCount(lastPage + 1) }
-            // Grid modunda dolu hucreye birakilan widget Launcher tarzi SWAP yapar:
-            // hedefi tam kaplayan tek widget varsa ve o, eski bolgemize sigiyorsa iki
-            // widget yer degistirir; aksi halde solver en yakin bos hucreye tasir.
-            fun commitPlacement(id: String, target: WidgetPlacement) {
-                if (!snapToGrid) {
-                    layoutStore.setPlacement(id, target)
-                    return
-                }
-                val old = resolvedLayout[id]
-                if (old == null || old.cellX < 0 || target.cellX < 0) {
-                    layoutStore.setPlacement(id, target)
-                    return
-                }
-                val otherEntry = resolvedLayout.entries.firstOrNull { (wid, pl) ->
+            // Grid modunda birakma kurallari (Launcher davranisi):
+            // - Hedef hucre bos ise birakilir.
+            // - Hedefi tek bir widget dolduruyorsa ve o widget eski bolgumuzde sigiyorsa
+            //   yer degistirirler (swap).
+            // - Yer yoksa birakma REDDEDILIR: widget eski konumuna/sayfasina geri doner
+            //   (ust uste binme olmaz).
+            fun occupantOf(id: String, target: WidgetPlacement): Map.Entry<String, WidgetPlacement>? =
+                resolvedLayout.entries.firstOrNull { (wid, pl) ->
                     wid != id && pl.page == target.page &&
                         pl.cellX < target.cellX + target.spanX && pl.cellX + pl.spanX > target.cellX &&
                         pl.cellY < target.cellY + target.spanY && pl.cellY + pl.spanY > target.cellY
                 }
-                val other = otherEntry?.value
-                if (other == null || other.spanX > old.spanX || other.spanY > old.spanY) {
-                    layoutStore.setPlacement(id, target)
-                    return
+
+            fun oldRegionClear(id: String, otherId: String, old: WidgetPlacement): Boolean =
+                resolvedLayout.entries.none { (wid, pl) ->
+                    wid != id && wid != otherId && pl.page == old.page &&
+                        pl.cellX < old.cellX + old.spanX && pl.cellX + old.spanX > old.cellX &&
+                        pl.cellY < old.cellY + old.spanY && pl.cellY + old.spanY > old.cellY
                 }
-                val origin = cellGrid?.originDp(old.cellX, old.cellY)
-                if (origin == null) {
+
+            /** Birakma kabul edilir mi? (yazim yapmayan saf kontrol) */
+            fun placementAllowed(id: String, target: WidgetPlacement): Boolean {
+                if (!snapToGrid || cellGrid == null || target.cellX < 0 || target.spanX <= 0 || target.spanY <= 0) return true
+                val old = resolvedLayout[id] ?: return true
+                val occupant = occupantOf(id, target) ?: return true
+                val other = occupant.value
+                val fits = other.spanX <= old.spanX && other.spanY <= old.spanY
+                return fits && oldRegionClear(id, occupant.key, old)
+            }
+
+            fun commitPlacement(id: String, target: WidgetPlacement): Boolean {
+                if (!snapToGrid) {
                     layoutStore.setPlacement(id, target)
-                    return
+                    return true
                 }
-                val (originX, originY) = origin
+                if (!placementAllowed(id, target)) return false
+                val old = resolvedLayout[id]
+                val occupant = occupantOf(id, target)
+                val grid = cellGrid
+                if (old == null || old.cellX < 0 || target.cellX < 0 || grid == null || occupant == null) {
+                    layoutStore.setPlacement(id, target)
+                    return true
+                }
+                val origin = grid.originDp(old.cellX, old.cellY)
                 layoutStore.setPlacement(id, target)
                 layoutStore.setPlacement(
-                    otherEntry.key,
-                    other.copy(page = old.page, cellX = old.cellX, cellY = old.cellY, dx = originX, dy = originY)
+                    occupant.key,
+                    occupant.value.copy(page = old.page, cellX = old.cellX, cellY = old.cellY, dx = origin.first, dy = origin.second)
                 )
+                return true
             }
             LaunchedEffect(lastPage, isEditMode) {
                 if (!isEditMode && currentPage > lastPage) currentPage = lastPage
@@ -423,7 +442,27 @@ fun CarDesktopWorkspaceView(
                                     },
                                     onSettings = { selectedWidgetId = widgetId },
                                     onCommit = { newPlacement ->
-                                        commitPlacement(widgetId, newPlacement)
+                                        val accepted = commitPlacement(widgetId, newPlacement)
+                                        if (!accepted) {
+                                            // Hedefte yer yok: kullanici girdigi sayfada kalsin
+                                            // ama widget eski sayfasina geri donsun.
+                                            resolvedLayout[widgetId]?.page?.let { currentPage = it }
+                                        }
+                                        accepted
+                                    },
+                                    canDrop = { page, cellX, cellY, spanX, spanY ->
+                                        placementAllowed(
+                                            widgetId,
+                                            (resolvedLayout[widgetId] ?: WidgetPlacement()).copy(
+                                                page = page,
+                                                dx = 0f,
+                                                dy = 0f,
+                                                cellX = cellX,
+                                                cellY = cellY,
+                                                spanX = spanX,
+                                                spanY = spanY
+                                            )
+                                        )
                                     }
                                 ) {
                                     CompositionLocalProvider(LocalDesktopCardColor provides Color(placement.backgroundColor).let { it.copy(alpha = it.alpha * placement.opacity) }) {
@@ -1164,29 +1203,41 @@ private fun FloatingDesktopControls(
     onResetLayout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    // Edit modu kontrolleri tek bir yuzucu buton + "daha fazla" menusu olarak toparlanir;
+    // boylece masaustunde cok daha az yer kaplar.
+    var menuOpen by remember { mutableStateOf(false) }
+    Column(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        FloatingActionButton(
-            onClick = onResetLayout,
-            containerColor = Color(0xFF2A2D40),
-            contentColor = Color.White,
-            shape = CircleShape,
-            modifier = Modifier.size(42.dp)
-        ) {
-            Icon(Icons.Default.Refresh, contentDescription = "Sıfırla", modifier = Modifier.size(18.dp))
-        }
-
-        FloatingActionButton(
-            onClick = onOpenWallpaperPicker,
-            containerColor = Color(0xFF2A2D40),
-            contentColor = Color.White,
-            shape = CircleShape,
-            modifier = Modifier.size(42.dp)
-        ) {
-            Icon(Icons.Default.Wallpaper, contentDescription = "Duvar Kağıdı", modifier = Modifier.size(18.dp))
+        Box {
+            FloatingActionButton(
+                onClick = { menuOpen = true },
+                containerColor = Color(0xCC1A1D2E),
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size(42.dp)
+            ) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Daha fazla", modifier = Modifier.size(20.dp))
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Duvar kâğıdı") },
+                    leadingIcon = { Icon(Icons.Default.Wallpaper, contentDescription = null) },
+                    onClick = { menuOpen = false; onOpenWallpaperPicker() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Düzeni sıfırla") },
+                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                    onClick = { menuOpen = false; onResetLayout() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Düzenlemeyi bitir") },
+                    leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
+                    onClick = { menuOpen = false; onExitEditMode() }
+                )
+            }
         }
 
         FloatingActionButton(
@@ -1194,23 +1245,9 @@ private fun FloatingDesktopControls(
             containerColor = Color(0xFF00E5FF),
             contentColor = Color.Black,
             shape = CircleShape,
-            modifier = Modifier.size(46.dp)
+            modifier = Modifier.size(52.dp)
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Widget Ekle", modifier = Modifier.size(24.dp))
-        }
-
-        FloatingActionButton(
-            onClick = onExitEditMode,
-            containerColor = Color(0xFF30D158),
-            contentColor = Color.Black,
-            shape = CircleShape,
-            modifier = Modifier.size(46.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = "Kaydet",
-                modifier = Modifier.size(22.dp)
-            )
+            Icon(Icons.Default.Add, contentDescription = "Widget Ekle", modifier = Modifier.size(26.dp))
         }
     }
 }

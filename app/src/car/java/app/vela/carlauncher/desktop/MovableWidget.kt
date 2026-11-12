@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.wrapContentSize
@@ -54,6 +55,8 @@ import kotlin.math.roundToInt
 private const val SNAP_STEP_DP = 16f
 private const val MIN_WIDTH_DP = 120f
 private const val MIN_HEIGHT_DP = 60f
+// Hucre modunda komsu cerceveler birbirine degmesin diye birakilan ic bosluk (dp).
+private const val CELL_GAP_DP = 4f
 
 /**
  * UmainLauncher tabanli serbest tasinabilir ve boyutlandirilabilir widget saricisi (MovableWidget).
@@ -86,7 +89,11 @@ fun MovableWidget(
     onPageEdge: (Int) -> Int = { placement.page },
     onRemove: (() -> Unit)? = null,
     onSettings: (() -> Unit)? = null,
-    onCommit: (WidgetPlacement) -> Unit,
+    // true: birakma kabul edildi. false: hedefte yer yok, widget eski yerine doner.
+    onCommit: (WidgetPlacement) -> Boolean,
+    // Surukleme onizlemesi gecerli mi? (yesil/kirmizi gostergesi icin)
+    canDrop: (page: Int, cellX: Int, cellY: Int, spanX: Int, spanY: Int) -> Boolean =
+        { _, _, _, _, _ -> true },
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
@@ -105,8 +112,11 @@ fun MovableWidget(
     var resizing by remember { mutableStateOf(true) }
     val pageEdge by rememberUpdatedState(onPageEdge)
     val draggingCallback by rememberUpdatedState(onDragging)
+    val dropAllowed by rememberUpdatedState(canDrop)
     var dx by remember { mutableFloatStateOf(placement.dx) }
     var dy by remember { mutableFloatStateOf(placement.dy) }
+    // Kenarda sayfa cevirme: parmak kenarda kaldigi surece tekrar tekrar cevirmesin.
+    var edgeLatched by remember { mutableStateOf(false) }
     var widthScale by remember { mutableFloatStateOf(placement.widthScale) }
     var heightScale by remember { mutableFloatStateOf(placement.heightScale) }
     // Hucre modu span'i; resize tutamacindan canli guncellenir.
@@ -145,6 +155,8 @@ fun MovableWidget(
         if (dragging && edge == dir) {
             dragPage = pageEdge(dir)
             edge = 0
+            // Parmak hala kenardayken ikinci kez cevirme; edge 0'a donece re-arm olur.
+            edgeLatched = true
         }
     }
 
@@ -172,11 +184,29 @@ fun MovableWidget(
     } else {
         (baseHeight * heightScale).coerceAtLeast(MIN_HEIGHT_DP)
     }
+    // Hucre modunda cerceveler birbirine degmesin: hucre alaninin icine kucuk bir bosluk girilir.
+    val cellGap = if (gridForCompose != null) CELL_GAP_DP else 0f
+    val frameWidth = (currentPixelWidth - cellGap * 2f).coerceAtLeast(1f)
+    val frameHeight = (currentPixelHeight - cellGap * 2f).coerceAtLeast(1f)
+    val renderX = (dx + cellGap).coerceIn(0f, (workspaceWidth - frameWidth).coerceAtLeast(0f))
+    val renderY = (dy + cellGap).coerceIn(0f, (workspaceHeight - frameHeight).coerceAtLeast(0f))
     // Non-uniform uzamayi/sundurulmeyi onlemek icin icerige uygulanan en-boy dengeli olcek
     val contentScale = if (gridForCompose != null && initialBaseWidth > 0f && initialBaseHeight > 0f) {
-        minOf(currentPixelWidth / initialBaseWidth, currentPixelHeight / initialBaseHeight)
+        minOf(frameWidth / initialBaseWidth, frameHeight / initialBaseHeight)
     } else {
         minOf(widthScale, heightScale)
+    }
+
+    /** Basarisiz birakmayi geri al: widget eski kayitli yerine/sayfasina doner. */
+    fun revertToPlacement() {
+        dx = currentPlacement.dx
+        dy = currentPlacement.dy
+        widthScale = currentPlacement.widthScale
+        heightScale = currentPlacement.heightScale
+        spanX = currentPlacement.spanX.takeIf { it > 0 } ?: 1
+        spanY = currentPlacement.spanY.takeIf { it > 0 } ?: 1
+        dragPage = currentPlacement.page
+        edgeLatched = false
     }
 
     fun commitSnapped() {
@@ -193,7 +223,7 @@ fun MovableWidget(
             dy = snappedDy
             spanX = sx
             spanY = sy
-            onCommit(currentPlacement.copy(
+            val accepted = onCommit(currentPlacement.copy(
                 page = dragPage,
                 dx = snappedDx,
                 dy = snappedDy,
@@ -205,6 +235,7 @@ fun MovableWidget(
                 spanX = sx,
                 spanY = sy
             ))
+            if (!accepted) revertToPlacement()
         } else {
             val snappedDx = (if (currentSnapToGrid) (dx / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP else dx)
                 .coerceIn(0f, (workspaceWidth - currentPixelWidth).coerceAtLeast(0f))
@@ -212,7 +243,7 @@ fun MovableWidget(
                 .coerceIn(0f, (workspaceHeight - currentPixelHeight).coerceAtLeast(0f))
             dx = snappedDx
             dy = snappedDy
-            onCommit(currentPlacement.copy(
+            val accepted = onCommit(currentPlacement.copy(
                 page = dragPage,
                 dx = snappedDx,
                 dy = snappedDy,
@@ -220,12 +251,14 @@ fun MovableWidget(
                 widthScale = widthScale,
                 heightScale = heightScale
             ))
+            if (!accepted) revertToPlacement()
         }
     }
 
     fun finishDrag() {
         dragging = false
         edge = 0
+        edgeLatched = false
         commitSnapped()
         draggingCallback(false)
     }
@@ -233,20 +266,20 @@ fun MovableWidget(
     fun moveBy(x: Float, y: Float) {
         dx = (dx + x / density).coerceIn(0f, (workspaceWidth - currentPixelWidth).coerceAtLeast(0f))
         dy = (dy + y / density).coerceIn(0f, (workspaceHeight - currentPixelHeight).coerceAtLeast(0f))
-        edge = when {
+        val nextEdge = when {
             dx < 12f -> -1
             dx + currentPixelWidth > workspaceWidth - 12f -> 1
             else -> 0
         }
+        // Parmak kenardan uzaklastikca yeniden dolasabilir (re-arm).
+        if (nextEdge == 0) edgeLatched = false
+        edge = if (edgeLatched) 0 else nextEdge
     }
 
     Box(
         modifier = modifier
-            .offset(
-                dx.coerceIn(0f, (workspaceWidth - currentPixelWidth).coerceAtLeast(0f)).dp,
-                dy.coerceIn(0f, (workspaceHeight - currentPixelHeight).coerceAtLeast(0f)).dp
-            )
-            .requiredSize(currentPixelWidth.dp, currentPixelHeight.dp)
+            .offset(renderX.dp, renderY.dp)
+            .requiredSize(frameWidth.dp, frameHeight.dp)
             .pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -307,20 +340,24 @@ fun MovableWidget(
                     .coerceIn(0, previewGrid.cols - previewSpanX)
                 val previewCellY = (dy / previewGrid.cellHeight).roundToInt()
                     .coerceIn(0, previewGrid.rows - previewSpanY)
+                // Hedefte yer yoksa onizleme kirmizi: birakmanin reddedilecegi onceden gorunur.
+                val previewOk = dropAllowed(dragPage, previewCellX, previewCellY, previewSpanX, previewSpanY)
+                val previewFill = if (previewOk) Color(0x2200E5FF) else Color(0x33FF5252)
+                val previewLine = if (previewOk) Color(0x8800E5FF) else Color(0xCCFF5252)
                 Box(
                     Modifier
                         .offset((previewCellX * previewGrid.cellWidth - dx).dp, (previewCellY * previewGrid.cellHeight - dy).dp)
                         .requiredSize(
-                            (previewSpanX * previewGrid.cellWidth).dp,
-                            (previewSpanY * previewGrid.cellHeight).dp
+                            (previewSpanX * previewGrid.cellWidth - cellGap * 2f).coerceAtLeast(1f).dp,
+                            (previewSpanY * previewGrid.cellHeight - cellGap * 2f).coerceAtLeast(1f).dp
                         )
-                        .background(Color(0x2200E5FF), RoundedCornerShape(10.dp))
-                        .border(1.dp, Color(0x8800E5FF), RoundedCornerShape(10.dp))
+                        .background(previewFill, RoundedCornerShape(10.dp))
+                        .border(1.dp, previewLine, RoundedCornerShape(10.dp))
                 )
             }
             Box(
                 Modifier
-                    .requiredSize(currentPixelWidth.dp, currentPixelHeight.dp)
+                    .fillMaxSize()
                     .border(1.dp, Color(0xAA00E5FF), RoundedCornerShape(10.dp))
                     .pointerInput(Unit) {
                         detectDragGestures(
@@ -349,7 +386,8 @@ fun MovableWidget(
                     description = "Tasi",
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .offset((-6).dp, (-6).dp)
+                        // 28dp tutamacin yarisi: cizgi uzerine ortalanir.
+                        .offset((-14).dp, (-14).dp)
                         .zIndex(10f)
                         .pointerInput(Unit) {
                             detectDragGestures(
@@ -370,7 +408,7 @@ fun MovableWidget(
                     description = "Kaldir",
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .offset(6.dp, (-6).dp)
+                        .offset(14.dp, (-14).dp)
                         .zIndex(10f)
                         .clickable { onRemove() }
                 )
@@ -467,7 +505,9 @@ fun MovableWidget(
                     onStart = { dragAccumulatorX = 0f; dragAccumulatorY = 0f },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .offset(12.dp, 12.dp)
+                        // Dokunma kutusu 44dp; yarisi (22dp) kadar kaysin ki beyaz daire
+                        // cerceve cizgisinin tam ortada dursun.
+                        .offset(22.dp, 22.dp)
                         .zIndex(20f),
                     onResize = { axis, dragX, dragY ->
                         val g = activeGrid()
@@ -505,7 +545,7 @@ fun MovableWidget(
                     onStart = { dragAccumulatorX = 0f; dragAccumulatorY = 0f },
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .offset(10.dp, 0.dp)
+                        .offset(22.dp, 0.dp)
                         .zIndex(20f),
                     onResize = { axis, dragX, dragY ->
                         val g = activeGrid()
@@ -530,7 +570,7 @@ fun MovableWidget(
                     onStart = { dragAccumulatorX = 0f; dragAccumulatorY = 0f },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .offset(0.dp, 10.dp)
+                        .offset(0.dp, 22.dp)
                         .zIndex(20f),
                     onResize = { axis, dragX, dragY ->
                         val g = activeGrid()
@@ -555,7 +595,7 @@ fun MovableWidget(
                     description = "Widget ayarlari",
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .offset((-6).dp, 6.dp)
+                        .offset((-14).dp, 14.dp)
                         .zIndex(10f)
                         .clickable { onSettings() }
                 )
