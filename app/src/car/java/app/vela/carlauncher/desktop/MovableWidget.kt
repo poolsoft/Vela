@@ -31,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -113,6 +114,14 @@ fun MovableWidget(
     val pageEdge by rememberUpdatedState(onPageEdge)
     val draggingCallback by rememberUpdatedState(onDragging)
     val dropAllowed by rememberUpdatedState(canDrop)
+    // Widget composition'i surukleme sirasinda elden cikarilirsa (sayfa degisimi, edit modu
+    // kapanmasi, widget silinmesi) ust katmandaki "surukleniyor" bayragi takili kalmasin;
+    // aksi halde pager kalici olarak kilitlenir.
+    DisposableEffect(Unit) {
+        onDispose {
+            if (dragging) draggingCallback(false)
+        }
+    }
     var dx by remember { mutableFloatStateOf(placement.dx) }
     var dy by remember { mutableFloatStateOf(placement.dy) }
     // Kenarda sayfa cevirme: parmak kenarda kaldigi surece tekrar tekrar cevirmesin.
