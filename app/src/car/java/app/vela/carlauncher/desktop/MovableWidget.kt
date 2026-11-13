@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,8 +52,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 
@@ -134,6 +137,12 @@ fun MovableWidget(
     // menuden kapatilabilir.
     var menuOpen by remember { mutableStateOf(false) }
     var resizing by remember { mutableStateOf(true) }
+    // Boyutlandirma tutamaci su anda surukleniyor mu? Canli resize onizlemesi
+    // (hayalet hucre + boyut rozeti + kirmizi cerceve) bunun icin gerekir.
+    var resizeActive by remember { mutableStateOf(false) }
+    // Son boyut adimi gecersizdi (sinir veya komsu widget): kisa kirmizi cerceve.
+    var resizeBlocked by remember { mutableStateOf(false) }
+    var blockedTick by remember { mutableIntStateOf(0) }
     val pageEdge by rememberUpdatedState(onPageEdge)
     val draggingCallback by rememberUpdatedState(onDragging)
     val dropAllowed by rememberUpdatedState(canDrop)
@@ -220,6 +229,16 @@ fun MovableWidget(
         }
     }
 
+    // Gecersiz boyut adimi: cerceve kisa sure kirmizi yanip soner. Her yeni adim
+    // sayaci artirdigi icin sure yeniden baslar (parmak sinirda beklerken cerceve
+    // kirmizi kalir, buyume olmaya devam etmez).
+    LaunchedEffect(blockedTick) {
+        if (blockedTick == 0) return@LaunchedEffect
+        resizeBlocked = true
+        delay(700)
+        resizeBlocked = false
+    }
+
     LaunchedEffect(placement) {
         if (dragging) return@LaunchedEffect
         dragPage = placement.page
@@ -260,23 +279,24 @@ fun MovableWidget(
     )
     val renderX = (dx + cellGap).coerceIn(0f, (workspaceWidth - frameWidth).coerceAtLeast(0f)) + pageShift
     val renderY = (dy + cellGap).coerceIn(0f, (workspaceHeight - frameHeight).coerceAtLeast(0f))
-    // Non-uniform uzamayi/sundurulmeyi onlemek icin icerige uygulanan en-boy dengeli olcek
-    val contentScale = if (gridForCompose != null && initialBaseWidth > 0f && initialBaseHeight > 0f) {
-        minOf(frameWidth / initialBaseWidth, frameHeight / initialBaseHeight)
-    } else {
-        minOf(widthScale, heightScale)
-    }
+    // Serbest (grid'siz) modda icerik taban olcusunde cizilir ve olceklenir.
+    // Hucre modunda olcekleme YAPILMAZ: icerige gercek cerceve olcusu verilir ki widget
+    // yeni boyuta gore yeniden yerlessin (buyuk cerceve + kucuk/bulanik icerik bitisi).
+    val contentScale = minOf(widthScale, heightScale)
 
-    // Surukleme sirasinda hedeflenen hucre ve buraya birakilip birakilamayacagi.
-    val dropPreview = if (dragging && gridForCompose != null) {
+    // Surukleme VEYA boyutlandirma sirasinda hedeflenen hucre ve buraya
+    // birakilip birakilamayacagi (canli geri bildirim).
+    val previewActive = gridForCompose != null && (dragging || resizeActive)
+    val dropPreview = if (previewActive && gridForCompose != null) {
         val sx = spanX.coerceIn(1, gridForCompose.cols)
         val sy = spanY.coerceIn(1, gridForCompose.rows)
         val cx = (dx / gridForCompose.cellWidth).roundToInt().coerceIn(0, gridForCompose.cols - sx)
         val cy = (dy / gridForCompose.cellHeight).roundToInt().coerceIn(0, gridForCompose.rows - sy)
         DropPreview(cx, cy, sx, sy, dropAllowed(dragPage, cx, cy, sx, sy))
     } else null
-    // Kirmizi cerceve: hedefte yer yok (suruklerken) veya birakma reddedildi (kisa yanip sonme).
-    val blocked = rejectFlash || (dropPreview != null && !dropPreview.ok)
+    // Kirmizi cerceve: hedefte yer yok (suruklerken/boyutlandirirken), son boyut adimi
+    // gecersizdi veya birakma reddedildi (kisa yanip sonme).
+    val blocked = rejectFlash || resizeBlocked || (dropPreview != null && !dropPreview.ok)
 
     /** Basarisiz birakmayi geri al: widget eski kayitli yerine/sayfasina doner. */
     fun revertToPlacement() {
@@ -393,35 +413,43 @@ fun MovableWidget(
             }
         }
     }) {
-        Box(
-            modifier = Modifier
+        // B: hucre modunda icerik gercek cerceve olcusu ile olculur ve olceklenmez;
+        // boylece widget yeni boyuta gore yeniden yerlesir. Serbest (grid'siz) modda
+        // eski davranis korunur: icerik taban olcusunde cizilip olceklenir.
+        val contentModifier = if (gridForCompose != null) {
+            Modifier.fillMaxSize()
+        } else {
+            Modifier
                 .wrapContentSize(unbounded = true, align = Alignment.TopStart)
-                .onSizeChanged {
-                    if (it.width > 0 && it.height > 0) {
-                        val w = it.width / density
-                        val h = it.height / density
-                        if (initialBaseWidth <= 0f) {
-                            initialBaseWidth = w
-                            widgetWidth = w
-                        }
-                        if (initialBaseHeight <= 0f) {
-                            initialBaseHeight = h
-                            widgetHeight = h
-                        }
-                    }
-                }
                 .graphicsLayer {
                     scaleX = contentScale
                     scaleY = contentScale
                     transformOrigin = TransformOrigin(0f, 0f)
                 }
+        }
+        Box(
+            modifier = contentModifier.onSizeChanged {
+                if (it.width > 0 && it.height > 0) {
+                    val w = it.width / density
+                    val h = it.height / density
+                    if (initialBaseWidth <= 0f) {
+                        initialBaseWidth = w
+                        widgetWidth = w
+                    }
+                    if (initialBaseHeight <= 0f) {
+                        initialBaseHeight = h
+                        widgetHeight = h
+                    }
+                }
+            }
         ) {
             content()
         }
 
         if (showControls) {
-            // Hucre modunda surukleme sirasinda hedef hucre bolgesi vurgulanir (Launcher davranisi).
-            val previewGrid = if (dragging) gridForCompose else null
+            // Hucre modunda surukleme/boyutlandirma sirasinda hedef hucre bolgesi
+            // vurgulanir (Launcher davranisi).
+            val previewGrid = if (previewActive) gridForCompose else null
             val preview = dropPreview
             if (previewGrid != null && preview != null) {
                 // Yer varsa camgobegi "buraya oturabilir" cercevesi; yer yoksa kirmizi.
@@ -437,6 +465,26 @@ fun MovableWidget(
                         .background(previewFill, RoundedCornerShape(10.dp))
                         .border(1.dp, previewLine, RoundedCornerShape(10.dp))
                 )
+            }
+            // Boyut rozeti: hedef hucre boyutu (ornek "3x2"). Kirmizi ise bu olcuye
+            // yerlesilemiyor (ekran kenari veya komsu widget engeli).
+            if (previewGrid != null && preview != null) {
+                Surface(
+                    color = if (preview.ok) Color(0xE6141624) else Color(0xE6B3261E),
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = (-13).dp)
+                        .zIndex(20f)
+                ) {
+                    Text(
+                        text = "${preview.spanX}x${preview.spanY}",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
             Box(
                 Modifier
@@ -547,45 +595,76 @@ fun MovableWidget(
                 // Hucre modunda span degisimi; sinirlar min span ve kalan hucre sayisidir.
                 // Birikimli delta yalnizca ilgili eksende toplanir; boylece kullanilmayan
                 // eksendeki artik deger sonraki bir resize'ta span'i ziplatmaz.
+                // Gecersiz adim (komsu widget veya min/sinir asmasi) UYGULANMAZ: cerceve
+                // kirmizi yanar ve boyut son gecersiz kilmadan onceki degerinde kalir.
                 fun resizeSpan(axis: ResizeAxis, dragX: Float, dragY: Float) {
                     val g = activeGrid() ?: return
-                    val cellXNow = (dx / g.cellWidth).roundToInt().coerceIn(0, g.cols - 1)
-                    val cellYNow = (dy / g.cellHeight).roundToInt().coerceIn(0, g.rows - 1)
+                    val cellXNow = (dx / g.cellWidth).roundToInt().coerceIn(0, (g.cols - 1).coerceAtLeast(0))
+                    val cellYNow = (dy / g.cellHeight).roundToInt().coerceIn(0, (g.rows - 1).coerceAtLeast(0))
                     val maxSpanX = (g.cols - cellXNow).coerceAtLeast(latestMinSpanX)
                     val maxSpanY = (g.rows - cellYNow).coerceAtLeast(latestMinSpanY)
 
                     val stepX = (g.cellWidth * 0.25f).coerceIn(16f, 32f)
                     val stepY = (g.cellHeight * 0.25f).coerceIn(16f, 32f)
 
+                    /** Aday yerlesim bu sayfada uygulanabilir mi? (komsu cakismasi yok mu) */
+                    fun fits(cx: Int, cy: Int, sx: Int, sy: Int): Boolean =
+                        sx in 1..g.cols && sy in 1..g.rows && dropAllowed(dragPage, cx, cy, sx, sy)
+
+                    /** Genislik adimi; gecersizse uygulanmaz, kirmizi yanip soner. */
+                    fun stepWidth(change: Int, limit: Int, min: Int) {
+                        val next = (spanX + change).coerceIn(min, limit)
+                        if (next == spanX || !fits(cellXNow, cellYNow, next, spanY)) {
+                            blockedTick++
+                        } else {
+                            spanX = next
+                        }
+                    }
+
+                    /** Yukseklik adimi; gecersizse uygulanmaz, kirmizi yanip soner. */
+                    fun stepHeight(change: Int, limit: Int, min: Int) {
+                        val next = (spanY + change).coerceIn(min, limit)
+                        if (next == spanY || !fits(cellXNow, cellYNow, spanX, next)) {
+                            blockedTick++
+                        } else {
+                            spanY = next
+                        }
+                    }
+
                     when (axis) {
                         ResizeAxis.WIDTH -> {
                             dragAccumulatorX += dragX / density
                             if (kotlin.math.abs(dragAccumulatorX) >= stepX) {
                                 val change = if (dragAccumulatorX > 0) 1 else -1
-                                spanX = (spanX + change).coerceIn(latestMinSpanX, maxSpanX)
                                 dragAccumulatorX = 0f
+                                stepWidth(change, maxSpanX, latestMinSpanX)
                             }
                         }
                         ResizeAxis.HEIGHT -> {
                             dragAccumulatorY += dragY / density
                             if (kotlin.math.abs(dragAccumulatorY) >= stepY) {
                                 val change = if (dragAccumulatorY > 0) 1 else -1
-                                spanY = (spanY + change).coerceIn(latestMinSpanY, maxSpanY)
                                 dragAccumulatorY = 0f
+                                stepHeight(change, maxSpanY, latestMinSpanY)
                             }
                         }
                         ResizeAxis.BOTH -> {
                             dragAccumulatorX += dragX / density
                             dragAccumulatorY += dragY / density
-                            if (kotlin.math.abs(dragAccumulatorX) >= stepX) {
+                            val cellsX = kotlin.math.abs(dragAccumulatorX) / stepX
+                            val cellsY = kotlin.math.abs(dragAccumulatorY) / stepY
+                            // Baskin eksen: parmak iki eksende de kaysa bile once hangi
+                            // eksende bir hucre dolmussa yalnizca o eksen degisir. Boylece
+                            // dikey cekerken genislik istemsiz 1 hucre kaymaz.
+                            if (cellsX < 1f && cellsY < 1f) return
+                            if (cellsX >= cellsY) {
                                 val changeX = if (dragAccumulatorX > 0) 1 else -1
-                                spanX = (spanX + changeX).coerceIn(latestMinSpanX, maxSpanX)
                                 dragAccumulatorX = 0f
-                            }
-                            if (kotlin.math.abs(dragAccumulatorY) >= stepY) {
+                                stepWidth(changeX, maxSpanX, latestMinSpanX)
+                            } else {
                                 val changeY = if (dragAccumulatorY > 0) 1 else -1
-                                spanY = (spanY + changeY).coerceIn(latestMinSpanY, maxSpanY)
                                 dragAccumulatorY = 0f
+                                stepHeight(changeY, maxSpanY, latestMinSpanY)
                             }
                         }
                     }
@@ -595,7 +674,11 @@ fun MovableWidget(
                     description = "Boyutlandir",
                     axis = ResizeAxis.BOTH,
                     sizeDp = 24.dp,
-                    onStart = { dragAccumulatorX = 0f; dragAccumulatorY = 0f },
+                    onStart = {
+                        resizeActive = true
+                        dragAccumulatorX = 0f
+                        dragAccumulatorY = 0f
+                    },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         // Dokunma kutusu 44dp; yarisi (22dp) kadar kaysin ki beyaz daire
@@ -628,14 +711,21 @@ fun MovableWidget(
                             }
                         }
                     },
-                    onEnd = { commitSnapped() }
+                    onEnd = {
+                        resizeActive = false
+                        commitSnapped()
+                    }
                 )
                 // Sag kenar ortasi: yalnizca genislik (Launcher tarzi dolu daire).
                 ResizeHandle(
                     description = "Genislik",
                     axis = ResizeAxis.WIDTH,
                     sizeDp = 20.dp,
-                    onStart = { dragAccumulatorX = 0f; dragAccumulatorY = 0f },
+                    onStart = {
+                        resizeActive = true
+                        dragAccumulatorX = 0f
+                        dragAccumulatorY = 0f
+                    },
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .offset(22.dp, 0.dp)
@@ -653,14 +743,21 @@ fun MovableWidget(
                             }
                         }
                     },
-                    onEnd = { commitSnapped() }
+                    onEnd = {
+                        resizeActive = false
+                        commitSnapped()
+                    }
                 )
                 // Alt kenar ortasi: yalnizca yukseklik (Launcher tarzi dolu daire).
                 ResizeHandle(
                     description = "Yukseklik",
                     axis = ResizeAxis.HEIGHT,
                     sizeDp = 20.dp,
-                    onStart = { dragAccumulatorX = 0f; dragAccumulatorY = 0f },
+                    onStart = {
+                        resizeActive = true
+                        dragAccumulatorX = 0f
+                        dragAccumulatorY = 0f
+                    },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .offset(0.dp, 22.dp)
@@ -678,7 +775,10 @@ fun MovableWidget(
                             }
                         }
                     },
-                    onEnd = { commitSnapped() }
+                    onEnd = {
+                        resizeActive = false
+                        commitSnapped()
+                    }
                 )
             }
 

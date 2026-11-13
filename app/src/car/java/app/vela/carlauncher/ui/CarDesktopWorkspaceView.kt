@@ -697,6 +697,25 @@ fun CarDesktopWorkspaceView(
 // WIDGET CERIK RENDERLARI (KULLANICININ 7-8 WIDGET'I)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Cerceve olcusune gore icerik olcegi.
+ *
+ * Hucre modunda MovableWidget icerige olcek uygulamaz, gercek cerceve olcusunu verir;
+ * kartlar da bu olcegi taban tasarim olculerine gore hesaplayip yazi/simbol boyutlarini
+ * yeniden duzenler. Boylece widget buyudugunde buyutulmus bulanik bir kopya degil,
+ * yeni boyuta gore yerlesen icerik gorunur.
+ *
+ * Serbest (grid'siz) modda icerik sinirsiz olculur (olceklenerek cizilir); bu durumda
+ * taban olcek (1f) kullanilir.
+ */
+private fun androidx.compose.foundation.layout.BoxWithConstraintsScope.cardScale(
+    baseWidthDp: Float,
+    baseHeightDp: Float
+): Float {
+    if (!constraints.hasBoundedWidth || !constraints.hasBoundedHeight) return 1f
+    return minOf(maxWidth.value / baseWidthDp, maxHeight.value / baseHeightDp).coerceIn(0.75f, 2.2f)
+}
+
 @Composable
 private fun RenderDesktopWidgetContent(
     widgetId: String,
@@ -717,7 +736,14 @@ private fun RenderDesktopWidgetContent(
         }
         // 2. SISTEM / CIHAZ DURUMU (PIL, RAM, HAFIZA)
         widgetId == WidgetIds.STATUS -> {
-            StatusWidgetView(modifier = Modifier.size(280.dp, 140.dp), backgroundColor = ClCardBg)
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val s = cardScale(280f, 140f)
+                StatusWidgetView(
+                    modifier = Modifier.fillMaxSize(),
+                    backgroundColor = ClCardBg,
+                    scale = s
+                )
+            }
         }
         // 3. CANLI HIZ GOSTERGESI
         widgetId == WidgetIds.SPEEDOMETER -> {
@@ -760,10 +786,12 @@ private fun RenderDesktopWidgetContent(
         widgetId.startsWith(WidgetIds.AW_PREFIX) -> {
             val awId = widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()
             if (awId != null) {
+                // Gercek cerceve olcusu verilir: HostedAppWidgetView olcuyu onSizeChanged ile
+                // AppWidgetManager'a bildirir, saglayici widget'i yeni boyuta gore cizer.
                 Surface(
                     color = Color.Transparent,
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.size(width = 280.dp, height = 140.dp)
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     HostedAppWidgetView(appWidgetId = awId, modifier = Modifier.fillMaxSize())
                 }
@@ -774,7 +802,7 @@ private fun RenderDesktopWidgetContent(
                 color = ClCardBg,
                 shape = RoundedCornerShape(16.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-                modifier = Modifier.size(160.dp, 100.dp)
+                modifier = Modifier.fillMaxSize()
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(text = widgetId, color = Color.White, fontSize = 12.sp)
@@ -790,76 +818,85 @@ private fun RenderDesktopWidgetContent(
 
 @Composable
 private fun ClockWidgetCard(saatMetni: String, tarihMetni: String) {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 260.dp, height = 100.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.Center
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // Taban tasarim 260x100 dp; cerceve buyudukce yazilar orantili buyur.
+        val s = cardScale(260f, 100f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Text(
-                text = saatMetni,
-                color = Color.White,
-                fontSize = 42.sp,
-                fontWeight = FontWeight.Light,
-                letterSpacing = 1.sp
-            )
-            Text(
-                text = tarihMetni.replaceFirstChar { it.uppercase() },
-                color = Color(0xFFB0B3C6),
-                fontSize = 13.sp,
-                maxLines = 1
-            )
+            Column(
+                modifier = Modifier.fillMaxSize().padding(horizontal = (16 * s).dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = saatMetni,
+                    color = Color.White,
+                    fontSize = (42 * s).sp,
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = tarihMetni.replaceFirstChar { it.uppercase() },
+                    color = Color(0xFFB0B3C6),
+                    fontSize = (13 * s).sp,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun SpeedometerWidgetCard(telemetri: HizTelemetrisi) {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 240.dp, height = 160.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(240f, 160f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Text(
-                text = "${telemetri.anlikHizKmh}",
-                color = Color.White,
-                fontSize = 52.sp,
-                fontWeight = FontWeight.Black
-            )
-            Text(
-                text = "KM / S",
-                color = ClPrimary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxSize().padding((14 * s).dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "Pusula: ${telemetri.pusulaYonu.roundToInt()}°",
-                    color = Color(0xFF8E92A8),
-                    fontSize = 11.sp
+                    text = "${telemetri.anlikHizKmh}",
+                    color = Color.White,
+                    fontSize = (52 * s).sp,
+                    fontWeight = FontWeight.Black
                 )
                 Text(
-                    text = "İrtifa: ${telemetri.irtifaMetre.roundToInt()}m",
-                    color = Color(0xFF8E92A8),
-                    fontSize = 11.sp
+                    text = "KM / S",
+                    color = ClPrimary,
+                    fontSize = (11 * s).sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp
                 )
+                Spacer(modifier = Modifier.height((4 * s).dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy((12 * s).dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Pusula: ${telemetri.pusulaYonu.roundToInt()}°",
+                        color = Color(0xFF8E92A8),
+                        fontSize = (11 * s).sp,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "İrtifa: ${telemetri.irtifaMetre.roundToInt()}m",
+                        color = Color(0xFF8E92A8),
+                        fontSize = (11 * s).sp,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
@@ -867,24 +904,27 @@ private fun SpeedometerWidgetCard(telemetri: HizTelemetrisi) {
 
 @Composable
 private fun CombinedDashboardCard(saatMetni: String, tarihMetni: String, telemetri: HizTelemetrisi) {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 340.dp, height = 120.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(340f, 120f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = saatMetni, color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.Bold)
-                Text(text = tarihMetni, color = Color.LightGray, fontSize = 11.sp, maxLines = 1)
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(text = "${telemetri.anlikHizKmh}", color = ClPrimary, fontSize = 44.sp, fontWeight = FontWeight.Black)
-                Text(text = "KM / S", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxSize().padding((16 * s).dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = saatMetni, color = Color.White, fontSize = (38 * s).sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(text = tarihMetni, color = Color.LightGray, fontSize = (11 * s).sp, maxLines = 1)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(text = "${telemetri.anlikHizKmh}", color = ClPrimary, fontSize = (44 * s).sp, fontWeight = FontWeight.Black)
+                    Text(text = "KM / S", color = Color.Gray, fontSize = (10 * s).sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -898,88 +938,91 @@ private fun MusicPlayerWidgetCard(
     onOnceki: () -> Unit,
     onMuzikPaneliAc: () -> Unit
 ) {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier
-            .size(width = 300.dp, height = 160.dp)
-            .clickable { onMuzikPaneliAc() }
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(14.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(300f, 160f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable { onMuzikPaneliAc() }
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            Brush.linearGradient(listOf(Color(0xFF00E5FF), Color(0xFF0072FF)))
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = "♪", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = medya.baslik.ifBlank { "Müzik Çalınmıyor" },
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = medya.sanatci.ifBlank { "Vela Audio" },
-                        color = Color(0xFFB0B3C6),
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxSize().padding((14 * s).dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Surface(
-                    color = Color(0x33FFFFFF),
-                    shape = CircleShape,
-                    modifier = Modifier.size(36.dp).clickable { onOnceki() }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(text = "◀◀", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size((46 * s).dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                Brush.linearGradient(listOf(Color(0xFF00E5FF), Color(0xFF0072FF)))
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "♪", color = Color.White, fontSize = (24 * s).sp, fontWeight = FontWeight.Bold)
                     }
-                }
-
-                Surface(
-                    color = ClPrimary,
-                    shape = CircleShape,
-                    modifier = Modifier.size(46.dp).clickable { onOynatDuraklat() }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (medya.caliyorMu) Icons.Default.Close else Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = Color.Black,
-                            modifier = Modifier.size(24.dp)
+                    Spacer(modifier = Modifier.width((12 * s).dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = medya.baslik.ifBlank { "Müzik Çalınmıyor" },
+                            color = Color.White,
+                            fontSize = (14 * s).sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = medya.sanatci.ifBlank { "Vela Audio" },
+                            color = Color(0xFFB0B3C6),
+                            fontSize = (12 * s).sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Surface(
-                    color = Color(0x33FFFFFF),
-                    shape = CircleShape,
-                    modifier = Modifier.size(36.dp).clickable { onSonraki() }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(text = "▶▶", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Surface(
+                        color = Color(0x33FFFFFF),
+                        shape = CircleShape,
+                        modifier = Modifier.size((36 * s).dp).clickable { onOnceki() }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(text = "◀◀", color = Color.White, fontSize = (11 * s).sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Surface(
+                        color = ClPrimary,
+                        shape = CircleShape,
+                        modifier = Modifier.size((46 * s).dp).clickable { onOynatDuraklat() }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (medya.caliyorMu) Icons.Default.Close else Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.Black,
+                                modifier = Modifier.size((24 * s).dp)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        color = Color(0x33FFFFFF),
+                        shape = CircleShape,
+                        modifier = Modifier.size((36 * s).dp).clickable { onSonraki() }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(text = "▶▶", color = Color.White, fontSize = (11 * s).sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -989,25 +1032,28 @@ private fun MusicPlayerWidgetCard(
 
 @Composable
 private fun WeatherWidgetCard() {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 170.dp, height = 90.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(170f, 90f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Canvas(modifier = Modifier.size(28.dp)) {
-                drawCircle(color = Color(0xFFFFCC00), radius = size.minDimension / 2.2f)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(text = "22°C", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text(text = "Güneşli", color = Color.LightGray, fontSize = 11.sp)
+            Row(
+                modifier = Modifier.fillMaxSize().padding((12 * s).dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Canvas(modifier = Modifier.size((28 * s).dp)) {
+                    drawCircle(color = Color(0xFFFFCC00), radius = size.minDimension / 2.2f)
+                }
+                Spacer(modifier = Modifier.width((12 * s).dp))
+                Column {
+                    Text(text = "22°C", color = Color.White, fontSize = (22 * s).sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Güneşli", color = Color.LightGray, fontSize = (11 * s).sp)
+                }
             }
         }
     }
@@ -1015,56 +1061,62 @@ private fun WeatherWidgetCard() {
 
 @Composable
 private fun CompassWidgetCard(telemetri: HizTelemetrisi) {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 170.dp, height = 90.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(170f, 90f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Canvas(modifier = Modifier.size(28.dp)) {
-                drawCircle(
-                    color = Color(0xFF32ADE6),
-                    radius = size.minDimension / 2f,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                )
+            Column(
+                modifier = Modifier.fillMaxSize().padding((10 * s).dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Canvas(modifier = Modifier.size((28 * s).dp)) {
+                    drawCircle(
+                        color = Color(0xFF32ADE6),
+                        radius = size.minDimension / 2f,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                    )
+                }
+                Spacer(modifier = Modifier.height((4 * s).dp))
+                Text(text = "YÖN: ${telemetri.pusulaYonu.roundToInt()}°", color = Color.White, fontSize = (12 * s).sp, fontWeight = FontWeight.Bold)
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "YÖN: ${telemetri.pusulaYonu.roundToInt()}°", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
 private fun ObdWidgetCard() {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 280.dp, height = 90.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceAround
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(280f, 90f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "RPM", color = Color.Gray, fontSize = 10.sp)
-                Text(text = "2200", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "HARARET", color = Color.Gray, fontSize = 10.sp)
-                Text(text = "90°C", color = ClSuccess, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "VOLTAJ", color = Color.Gray, fontSize = 10.sp)
-                Text(text = "14.2V", color = ClPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxSize().padding((12 * s).dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "RPM", color = Color.Gray, fontSize = (10 * s).sp)
+                    Text(text = "2200", color = Color.White, fontSize = (16 * s).sp, fontWeight = FontWeight.Bold)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "HARARET", color = Color.Gray, fontSize = (10 * s).sp)
+                    Text(text = "90°C", color = ClSuccess, fontSize = (16 * s).sp, fontWeight = FontWeight.Bold)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "VOLTAJ", color = Color.Gray, fontSize = (10 * s).sp)
+                    Text(text = "14.2V", color = ClPrimary, fontSize = (16 * s).sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -1082,35 +1134,38 @@ private fun DockWidgetCard(onLaunchApp: (String) -> Unit) {
         "com.android.settings" to "Ayarlar"
     )
 
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(22.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 340.dp, height = 76.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(340f, 76f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(22.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            dockApps.forEach { (pkg, fallbackLabel) ->
-                val icon = remember(pkg) {
-                    try { pm.getApplicationIcon(pkg).toBitmap(64, 64).asImageBitmap() } catch (e: Exception) { null }
-                }
+            Row(
+                modifier = Modifier.fillMaxSize().padding(horizontal = (14 * s).dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                dockApps.forEach { (pkg, fallbackLabel) ->
+                    val icon = remember(pkg) {
+                        try { pm.getApplicationIcon(pkg).toBitmap(64, 64).asImageBitmap() } catch (e: Exception) { null }
+                    }
 
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0x22FFFFFF))
-                        .clickable { onLaunchApp(pkg) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (icon != null) {
-                        Image(bitmap = icon, contentDescription = fallbackLabel, modifier = Modifier.size(36.dp))
-                    } else {
-                        Text(text = fallbackLabel.take(1), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Box(
+                        modifier = Modifier
+                            .size((48 * s).dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0x22FFFFFF))
+                            .clickable { onLaunchApp(pkg) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (icon != null) {
+                            Image(bitmap = icon, contentDescription = fallbackLabel, modifier = Modifier.size((36 * s).dp))
+                        } else {
+                            Text(text = fallbackLabel.take(1), color = Color.White, fontSize = (18 * s).sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -1135,14 +1190,18 @@ private fun DesktopAppShortcut(packageName: String, onLaunchApp: (String) -> Uni
                 .toBitmap(64, 64).asImageBitmap()
         }.getOrNull()
     }
-    Column(
-        modifier = Modifier.size(width = 80.dp, height = 96.dp).clickable { onLaunchApp(packageName) },
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        if (icon != null) Image(icon, contentDescription = label, modifier = Modifier.size(56.dp))
-        else Text(label.take(1), color = Color.White, fontSize = 30.sp)
-        Text(label, color = Color.White, fontSize = 11.sp, maxLines = 2,
-            overflow = TextOverflow.Ellipsis)
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(80f, 96f)
+        Column(
+            modifier = Modifier.fillMaxSize().clickable { onLaunchApp(packageName) },
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            if (icon != null) Image(icon, contentDescription = label, modifier = Modifier.size((56 * s).dp))
+            else Text(label.take(1), color = Color.White, fontSize = (30 * s).sp)
+            Text(label, color = Color.White, fontSize = (11 * s).sp, maxLines = 2,
+                overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
