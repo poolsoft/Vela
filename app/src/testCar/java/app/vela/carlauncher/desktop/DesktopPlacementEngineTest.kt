@@ -2,6 +2,7 @@ package app.vela.carlauncher.desktop
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -13,6 +14,7 @@ import org.junit.Test
  * - eski bolgemizde ucuncu widget varken swap red
  * - iki widget hedefe tasiyorsa red (ust uste binme olmaz)
  * - sayfada yer var mi taramasi (swap dahil)
+ * - sayfa kenari adimlamasi: dolu sayfalar atlanir, yonde yer yoksa red
  * - serbest modda (grid == null) her yerlesim serbest
  */
 class DesktopPlacementEngineTest {
@@ -187,5 +189,105 @@ class DesktopPlacementEngineTest {
         val layout = mapOf("a" to place(0, 0, 4, 4))
         assertTrue(DesktopPlacementEngine.allowed(layout, "a", place(0, 0, 4, 4), null))
         assertTrue(DesktopPlacementEngine.hasRoom(layout, "a", 0, 9, 9, null))
+    }
+
+    // Sayfa kenari adimlamasi: dolu sayfalari atla, ilk bos sayfaya git.
+
+    /** Tek widget tum tahtayi kaplar: sayfa dolu sayilir (baska widget'a yer yok). */
+    private fun fullPage(id: String, page: Int) = id to place(0, 0, grid.cols, grid.rows, page)
+
+    private fun step(
+        layout: Map<String, WidgetPlacement>,
+        from: Int,
+        direction: Int,
+        lastPage: Int,
+        spanX: Int = 2,
+        spanY: Int = 2
+    ) = DesktopPlacementEngine.stepPageWithRoom(
+        layout = layout,
+        id = "a",
+        fromPage = from,
+        direction = direction,
+        lastPage = lastPage,
+        spanX = spanX,
+        spanY = spanY,
+        grid = grid
+    )
+
+    @Test
+    fun edgeSteppingSkipsFullPagesTowardsStart() {
+        // Kullanici 4. sayfadaki widget'i 1. sayfaya tasiyor; 2 ve 3 dolu. Tasima
+        // engellenmemeli: kenarda bekleyince 2 ve 3 atlanip 1. sayfaya gidilir.
+        val layout = mapOf(
+            "a" to place(0, 0, 2, 2, page = 3),
+            fullPage("dolu3", 2),
+            fullPage("dolu2", 1)
+        )
+        assertEquals(0, step(layout, from = 3, direction = -1, lastPage = 3))
+    }
+
+    @Test
+    fun edgeSteppingSkipsFullPagesTowardsEnd() {
+        val layout = mapOf(
+            "a" to place(0, 0, 2, 2, page = 0),
+            fullPage("dolu1", 1),
+            fullPage("dolu2", 2)
+        )
+        assertEquals(3, step(layout, from = 0, direction = 1, lastPage = 3))
+    }
+
+    @Test
+    fun edgeSteppingStopsAtNearestPageWithRoom() {
+        // Yalnizca sonraki sayfa dolu degil: tek adimda oraya gidilir (atlanan yok).
+        val layout = mapOf(
+            "a" to place(0, 0, 2, 2, page = 3),
+            fullPage("dolu3", 2)
+        )
+        assertEquals(1, step(layout, from = 3, direction = -1, lastPage = 3))
+    }
+
+    @Test
+    fun edgeSteppingRejectsDirectionWithNoRoom() {
+        // Yondeki butun sayfalar dolu: null. Cagiran taraf sayfayi degistirmez ve
+        // kirmizi cerceveyle bildirir; widget birakilirsa eski yerinde kalir.
+        val layout = mapOf(
+            "a" to place(0, 0, 2, 2, page = 2),
+            fullPage("dolu2", 1),
+            fullPage("dolu1", 0)
+        )
+        assertNull(step(layout, from = 2, direction = -1, lastPage = 2))
+    }
+
+    @Test
+    fun edgeSteppingStaysAtRangeEdges() {
+        val layout = mapOf("a" to place(0, 0, 2, 2, page = 0))
+        // Ilk sayfada daha sola gidilemez; son sayfada daha saga gidilemez.
+        assertEquals(0, step(layout, from = 0, direction = -1, lastPage = 2))
+        assertEquals(2, step(layout, from = 2, direction = 1, lastPage = 2))
+    }
+
+    @Test
+    fun edgeSteppingInFreeModeStepsOnePage() {
+        // Serbest modda hucre kurali yok: her sayfa yer kabul eder, tek adim ilerler.
+        val layout = mapOf("a" to place(0, 0, 2, 2, page = 1))
+        assertEquals(
+            2,
+            DesktopPlacementEngine.stepPageWithRoom(layout, "a", 1, 1, 2, 2, 2, null)
+        )
+    }
+
+    @Test
+    fun edgeSteppingNeverSkipsOntoFullPage() {
+        // Atlama yalnizca GERCEKTEN bos sayfaya: her donen sayfa hasRoom ile dogrulanir.
+        val layout = mapOf(
+            "a" to place(0, 0, 2, 2, page = 4),
+            fullPage("dolu4", 3),
+            fullPage("dolu3", 2),
+            fullPage("dolu2", 1),
+            "kucuk" to place(0, 0, 1, 1, page = 0)
+        )
+        val target = step(layout, from = 4, direction = -1, lastPage = 4)!!
+        assertEquals(0, target)
+        assertTrue(DesktopPlacementEngine.hasRoom(layout, "a", target, 2, 2, grid))
     }
 }

@@ -9,6 +9,8 @@ package app.vela.carlauncher.desktop
  *   sigiyorsa, ustelik eski bolgemizde baska kimse yoksa, yer degistirirler (swap).
  * - Bunlarin disinda birakma REDDEDILIR; cagiran taraf widget'i eski yerine dondurur.
  *   Boylece hicbir zaman ust uste binme olusmaz.
+ * - Sayfa degistirirken dolu sayfalar engeldir AMA tasimayi durdurmaz: stepPageWithRoom
+ *   yon boyunca ilk bos sayfaya kadar atlar ([hasRoom] swap dahil yer sayar).
  *
  * Compose'dan bagimsiz, saf Kotlin'dir: grid modundaki "birakilabilir mi / bu sayfada
  * yer var mi" kararlari birim testleriyle dogrulanabilir (DesktopPlacementEngineTest).
@@ -110,7 +112,7 @@ object DesktopPlacementEngine {
 
     /**
      * Bu sayfada bu boyutta widget icin yer var mi? (swap dahil)
-     * Sayfa degistirme onizlemesi icin kullanilir: yer yoksa sayfaya gecilmez.
+     * Sayfa adimlamasi ([stepPageWithRoom]) ve ayarlardaki sayfa secimi icinde kullanilir.
      */
     fun hasRoom(
         layout: Map<String, WidgetPlacement>,
@@ -139,6 +141,40 @@ object DesktopPlacementEngine {
             }
         }
         return false
+    }
+
+    /**
+     * Sayfa kenari adimlamasi: parmak calisma alaninin kenarinda beklerken gidilecek sayfayi
+     * YON boyunca arar. Bu boyutta widget'i almayan (dolu) sayfalar ATLANIR ve yondaki ilk
+     * bos sayfaya kadar gidilir; boylece ortada dolu bir sayfa varsa tasima engellenmez.
+     *
+     * Doner deger:
+     * - sayfa: gidilecek sayfa. Kaynaktan farkli ise hareket vardir; fark 1'den buyukse
+     *   aradaki sayfalar atlanmis demektir (cagiran taraf kirmizi cerceveyle bildirir).
+     * - null: bu yonde hicbir sayfada bu boyutta yer yok; hareket REDDEDILIR.
+     * - kaynak sayfanin kendisi: araligin kenarindayiz, o yonde baska sayfa yok.
+     *
+     * grid == null (serbest mod) her sayfada yer oldugunu kabul eder, tek adim ilerler.
+     */
+    fun stepPageWithRoom(
+        layout: Map<String, WidgetPlacement>,
+        id: String,
+        fromPage: Int,
+        direction: Int,
+        lastPage: Int,
+        spanX: Int,
+        spanY: Int,
+        grid: CellGrid.Grid?
+    ): Int? {
+        if (direction == 0) return fromPage
+        val first = fromPage + direction
+        if (first < 0 || first > lastPage) return fromPage
+        var page = first
+        while (page in 0..lastPage) {
+            if (hasRoom(layout, id, page, spanX, spanY, grid)) return page
+            page += direction
+        }
+        return null
     }
 
     /**

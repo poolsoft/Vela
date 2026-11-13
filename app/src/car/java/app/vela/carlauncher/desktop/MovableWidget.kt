@@ -105,11 +105,12 @@ fun MovableWidget(
     maxSpanY: Int = Int.MAX_VALUE,
     onEnterEdit: () -> Unit = {},
     onDragging: (Boolean) -> Unit = {},
-    // Kenarda beklenince hedef sayfa adimlar; bu callback SAF hesaplamadir:
-    // (mevcut hedef, yon) -> hedef sayfa (gecerli araliga kisitlanmis).
-    onPageEdge: (from: Int, direction: Int) -> Int = { from, _ -> from },
-    // Hedef sayfada bu boyutta widget icin yer var mi? Yer yoksa sayfa gecisi yapilmaz.
-    canTakePage: (page: Int, spanX: Int, spanY: Int) -> Boolean = { _, _, _ -> true },
+    // Parmak kenarda beklenince hedef sayfa adimlar; bu callback SAF hesaplamadir:
+    // (mevcut hedef, yon, genislik, yukseklik) -> gidilecek sayfa. Doner deger:
+    //  - sayfa: gidilecek sayfa; dolu sayfalar atlanmis olabilir (fark > 1 => atlandi)
+    //  - null : bu yonde hicbir sayfada yer yok -> adim yok, kirmizi cerceve
+    //  - kaynak sayfa: araligin kenari, o yonde baska sayfa yok -> sessiz adim yok
+    onPageEdge: (from: Int, direction: Int, spanX: Int, spanY: Int) -> Int? = { from, _, _, _ -> from },
     // Hedef sayfa kabul edildi: calisma alani o sayfayi gosterir (surukleme sirasinda
     // gorunur sayfa degisir, boylece kullanicinin bos alanlari gorebilir).
     onPageTarget: (Int) -> Unit = {},
@@ -149,7 +150,6 @@ fun MovableWidget(
     val pageEdge by rememberUpdatedState(onPageEdge)
     val draggingCallback by rememberUpdatedState(onDragging)
     val dropAllowed by rememberUpdatedState(canDrop)
-    val fitsPage by rememberUpdatedState(canTakePage)
     val pageTarget by rememberUpdatedState(onPageTarget)
     // Widget composition'i surukleme sirasinda elden cikarilirsa (sayfa degisimi, edit modu
     // kapanmasi, widget silinmesi) ust katmandaki "surukleniyor" bayragi takili kalmasin;
@@ -198,31 +198,40 @@ fun MovableWidget(
     fun activeGrid(): CellGrid.Grid? = if (currentSnapToGrid) latestGrid else null
 
     LaunchedEffect(edge, dragging) {
-        // Parmak kenarda bekleyince (650ms) hedef sayfa bir adim kayar; parmak kenarda
-        // kaldikca adimlama surer (iki-uc sayfa uzağa gidilebilir). Sayfa degisiminde
-        // widget parmagin altinda kalir: yeni sayfanin ayni kenarinda durur, boylece
-        // kullanici oradaki bos hucreleri gorerek birakabilir.
+        // Parmak kenarda bekleyince (650ms) hedef sayfa adimlar; parmak kenarda kaldikca
+        // adimlama surer. Yondaki sayfalar bu boyutta widget'i almiyorsa ATLANIR ve ilk
+        // bos sayfaya gidilir: 4. sayfadan 1. sayfaya tasirken 2 ve 3. sayfalarin dolu
+        // olmasi tasimayi engellemez. O yonde hicbir sayfada yer yoksa adim atlanmaz,
+        // kirmizi cerceve bildirir.
         if (!dragging || edge == 0) return@LaunchedEffect
         val dir = edge
         delay(650)
         if (dragging && edge == dir) {
-            val target = pageEdge(dragPage, dir)
             val sx = spanX.coerceAtLeast(1)
             val sy = spanY.coerceAtLeast(1)
-            if (target == dragPage) {
-                edge = 0
-            } else if (fitsPage(target, sx, sy)) {
-                dragPage = target
-                // Gorunur sayfa degisir; widget parmagin altinda kaldigi icin konumu
-                // degistirilmez (parmak hareketi yeni sayfanin koordinatlarinda surer).
-                pageTarget(target)
-                edge = 0
-            } else {
-                // Hedef sayfa bu boyutta widget'i alacak boslukta degil: sayfaya gecme,
-                // kirmizi cerceveyle bildir.
-                rejectFlash = true
-                edge = 0
-                edgeBlocked = true
+            val target = pageEdge(dragPage, dir, sx, sy)
+            when {
+                target == null -> {
+                    // Yon boyunca hicbir sayfada bu boyutta yer yok: sayfaya gecme,
+                    // kirmizi cerceveyle bildir. Parmak kenardan cekilince tekrar denenir.
+                    rejectFlash = true
+                    edge = 0
+                    edgeBlocked = true
+                }
+                target == dragPage -> {
+                    // Araligin kenari: o yonde baska sayfa yok (sessiz).
+                    edge = 0
+                }
+                else -> {
+                    // Birden fazla sayfa atlandiysa bunu kirmizi cerceveyle goster:
+                    // kullanici atlanan sayfalarin dolu oldugunu anlasin.
+                    if (kotlin.math.abs(target - dragPage) > 1) rejectFlash = true
+                    dragPage = target
+                    // Gorunur sayfa degisir; widget parmagin altinda kaldigi icin konumu
+                    // degistirilmez (parmak hareketi yeni sayfanin koordinatlarinda surer).
+                    pageTarget(target)
+                    edge = 0
+                }
             }
         }
     }
