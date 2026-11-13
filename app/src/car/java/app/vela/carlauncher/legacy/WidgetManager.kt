@@ -1,4 +1,11 @@
-package app.vela.carlauncher.widgets
+/*
+ * OLU KOD: cagrilmayan ikinci (view tabanli) widget sisteminden kalinti.
+ * Neden oldugu ve silmeden once uygulanacak kontrol adimlari: ayni klasordeki README.kt.
+ * Yeni kod buraya EKLENMEZ; canli sistem: app/vela/carlauncher/desktop + widgets/WidgetRegistry.
+ */
+package app.vela.carlauncher.legacy
+
+import app.vela.carlauncher.widgets.WidgetRegistry
 
 import android.appwidget.AppWidgetHost
 import android.content.Context

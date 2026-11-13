@@ -100,6 +100,9 @@ fun MovableWidget(
     grid: CellGrid.Grid? = null,
     minSpanX: Int = 1,
     minSpanY: Int = 1,
+    // Saglayici bildiriminden gelen ust sinirlar (resize C): sinir disi boyuta buyutulemez.
+    maxSpanX: Int = Int.MAX_VALUE,
+    maxSpanY: Int = Int.MAX_VALUE,
     onEnterEdit: () -> Unit = {},
     onDragging: (Boolean) -> Unit = {},
     // Kenarda beklenince hedef sayfa adimlar; bu callback SAF hesaplamadir:
@@ -175,6 +178,8 @@ fun MovableWidget(
     val latestGrid by rememberUpdatedState(grid)
     val latestMinSpanX by rememberUpdatedState(minSpanX)
     val latestMinSpanY by rememberUpdatedState(minSpanY)
+    val latestMaxSpanX by rememberUpdatedState(maxSpanX)
+    val latestMaxSpanY by rememberUpdatedState(maxSpanY)
 
     // Edit moda giriste boyutlandirma tutamaclari yeniden acilir; cikista menu kapatilir.
     var dragAccumulatorX by remember { mutableFloatStateOf(0f) }
@@ -322,8 +327,8 @@ fun MovableWidget(
         val g = activeGrid()
         if (g != null) {
             // Hucre modu: konumu ve boyutu hucre agina oturt; span'i kaydet.
-            val sx = spanX.coerceIn(latestMinSpanX, g.cols)
-            val sy = spanY.coerceIn(latestMinSpanY, g.rows)
+            val sx = spanX.coerceIn(latestMinSpanX, minOf(g.cols, latestMaxSpanX).coerceAtLeast(latestMinSpanX))
+            val sy = spanY.coerceIn(latestMinSpanY, minOf(g.rows, latestMaxSpanY).coerceAtLeast(latestMinSpanY))
             val cx = (dx / g.cellWidth).roundToInt().coerceIn(0, g.cols - sx)
             val cy = (dy / g.cellHeight).roundToInt().coerceIn(0, g.rows - sy)
             val snappedDx = cx * g.cellWidth
@@ -475,7 +480,8 @@ fun MovableWidget(
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .offset(y = (-13).dp)
+                        // Ust kenar resize tutamaci ortada durur; rozet onun sagina kayar.
+                        .offset(x = 34.dp, y = (-13).dp)
                         .zIndex(20f)
                 ) {
                     Text(
@@ -592,65 +598,87 @@ fun MovableWidget(
                     val snapped = ((base * raw / SNAP_STEP_DP).roundToInt() * SNAP_STEP_DP) / base
                     return snapped.coerceIn(minS, maxS)
                 }
-                // Hucre modunda span degisimi; sinirlar min span ve kalan hucre sayisidir.
+                // Hucre modunda span degisimi. Sinirlar: min span, saglayicinin max span'i
+                // (maxSpanX/Y) ve tutamacin kenarina kalan hucre sayisi. Tutamacin kenari
+                // onemlidir: sol/ust tutamac sabit kenarin tersine buyutur, yani span artarken
+                // hucre koordinati ve dx/dy azalir (kenara yapisik widget da buyuyebilir).
                 // Birikimli delta yalnizca ilgili eksende toplanir; boylece kullanilmayan
                 // eksendeki artik deger sonraki bir resize'ta span'i ziplatmaz.
                 // Gecersiz adim (komsu widget veya min/sinir asmasi) UYGULANMAZ: cerceve
                 // kirmizi yanar ve boyut son gecersiz kilmadan onceki degerinde kalir.
-                fun resizeSpan(axis: ResizeAxis, dragX: Float, dragY: Float) {
+                fun resizeSpan(anchor: ResizeAnchor, dragX: Float, dragY: Float) {
                     val g = activeGrid() ?: return
                     val cellXNow = (dx / g.cellWidth).roundToInt().coerceIn(0, (g.cols - 1).coerceAtLeast(0))
                     val cellYNow = (dy / g.cellHeight).roundToInt().coerceIn(0, (g.rows - 1).coerceAtLeast(0))
-                    val maxSpanX = (g.cols - cellXNow).coerceAtLeast(latestMinSpanX)
-                    val maxSpanY = (g.rows - cellYNow).coerceAtLeast(latestMinSpanY)
 
                     val stepX = (g.cellWidth * 0.25f).coerceIn(16f, 32f)
                     val stepY = (g.cellHeight * 0.25f).coerceIn(16f, 32f)
 
                     /** Aday yerlesim bu sayfada uygulanabilir mi? (komsu cakismasi yok mu) */
                     fun fits(cx: Int, cy: Int, sx: Int, sy: Int): Boolean =
-                        sx in 1..g.cols && sy in 1..g.rows && dropAllowed(dragPage, cx, cy, sx, sy)
+                        cx >= 0 && cy >= 0 && sx in 1..g.cols && sy in 1..g.rows &&
+                            dropAllowed(dragPage, cx, cy, sx, sy)
 
-                    /** Genislik adimi; gecersizse uygulanmaz, kirmizi yanip soner. */
-                    fun stepWidth(change: Int, limit: Int, min: Int) {
-                        val next = (spanX + change).coerceIn(min, limit)
-                        if (next == spanX || !fits(cellXNow, cellYNow, next, spanY)) {
+                    /** Sol/ust tutamakta parmagin ters yonu buyutme yonudur. */
+                    fun outwardX(value: Float): Float =
+                        (value / density) * (if (anchor.growLeft) -1f else 1f)
+
+                    fun outwardY(value: Float): Float =
+                        (value / density) * (if (anchor.growTop) -1f else 1f)
+
+                    /** Genislik adimi (+1 buyur, -1 kuculur); gecersizse kirmizi yanip soner. */
+                    fun stepWidth(grow: Int) {
+                        val nextSpan = spanX + grow
+                        val nextCellX = if (anchor.growLeft) cellXNow - grow else cellXNow
+                        // Sag/alt tutamakta sag kenar, sol tutamakta sol kenar (0) hedef:
+                        val limit = if (anchor.growLeft) cellXNow + spanX else g.cols - cellXNow
+                        val cap = minOf(limit, latestMaxSpanX)
+                        if (nextSpan < latestMinSpanX || nextSpan > cap || nextCellX < 0 ||
+                            !fits(nextCellX, cellYNow, nextSpan, spanY)
+                        ) {
                             blockedTick++
                         } else {
-                            spanX = next
+                            spanX = nextSpan
+                            if (anchor.growLeft) dx = nextCellX * g.cellWidth
                         }
                     }
 
-                    /** Yukseklik adimi; gecersizse uygulanmaz, kirmizi yanip soner. */
-                    fun stepHeight(change: Int, limit: Int, min: Int) {
-                        val next = (spanY + change).coerceIn(min, limit)
-                        if (next == spanY || !fits(cellXNow, cellYNow, spanX, next)) {
+                    /** Yukseklik adimi (+1 buyur, -1 kuculur); gecersizse kirmizi yanip soner. */
+                    fun stepHeight(grow: Int) {
+                        val nextSpan = spanY + grow
+                        val nextCellY = if (anchor.growTop) cellYNow - grow else cellYNow
+                        val limit = if (anchor.growTop) cellYNow + spanY else g.rows - cellYNow
+                        val cap = minOf(limit, latestMaxSpanY)
+                        if (nextSpan < latestMinSpanY || nextSpan > cap || nextCellY < 0 ||
+                            !fits(cellXNow, nextCellY, spanX, nextSpan)
+                        ) {
                             blockedTick++
                         } else {
-                            spanY = next
+                            spanY = nextSpan
+                            if (anchor.growTop) dy = nextCellY * g.cellHeight
                         }
                     }
 
-                    when (axis) {
+                    when (anchor.axis) {
                         ResizeAxis.WIDTH -> {
-                            dragAccumulatorX += dragX / density
+                            dragAccumulatorX += outwardX(dragX)
                             if (kotlin.math.abs(dragAccumulatorX) >= stepX) {
-                                val change = if (dragAccumulatorX > 0) 1 else -1
+                                val grow = if (dragAccumulatorX > 0) 1 else -1
                                 dragAccumulatorX = 0f
-                                stepWidth(change, maxSpanX, latestMinSpanX)
+                                stepWidth(grow)
                             }
                         }
                         ResizeAxis.HEIGHT -> {
-                            dragAccumulatorY += dragY / density
+                            dragAccumulatorY += outwardY(dragY)
                             if (kotlin.math.abs(dragAccumulatorY) >= stepY) {
-                                val change = if (dragAccumulatorY > 0) 1 else -1
+                                val grow = if (dragAccumulatorY > 0) 1 else -1
                                 dragAccumulatorY = 0f
-                                stepHeight(change, maxSpanY, latestMinSpanY)
+                                stepHeight(grow)
                             }
                         }
                         ResizeAxis.BOTH -> {
-                            dragAccumulatorX += dragX / density
-                            dragAccumulatorY += dragY / density
+                            dragAccumulatorX += outwardX(dragX)
+                            dragAccumulatorY += outwardY(dragY)
                             val cellsX = kotlin.math.abs(dragAccumulatorX) / stepX
                             val cellsY = kotlin.math.abs(dragAccumulatorY) / stepY
                             // Baskin eksen: parmak iki eksende de kaysa bile once hangi
@@ -658,127 +686,163 @@ fun MovableWidget(
                             // dikey cekerken genislik istemsiz 1 hucre kaymaz.
                             if (cellsX < 1f && cellsY < 1f) return
                             if (cellsX >= cellsY) {
-                                val changeX = if (dragAccumulatorX > 0) 1 else -1
+                                val growX = if (dragAccumulatorX > 0) 1 else -1
                                 dragAccumulatorX = 0f
-                                stepWidth(changeX, maxSpanX, latestMinSpanX)
+                                stepWidth(growX)
                             } else {
-                                val changeY = if (dragAccumulatorY > 0) 1 else -1
+                                val growY = if (dragAccumulatorY > 0) 1 else -1
                                 dragAccumulatorY = 0f
-                                stepHeight(changeY, maxSpanY, latestMinSpanY)
+                                stepHeight(growY)
                             }
                         }
                     }
                 }
+
+                // Serbest (hucre disi) modda olcek degisimi. Sol/ust tutamakta sabit kenar
+                // sag/alt kenar oldugu icin ofset de geri kaydirilir.
+                fun resizeScale(anchor: ResizeAnchor, dragX: Float, dragY: Float) {
+                    val (baseW, baseH) = baseDims()
+                    val minWScale = maxOf(PlacementBounds.MIN_SCALE, MIN_WIDTH_DP / baseW)
+                    val minHScale = maxOf(PlacementBounds.MIN_SCALE, MIN_HEIGHT_DP / baseH)
+                    when (anchor.axis) {
+                        ResizeAxis.WIDTH -> {
+                            if (anchor.growLeft) {
+                                val rightEdge = dx + baseW * widthScale
+                                val maxScale = minOf(
+                                    PlacementBounds.MAX_SCALE,
+                                    (rightEdge / baseW).coerceAtLeast(minWScale)
+                                )
+                                val next = snapScale(baseW, widthScale - (dragX / density) / baseW, minWScale, maxScale)
+                                widthScale = next
+                                dx = (rightEdge - baseW * next).coerceIn(
+                                    0f,
+                                    (workspaceWidth - baseW * next).coerceAtLeast(0f)
+                                )
+                            } else {
+                                val maxScale = minOf(
+                                    PlacementBounds.MAX_SCALE,
+                                    (workspaceWidth - dx).coerceAtLeast(baseW) / baseW
+                                )
+                                widthScale = snapScale(baseW, widthScale + (dragX / density) / baseW, minWScale, maxScale)
+                            }
+                        }
+                        ResizeAxis.HEIGHT -> {
+                            if (anchor.growTop) {
+                                val bottomEdge = dy + baseH * heightScale
+                                val maxScale = minOf(
+                                    PlacementBounds.MAX_SCALE,
+                                    (bottomEdge / baseH).coerceAtLeast(minHScale)
+                                )
+                                val next = snapScale(baseH, heightScale - (dragY / density) / baseH, minHScale, maxScale)
+                                heightScale = next
+                                dy = (bottomEdge - baseH * next).coerceIn(
+                                    0f,
+                                    (workspaceHeight - baseH * next).coerceAtLeast(0f)
+                                )
+                            } else {
+                                val maxScale = minOf(
+                                    PlacementBounds.MAX_SCALE,
+                                    (workspaceHeight - dy).coerceAtLeast(baseH) / baseH
+                                )
+                                heightScale = snapScale(baseH, heightScale + (dragY / density) / baseH, minHScale, maxScale)
+                            }
+                        }
+                        ResizeAxis.BOTH -> {
+                            val minCommonScale = maxOf(minWScale, minHScale)
+                            val maxWScale = minOf(PlacementBounds.MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
+                            val maxHScale = minOf(PlacementBounds.MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
+                            val maxCommonScale = minOf(maxWScale, maxHScale).coerceAtLeast(minCommonScale)
+                            val delta = ((dragX / density) / baseW + (dragY / density) / baseH) / 2f
+                            val newScale = snapScale(baseW, widthScale + delta, minCommonScale, maxCommonScale)
+                            widthScale = newScale
+                            heightScale = newScale
+                        }
+                    }
+                }
+
+                /** Tutamac hareketi: hucre modu span, serbest mod olcek kullanir. */
+                fun applyResize(anchor: ResizeAnchor, dragX: Float, dragY: Float) {
+                    if (activeGrid() != null) resizeSpan(anchor, dragX, dragY) else resizeScale(anchor, dragX, dragY)
+                }
+
+                fun beginResize() {
+                    resizeActive = true
+                    dragAccumulatorX = 0f
+                    dragAccumulatorY = 0f
+                }
+
+                fun endResize() {
+                    resizeActive = false
+                    commitSnapped()
+                }
+
                 // Sag alt kose: en + boy birlikte (Launcher tarzi dolu daire / fill circle tutamac).
                 ResizeHandle(
                     description = "Boyutlandir",
-                    axis = ResizeAxis.BOTH,
+                    anchor = ResizeAnchor.BOTTOM_END,
                     sizeDp = 24.dp,
-                    onStart = {
-                        resizeActive = true
-                        dragAccumulatorX = 0f
-                        dragAccumulatorY = 0f
-                    },
+                    onStart = ::beginResize,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         // Dokunma kutusu 44dp; yarisi (22dp) kadar kaysin ki beyaz daire
                         // cerceve cizgisinin tam ortada dursun.
                         .offset(22.dp, 22.dp)
                         .zIndex(20f),
-                    onResize = { axis, dragX, dragY ->
-                        val g = activeGrid()
-                        if (g != null) {
-                            resizeSpan(axis, dragX, dragY)
-                        } else {
-                            val (baseW, baseH) = baseDims()
-                            val minWScale = maxOf(PlacementBounds.MIN_SCALE, MIN_WIDTH_DP / baseW)
-                            val minHScale = maxOf(PlacementBounds.MIN_SCALE, MIN_HEIGHT_DP / baseH)
-                            val minCommonScale = maxOf(minWScale, minHScale)
-                            val maxWScale = minOf(PlacementBounds.MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
-                            val maxHScale = minOf(PlacementBounds.MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
-                            val maxCommonScale = minOf(maxWScale, maxHScale).coerceAtLeast(minCommonScale)
-                            when (axis) {
-                                ResizeAxis.WIDTH ->
-                                    widthScale = snapScale(baseW, widthScale + (dragX / density) / baseW, minWScale, maxWScale)
-                                ResizeAxis.HEIGHT ->
-                                    heightScale = snapScale(baseH, heightScale + (dragY / density) / baseH, minHScale, maxHScale)
-                                ResizeAxis.BOTH -> {
-                                    val delta = ((dragX / density) / baseW + (dragY / density) / baseH) / 2f
-                                    val newScale = snapScale(baseW, widthScale + delta, minCommonScale, maxCommonScale)
-                                    widthScale = newScale
-                                    heightScale = newScale
-                                }
-                            }
-                        }
-                    },
-                    onEnd = {
-                        resizeActive = false
-                        commitSnapped()
-                    }
+                    onResize = ::applyResize,
+                    onEnd = ::endResize
                 )
                 // Sag kenar ortasi: yalnizca genislik (Launcher tarzi dolu daire).
                 ResizeHandle(
                     description = "Genislik",
-                    axis = ResizeAxis.WIDTH,
+                    anchor = ResizeAnchor.END,
                     sizeDp = 20.dp,
-                    onStart = {
-                        resizeActive = true
-                        dragAccumulatorX = 0f
-                        dragAccumulatorY = 0f
-                    },
+                    onStart = ::beginResize,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .offset(22.dp, 0.dp)
                         .zIndex(20f),
-                    onResize = { axis, dragX, dragY ->
-                        val g = activeGrid()
-                        if (g != null) {
-                            resizeSpan(axis, dragX, dragY)
-                        } else {
-                            val (baseW, _) = baseDims()
-                            val minWScale = maxOf(PlacementBounds.MIN_SCALE, MIN_WIDTH_DP / baseW)
-                            val maxWScale = minOf(PlacementBounds.MAX_SCALE, (workspaceWidth - dx).coerceAtLeast(baseW) / baseW)
-                            if (axis == ResizeAxis.WIDTH) {
-                                widthScale = snapScale(baseW, widthScale + (dragX / density) / baseW, minWScale, maxWScale)
-                            }
-                        }
-                    },
-                    onEnd = {
-                        resizeActive = false
-                        commitSnapped()
-                    }
+                    onResize = ::applyResize,
+                    onEnd = ::endResize
+                )
+                // Sol kenar ortasi: sabit sag kenardan buyutur. Kenara yapisik widget'lar
+                // boylece genisleyebilir (eskiden maxSpanX = cols - cellX yuzunden kilitleyenirlerdi).
+                ResizeHandle(
+                    description = "Genislik (soldan)",
+                    anchor = ResizeAnchor.START,
+                    sizeDp = 20.dp,
+                    onStart = ::beginResize,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .offset((-22).dp, 0.dp)
+                        .zIndex(20f),
+                    onResize = ::applyResize,
+                    onEnd = ::endResize
                 )
                 // Alt kenar ortasi: yalnizca yukseklik (Launcher tarzi dolu daire).
                 ResizeHandle(
                     description = "Yukseklik",
-                    axis = ResizeAxis.HEIGHT,
+                    anchor = ResizeAnchor.BOTTOM,
                     sizeDp = 20.dp,
-                    onStart = {
-                        resizeActive = true
-                        dragAccumulatorX = 0f
-                        dragAccumulatorY = 0f
-                    },
+                    onStart = ::beginResize,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .offset(0.dp, 22.dp)
                         .zIndex(20f),
-                    onResize = { axis, dragX, dragY ->
-                        val g = activeGrid()
-                        if (g != null) {
-                            resizeSpan(axis, dragX, dragY)
-                        } else {
-                            val (_, baseH) = baseDims()
-                            val minHScale = maxOf(PlacementBounds.MIN_SCALE, MIN_HEIGHT_DP / baseH)
-                            val maxHScale = minOf(PlacementBounds.MAX_SCALE, (workspaceHeight - dy).coerceAtLeast(baseH) / baseH)
-                            if (axis == ResizeAxis.HEIGHT) {
-                                heightScale = snapScale(baseH, heightScale + (dragY / density) / baseH, minHScale, maxHScale)
-                            }
-                        }
-                    },
-                    onEnd = {
-                        resizeActive = false
-                        commitSnapped()
-                    }
+                    onResize = ::applyResize,
+                    onEnd = ::endResize
+                )
+                // Ust kenar ortasi: sabit alt kenardan asagiya/ yukariya buyutur.
+                ResizeHandle(
+                    description = "Yukseklik (ustten)",
+                    anchor = ResizeAnchor.TOP,
+                    sizeDp = 20.dp,
+                    onStart = ::beginResize,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(0.dp, (-22).dp)
+                        .zIndex(20f),
+                    onResize = ::applyResize,
+                    onEnd = ::endResize
                 )
             }
 
@@ -825,6 +889,23 @@ private fun HandleSurface(
 private enum class ResizeAxis { WIDTH, HEIGHT, BOTH }
 
 /**
+ * Tutamacin hangi kenarda durdugu. Sol/ust tutamaklarda sabit kenar sag/alt kenardir:
+ * buyurken span artar, hucre koordinati (ve dx/dy) azalir. Boylece `maxSpanX = cols - cellX`
+ * siniri yuzunden kenara yapisik widget'lar da buyuyebilir (resize D).
+ */
+private enum class ResizeAnchor(
+    val axis: ResizeAxis,
+    val growLeft: Boolean = false,
+    val growTop: Boolean = false
+) {
+    BOTTOM_END(ResizeAxis.BOTH),
+    END(ResizeAxis.WIDTH),
+    START(ResizeAxis.WIDTH, growLeft = true),
+    BOTTOM(ResizeAxis.HEIGHT),
+    TOP(ResizeAxis.HEIGHT, growTop = true)
+}
+
+/**
  * Suruklenerek boyutlandirma tutamacı (Launcher tarzi dolu daire / fill circle).
  * Drag px cinsinden onResize'a iletilir.
  * Birakildiginda onEnd ile grid snap'li commit yapilir.
@@ -832,11 +913,11 @@ private enum class ResizeAxis { WIDTH, HEIGHT, BOTH }
 @Composable
 private fun ResizeHandle(
     description: String,
-    axis: ResizeAxis,
+    anchor: ResizeAnchor,
     sizeDp: Dp,
     modifier: Modifier = Modifier,
     onStart: () -> Unit = {},
-    onResize: (ResizeAxis, Float, Float) -> Unit,
+    onResize: (ResizeAnchor, Float, Float) -> Unit,
     onEnd: () -> Unit
 ) {
     // Dokunma alanini artirmak icin en az 44dp'lik dokunma hedefi (touch target)
@@ -852,7 +933,7 @@ private fun ResizeHandle(
                     onDragCancel = { onEnd() }
                 ) { change, drag ->
                     change.consume()
-                    onResize(axis, drag.x, drag.y)
+                    onResize(anchor, drag.x, drag.y)
                 }
             }
     ) {

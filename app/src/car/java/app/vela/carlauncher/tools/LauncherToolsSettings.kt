@@ -26,7 +26,7 @@ import app.vela.carlauncher.apps.CarAppManager
 import app.vela.carlauncher.media.MusicPlaylistStore
 import app.vela.carlauncher.settings.CarLauncherSettings
 import app.vela.carlauncher.widgets.SystemWidgetAddButton
-import app.vela.carlauncher.widgets.WidgetManager
+import app.vela.carlauncher.legacy.WidgetManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

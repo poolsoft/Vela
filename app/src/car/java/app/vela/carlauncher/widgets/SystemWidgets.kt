@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import app.vela.R
+import app.vela.carlauncher.legacy.WidgetManager
 
 object SystemWidgets {
     private var instance: AppWidgetHost? = null
@@ -29,6 +30,15 @@ object SystemWidgets {
     fun delete(context: Context, id: Int) { runCatching { host(context).deleteAppWidgetId(id) } }
 }
 
+/**
+ * Araclar ekranindaki "Sistem widget'i ekle" butonu.
+ *
+ * DIKKAT: Eski (legacy) sisteme yazar — widget'i legacy.WidgetManager kayit defterine
+ * ekler ve o defter hicbir ekranda cizilmiyor. Yani buton ekledigi widget'i masaustunde
+ * gostermez. Gercek yol: masaustu duzenleme modu -> DesktopWidgetPicker ->
+ * desktop.CarAppWidgetHostController (aw_<id> yerlesimi). Buradaki kod, kaldirilmasi
+ * kararlastirildiginda legacy/README.kt adimlariyla birlikte silinmeli.
+ */
 @Composable
 fun SystemWidgetAddButton(page: Int = 0, onAdded: () -> Unit = {}) {
     val context = LocalContext.current

@@ -1,23 +1,25 @@
 package app.vela.carlauncher.desktop
 
+import app.vela.carlauncher.widgets.WidgetRegistry
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** Places the existing cards on a bounded grid without changing the saved user layout. */
 object WorkspaceGrid {
     private const val STEP = 16f
+    private const val DEFAULT_WIDTH_DP = 280f
+    private const val DEFAULT_HEIGHT_DP = 140f
+    private const val APP_SHORTCUT_WIDTH_DP = 80f
+    private const val APP_SHORTCUT_HEIGHT_DP = 96f
 
+    /**
+     * Widget'in dogal boyutu. TEK KAYNAK: WidgetRegistry (desktopId -> baseWidthDp/HeightDp).
+     * Boylece masaustu grid'i ile widget katalogu ayni tabloyu kullanir; yeni bir widget
+     * eklemek icin yalnizca kayit defterine girmek yeterlidir.
+     */
     fun size(id: String): Pair<Float, Float> = when {
-        id.startsWith(WidgetIds.APP_PREFIX) -> 80f to 96f
-        id == WidgetIds.CLOCK -> 260f to 100f
-        id == WidgetIds.STATUS -> 280f to 140f
-        id == WidgetIds.SPEEDOMETER -> 240f to 160f
-        id == WidgetIds.MUSIC -> 300f to 160f
-        id == WidgetIds.COMBINED -> 340f to 120f
-        id == WidgetIds.WEATHER || id == WidgetIds.COMPASS -> 170f to 90f
-        id == WidgetIds.OBD -> 280f to 90f
-        id == WidgetIds.DOCK -> 340f to 76f
-        else -> 280f to 140f
+        id.startsWith(WidgetIds.APP_PREFIX) -> APP_SHORTCUT_WIDTH_DP to APP_SHORTCUT_HEIGHT_DP
+        else -> WidgetRegistry.baseSize(WidgetIds.type(id)) ?: (DEFAULT_WIDTH_DP to DEFAULT_HEIGHT_DP)
     }
 
     fun resolve(

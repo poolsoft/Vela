@@ -1,4 +1,11 @@
-package app.vela.carlauncher.widgets
+/*
+ * OLU KOD: cagrilmayan ikinci (view tabanli) widget sisteminden kalinti.
+ * Neden oldugu ve silmeden once uygulanacak kontrol adimlari: ayni klasordeki README.kt.
+ * Yeni kod buraya EKLENMEZ; canli sistem: app/vela/carlauncher/desktop + widgets/WidgetRegistry.
+ */
+package app.vela.carlauncher.legacy
+
+import app.vela.carlauncher.widgets.WidgetRegistry
 
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
@@ -14,6 +21,7 @@ import kotlin.math.roundToInt
  * - Surukleme sirasinda parmagin tuttugu noktayi koruyarak hedef hucreyi hesaplar (adjustedWidgetDropCell).
  * Kod icerisinde Turkce karakter kullanilmamistir (identifier ve degiskenlerde).
  */
+@Deprecated("Kullanilmiyor: masaustu boyut sinirlari desktop/WidgetSpanSizing + WidgetSpanLimits icinde.")
 object CarWidgetSizing {
 
     const val COLUMNS = 12
