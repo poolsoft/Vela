@@ -446,12 +446,20 @@ fun CarDesktopWorkspaceView(
                                     },
                                     // Parmak kenarda beklenince hedef sayfa adimlar; sayfa
                                     // gercekten kaydirilir ve widget parmagin altinda kalir.
-                                    // Hedef sayfada yer yoksa adim atlanmaz (kirmizi cerceve).
-                                    onPageEdge = { from, direction ->
-                                        (from + direction).coerceIn(0, lastPage)
-                                    },
-                                    canTakePage = { page, sx, sy ->
-                                        pageHasRoom(widgetId, page, sx, sy)
+                                    // Dolu sayfalar atlanir: motor yondaki ilk bos sayfayi
+                                    // doner. Hicbir sayfada yer yoksa null doner ve adim
+                                    // atlanmaz (kirmizi cerceve).
+                                    onPageEdge = { from, direction, sx, sy ->
+                                        DesktopPlacementEngine.stepPageWithRoom(
+                                            layout = resolvedLayout,
+                                            id = widgetId,
+                                            fromPage = from,
+                                            direction = direction,
+                                            lastPage = lastPage,
+                                            spanX = sx,
+                                            spanY = sy,
+                                            grid = engineGrid
+                                        )
                                     },
                                     onPageTarget = { page -> currentPage = page },
                                     pageShiftTarget = if (isDraggingThis) {
