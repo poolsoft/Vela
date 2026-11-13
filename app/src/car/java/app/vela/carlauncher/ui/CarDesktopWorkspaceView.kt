@@ -79,6 +79,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -114,6 +115,8 @@ import app.vela.carlauncher.model.InternalApp
 import app.vela.carlauncher.model.HizTelemetrisi
 import app.vela.carlauncher.model.MedyaParcasi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -377,15 +380,59 @@ fun CarDesktopWorkspaceView(
             val totalPages = (lastPage + 1).coerceAtLeast(1)
             val pagerState = rememberPagerState(initialPage = currentPage.coerceIn(0, totalPages - 1)) { totalPages }
 
-            LaunchedEffect(currentPage) {
-                if (pagerState.currentPage != currentPage && currentPage in 0 until totalPages) {
-                    pagerState.animateScrollToPage(currentPage)
-                }
+            // PROGRAMATIK GEZINME (tek yon: currentPage -> pager).
+            //
+            // Widget suruklerken sayfa ANINDA degisir (animasyonsuz). Neden:
+            //  - animateScrollToPage uzun mesafede ara sayfalara on-atlama yapar ve
+            //    animasyon surerken pager'in currentPage'i degisir. Asagidaki iki yonlu
+            //    senkron bu ara degeri currentPage'e yazip animasyonu iptal ediyordu;
+            //    sonuc pager'in yari sayfa konumunda kalmasi (ornegin 1 ve 2. sayfanin
+            //    yarisi gorunur) ve birakmanin yanlis yere denk gelmesiydi.
+            //  - Surukleme sirasinda ara konumun anlami yok: widget zaten parmagin
+            //    altindadir ve sayfa dilimi telafisi (pageShiftDp) tam sayfa kaymasiyla
+            //    birebir ayni oldugu icin ani gecis gorunmez.
+            LaunchedEffect(pagerState, draggingWidgetId) {
+                snapshotFlow { currentPage to draggingWidgetId }
+                    .collectLatest { (target, draggingId) ->
+                        if (target !in 0 until totalPages) return@collectLatest
+                        if (draggingId != null) {
+                            pagerState.scrollToPage(target)
+                            return@collectLatest
+                        }
+                        if (pagerState.currentPage != target ||
+                            pagerState.currentPageOffsetFraction != 0f
+                        ) {
+                            pagerState.animateScrollToPage(target)
+                            // Animasyon tamamlanmadan iptal edilmis olabilir; hedefe
+                            // her durumda tam otur (yarim sayfa kalmasin).
+                            if (pagerState.currentPage != target ||
+                                pagerState.currentPageOffsetFraction != 0f
+                            ) {
+                                pagerState.scrollToPage(target)
+                            }
+                        }
+                    }
             }
-            LaunchedEffect(pagerState.currentPage) {
-                if (currentPage != pagerState.currentPage) {
-                    currentPage = pagerState.currentPage
+            // PAGER -> currentPage: yalnizca pager DURDUGUNDA ve surukleme yokken.
+            // Animasyon/parmak kaydirmasi surerken ara sayfalar currentPage'e yazilmaz;
+            // yoksa programatik gezinme kendi kendini iptal eder.
+            LaunchedEffect(pagerState, draggingWidgetId) {
+                if (draggingWidgetId != null) return@LaunchedEffect
+                snapshotFlow {
+                    Triple(
+                        pagerState.isScrollInProgress,
+                        pagerState.currentPage,
+                        pagerState.currentPageOffsetFraction
+                    )
                 }
+                    .distinctUntilChanged()
+                    .collect { (scrolling, page, fraction) ->
+                        if (scrolling) return@collect
+                        if (page != currentPage) currentPage = page
+                        // Guvenlik agi: pager durdugu halde tam sayfa konumunda degilse
+                        // (iptal edilmis animasyon artigi) en yakin sayfaya ANINDA otur.
+                        if (fraction != 0f) pagerState.scrollToPage(page)
+                    }
             }
             // Guvenlik agi: edit modundan cikilinca takili kalan surukleme bayragi
             // pager'i kalici olarak kilitlemesin.
