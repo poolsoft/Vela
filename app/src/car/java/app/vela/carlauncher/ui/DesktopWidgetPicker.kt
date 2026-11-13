@@ -50,8 +50,9 @@ import app.vela.ui.VelaWindowDialog as Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.drawable.toBitmap
 import app.vela.carlauncher.apps.CarAppManager
-import app.vela.carlauncher.desktop.WidgetIds
 import app.vela.carlauncher.model.AracUygulamasi
+import app.vela.carlauncher.widgets.WidgetRegistry
+import kotlin.math.roundToInt
 
 private data class DesktopWidgetChoice(val id: String, val title: String, val symbol: String, val size: String)
 
@@ -75,18 +76,17 @@ fun DesktopWidgetPicker(
                 runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
             })
     }
+    // Tek kaynak: baslik, sembol ve boyut WidgetRegistry'den gelir (masaustu grid'i da
+    // ayni boyut tablosunu kullanir).
     val localWidgets = remember {
-        listOf(
-            DesktopWidgetChoice(WidgetIds.COMBINED, "Saat + Hız", "◴", "340 × 120"),
-            DesktopWidgetChoice(WidgetIds.SPEEDOMETER, "Hız göstergesi", "◉", "240 × 160"),
-            DesktopWidgetChoice(WidgetIds.CLOCK, "Dijital saat", "22:55", "260 × 100"),
-            DesktopWidgetChoice(WidgetIds.MUSIC, "Müzik çalar", "♫", "300 × 160"),
-            DesktopWidgetChoice(WidgetIds.WEATHER, "Hava durumu", "☀", "170 × 90"),
-            DesktopWidgetChoice(WidgetIds.COMPASS, "Pusula", "◇", "170 × 90"),
-            DesktopWidgetChoice(WidgetIds.OBD, "OBD2 verileri", "OBD", "280 × 90"),
-            DesktopWidgetChoice(WidgetIds.STATUS, "Sistem durumu", "▥", "280 × 140"),
-            DesktopWidgetChoice(WidgetIds.DOCK, "Uygulama dock'u", "•••", "340 × 76")
-        )
+        WidgetRegistry.desktopEntries().map { entry ->
+            DesktopWidgetChoice(
+                id = entry.desktopId,
+                title = entry.displayName,
+                symbol = entry.symbol,
+                size = "${entry.baseWidthDp.roundToInt()} × ${entry.baseHeightDp.roundToInt()}"
+            )
+        }
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {

@@ -1,6 +1,8 @@
 package app.vela.carlauncher.desktop
 
+import app.vela.carlauncher.widgets.WidgetRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -92,6 +94,53 @@ class WorkspaceGridTest {
             .getValue(WidgetIds.CLOCK)
         assertEquals(25f, result.dx, 0.001f)
         assertEquals(33f, result.dy, 0.001f)
+    }
+
+    @Test
+    fun baseSizesComeFromTheWidgetRegistry() {
+        // Tek kaynak: bu tablo WidgetRegistry'de yasar. Degerler degisirse masaustu
+        // yerlesimi de degisir; bu test ikisinin ayrismasini engeller.
+        val expected = mapOf(
+            WidgetIds.CLOCK to (260f to 100f),
+            WidgetIds.STATUS to (280f to 140f),
+            WidgetIds.SPEEDOMETER to (240f to 160f),
+            WidgetIds.MUSIC to (300f to 160f),
+            WidgetIds.COMBINED to (340f to 120f),
+            WidgetIds.WEATHER to (170f to 90f),
+            WidgetIds.COMPASS to (170f to 90f),
+            WidgetIds.OBD to (280f to 90f),
+            WidgetIds.DOCK to (340f to 76f)
+        )
+        expected.forEach { (id, size) ->
+            assertEquals("$id dogal boyutu", size, WorkspaceGrid.size(id))
+            assertNotNull("$id kayit defterinde yok", WidgetRegistry.byDesktopId(id))
+        }
+        // Ayni turden ikinci kopya da ayni boyutu alir.
+        assertEquals(260f to 100f, WorkspaceGrid.size("clock#second"))
+        // Uygulama kisayolu ayri boyut kullanir.
+        assertEquals(80f to 96f, WorkspaceGrid.size(WidgetIds.APP_PREFIX + "com.example"))
+        // Bilinmeyen kimlik guvenli varsayilana duser.
+        assertEquals(280f to 140f, WorkspaceGrid.size("bilinmeyen"))
+    }
+
+    @Test
+    fun desktopRegistryIdsAreUniqueAndSized() {
+        val entries = WidgetRegistry.desktopEntries()
+        assertTrue(entries.size >= 9)
+        val ids = entries.map { it.desktopId }
+        assertEquals(ids.size, ids.toSet().size)
+        assertTrue(entries.all { it.baseWidthDp > 0f && it.baseHeightDp > 0f })
+        // Secicide gorunen her widget masaustune eklenebilmeli.
+        assertTrue(entries.all { WidgetRegistry.baseSize(it.desktopId) != null })
+    }
+
+    @Test
+    fun spanUsesRegistryBaseSize() {
+        val grid = CellGrid.build(1000f, 500f, cols = 10, rows = 5)
+        val (sx, sy) = CellGrid.spanOf(WidgetIds.MUSIC, grid)
+        // 300x160 dp / 100x100 hucre -> 3x2
+        assertEquals(3, sx)
+        assertEquals(2, sy)
     }
 
 }
