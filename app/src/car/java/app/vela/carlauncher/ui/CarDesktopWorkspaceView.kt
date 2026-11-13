@@ -462,9 +462,25 @@ fun CarDesktopWorkspaceView(
                                         )
                                     },
                                     onPageTarget = { page -> currentPage = page },
-                                    pageShiftTarget = if (isDraggingThis) {
-                                        (currentPage - placement.page) * workspaceWidth
-                                    } else 0f,
+                                    // Suruklenen widget kendi sayfasinin diliminde cizilir.
+                                    // Pager hedef sayfaya kayarken widget'in ekranda sabit
+                                    // kalmasi icin pager'in GERCEK ofseti kadar (dp) geri
+                                    // kaydirilir. Ofset pagerState'ten okunur: dongunun
+                                    // verdigi hedef degil, animasyonun o anki degeri
+                                    // kullanilir; boylece widget parmaktan kopmaz.
+                                    pageShiftDp = if (isDraggingThis) {
+                                        {
+                                            // Sayfa i'nin ekrandaki x'i (i - pos) * genislik'tir.
+                                            // Widget'in ekranda sabit kalmasi icin:
+                                            //   (placement.page - pos) * w + dx + shift = dx
+                                            //   => shift = (pos - placement.page) * w
+                                            val pos = pagerState.currentPage.toFloat() +
+                                                pagerState.currentPageOffsetFraction
+                                            (pos - placement.page) * workspaceWidth
+                                        }
+                                    } else {
+                                        { 0f }
+                                    },
                                     workspaceWidth = workspaceWidth,
                                     workspaceHeight = workspaceHeight,
                                     onRemove = {

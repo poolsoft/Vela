@@ -1,9 +1,6 @@
 package app.vela.carlauncher.desktop
 
 import androidx.compose.foundation.clickable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -114,10 +111,12 @@ fun MovableWidget(
     // Hedef sayfa kabul edildi: calisma alani o sayfayi gosterir (surukleme sirasinda
     // gorunur sayfa degisir, boylece kullanicinin bos alanlari gorebilir).
     onPageTarget: (Int) -> Unit = {},
-    // Surukleme sirasinda widget'in gorunur sayfaya kaydirilma miktari (dp). Widget kendi
-    // sayfasi icinde cizilmeye devam eder (surukleme durumu korunur); bu kaydirma yalnizca
-    // gorseldir ve parmagin altinda yuzmesini saglar.
-    pageShiftTarget: Float = 0f,
+    // Surukleme sirasinda widget'in ekranda sabit kalmasi icin pager kaydirma ofisini
+    // telafi eden dp kaymasi. SAGLAYICI pager'in GERCEK ofsetini okur (currentPage +
+    // currentPageOffsetFraction); lambda oldugu icin her olcumde yeniden okunur ve widget
+    // parmaktan kopmaz. (Eski surumde hedef sayfa farki ayri bir spring ile animasyona
+    // giriyordu; pager'in animasyonuyla uyusmayinca widget geride kaliyordu.)
+    pageShiftDp: () -> Float = { 0f },
     onRemove: (() -> Unit)? = null,
     onSettings: (() -> Unit)? = null,
     // true: birakma kabul edildi. false: hedefte yer yok, widget eski yerine doner.
@@ -151,6 +150,7 @@ fun MovableWidget(
     val draggingCallback by rememberUpdatedState(onDragging)
     val dropAllowed by rememberUpdatedState(canDrop)
     val pageTarget by rememberUpdatedState(onPageTarget)
+    val pageShiftDp by rememberUpdatedState(pageShiftDp)
     // Widget composition'i surukleme sirasinda elden cikarilirsa (sayfa degisimi, edit modu
     // kapanmasi, widget silinmesi) ust katmandaki "surukleniyor" bayragi takili kalmasin;
     // aksi halde pager kalici olarak kilitlenir.
@@ -303,16 +303,14 @@ fun MovableWidget(
     val cellGap = if (gridForCompose != null) CELL_GAP_DP else 0f
     val frameWidth = (currentPixelWidth - cellGap * 2f).coerceAtLeast(1f)
     val frameHeight = (currentPixelHeight - cellGap * 2f).coerceAtLeast(1f)
-    // Sayfa degisiminde widget parmagin altinda kalsin: kendi sayfasi icinde cizilmeye devam
-    // eder (surukleme durumu korunur) ama gorunur sayfaya gorsel olarak kaydirilir. Pager'in
-    // kendi yay animasyonuyla benzer davranir ki iki hareket ust uste binmesin.
-    val pageShift by animateFloatAsState(
-        targetValue = pageShiftTarget,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        )
-    )
+    // Sayfa takibi: widget kendi sayfasinin diliminde cizilir; pager ne kadar kaydiysa
+    // (px) o kadar geri kaydirilir. SAGLAYICI pager'in gercek ofsetini okudugu icin widget
+    // her karede parmagin altinda kalir.
+    //
+    // ONEMLI: burada ayri bir animasyon KULLANILMAZ. Onceki surumde pageShift kendi
+    // basina spring ile animasyona griyor, pager ise kendi animasyonuyla kayiyordu; iki
+    // farkli sure/hiz widget'i parmaktan koparip geride birakiyordu.
+    val pageShift = pageShiftDp()
     val renderX = (dx + cellGap).coerceIn(0f, (workspaceWidth - frameWidth).coerceAtLeast(0f)) + pageShift
     val renderY = (dy + cellGap).coerceIn(0f, (workspaceHeight - frameHeight).coerceAtLeast(0f))
     // Serbest (grid'siz) modda icerik taban olcusunde cizilir ve olceklenir.
