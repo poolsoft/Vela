@@ -1,6 +1,8 @@
 package app.vela.carlauncher.widgets
 
 import app.vela.carlauncher.desktop.WidgetIds
+import app.vela.carlauncher.legacy.BaseWidget
+import app.vela.carlauncher.legacy.GenericWidget
 
 /**
  * Dinamik Widget Kayit ve Katalog Sistemi.
@@ -253,33 +255,5 @@ object WidgetRegistry {
     }
 }
 
-/**
- * Dinamik widget veri tutucusu
- */
-class GenericWidget(
-    id: String,
-    typeId: String,
-    title: String,
-    size: WidgetSize = WidgetSize.MEDIUM,
-    pageIndex: Int = 0,
-    cellX: Int = -1,
-    cellY: Int = -1,
-    spanX: Int = 1,
-    spanY: Int = 1,
-    appWidgetId: Int = -1,
-    packageName: String? = null,
-    customConfig: String? = null
-) : BaseWidget(
-    id = id,
-    typeId = typeId,
-    title = title,
-    size = size,
-    pageIndex = pageIndex,
-    cellX = cellX,
-    cellY = cellY,
-    spanX = spanX,
-    spanY = spanY,
-    appWidgetId = appWidgetId,
-    packageName = packageName,
-    customConfig = customConfig
-)
+// GenericWidget artik legacy/BaseWidget.kt'de yasar (yalnizca cagrilmayan eski sistem
+// kullanir). Katalogun kendisi (kayit + boyut tablosu) burada, canli kalir.
