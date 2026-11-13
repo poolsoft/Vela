@@ -8,6 +8,7 @@ import android.os.StatFs
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -65,8 +66,19 @@ object DeviceStatsReader {
     }
 }
 
+/**
+ * Cihaz durumu widget'i.
+ *
+ * scale: cerceve olcegine gore yazi/simbol olcegi. Hucre modunda masaustu icerige
+ * olcek uygulamak yerine gercek boyutu verdigi icin (MovableWidget), kart kendini
+ * yeni boyuta gore yeniden duzenler; scale bunu saglar.
+ */
 @Composable
-fun StatusWidgetView(modifier: Modifier = Modifier, backgroundColor: Color = Color(0xF0141624)) {
+fun StatusWidgetView(
+    modifier: Modifier = Modifier,
+    backgroundColor: Color = Color(0xF0141624),
+    scale: Float = 1f
+) {
     val context = LocalContext.current
     val stats by produceState(initialValue = DeviceStatsReader.read(context)) {
         while (true) {
@@ -83,38 +95,46 @@ fun StatusWidgetView(modifier: Modifier = Modifier, backgroundColor: Color = Col
         modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    horizontal = (16 * scale).dp,
+                    vertical = (12 * scale).dp
+                ),
+            verticalArrangement = Arrangement.SpaceEvenly
         ) {
             StatRow(
                 icon = Icons.Default.BatteryFull,
-                text = if (stats.batteryPercent in 0..100) "${stats.batteryPercent}%" else "100% (Arac)"
+                text = if (stats.batteryPercent in 0..100) "${stats.batteryPercent}%" else "100% (Arac)",
+                scale = scale
             )
             StatRow(
                 icon = Icons.Default.Storage,
-                text = "${toGb(stats.storageFreeBytes)} bos / ${toGb(stats.storageTotalBytes)}"
+                text = "${toGb(stats.storageFreeBytes)} bos / ${toGb(stats.storageTotalBytes)}",
+                scale = scale
             )
             StatRow(
                 icon = Icons.Default.Memory,
-                text = "RAM: ${toGb(stats.memoryUsedBytes)} / ${toGb(stats.memoryTotalBytes)}"
+                text = "RAM: ${toGb(stats.memoryUsedBytes)} / ${toGb(stats.memoryTotalBytes)}",
+                scale = scale
             )
         }
     }
 }
 
 @Composable
-private fun StatRow(icon: ImageVector, text: String) {
+private fun StatRow(icon: ImageVector, text: String, scale: Float = 1f) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy((8 * scale).dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = Color(0xFF00E5FF),
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size((16 * scale).dp)
         )
-        Text(text = text, color = Color.White, fontSize = 13.sp)
+        Text(text = text, color = Color.White, fontSize = (13 * scale).sp, maxLines = 1)
     }
 }
 

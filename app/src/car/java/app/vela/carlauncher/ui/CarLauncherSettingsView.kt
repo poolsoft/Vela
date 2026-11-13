@@ -671,6 +671,11 @@ private fun CarWidgetsSettingsScreen(
     val snapToGrid by CarLauncherSettings.workspaceSnapToGrid.collectAsState()
     val swipeThreshold by CarLauncherSettings.workspaceSwipeThreshold.collectAsState()
     val indicatorSeconds by CarLauncherSettings.workspaceIndicatorSeconds.collectAsState()
+    val gridLandscapeCols by CarLauncherSettings.workspaceGridLandscapeCols.collectAsState()
+    val gridLandscapeRows by CarLauncherSettings.workspaceGridLandscapeRows.collectAsState()
+    val gridPortraitCols by CarLauncherSettings.workspaceGridPortraitCols.collectAsState()
+    val gridPortraitRows by CarLauncherSettings.workspaceGridPortraitRows.collectAsState()
+    val freeSnap by CarLauncherSettings.workspaceFreeSnap.collectAsState()
 
     Scaffold(
         topBar = {
@@ -695,11 +700,57 @@ private fun CarWidgetsSettingsScreen(
         ) {
             SettingsGroup(title = "Masaüstü (Desktop) Modu") {
                 ToggleRow(
-                    label = "Grid'e Yapış ve Çakışmayı Önle",
-                    hint = "Taşınan widget'ları boş hücrelere yerleştirir; kapalıyken serbest yerleşim kullanılır",
+                    label = "Grid Modu (Launcher Yerleşimi)",
+                    hint = "Açık: widget'lar hücre grid'ine oturur, sürüklerken hedef hücre görünür, dolu hücreye bırakınca yer değiştirir (swap). Kapalı: serbest mod — widget'lar istenilen konum ve boyutta durur",
                     checked = snapToGrid,
                     onCheckedChange = { CarLauncherSettings.setWorkspaceSnapToGrid(it) }
                 )
+                if (snapToGrid) {
+                    GroupDivider()
+                    SliderRow(
+                        label = "Yatay Grid Kolon Sayısı",
+                        detail = "Yatay ekranda genişlik başına düşen hücre sayısı",
+                        value = gridLandscapeCols.toFloat(),
+                        valueRange = 4f..14f,
+                        unit = " kolon",
+                        onValueChange = { CarLauncherSettings.setWorkspaceGridLandscapeCols(it.roundToInt()) }
+                    )
+                    GroupDivider()
+                    SliderRow(
+                        label = "Yatay Grid Satır Sayısı",
+                        detail = "Yatay ekranda yükseklik başına düşen hücre sayısı",
+                        value = gridLandscapeRows.toFloat(),
+                        valueRange = 3f..8f,
+                        unit = " satır",
+                        onValueChange = { CarLauncherSettings.setWorkspaceGridLandscapeRows(it.roundToInt()) }
+                    )
+                    GroupDivider()
+                    SliderRow(
+                        label = "Dikey Grid Kolon Sayısı",
+                        detail = "Dikey (dönen ekran) modda genişlik başına düşen hücre sayısı",
+                        value = gridPortraitCols.toFloat(),
+                        valueRange = 3f..8f,
+                        unit = " kolon",
+                        onValueChange = { CarLauncherSettings.setWorkspaceGridPortraitCols(it.roundToInt()) }
+                    )
+                    GroupDivider()
+                    SliderRow(
+                        label = "Dikey Grid Satır Sayısı",
+                        detail = "Dikey (dönen ekran) modda yükseklik başına düşen hücre sayısı",
+                        value = gridPortraitRows.toFloat(),
+                        valueRange = 4f..12f,
+                        unit = " satır",
+                        onValueChange = { CarLauncherSettings.setWorkspaceGridPortraitRows(it.roundToInt()) }
+                    )
+                } else {
+                    GroupDivider()
+                    ToggleRow(
+                        label = "Serbest Modda 16 dp Yerleşim Kılavuzu",
+                        hint = "Grid modu kapalıyken geçerlidir: widget'lar 16 dp yerleşime yapışır ve çakışmalar en yakın boş alana taşınarak önlenir (eski 'Grid'e Yapış' davranışı). Kapalıyken tamamen serbest yerleşim kullanılır",
+                        checked = freeSnap,
+                        onCheckedChange = { CarLauncherSettings.setWorkspaceFreeSnap(it) }
+                    )
+                }
                 GroupDivider()
                 ToggleRow(
                     label = "Masaüstü Modunu Döngüye Dahil Et",

@@ -23,7 +23,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
-        app:tint="#FFFFFF"
+        android:tint="#FFFFFF"
         android:visibility="visible" />
 
     <!-- Shortcuts RecyclerView (Center, fills vertical space) -->
@@ -45,14 +45,14 @@
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:background="?android:attr/selectableItemBackgroundBorderless"
-        android:contentDescription="Toggle Desktop"
-        android:padding="12dp"
+        android:contentDescription="@string/car_dock_desktop_mode_desc"
+        android:padding="11dp"
         android:scaleType="fitCenter"
         android:src="@drawable/ic_desktop_mode"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:tint="#88FFFFFF" />
+        android:tint="@color/cl_dock_icon" />
 
     <!-- Layout Toggle Button (Bottom) - Uses sort_by_size (Layout/Grid) -->
     <ImageButton
@@ -68,7 +68,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
-        app:tint="#FFFFFF"
+        android:tint="#FFFFFF"
         android:visibility="gone" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

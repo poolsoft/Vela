@@ -14,14 +14,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
@@ -52,13 +51,17 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material.icons.filled.Widgets
 import app.vela.ui.VelaWindowAlertDialog as AlertDialog
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -73,6 +76,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,7 +86,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -90,6 +93,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import app.vela.carlauncher.desktop.CarAppWidgetHostController
+import app.vela.carlauncher.desktop.CellGrid
 import app.vela.carlauncher.desktop.DesktopWidgetLayoutStore
 import app.vela.carlauncher.desktop.HostedAppWidgetView
 import app.vela.carlauncher.desktop.LocalCarAppWidgetHost
@@ -146,7 +150,11 @@ fun CarDesktopWorkspaceView(
     val snapToGrid by CarLauncherSettings.workspaceSnapToGrid.collectAsState()
     val swipeThresholdFraction by CarLauncherSettings.workspaceSwipeThreshold.collectAsState()
     val indicatorSeconds by CarLauncherSettings.workspaceIndicatorSeconds.collectAsState()
-    val density = LocalDensity.current.density
+    // Perf: hiz telemetrisi ve medya durumu sik degisir; workspace kokunde okunurlarsa
+    // tum pager ve widget'lar recompose olurdu. rememberUpdatedState ile deger yalnizca
+    // icerigini cizen widget lambda'sinda okunur; recompose o widget'la sinirli kalir.
+    val latestTelemetri by rememberUpdatedState(telemetri)
+    val latestMedya by rememberUpdatedState(medya)
 
     // Sistem Duvar Kagidinin arkadan gorunebilmesi icin Activity pencere bayragi
     LaunchedEffect(Unit) {
@@ -164,6 +172,7 @@ fun CarDesktopWorkspaceView(
     var isEditMode by remember { mutableStateOf(false) }
     var showWidgetPicker by remember { mutableStateOf(false) }
     var showWallpaperDialog by remember { mutableStateOf(false) }
+    var showPageDeleteConfirm by remember { mutableStateOf(false) }
     var currentPage by remember { mutableStateOf(0) }
     var draggingWidgetId by remember { mutableStateOf<String?>(null) }
     var selectedWidgetId by remember { mutableStateOf<String?>(null) }
@@ -240,15 +249,125 @@ fun CarDesktopWorkspaceView(
                     )
                 }
         ) {
+            // BoxWithConstraints maxWidth/maxHeight zaten dp cinsindendir; density'ye bolmek
+            // calisma alanini kuculturdu (widget'larin tek sayfaya dusmesinin ve ust uste
+            // binmesinin kok nedeni buydu). Yerlesim matematigi (SNAP_STEP_DP, base boyutlar)
+            // dp uzerinde calisir; burada donusum YAPILMAZ.
             val workspaceWidth = maxWidth.value
             val workspaceHeight = maxHeight.value
             val isPortrait = workspaceHeight > workspaceWidth
             LaunchedEffect(isPortrait) {
                 layoutStore.updateOrientation(isPortrait)
             }
-            val resolvedLayout = WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid)
+            // Grid modu: snap ayari acikken Launcher tarzi hucre grid'i kullanilir;
+            // kapaliyken serbest float mod devreye girer. Hucre sayisi ayarlardan
+            // yon bagimli olarak okunur (donen ekranlarda dik/yatay farkli grid).
+            val gridLandscapeCols by CarLauncherSettings.workspaceGridLandscapeCols.collectAsState()
+            val gridLandscapeRows by CarLauncherSettings.workspaceGridLandscapeRows.collectAsState()
+            val gridPortraitCols by CarLauncherSettings.workspaceGridPortraitCols.collectAsState()
+            val gridPortraitRows by CarLauncherSettings.workspaceGridPortraitRows.collectAsState()
+            // Serbest mod davranisi: eski "grid'e yapis ve cakismayi onle" gorevi.
+            // Grid modu kapaliyken gecerlidir.
+            val freeSnap by CarLauncherSettings.workspaceFreeSnap.collectAsState()
+            val gridCols = if (isPortrait) gridPortraitCols else gridLandscapeCols
+            val gridRows = if (isPortrait) gridPortraitRows else gridLandscapeRows
+            // Olcu henuz gelmemisse (0) hucre grid'i kurulmaz; kayitsiz garapan yazim engellenir.
+            val gridHealthy = workspaceWidth > 0f && workspaceHeight > 0f
+            val cellGrid = if (gridHealthy) {
+                remember(workspaceWidth, workspaceHeight, gridCols, gridRows) {
+                    CellGrid.build(workspaceWidth, workspaceHeight, gridCols, gridRows)
+                }
+            } else {
+                null
+            }
+            // Perf: resolve O(hucre x widget) maliyetlidir; telemetri/medya guncellemelerinde
+            // yeniden calismamasi icin girislere bagli olarak cache'lenir.
+            val resolvedLayout = remember(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid, freeSnap, cellGrid) {
+                if (snapToGrid && cellGrid != null) {
+                    CellGrid.solve(activeWidgets, layout, cellGrid)
+                } else {
+                    // Serbest mod: freeSnap acikken eski davranis (16dp yapisma + cakisma onleme),
+                    // kapaliyken tamamen serbest yerlesim.
+                    WorkspaceGrid.resolve(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid = freeSnap)
+                }
+            }
             val lastPage = maxOf(pageCount - 1, resolvedLayout.values.maxOfOrNull { it.page } ?: 0)
             LaunchedEffect(lastPage) { layoutStore.ensurePageCount(lastPage + 1) }
+            // Grid modunda birakma kurallari (Launcher davranisi):
+            // - Hedef hucre bos ise birakilir.
+            // - Hedefi tek bir widget dolduruyorsa ve o widget eski bolgumuzde sigiyorsa
+            //   yer degistirirler (swap).
+            // - Yer yoksa birakma REDDEDILIR: widget eski konumuna/sayfasina geri doner
+            //   (ust uste binme olmaz).
+            fun occupantOf(id: String, target: WidgetPlacement): Map.Entry<String, WidgetPlacement>? =
+                resolvedLayout.entries.firstOrNull { (wid, pl) ->
+                    wid != id && pl.page == target.page &&
+                        pl.cellX < target.cellX + target.spanX && pl.cellX + pl.spanX > target.cellX &&
+                        pl.cellY < target.cellY + target.spanY && pl.cellY + pl.spanY > target.cellY
+                }
+
+            fun oldRegionClear(id: String, otherId: String, old: WidgetPlacement): Boolean =
+                resolvedLayout.entries.none { (wid, pl) ->
+                    wid != id && wid != otherId && pl.page == old.page &&
+                        pl.cellX < old.cellX + old.spanX && pl.cellX + old.spanX > old.cellX &&
+                        pl.cellY < old.cellY + old.spanY && pl.cellY + old.spanY > old.cellY
+                }
+
+            /** Birakma kabul edilir mi? (yazim yapmayan saf kontrol) */
+            fun placementAllowed(id: String, target: WidgetPlacement): Boolean {
+                if (!snapToGrid || cellGrid == null || target.cellX < 0 || target.spanX <= 0 || target.spanY <= 0) return true
+                val old = resolvedLayout[id] ?: return true
+                val occupant = occupantOf(id, target) ?: return true
+                val other = occupant.value
+                val fits = other.spanX <= old.spanX && other.spanY <= old.spanY
+                return fits && oldRegionClear(id, occupant.key, old)
+            }
+
+            /** Bu sayfada bu boyutta widget icin (swap dahil) yer var mi? */
+            fun pageHasRoom(id: String, page: Int, spanX: Int, spanY: Int): Boolean {
+                val grid = cellGrid ?: return true
+                if (!snapToGrid) return true
+                val base = resolvedLayout[id] ?: return true
+                val sx = spanX.coerceIn(1, grid.cols)
+                val sy = spanY.coerceIn(1, grid.rows)
+                for (cy in 0..(grid.rows - sy)) {
+                    for (cx in 0..(grid.cols - sx)) {
+                        val candidate = base.copy(
+                            page = page,
+                            cellX = cx,
+                            cellY = cy,
+                            dx = cx * grid.cellWidth,
+                            dy = cy * grid.cellHeight,
+                            spanX = sx,
+                            spanY = sy
+                        )
+                        if (placementAllowed(id, candidate)) return true
+                    }
+                }
+                return false
+            }
+
+            fun commitPlacement(id: String, target: WidgetPlacement): Boolean {
+                if (!snapToGrid) {
+                    layoutStore.setPlacement(id, target)
+                    return true
+                }
+                if (!placementAllowed(id, target)) return false
+                val old = resolvedLayout[id]
+                val occupant = occupantOf(id, target)
+                val grid = cellGrid
+                if (old == null || old.cellX < 0 || target.cellX < 0 || grid == null || occupant == null) {
+                    layoutStore.setPlacement(id, target)
+                    return true
+                }
+                val origin = grid.originDp(old.cellX, old.cellY)
+                layoutStore.setPlacement(id, target)
+                layoutStore.setPlacement(
+                    occupant.key,
+                    occupant.value.copy(page = old.page, cellX = old.cellX, cellY = old.cellY, dx = origin.first, dy = origin.second)
+                )
+                return true
+            }
             LaunchedEffect(lastPage, isEditMode) {
                 if (!isEditMode && currentPage > lastPage) currentPage = lastPage
             }
@@ -262,9 +381,32 @@ fun CarDesktopWorkspaceView(
             // 0. MASAUSTU ARKA PLANI (Sistem Duvar Kagidi veya Tema)
             DesktopWallpaperView(modifier = Modifier.fillMaxSize())
 
+            // Edit modunda yerlesim kilavuzunu gorunur kilar. Grid modunda cizgiler hucre
+            // kenarlaridir; serbest snap'te 16dp adim cizgileri cizilir.
+            if (isEditMode && (snapToGrid || freeSnap)) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(0.5f)
+                ) {
+                    val gridStep = if (snapToGrid && cellGrid != null) cellGrid.cellWidth.dp.toPx() else 16.dp.toPx()
+                    val gridStepY = if (snapToGrid && cellGrid != null) cellGrid.cellHeight.dp.toPx() else gridStep
+                    val lineColor = Color(0x12FFFFFF)
+                    var x = 0f
+                    while (x <= size.width) {
+                        drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+                        x += gridStep
+                    }
+                    var y = 0f
+                    while (y <= size.height) {
+                        drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+                        y += gridStepY
+                    }
+                }
+            }
+
             val totalPages = (lastPage + 1).coerceAtLeast(1)
             val pagerState = rememberPagerState(initialPage = currentPage.coerceIn(0, totalPages - 1)) { totalPages }
-            val coroutineScope = rememberCoroutineScope()
 
             LaunchedEffect(currentPage) {
                 if (pagerState.currentPage != currentPage && currentPage in 0 until totalPages) {
@@ -276,34 +418,67 @@ fun CarDesktopWorkspaceView(
                     currentPage = pagerState.currentPage
                 }
             }
+            // Guvenlik agi: edit modundan cikilinca takili kalan surukleme bayragi
+            // pager'i kalici olarak kilitlemesin.
+            LaunchedEffect(isEditMode, lastPage) {
+                if (!isEditMode) draggingWidgetId = null
+            }
 
             HorizontalPager(
                 state = pagerState,
-                userScrollEnabled = !isEditMode && draggingWidgetId == null,
+                userScrollEnabled = draggingWidgetId == null,
+                // Surukleme sirasinda butun sayfalar canli tutulur: widget kendi sayfasi
+                // icinde cizilmeye devam ettigi icin surukleme durumu kaybolmaz, pager ise
+                // hedef sayfayi gostererek bos alanlari gorunur kilir.
+                beyondViewportPageCount = if (draggingWidgetId == null) 1 else maxOf(lastPage, 1),
                 modifier = Modifier.fillMaxSize()
             ) { pageIndex ->
-                Box(modifier = Modifier.fillMaxSize()) {
+                val draggingHere = draggingWidgetId != null &&
+                    resolvedLayout[draggingWidgetId]?.page == pageIndex
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        // Suruklenen widget'in sayfasi ustte cizilmeye calisilir; pager
+                        // sayfalar arasi cizim sirasini garanti etmedigi icin asil koruma
+                        // birakmanin yalnizca bos hucreye yapabilmesidir.
+                        .zIndex(if (draggingHere) 1f else 0f)
+                ) {
                     activeWidgets.forEach { widgetId ->
                         key(widgetId) {
                             val placement = resolvedLayout[widgetId]
-                            if (placement != null && (placement.page == pageIndex || (draggingWidgetId == widgetId && pageIndex == currentPage))) {
+                            val isDraggingThis = draggingWidgetId == widgetId
+                            if (placement != null && placement.page == pageIndex) {
                                 MovableWidget(
                                     placement = placement,
+                                    // NOT: Surukleme sirasinda diger widget'lara alpha/graphicsLayer
+                                    // uygulamayin: AppWidgetHostView (AndroidView) icerigi
+                                    // alpha < 1 ile bazi surumlerde hic cizilmiyor.
                                     modifier = Modifier.zIndex(if (draggingWidgetId == widgetId) 100f else 0f),
                                     resizable = true,
                                     dragViaHandle = true,
                                     showControls = isEditMode,
-                                    snapToGrid = snapToGrid,
+                                    snapToGrid = snapToGrid || freeSnap,
+                                    grid = if (snapToGrid) cellGrid else null,
+                                    minSpanX = cellGrid?.let { CellGrid.spanOf(WidgetIds.type(widgetId), it).first } ?: 1,
+                                    minSpanY = cellGrid?.let { CellGrid.spanOf(WidgetIds.type(widgetId), it).second } ?: 1,
                                     onEnterEdit = { isEditMode = true },
-                                    onDragging = { draggingWidgetId = if (it) widgetId else null },
-                                    onPageEdge = { direction ->
-                                        val targetPage = (currentPage + direction).coerceIn(0, lastPage)
-                                        if (targetPage != currentPage) {
-                                            currentPage = targetPage
-                                            coroutineScope.launch { pagerState.animateScrollToPage(targetPage) }
-                                        }
-                                        targetPage
+                                    onDragging = { isDragging ->
+                                        draggingWidgetId = if (isDragging) widgetId else null
+                                        if (isDragging) showPageIndicator = true
                                     },
+                                    // Parmak kenarda beklenince hedef sayfa adimlar; sayfa
+                                    // gercekten kaydirilir ve widget parmagin altinda kalir.
+                                    // Hedef sayfada yer yoksa adim atlanmaz (kirmizi cerceve).
+                                    onPageEdge = { from, direction ->
+                                        (from + direction).coerceIn(0, lastPage)
+                                    },
+                                    canTakePage = { page, sx, sy ->
+                                        pageHasRoom(widgetId, page, sx, sy)
+                                    },
+                                    onPageTarget = { page -> currentPage = page },
+                                    pageShiftTarget = if (isDraggingThis) {
+                                        (currentPage - placement.page) * workspaceWidth
+                                    } else 0f,
                                     workspaceWidth = workspaceWidth,
                                     workspaceHeight = workspaceHeight,
                                     onRemove = {
@@ -315,7 +490,28 @@ fun CarDesktopWorkspaceView(
                                     },
                                     onSettings = { selectedWidgetId = widgetId },
                                     onCommit = { newPlacement ->
-                                        layoutStore.setPlacement(widgetId, newPlacement)
+                                        // Kabul edilirse yerlesir (farkli sayfaya tasindiysa oraya
+                                        // gecilir); reddedilirse widget kendi konumunda kalir ve
+                                        // kirmizi cerceve yanip soner.
+                                        val accepted = commitPlacement(widgetId, newPlacement)
+                                        if (accepted && newPlacement.page != currentPage) {
+                                            currentPage = newPlacement.page
+                                        }
+                                        accepted
+                                    },
+                                    canDrop = { page, cellX, cellY, spanX, spanY ->
+                                        placementAllowed(
+                                            widgetId,
+                                            (resolvedLayout[widgetId] ?: WidgetPlacement()).copy(
+                                                page = page,
+                                                dx = 0f,
+                                                dy = 0f,
+                                                cellX = cellX,
+                                                cellY = cellY,
+                                                spanX = spanX,
+                                                spanY = spanY
+                                            )
+                                        )
                                     }
                                 ) {
                                     CompositionLocalProvider(LocalDesktopCardColor provides Color(placement.backgroundColor).let { it.copy(alpha = it.alpha * placement.opacity) }) {
@@ -323,8 +519,8 @@ fun CarDesktopWorkspaceView(
                                             widgetId = WidgetIds.type(widgetId),
                                             saatMetni = saatMetni,
                                             tarihMetni = tarihMetni,
-                                            telemetri = telemetri,
-                                            medya = medya,
+                                            telemetri = latestTelemetri,
+                                            medya = latestMedya,
                                             onOynatDuraklat = onOynatDuraklat,
                                             onSonraki = onSonraki,
                                             onOnceki = onOnceki,
@@ -339,6 +535,8 @@ fun CarDesktopWorkspaceView(
                 }
             }
 
+            // Surukleme sirasinda hedef sayfa nokta gostergesinde isaretlenir:
+            // camgobegi = oraya birakilabilir, kirmizi = yer yok (o sayfaya gecilmez).
             AnimatedVisibility(
                 visible = showPageIndicator,
                 enter = fadeIn(), exit = fadeOut(),
@@ -357,13 +555,13 @@ fun CarDesktopWorkspaceView(
                                     .size(if (page == currentPage) 10.dp else 7.dp)
                                     .clip(CircleShape)
                                     .background(if (page == currentPage) Color.White else Color(0x66FFFFFF))
-                                    .clickable(enabled = isEditMode) { currentPage = page }
+                                    .clickable(enabled = isEditMode && draggingWidgetId == null) { currentPage = page }
                             )
                         }
                         if (isEditMode) item {
                             Icon(
                                 Icons.Default.Add, "Yeni sayfa", tint = ClPrimary,
-                                modifier = Modifier.size(22.dp).clickable {
+                                modifier = Modifier.size(22.dp).clickable(enabled = draggingWidgetId == null) {
                                     currentPage = layoutStore.addPage()
                                 }
                             )
@@ -371,14 +569,30 @@ fun CarDesktopWorkspaceView(
                         if (isEditMode && lastPage > 0) item {
                             Icon(
                                 Icons.Default.Delete, "Sayfayı sil", tint = Color(0xFFFF6B6B),
-                                modifier = Modifier.size(22.dp).clickable {
-                                    val nextPage = (currentPage - 1).coerceAtLeast(0)
-                                    if (layoutStore.removePage(currentPage)) currentPage = nextPage
-                                }
+                                modifier = Modifier.size(22.dp).clickable { showPageDeleteConfirm = true }
                             )
                         }
                     }
                 }
+            }
+
+            // Sayfa silme onayi: kazara dokunmada widget'larin dagilmamasi icin once sorulur.
+            if (showPageDeleteConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showPageDeleteConfirm = false },
+                    title = { Text("Sayfa silinsin mi?") },
+                    text = { Text("Bu sayfadaki widget'lar bir onceki sayfaya tasinir. Islem geri alinamaz.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showPageDeleteConfirm = false
+                            val nextPage = (currentPage - 1).coerceAtLeast(0)
+                            if (layoutStore.removePage(currentPage)) currentPage = nextPage
+                        }) { Text("Sil") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showPageDeleteConfirm = false }) { Text("Vazgec") }
+                    }
+                )
             }
 
             // 2. YUZEN KONTROL CUBUGU (Sadece Edit Modunda Gorunur: Ekle / Duvar Kagidi / Sifirla / Kaydet)
@@ -432,9 +646,26 @@ fun CarDesktopWorkspaceView(
                     widgetId = widgetId,
                     placement = resolvedLayout[widgetId] ?: layout[widgetId] ?: WidgetPlacement(page = currentPage),
                     pageCount = lastPage + 1,
+                    gridMode = snapToGrid,
+                    pageHasRoom = { page ->
+                        val pl = resolvedLayout[widgetId]
+                        pl == null || pageHasRoom(
+                            widgetId,
+                            page,
+                            pl.spanX.coerceAtLeast(1),
+                            pl.spanY.coerceAtLeast(1)
+                        )
+                    },
                     providerInfo = widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()?.let(hostController::info),
                     onDismiss = { selectedWidgetId = null },
-                    onSave = { placement -> layoutStore.setPlacement(widgetId, placement); selectedWidgetId = null },
+                    onSave = { placement ->
+                        // Sayfa/boyut degisikligi de birakma kurallarindan gecer: hedef
+                        // sayfada yer yoksa yazilmaz (widget eski sayfasinda kalir).
+                        if (commitPlacement(widgetId, placement) && placement.page != currentPage) {
+                            currentPage = placement.page
+                        }
+                        selectedWidgetId = null
+                    },
                     onConfigure = { info, id ->
                         runCatching {
                             context.startActivity(Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
@@ -466,6 +697,25 @@ fun CarDesktopWorkspaceView(
 // WIDGET CERIK RENDERLARI (KULLANICININ 7-8 WIDGET'I)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Cerceve olcusune gore icerik olcegi.
+ *
+ * Hucre modunda MovableWidget icerige olcek uygulamaz, gercek cerceve olcusunu verir;
+ * kartlar da bu olcegi taban tasarim olculerine gore hesaplayip yazi/simbol boyutlarini
+ * yeniden duzenler. Boylece widget buyudugunde buyutulmus bulanik bir kopya degil,
+ * yeni boyuta gore yerlesen icerik gorunur.
+ *
+ * Serbest (grid'siz) modda icerik sinirsiz olculur (olceklenerek cizilir); bu durumda
+ * taban olcek (1f) kullanilir.
+ */
+private fun androidx.compose.foundation.layout.BoxWithConstraintsScope.cardScale(
+    baseWidthDp: Float,
+    baseHeightDp: Float
+): Float {
+    if (!constraints.hasBoundedWidth || !constraints.hasBoundedHeight) return 1f
+    return minOf(maxWidth.value / baseWidthDp, maxHeight.value / baseHeightDp).coerceIn(0.75f, 2.2f)
+}
+
 @Composable
 private fun RenderDesktopWidgetContent(
     widgetId: String,
@@ -486,7 +736,14 @@ private fun RenderDesktopWidgetContent(
         }
         // 2. SISTEM / CIHAZ DURUMU (PIL, RAM, HAFIZA)
         widgetId == WidgetIds.STATUS -> {
-            StatusWidgetView(modifier = Modifier.size(280.dp, 140.dp), backgroundColor = ClCardBg)
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val s = cardScale(280f, 140f)
+                StatusWidgetView(
+                    modifier = Modifier.fillMaxSize(),
+                    backgroundColor = ClCardBg,
+                    scale = s
+                )
+            }
         }
         // 3. CANLI HIZ GOSTERGESI
         widgetId == WidgetIds.SPEEDOMETER -> {
@@ -529,10 +786,12 @@ private fun RenderDesktopWidgetContent(
         widgetId.startsWith(WidgetIds.AW_PREFIX) -> {
             val awId = widgetId.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()
             if (awId != null) {
+                // Gercek cerceve olcusu verilir: HostedAppWidgetView olcuyu onSizeChanged ile
+                // AppWidgetManager'a bildirir, saglayici widget'i yeni boyuta gore cizer.
                 Surface(
                     color = Color.Transparent,
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.size(width = 280.dp, height = 140.dp)
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     HostedAppWidgetView(appWidgetId = awId, modifier = Modifier.fillMaxSize())
                 }
@@ -543,7 +802,7 @@ private fun RenderDesktopWidgetContent(
                 color = ClCardBg,
                 shape = RoundedCornerShape(16.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-                modifier = Modifier.size(160.dp, 100.dp)
+                modifier = Modifier.fillMaxSize()
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(text = widgetId, color = Color.White, fontSize = 12.sp)
@@ -559,76 +818,85 @@ private fun RenderDesktopWidgetContent(
 
 @Composable
 private fun ClockWidgetCard(saatMetni: String, tarihMetni: String) {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 260.dp, height = 100.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.Center
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // Taban tasarim 260x100 dp; cerceve buyudukce yazilar orantili buyur.
+        val s = cardScale(260f, 100f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Text(
-                text = saatMetni,
-                color = Color.White,
-                fontSize = 42.sp,
-                fontWeight = FontWeight.Light,
-                letterSpacing = 1.sp
-            )
-            Text(
-                text = tarihMetni.replaceFirstChar { it.uppercase() },
-                color = Color(0xFFB0B3C6),
-                fontSize = 13.sp,
-                maxLines = 1
-            )
+            Column(
+                modifier = Modifier.fillMaxSize().padding(horizontal = (16 * s).dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = saatMetni,
+                    color = Color.White,
+                    fontSize = (42 * s).sp,
+                    fontWeight = FontWeight.Light,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = tarihMetni.replaceFirstChar { it.uppercase() },
+                    color = Color(0xFFB0B3C6),
+                    fontSize = (13 * s).sp,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
 
 @Composable
 private fun SpeedometerWidgetCard(telemetri: HizTelemetrisi) {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 240.dp, height = 160.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(240f, 160f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Text(
-                text = "${telemetri.anlikHizKmh}",
-                color = Color.White,
-                fontSize = 52.sp,
-                fontWeight = FontWeight.Black
-            )
-            Text(
-                text = "KM / S",
-                color = ClPrimary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxSize().padding((14 * s).dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = "Pusula: ${telemetri.pusulaYonu.roundToInt()}°",
-                    color = Color(0xFF8E92A8),
-                    fontSize = 11.sp
+                    text = "${telemetri.anlikHizKmh}",
+                    color = Color.White,
+                    fontSize = (52 * s).sp,
+                    fontWeight = FontWeight.Black
                 )
                 Text(
-                    text = "İrtifa: ${telemetri.irtifaMetre.roundToInt()}m",
-                    color = Color(0xFF8E92A8),
-                    fontSize = 11.sp
+                    text = "KM / S",
+                    color = ClPrimary,
+                    fontSize = (11 * s).sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp
                 )
+                Spacer(modifier = Modifier.height((4 * s).dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy((12 * s).dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Pusula: ${telemetri.pusulaYonu.roundToInt()}°",
+                        color = Color(0xFF8E92A8),
+                        fontSize = (11 * s).sp,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "İrtifa: ${telemetri.irtifaMetre.roundToInt()}m",
+                        color = Color(0xFF8E92A8),
+                        fontSize = (11 * s).sp,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
@@ -636,24 +904,27 @@ private fun SpeedometerWidgetCard(telemetri: HizTelemetrisi) {
 
 @Composable
 private fun CombinedDashboardCard(saatMetni: String, tarihMetni: String, telemetri: HizTelemetrisi) {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 340.dp, height = 120.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(340f, 120f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = saatMetni, color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.Bold)
-                Text(text = tarihMetni, color = Color.LightGray, fontSize = 11.sp, maxLines = 1)
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(text = "${telemetri.anlikHizKmh}", color = ClPrimary, fontSize = 44.sp, fontWeight = FontWeight.Black)
-                Text(text = "KM / S", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxSize().padding((16 * s).dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = saatMetni, color = Color.White, fontSize = (38 * s).sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(text = tarihMetni, color = Color.LightGray, fontSize = (11 * s).sp, maxLines = 1)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(text = "${telemetri.anlikHizKmh}", color = ClPrimary, fontSize = (44 * s).sp, fontWeight = FontWeight.Black)
+                    Text(text = "KM / S", color = Color.Gray, fontSize = (10 * s).sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -667,88 +938,91 @@ private fun MusicPlayerWidgetCard(
     onOnceki: () -> Unit,
     onMuzikPaneliAc: () -> Unit
 ) {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier
-            .size(width = 300.dp, height = 160.dp)
-            .clickable { onMuzikPaneliAc() }
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(14.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(300f, 160f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable { onMuzikPaneliAc() }
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            Brush.linearGradient(listOf(Color(0xFF00E5FF), Color(0xFF0072FF)))
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = "♪", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = medya.baslik.ifBlank { "Müzik Çalınmıyor" },
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = medya.sanatci.ifBlank { "Vela Audio" },
-                        color = Color(0xFFB0B3C6),
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxSize().padding((14 * s).dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Surface(
-                    color = Color(0x33FFFFFF),
-                    shape = CircleShape,
-                    modifier = Modifier.size(36.dp).clickable { onOnceki() }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(text = "◀◀", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size((46 * s).dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                Brush.linearGradient(listOf(Color(0xFF00E5FF), Color(0xFF0072FF)))
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "♪", color = Color.White, fontSize = (24 * s).sp, fontWeight = FontWeight.Bold)
                     }
-                }
-
-                Surface(
-                    color = ClPrimary,
-                    shape = CircleShape,
-                    modifier = Modifier.size(46.dp).clickable { onOynatDuraklat() }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (medya.caliyorMu) Icons.Default.Close else Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = Color.Black,
-                            modifier = Modifier.size(24.dp)
+                    Spacer(modifier = Modifier.width((12 * s).dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = medya.baslik.ifBlank { "Müzik Çalınmıyor" },
+                            color = Color.White,
+                            fontSize = (14 * s).sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = medya.sanatci.ifBlank { "Vela Audio" },
+                            color = Color(0xFFB0B3C6),
+                            fontSize = (12 * s).sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Surface(
-                    color = Color(0x33FFFFFF),
-                    shape = CircleShape,
-                    modifier = Modifier.size(36.dp).clickable { onSonraki() }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(text = "▶▶", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Surface(
+                        color = Color(0x33FFFFFF),
+                        shape = CircleShape,
+                        modifier = Modifier.size((36 * s).dp).clickable { onOnceki() }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(text = "◀◀", color = Color.White, fontSize = (11 * s).sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Surface(
+                        color = ClPrimary,
+                        shape = CircleShape,
+                        modifier = Modifier.size((46 * s).dp).clickable { onOynatDuraklat() }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (medya.caliyorMu) Icons.Default.Close else Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.Black,
+                                modifier = Modifier.size((24 * s).dp)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        color = Color(0x33FFFFFF),
+                        shape = CircleShape,
+                        modifier = Modifier.size((36 * s).dp).clickable { onSonraki() }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(text = "▶▶", color = Color.White, fontSize = (11 * s).sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -758,25 +1032,28 @@ private fun MusicPlayerWidgetCard(
 
 @Composable
 private fun WeatherWidgetCard() {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 170.dp, height = 90.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(170f, 90f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Canvas(modifier = Modifier.size(28.dp)) {
-                drawCircle(color = Color(0xFFFFCC00), radius = size.minDimension / 2.2f)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(text = "22°C", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text(text = "Güneşli", color = Color.LightGray, fontSize = 11.sp)
+            Row(
+                modifier = Modifier.fillMaxSize().padding((12 * s).dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Canvas(modifier = Modifier.size((28 * s).dp)) {
+                    drawCircle(color = Color(0xFFFFCC00), radius = size.minDimension / 2.2f)
+                }
+                Spacer(modifier = Modifier.width((12 * s).dp))
+                Column {
+                    Text(text = "22°C", color = Color.White, fontSize = (22 * s).sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Güneşli", color = Color.LightGray, fontSize = (11 * s).sp)
+                }
             }
         }
     }
@@ -784,56 +1061,62 @@ private fun WeatherWidgetCard() {
 
 @Composable
 private fun CompassWidgetCard(telemetri: HizTelemetrisi) {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 170.dp, height = 90.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(170f, 90f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Canvas(modifier = Modifier.size(28.dp)) {
-                drawCircle(
-                    color = Color(0xFF32ADE6),
-                    radius = size.minDimension / 2f,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
-                )
+            Column(
+                modifier = Modifier.fillMaxSize().padding((10 * s).dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Canvas(modifier = Modifier.size((28 * s).dp)) {
+                    drawCircle(
+                        color = Color(0xFF32ADE6),
+                        radius = size.minDimension / 2f,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                    )
+                }
+                Spacer(modifier = Modifier.height((4 * s).dp))
+                Text(text = "YÖN: ${telemetri.pusulaYonu.roundToInt()}°", color = Color.White, fontSize = (12 * s).sp, fontWeight = FontWeight.Bold)
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "YÖN: ${telemetri.pusulaYonu.roundToInt()}°", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
 private fun ObdWidgetCard() {
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 280.dp, height = 90.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceAround
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(280f, 90f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "RPM", color = Color.Gray, fontSize = 10.sp)
-                Text(text = "2200", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "HARARET", color = Color.Gray, fontSize = 10.sp)
-                Text(text = "90°C", color = ClSuccess, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "VOLTAJ", color = Color.Gray, fontSize = 10.sp)
-                Text(text = "14.2V", color = ClPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxSize().padding((12 * s).dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "RPM", color = Color.Gray, fontSize = (10 * s).sp)
+                    Text(text = "2200", color = Color.White, fontSize = (16 * s).sp, fontWeight = FontWeight.Bold)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "HARARET", color = Color.Gray, fontSize = (10 * s).sp)
+                    Text(text = "90°C", color = ClSuccess, fontSize = (16 * s).sp, fontWeight = FontWeight.Bold)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "VOLTAJ", color = Color.Gray, fontSize = (10 * s).sp)
+                    Text(text = "14.2V", color = ClPrimary, fontSize = (16 * s).sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -851,35 +1134,38 @@ private fun DockWidgetCard(onLaunchApp: (String) -> Unit) {
         "com.android.settings" to "Ayarlar"
     )
 
-    Surface(
-        color = ClCardBg,
-        shape = RoundedCornerShape(22.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
-        shadowElevation = 8.dp,
-        modifier = Modifier.size(width = 340.dp, height = 76.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(340f, 76f)
+        Surface(
+            color = ClCardBg,
+            shape = RoundedCornerShape(22.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ClBorder),
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxSize()
         ) {
-            dockApps.forEach { (pkg, fallbackLabel) ->
-                val icon = remember(pkg) {
-                    try { pm.getApplicationIcon(pkg).toBitmap(64, 64).asImageBitmap() } catch (e: Exception) { null }
-                }
+            Row(
+                modifier = Modifier.fillMaxSize().padding(horizontal = (14 * s).dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                dockApps.forEach { (pkg, fallbackLabel) ->
+                    val icon = remember(pkg) {
+                        try { pm.getApplicationIcon(pkg).toBitmap(64, 64).asImageBitmap() } catch (e: Exception) { null }
+                    }
 
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0x22FFFFFF))
-                        .clickable { onLaunchApp(pkg) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (icon != null) {
-                        Image(bitmap = icon, contentDescription = fallbackLabel, modifier = Modifier.size(36.dp))
-                    } else {
-                        Text(text = fallbackLabel.take(1), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Box(
+                        modifier = Modifier
+                            .size((48 * s).dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0x22FFFFFF))
+                            .clickable { onLaunchApp(pkg) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (icon != null) {
+                            Image(bitmap = icon, contentDescription = fallbackLabel, modifier = Modifier.size((36 * s).dp))
+                        } else {
+                            Text(text = fallbackLabel.take(1), color = Color.White, fontSize = (18 * s).sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -904,14 +1190,18 @@ private fun DesktopAppShortcut(packageName: String, onLaunchApp: (String) -> Uni
                 .toBitmap(64, 64).asImageBitmap()
         }.getOrNull()
     }
-    Column(
-        modifier = Modifier.size(width = 80.dp, height = 96.dp).clickable { onLaunchApp(packageName) },
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        if (icon != null) Image(icon, contentDescription = label, modifier = Modifier.size(56.dp))
-        else Text(label.take(1), color = Color.White, fontSize = 30.sp)
-        Text(label, color = Color.White, fontSize = 11.sp, maxLines = 2,
-            overflow = TextOverflow.Ellipsis)
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val s = cardScale(80f, 96f)
+        Column(
+            modifier = Modifier.fillMaxSize().clickable { onLaunchApp(packageName) },
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            if (icon != null) Image(icon, contentDescription = label, modifier = Modifier.size((56 * s).dp))
+            else Text(label.take(1), color = Color.White, fontSize = (30 * s).sp)
+            Text(label, color = Color.White, fontSize = (11 * s).sp, maxLines = 2,
+                overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -947,6 +1237,8 @@ private fun DesktopWidgetSettingsDialog(
     widgetId: String,
     placement: WidgetPlacement,
     pageCount: Int,
+    gridMode: Boolean,
+    pageHasRoom: (Int) -> Boolean,
     providerInfo: AppWidgetProviderInfo?,
     onDismiss: () -> Unit,
     onSave: (WidgetPlacement) -> Unit,
@@ -970,16 +1262,27 @@ private fun DesktopWidgetSettingsDialog(
         title = { Text("$title ayarları", color = Color.White, fontWeight = FontWeight.Bold) },
         text = {
             Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Boyut", color = Color.White, fontWeight = FontWeight.SemiBold)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(0.75f to "Küçük", 1f to "Normal", 1.35f to "Büyük").forEach { (scale, label) ->
-                        TextButton(
-                            onClick = { draft = draft.copy(scale = scale, widthScale = scale, heightScale = scale) },
-                            modifier = Modifier.background(
-                                if (kotlin.math.abs(draft.widthScale - scale) < 0.05f && kotlin.math.abs(draft.heightScale - scale) < 0.05f) ClPrimary.copy(alpha = 0.25f) else Color.Transparent,
-                                RoundedCornerShape(10.dp)
-                            )
-                        ) { Text(label, color = Color.White) }
+                if (gridMode) {
+                    // Grid modunda boyut hucre span'i ile belirlenir; olcek alanlari
+                    // resolve sirasinda 1f'ye cevrildigi icin butonlar etkisiz kalirdi.
+                    Text("Boyut", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Grid modunda widget boyutu hücre dilimleriyle belirlenir. Değiştirmek için sağ alt / kenar resize tutamaçlarını sürükleyin.",
+                        color = Color(0xFFB0B3C6),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    Text("Boyut", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(0.75f to "Küçük", 1f to "Normal", 1.35f to "Büyük").forEach { (scale, label) ->
+                            TextButton(
+                                onClick = { draft = draft.copy(scale = scale, widthScale = scale, heightScale = scale) },
+                                modifier = Modifier.background(
+                                    if (kotlin.math.abs(draft.widthScale - scale) < 0.05f && kotlin.math.abs(draft.heightScale - scale) < 0.05f) ClPrimary.copy(alpha = 0.25f) else Color.Transparent,
+                                    RoundedCornerShape(10.dp)
+                                )
+                            ) { Text(label, color = Color.White) }
+                        }
                     }
                 }
                 Text("Arka plan opaklığı: ${(draft.opacity * 100).roundToInt()}%", color = Color.White)
@@ -995,11 +1298,26 @@ private fun DesktopWidgetSettingsDialog(
                 Text("Sayfa", color = Color.White, fontWeight = FontWeight.SemiBold)
                 LazyColumn(modifier = Modifier.height(120.dp)) {
                     items(pageCount) { page ->
-                        Text(
-                            "Sayfa ${page + 1}",
-                            color = if (draft.page == page) ClPrimary else Color.White,
-                            modifier = Modifier.fillMaxWidth().clickable { draft = draft.copy(page = page) }.padding(10.dp)
-                        )
+                        val room = pageHasRoom(page)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = room) { draft = draft.copy(page = page) }
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Sayfa ${page + 1}",
+                                color = when {
+                                    !room -> Color(0xFF6B6F85)
+                                    draft.page == page -> ClPrimary
+                                    else -> Color.White
+                                }
+                            )
+                            // Yer yoksa sayfa secilemez: widget oraya tasinamaz.
+                            if (!room) Text("yer yok", color = Color(0xFFFF8A80), fontSize = 11.sp)
+                        }
                     }
                 }
                 if (providerInfo?.configure != null) {
@@ -1027,53 +1345,51 @@ private fun FloatingDesktopControls(
     onResetLayout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    // Edit modu kontrolleri: ana yuzucu buton "duzenlemeyi bitir", diger eylemler
+    // simgeli acilir menude. Boylece masaustunde cok daha az yer kaplar.
+    var menuOpen by remember { mutableStateOf(false) }
+    Column(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        FloatingActionButton(
-            onClick = onResetLayout,
-            containerColor = Color(0xFF2A2D40),
-            contentColor = Color.White,
-            shape = CircleShape,
-            modifier = Modifier.size(42.dp)
-        ) {
-            Icon(Icons.Default.Refresh, contentDescription = "Sıfırla", modifier = Modifier.size(18.dp))
-        }
-
-        FloatingActionButton(
-            onClick = onOpenWallpaperPicker,
-            containerColor = Color(0xFF2A2D40),
-            contentColor = Color.White,
-            shape = CircleShape,
-            modifier = Modifier.size(42.dp)
-        ) {
-            Icon(Icons.Default.Wallpaper, contentDescription = "Duvar Kağıdı", modifier = Modifier.size(18.dp))
-        }
-
-        FloatingActionButton(
-            onClick = onOpenWidgetPicker,
-            containerColor = Color(0xFF00E5FF),
-            contentColor = Color.Black,
-            shape = CircleShape,
-            modifier = Modifier.size(46.dp)
-        ) {
-            Icon(Icons.Default.Add, contentDescription = "Widget Ekle", modifier = Modifier.size(24.dp))
+        Box {
+            FloatingActionButton(
+                onClick = { menuOpen = true },
+                containerColor = Color(0xCC1A1D2E),
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size(42.dp)
+            ) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Daha fazla", modifier = Modifier.size(20.dp))
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Widget ekle") },
+                    leadingIcon = { Icon(Icons.Default.Widgets, contentDescription = null) },
+                    onClick = { menuOpen = false; onOpenWidgetPicker() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Duvar kâğıdı") },
+                    leadingIcon = { Icon(Icons.Default.Wallpaper, contentDescription = null) },
+                    onClick = { menuOpen = false; onOpenWallpaperPicker() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Düzeni sıfırla") },
+                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                    onClick = { menuOpen = false; onResetLayout() }
+                )
+            }
         }
 
         FloatingActionButton(
             onClick = onExitEditMode,
-            containerColor = Color(0xFF30D158),
+            containerColor = Color(0xFF00E5FF),
             contentColor = Color.Black,
             shape = CircleShape,
-            modifier = Modifier.size(46.dp)
+            modifier = Modifier.size(52.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = "Kaydet",
-                modifier = Modifier.size(22.dp)
-            )
+            Icon(Icons.Default.Check, contentDescription = "Düzenlemeyi bitir", modifier = Modifier.size(26.dp))
         }
     }
 }

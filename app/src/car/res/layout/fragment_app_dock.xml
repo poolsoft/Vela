@@ -28,9 +28,9 @@
             android:src="@drawable/ic_desktop_mode"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:scaleType="fitCenter"
-            android:adjustViewBounds="true"
-            app:tint="@color/cl_text_hint"
-            android:padding="10dp"/>
+            android:contentDescription="@string/car_dock_desktop_mode_desc"
+            android:tint="@color/cl_dock_icon"
+            android:padding="11dp"/>
 
         <ImageButton
             android:id="@+id/btn_app_list"
@@ -42,7 +42,7 @@
             android:scaleType="fitCenter"
             android:adjustViewBounds="true"
             android:src="@drawable/dashboard_grid"
-            app:tint="@color/cl_primary"
+            android:tint="@color/cl_primary"
             android:padding="10dp"/>
 
     </LinearLayout>
@@ -90,9 +90,9 @@
                 android:id="@+id/mini_music_icon"
                 android:layout_width="24dp"
                 android:layout_height="24dp"
-                android:src="@android:drawable/ic_media_play"
+                android:src="@drawable/ic_dock_play"
                 android:layout_marginStart="2dp"
-                app:tint="@color/cl_accent_orange"/>
+                android:tint="@color/cl_accent_orange"/>
 
             <TextView
                 android:id="@+id/mini_music_title"
@@ -113,19 +113,19 @@
                 android:id="@+id/mini_btn_play"
                 android:layout_width="28dp"
                 android:layout_height="28dp"
-                android:src="@android:drawable/ic_media_play"
+                android:src="@drawable/ic_dock_play"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:padding="4dp"
-                app:tint="@color/cl_primary"/>
+                android:tint="@color/cl_primary"/>
 
             <ImageButton
                 android:id="@+id/mini_btn_next"
                 android:layout_width="28dp"
                 android:layout_height="28dp"
-                android:src="@android:drawable/ic_media_next"
+                android:src="@drawable/ic_dock_next"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:padding="4dp"
-                app:tint="@color/cl_text_secondary"/>
+                android:tint="@color/cl_text_secondary"/>
 
         </LinearLayout>
 
@@ -151,7 +151,7 @@
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:scaleType="fitCenter"
             android:adjustViewBounds="true"
-            app:tint="@color/cl_text_secondary"
+            android:tint="@color/cl_text_secondary"
             android:padding="10dp"/>
 
         <!-- Clock -->
