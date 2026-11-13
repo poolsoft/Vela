@@ -197,16 +197,33 @@ fun MovableWidget(
     /** Grid modu: snap ayari aciksa ve grid bilgisi geldiyse hucre modeli kullanilir. */
     fun activeGrid(): CellGrid.Grid? = if (currentSnapToGrid) latestGrid else null
 
-    LaunchedEffect(edge, dragging) {
-        // Parmak kenarda bekleyince (650ms) hedef sayfa adimlar; parmak kenarda kaldikca
-        // adimlama surer. Yondaki sayfalar bu boyutta widget'i almiyorsa ATLANIR ve ilk
-        // bos sayfaya gidilir: 4. sayfadan 1. sayfaya tasirken 2 ve 3. sayfalarin dolu
-        // olmasi tasimayi engellemez. O yonde hicbir sayfada yer yoksa adim atlanmaz,
-        // kirmizi cerceve bildirir.
-        if (!dragging || edge == 0) return@LaunchedEffect
-        val dir = edge
-        delay(650)
-        if (dragging && edge == dir) {
+    // Kenarda bekleme ile sayfa adimlama (Launcher davranisi).
+    //
+    // DONGU: parmak kenarda kaldigi surece adimlama SURER. Onceki surumde her adimdan
+    // sonra edge sifirlandigi icin kullanici 4. sayfadan 2. sayfaya gecince (dolu, kirmizi)
+    // takili kaldi: parmak kimmadikca yeni adim tetiklenmiyordu. Artik parmak kenarda
+    // durdugu muddetce ~520ms'de bir sonraki sayfaya gecer.
+    //
+    // Yon boyunca dolu sayfalar ATLANIR (ilk bos sayfaya kadar); atlanan varsa kirmizi
+    // cerceve yanar. O yonde hicbir sayfada yer yoksa adim atlanmaz, kirmizi cerceve
+    // yanar ve parmak kenardan cekilene kadar tekrar denenmez.
+    LaunchedEffect(dragging) {
+        if (!dragging) return@LaunchedEffect
+        var dir = 0
+        while (dragging) {
+            val current = edge
+            if (current == 0) {
+                // Parmak kenarda degil: yeni kenara gelmesini bekle.
+                dir = 0
+                delay(90)
+                continue
+            }
+            if (current != dir) {
+                // Kenara yeni geldi: kullaniciya tepki suresi birak.
+                dir = current
+                delay(650)
+                continue
+            }
             val sx = spanX.coerceAtLeast(1)
             val sy = spanY.coerceAtLeast(1)
             val target = pageEdge(dragPage, dir, sx, sy)
@@ -217,10 +234,14 @@ fun MovableWidget(
                     rejectFlash = true
                     edge = 0
                     edgeBlocked = true
+                    delay(500)
                 }
                 target == dragPage -> {
-                    // Araligin kenari: o yonde baska sayfa yok (sessiz).
+                    // Araligin kenari: o yonde baska sayfa yok. Kilitle ki dongu bosuna
+                    // donmesin; parmak kenardan cekilince tekrar serbest kalir.
                     edge = 0
+                    edgeBlocked = true
+                    delay(400)
                 }
                 else -> {
                     // Birden fazla sayfa atlandiysa bunu kirmizi cerceveyle goster:
@@ -230,7 +251,8 @@ fun MovableWidget(
                     // Gorunur sayfa degisir; widget parmagin altinda kaldigi icin konumu
                     // degistirilmez (parmak hareketi yeni sayfanin koordinatlarinda surer).
                     pageTarget(target)
-                    edge = 0
+                    // Yeni sayfada da kenardayiz; gerekirse kaldigimiz yerden devam eder.
+                    delay(520)
                 }
             }
         }

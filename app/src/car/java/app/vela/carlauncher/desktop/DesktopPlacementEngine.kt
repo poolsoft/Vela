@@ -86,6 +86,12 @@ object DesktopPlacementEngine {
      * Swap icin TEK bir isaretci sarti vardir: hedefin tamamini tek widget kaplamali ve
      * o widget eski bolgumuze sigmali. Iki veya fazla widget hedefe tasiyorsa swap
      * tanimsiz oldugu icin birakma reddedilir (aksi halde bir widget disarida kalirdi).
+     *
+     * SAYFALAR ARASI: isaretcinin eski sayfasinda bosalan alan, hedef sayfada hicbir sey
+     * ifade etmez. Bu yuzden baska sayfaya birakma yalnizca TAMAMEN BOS bolgeye kabul
+     * edilir; dolu sayfadaki widget'larla takas yapilmaz. (Eski surumde "bosalan alan"
+     * aramasi eski sayfanin hucreleriyle yapildigi icin dolu bir sayfa "yer var" gibi
+     * gorunuyor, widget oraya atliyor ve kirmizi cercevede takiliyordu.)
      */
     fun allowed(
         layout: Map<String, WidgetPlacement>,
@@ -99,6 +105,8 @@ object DesktopPlacementEngine {
         if (occupants.isEmpty()) return true
         val old = layout[id] ?: return false
         if (old.cellX < 0 || old.spanX <= 0 || old.spanY <= 0) return false
+        // Baska sayfaya tasima: takas yok, hedef bolge bos olmali.
+        if (old.page != target.page) return false
         if (occupants.size != 1) return false
         val other = occupants.first().value
         // Swap, isaretcinin BU HAREKETLE bosalan hucrelere sigmasiyla gecerlidir:
@@ -111,8 +119,11 @@ object DesktopPlacementEngine {
     }
 
     /**
-     * Bu sayfada bu boyutta widget icin yer var mi? (swap dahil)
+     * Bu sayfada bu boyutta widget icin yer var mi?
      * Sayfa adimlamasi ([stepPageWithRoom]) ve ayarlardaki sayfa secimi icinde kullanilir.
+     *
+     * Sayfalar arasi sorguda takas sayilmaz ([allowed] ayni sayfa sarti kosar): dolu bir
+     * sayfa icin false doner, boylece kenar adimlamasi o sayfayi atlar.
      */
     fun hasRoom(
         layout: Map<String, WidgetPlacement>,
@@ -189,8 +200,10 @@ object DesktopPlacementEngine {
     ): List<Pair<String, WidgetPlacement>> {
         if (grid == null) return listOf(id to target)
         val old = layout[id]
+        // Sayfalar arasi: takas yok (bkz. allowed), widget dogrudan hedefe yazilir.
+        if (old == null || old.cellX < 0 || old.page != target.page) return listOf(id to target)
         val occupant = occupantsOf(layout, id, target).singleOrNull()
-        if (old == null || occupant == null || old.cellX < 0) return listOf(id to target)
+        if (occupant == null) return listOf(id to target)
         // Isaretci her zaman eski bolgenin sol-ustune degil, gercekten bosalan alana konur;
         // aksi halde kismi kaydirmada yeni konumumuzun uzerine binerdi.
         val (spotX, spotY) = freedSpotFor(old, target, occupant.value) ?: return listOf(id to target)

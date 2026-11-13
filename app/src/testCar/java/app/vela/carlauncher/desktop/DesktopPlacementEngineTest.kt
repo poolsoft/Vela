@@ -290,4 +290,60 @@ class DesktopPlacementEngineTest {
         assertEquals(0, target)
         assertTrue(DesktopPlacementEngine.hasRoom(layout, "a", target, 2, 2, grid))
     }
+
+    // Sayfalar arasi birakma: eski sayfada bosalan alan hedef sayfada takas sayilmaz.
+
+    @Test
+    fun crossPageDropOnOccupiedAreaIsRejected() {
+        // a 4. sayfada; 1. sayfadaki b'nin uzerine birakmak istiyor. b'nin sigdigi
+        // "bosalan alan" eski sayfada (farkli sayfa) oldugu icin takas tanimsiz -> red.
+        val layout = mapOf(
+            "a" to place(0, 0, 2, 2, page = 3),
+            "b" to place(0, 0, 2, 2, page = 0)
+        )
+        assertFalse(DesktopPlacementEngine.allowed(layout, "a", place(0, 0, 2, 2, page = 0), grid))
+    }
+
+    @Test
+    fun crossPageFullPageHasNoRoom() {
+        // 1. sayfa tamamen dolu: baska sayfadan tasima icin yer yok.
+        val layout = buildMap {
+            put("a", place(0, 0, 2, 2, page = 3))
+            (0 until 5).forEach { row -> put("w$row", place(0, row, 10, 1, page = 0)) }
+        }
+        assertFalse(DesktopPlacementEngine.hasRoom(layout, "a", 0, 2, 2, grid))
+    }
+
+    @Test
+    fun crossPageDropOnFreeAreaIsAllowed() {
+        val target = place(5, 3, 2, 2, page = 0)
+        val layout = mapOf(
+            "a" to place(0, 0, 2, 2, page = 3),
+            "b" to place(0, 0, 2, 2, page = 0)
+        )
+        assertTrue(DesktopPlacementEngine.allowed(layout, "a", target, grid))
+        // Yazilan yerlesim tek satir: takas yok, b yerinde kalir.
+        val writes = DesktopPlacementEngine.swapPlan(layout, "a", target, grid)
+        assertEquals(1, writes.size)
+        assertEquals("a", writes.single().first)
+        assertEquals(5, writes.single().second.cellX)
+        assertEquals(3, writes.single().second.cellY)
+        assertEquals(0, writes.single().second.page)
+    }
+
+    @Test
+    fun edgeSteppingSkipsFullPagesButStopsAtPageWithFreeSpace() {
+        // 2 ve 3. sayfalar tamamen dolu (5x10 = 50 hucre), 1. sayfada tek bir widget var.
+        // Motor dolu sayfalari atlar, bos alan olan 1. sayfada durur; 1. sayfadaki widget
+        // ile "takas" hesaplanmaz (farkli sayfa).
+        val layout = buildMap {
+            put("a", place(0, 0, 2, 2, page = 3))
+            (0 until 5).forEach { row ->
+                put("dolu3_$row", place(0, row, 10, 1, page = 2))
+                put("dolu2_$row", place(0, row, 10, 1, page = 1))
+            }
+            put("b", place(4, 4, 2, 2, page = 0))
+        }
+        assertEquals(0, step(layout, from = 3, direction = -1, lastPage = 3))
+    }
 }
