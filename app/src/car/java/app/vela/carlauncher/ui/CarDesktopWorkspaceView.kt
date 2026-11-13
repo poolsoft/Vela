@@ -19,6 +19,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.Image
@@ -102,6 +103,9 @@ import app.vela.carlauncher.desktop.MovableWidget
 import app.vela.carlauncher.desktop.StatusWidgetView
 import app.vela.carlauncher.desktop.WidgetIds
 import app.vela.carlauncher.desktop.WidgetPlacement
+import app.vela.carlauncher.desktop.WidgetSpanLimits
+import app.vela.carlauncher.desktop.WidgetSpanSizing
+import app.vela.carlauncher.desktop.spanRuleFor
 import app.vela.carlauncher.desktop.WorkspaceGrid
 import app.vela.carlauncher.settings.CarLauncherSettings
 import app.vela.carlauncher.apps.CarAppManager
@@ -281,11 +285,27 @@ fun CarDesktopWorkspaceView(
             } else {
                 null
             }
+            // resize C: sistem widget'larinin saglayici bildiriminden gelen span kurali
+            // (min/max boyut + tercih edilen hucre). hostController.info() her cagrida
+            // binder'a gittigi icin widget listesi ve grid basina cache'lenir.
+            val spanRules = remember(activeWidgets, cellGrid) {
+                val grid = cellGrid
+                if (grid == null) {
+                    emptyMap()
+                } else {
+                    activeWidgets.mapNotNull { id ->
+                        if (!id.startsWith(WidgetIds.AW_PREFIX)) return@mapNotNull null
+                        val awId = id.removePrefix(WidgetIds.AW_PREFIX).toIntOrNull()
+                            ?: return@mapNotNull null
+                        hostController.info(awId)?.let { info -> id to info.spanRuleFor(grid) }
+                    }.toMap()
+                }
+            }
             // Perf: resolve O(hucre x widget) maliyetlidir; telemetri/medya guncellemelerinde
             // yeniden calismamasi icin girislere bagli olarak cache'lenir.
-            val resolvedLayout = remember(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid, freeSnap, cellGrid) {
+            val resolvedLayout = remember(activeWidgets, layout, workspaceWidth, workspaceHeight, snapToGrid, freeSnap, cellGrid, spanRules) {
                 if (snapToGrid && cellGrid != null) {
-                    CellGrid.solve(activeWidgets, layout, cellGrid)
+                    CellGrid.solve(activeWidgets, layout, cellGrid, rules = { id -> spanRules[id] })
                 } else {
                     // Serbest mod: freeSnap acikken eski davranis (16dp yapisma + cakisma onleme),
                     // kapaliyken tamamen serbest yerlesim.
@@ -396,6 +416,10 @@ fun CarDesktopWorkspaceView(
                         key(widgetId) {
                             val placement = resolvedLayout[widgetId]
                             val isDraggingThis = draggingWidgetId == widgetId
+                            // Taban span widget turunun dogal boyutundan; sistem widget'larinda
+                            // saglayicinin bildirdigi sinirlar onu ezer (resize C).
+                            val spanRule = spanRules[widgetId]
+                            val baseSpan = cellGrid?.let { CellGrid.spanOf(WidgetIds.type(widgetId), it) } ?: (1 to 1)
                             if (placement != null && placement.page == pageIndex) {
                                 MovableWidget(
                                     placement = placement,
@@ -403,13 +427,18 @@ fun CarDesktopWorkspaceView(
                                     // uygulamayin: AppWidgetHostView (AndroidView) icerigi
                                     // alpha < 1 ile bazi surumlerde hic cizilmiyor.
                                     modifier = Modifier.zIndex(if (draggingWidgetId == widgetId) 100f else 0f),
-                                    resizable = true,
+                                    // Saglayici "resizeMode = yok" diyorsa tutamaclar gereksiz.
+                                    resizable = spanRule == null ||
+                                        spanRule.limits.maxX > spanRule.limits.minX ||
+                                        spanRule.limits.maxY > spanRule.limits.minY,
                                     dragViaHandle = true,
                                     showControls = isEditMode,
                                     snapToGrid = snapToGrid || freeSnap,
                                     grid = if (snapToGrid) cellGrid else null,
-                                    minSpanX = cellGrid?.let { CellGrid.spanOf(WidgetIds.type(widgetId), it).first } ?: 1,
-                                    minSpanY = cellGrid?.let { CellGrid.spanOf(WidgetIds.type(widgetId), it).second } ?: 1,
+                                    minSpanX = spanRule?.limits?.minX ?: baseSpan.first,
+                                    minSpanY = spanRule?.limits?.minY ?: baseSpan.second,
+                                    maxSpanX = spanRule?.limits?.maxX ?: Int.MAX_VALUE,
+                                    maxSpanY = spanRule?.limits?.maxY ?: Int.MAX_VALUE,
                                     onEnterEdit = { isEditMode = true },
                                     onDragging = { isDragging ->
                                         draggingWidgetId = if (isDragging) widgetId else null
@@ -596,6 +625,30 @@ fun CarDesktopWorkspaceView(
                     placement = resolvedLayout[widgetId] ?: layout[widgetId] ?: WidgetPlacement(page = currentPage),
                     pageCount = lastPage + 1,
                     gridMode = snapToGrid,
+                    grid = if (snapToGrid) cellGrid else null,
+                    // Hazir boyutlar ve +/- adimlari icin sinirlar: sistem widget'ta
+                    // saglayici bildirimi, yerlesik widget'ta taban boyut ve tahta olcusu.
+                    spanLimits = if (snapToGrid) {
+                        cellGrid?.let { g ->
+                            spanRules[widgetId]?.limits
+                                ?: CellGrid.spanOf(WidgetIds.type(widgetId), g)
+                                    .let { (baseX, baseY) -> WidgetSpanLimits(baseX, baseY, g.cols, g.rows) }
+                        }
+                    } else {
+                        null
+                    },
+                    spanFits = { sx, sy ->
+                        val pl = resolvedLayout[widgetId]
+                        val g = cellGrid
+                        if (pl == null || g == null) {
+                            true
+                        } else {
+                            // Hucre sabit kalip yalnizca span degisir: sag/alt tasma ve komsu
+                            // cakismasi burada kontrol edilir.
+                            pl.cellX + sx <= g.cols && pl.cellY + sy <= g.rows &&
+                                placementAllowed(widgetId, pl.copy(spanX = sx, spanY = sy))
+                        }
+                    },
                     pageHasRoom = { page ->
                         val pl = resolvedLayout[widgetId]
                         pl == null || pageHasRoom(
@@ -1187,6 +1240,9 @@ private fun DesktopWidgetSettingsDialog(
     placement: WidgetPlacement,
     pageCount: Int,
     gridMode: Boolean,
+    grid: CellGrid.Grid?,
+    spanLimits: WidgetSpanLimits?,
+    spanFits: (Int, Int) -> Boolean,
     pageHasRoom: (Int) -> Boolean,
     providerInfo: AppWidgetProviderInfo?,
     onDismiss: () -> Unit,
@@ -1212,14 +1268,68 @@ private fun DesktopWidgetSettingsDialog(
         text = {
             Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (gridMode) {
-                    // Grid modunda boyut hucre span'i ile belirlenir; olcek alanlari
-                    // resolve sirasinda 1f'ye cevrildigi icin butonlar etkisiz kalirdi.
+                    // Grid modunda boyut hucre span'i ile belirlenir. Tutamaca ek olarak
+                    // hazir boyutlar ve +/- adimlari: tutamacin zor ulazilabildigi
+                    // (ust/kenar) veya dokunmatik olmayan durumlarda boyut degistirmek icin.
                     Text("Boyut", color = Color.White, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "Grid modunda widget boyutu hücre dilimleriyle belirlenir. Değiştirmek için sağ alt / kenar resize tutamaçlarını sürükleyin.",
-                        color = Color(0xFFB0B3C6),
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    val limits = spanLimits
+                    val board = grid
+                    val spanX = draft.spanX.coerceAtLeast(1)
+                    val spanY = draft.spanY.coerceAtLeast(1)
+                    if (limits != null && board != null) {
+                        /** Aday boyut uygulanabilir mi? Saglayici siniri + tasma kontrolu. */
+                        fun usable(nx: Int, ny: Int): Boolean =
+                            limits.accepts(nx, ny) && nx in 1..board.cols && ny in 1..board.rows && spanFits(nx, ny)
+
+                        fun applySpan(nx: Int, ny: Int) {
+                            if (usable(nx, ny)) draft = draft.copy(spanX = nx, spanY = ny)
+                        }
+                        Text(
+                            "${spanX} x ${spanY} hucre (en fazla ${limits.maxX} x ${limits.maxY})",
+                            color = Color(0xFFB0B3C6),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Genislik", color = Color(0xFFB0B3C6), style = MaterialTheme.typography.bodySmall)
+                            SizeStepButton("-") { applySpan(spanX - 1, spanY) }
+                            Text("$spanX", color = Color.White, fontWeight = FontWeight.Bold)
+                            SizeStepButton("+") { applySpan(spanX + 1, spanY) }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Yukseklik", color = Color(0xFFB0B3C6), style = MaterialTheme.typography.bodySmall)
+                            SizeStepButton("-") { applySpan(spanX, spanY - 1) }
+                            Text("$spanY", color = Color.White, fontWeight = FontWeight.Bold)
+                            SizeStepButton("+") { applySpan(spanX, spanY + 1) }
+                        }
+                        val presets = WidgetSpanSizing.presets(limits, board, spanX, spanY)
+                        if (presets.size > 1) {
+                            Text("Hazir boyutlar", color = Color(0xFFB0B3C6), style = MaterialTheme.typography.bodySmall)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                presets.forEach { (px, py) ->
+                                    val selected = px == spanX && py == spanY
+                                    TextButton(
+                                        enabled = usable(px, py),
+                                        onClick = { applySpan(px, py) },
+                                        modifier = Modifier.background(
+                                            if (selected) ClPrimary.copy(alpha = 0.25f) else Color.Transparent,
+                                            RoundedCornerShape(10.dp)
+                                        )
+                                    ) {
+                                        Text(
+                                            "${px}x${py}",
+                                            color = if (usable(px, py)) Color.White else Color(0xFF6B6F85)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Text(
+                            "Grid modunda widget boyutu hücre dilimleriyle belirlenir. Değiştirmek için sağ alt / kenar resize tutamaçlarını sürükleyin.",
+                            color = Color(0xFFB0B3C6),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 } else {
                     Text("Boyut", color = Color.White, fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1285,6 +1395,20 @@ private fun DesktopWidgetSettingsDialog(
 // ═══════════════════════════════════════════════════════════════════════════
 // KONTROLLER VE DIYALOGLAR
 // ═══════════════════════════════════════════════════════════════════════════
+
+/** Kucuk +/- boyut adim dugmesi (widget ayarlarinda hazir boyut kontrolu). */
+@Composable
+private fun SizeStepButton(label: String, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(34.dp)
+            .background(Color(0xFF262A3D), RoundedCornerShape(8.dp)),
+        contentPadding = PaddingValues(0.dp)
+    ) {
+        Text(label, color = Color.White, fontWeight = FontWeight.Bold)
+    }
+}
 
 @Composable
 private fun FloatingDesktopControls(

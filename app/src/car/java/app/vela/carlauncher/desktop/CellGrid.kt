@@ -57,7 +57,10 @@ object CellGrid {
     fun solve(
         ids: Set<String>,
         saved: Map<String, WidgetPlacement>,
-        grid: Grid
+        grid: Grid,
+        // Widget basina cozumleme kurali (resize C): saglayici bildiriminden gelen
+        // tercih edilen span ve min/max sinirlar. null ise eski davranis (taban boyut).
+        rules: ((String) -> WidgetSpanRule?)? = null
     ): Map<String, WidgetPlacement> {
         val boards = HashMap<Int, BooleanArray>()
         fun board(page: Int): BooleanArray = boards.getOrPut(page) { BooleanArray(grid.cols * grid.rows) }
@@ -110,15 +113,26 @@ object CellGrid {
 
         for (id in ordered) {
             val preferred = saved[id] ?: WidgetPlacement()
-            val (baseSx, baseSy) = spanOf(WidgetIds.type(id), grid)
+            val rule = rules?.invoke(id)
+            val (baseSx, baseSy) = if (rule != null) {
+                rule.defaultX.coerceIn(1, grid.cols) to rule.defaultY.coerceIn(1, grid.rows)
+            } else {
+                spanOf(WidgetIds.type(id), grid)
+            }
             // Bozuk kayit: span eksi/sifir ya da tahtanin tamamini kaplayan deger (eski hatali
             // donemde yazilan "tum sayfa" span'leri). Tam genislik/yukseklik (tek eksen) ise
             // gecerli bir kullanici secimidir, bozuk sayilmaz.
             val savedUsable = trustSavedCells &&
                 preferred.spanX > 0 && preferred.spanY > 0 &&
                 !(preferred.spanX >= grid.cols && preferred.spanY >= grid.rows)
-            val spanX = if (savedUsable) preferred.spanX.coerceIn(1, grid.cols) else baseSx
-            val spanY = if (savedUsable) preferred.spanY.coerceIn(1, grid.rows) else baseSy
+            // Saglayici sinirlari kayitli span'e de uygulanir: bir zamanlar sinir disi
+            // yazilmis boyutlar (veya saglayicinin artik kabul etmedigi boyut) duzeltilir.
+            val minX = rule?.limits?.minX?.coerceIn(1, grid.cols) ?: 1
+            val minY = rule?.limits?.minY?.coerceIn(1, grid.rows) ?: 1
+            val maxX = (rule?.limits?.maxX ?: grid.cols).coerceIn(minX, grid.cols)
+            val maxY = (rule?.limits?.maxY ?: grid.rows).coerceIn(minY, grid.rows)
+            val spanX = (if (savedUsable) preferred.spanX else baseSx).coerceIn(minX, maxX)
+            val spanY = (if (savedUsable) preferred.spanY else baseSy).coerceIn(minY, maxY)
 
             // Hucre alani olmayan kayitlar (serbest moddan gelen, yeni eklenen veya bozuk
             // kayit) icin eski dp konumu en yakin hucreye cevrilir; boylece serbest moddan
