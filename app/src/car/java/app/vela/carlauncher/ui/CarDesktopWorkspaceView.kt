@@ -94,6 +94,7 @@ import androidx.compose.ui.zIndex
 import androidx.core.graphics.drawable.toBitmap
 import app.vela.carlauncher.desktop.CarAppWidgetHostController
 import app.vela.carlauncher.desktop.CellGrid
+import app.vela.carlauncher.desktop.DesktopPlacementEngine
 import app.vela.carlauncher.desktop.DesktopWidgetLayoutStore
 import app.vela.carlauncher.desktop.HostedAppWidgetView
 import app.vela.carlauncher.desktop.LocalCarAppWidgetHost
@@ -293,59 +294,17 @@ fun CarDesktopWorkspaceView(
             }
             val lastPage = maxOf(pageCount - 1, resolvedLayout.values.maxOfOrNull { it.page } ?: 0)
             LaunchedEffect(lastPage) { layoutStore.ensurePageCount(lastPage + 1) }
-            // Grid modunda birakma kurallari (Launcher davranisi):
-            // - Hedef hucre bos ise birakilir.
-            // - Hedefi tek bir widget dolduruyorsa ve o widget eski bolgumuzde sigiyorsa
-            //   yer degistirirler (swap).
-            // - Yer yoksa birakma REDDEDILIR: widget eski konumuna/sayfasina geri doner
-            //   (ust uste binme olmaz).
-            fun occupantOf(id: String, target: WidgetPlacement): Map.Entry<String, WidgetPlacement>? =
-                resolvedLayout.entries.firstOrNull { (wid, pl) ->
-                    wid != id && pl.page == target.page &&
-                        pl.cellX < target.cellX + target.spanX && pl.cellX + pl.spanX > target.cellX &&
-                        pl.cellY < target.cellY + target.spanY && pl.cellY + pl.spanY > target.cellY
-                }
+            // Grid modunda birakma kurallari (Launcher davranisi) saf motorda:
+            // DesktopPlacementEngine (birim testli). Burada yalnizca o anki cozulmus
+            // yerlesim ve grid aktarilir.
+            val engineGrid = if (snapToGrid) cellGrid else null
 
-            fun oldRegionClear(id: String, otherId: String, old: WidgetPlacement): Boolean =
-                resolvedLayout.entries.none { (wid, pl) ->
-                    wid != id && wid != otherId && pl.page == old.page &&
-                        pl.cellX < old.cellX + old.spanX && pl.cellX + old.spanX > old.cellX &&
-                        pl.cellY < old.cellY + old.spanY && pl.cellY + old.spanY > old.cellY
-                }
-
-            /** Birakma kabul edilir mi? (yazim yapmayan saf kontrol) */
-            fun placementAllowed(id: String, target: WidgetPlacement): Boolean {
-                if (!snapToGrid || cellGrid == null || target.cellX < 0 || target.spanX <= 0 || target.spanY <= 0) return true
-                val old = resolvedLayout[id] ?: return true
-                val occupant = occupantOf(id, target) ?: return true
-                val other = occupant.value
-                val fits = other.spanX <= old.spanX && other.spanY <= old.spanY
-                return fits && oldRegionClear(id, occupant.key, old)
-            }
+            fun placementAllowed(id: String, target: WidgetPlacement): Boolean =
+                DesktopPlacementEngine.allowed(resolvedLayout, id, target, engineGrid)
 
             /** Bu sayfada bu boyutta widget icin (swap dahil) yer var mi? */
-            fun pageHasRoom(id: String, page: Int, spanX: Int, spanY: Int): Boolean {
-                val grid = cellGrid ?: return true
-                if (!snapToGrid) return true
-                val base = resolvedLayout[id] ?: return true
-                val sx = spanX.coerceIn(1, grid.cols)
-                val sy = spanY.coerceIn(1, grid.rows)
-                for (cy in 0..(grid.rows - sy)) {
-                    for (cx in 0..(grid.cols - sx)) {
-                        val candidate = base.copy(
-                            page = page,
-                            cellX = cx,
-                            cellY = cy,
-                            dx = cx * grid.cellWidth,
-                            dy = cy * grid.cellHeight,
-                            spanX = sx,
-                            spanY = sy
-                        )
-                        if (placementAllowed(id, candidate)) return true
-                    }
-                }
-                return false
-            }
+            fun pageHasRoom(id: String, page: Int, spanX: Int, spanY: Int): Boolean =
+                DesktopPlacementEngine.hasRoom(resolvedLayout, id, page, spanX, spanY, engineGrid)
 
             fun commitPlacement(id: String, target: WidgetPlacement): Boolean {
                 if (!snapToGrid) {
@@ -353,19 +312,9 @@ fun CarDesktopWorkspaceView(
                     return true
                 }
                 if (!placementAllowed(id, target)) return false
-                val old = resolvedLayout[id]
-                val occupant = occupantOf(id, target)
-                val grid = cellGrid
-                if (old == null || old.cellX < 0 || target.cellX < 0 || grid == null || occupant == null) {
-                    layoutStore.setPlacement(id, target)
-                    return true
+                DesktopPlacementEngine.swapPlan(resolvedLayout, id, target, cellGrid).forEach { (wid, placement) ->
+                    layoutStore.setPlacement(wid, placement)
                 }
-                val origin = grid.originDp(old.cellX, old.cellY)
-                layoutStore.setPlacement(id, target)
-                layoutStore.setPlacement(
-                    occupant.key,
-                    occupant.value.copy(page = old.page, cellX = old.cellX, cellY = old.cellY, dx = origin.first, dy = origin.second)
-                )
                 return true
             }
             LaunchedEffect(lastPage, isEditMode) {
