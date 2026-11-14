@@ -534,6 +534,7 @@ private fun CarDockPanelSettingsScreen(
     val scope = rememberCoroutineScope()
     val dockKonumu by CarLauncherSettings.dockKonumu.collectAsState()
     val dockBoyutu by CarLauncherSettings.dockBoyutu.collectAsState()
+    val dockAsistanGoster by CarLauncherSettings.dockAsistanGoster.collectAsState()
     val panelKonumu by CarLauncherSettings.panelKonumu.collectAsState()
     val panelGenislik by CarLauncherSettings.panelGenislikYuzdesi.collectAsState()
     val panelYukseklik by CarLauncherSettings.panelYukseklikYuzdesi.collectAsState()
@@ -581,6 +582,13 @@ private fun CarDockPanelSettingsScreen(
                     valueRange = 20f..100f,
                     unit = "%",
                     onValueChange = { CarLauncherSettings.setDockBoyutu(it.toInt()) }
+                )
+                GroupDivider()
+                ToggleRow(
+                    label = "Dock'ta Asistan (Mikrofon) Göster",
+                    hint = "Kapatıldığında mikrofon butonu gizlenir ve uygulama kısayolları saate kadar uzanır",
+                    checked = dockAsistanGoster,
+                    onCheckedChange = { CarLauncherSettings.setDockAsistanGoster(it) }
                 )
                 GroupDivider()
                 ActionRow(

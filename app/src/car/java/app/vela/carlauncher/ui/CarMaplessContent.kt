@@ -12,7 +12,7 @@ import app.vela.carlauncher.telemetry.CarTelemetryManager
 
 /** Reuses existing gauges without composing or binding the map renderer. */
 @Composable
-fun CarMaplessContent(onSettings: () -> Unit) {
+fun CarMaplessContent(onSettings: () -> Unit, onOpenMusic: () -> Unit = {}) {
     val context = LocalContext.current
     val telemetry = remember(context) { CarTelemetryManager.getInstance(context) }
     val mediaManager = remember(context) { app.vela.carlauncher.media.CarMediaManager.getInstance(context) }
@@ -30,7 +30,7 @@ fun CarMaplessContent(onSettings: () -> Unit) {
                         onOynatDuraklat = { mediaManager.oynatVeyaDuraklat() },
                         onSonraki = { mediaManager.sonrakiParca() },
                         onOnceki = { mediaManager.oncekiParca() },
-                        onMuzikPaneliAc = {},
+                        onMuzikPaneliAc = { onOpenMusic() },
                         onDashboardAc = {},
                         onAyarlarAc = { settings() }
                     )

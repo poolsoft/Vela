@@ -183,8 +183,9 @@ class CarAppDockHost(
         shortcutAdapter.setItemSize(size)
         fitShortcutRows()
         updateMiniMusicVisibility()
+        val showAssistantSetting = app.vela.carlauncher.settings.CarLauncherSettings.dockAsistanGoster.value
         rootView.findViewById<View>(R.id.btn_assistant)?.visibility =
-            if (isVertical || width / density >= 480) View.VISIBLE else View.GONE
+            if (showAssistantSetting && (isVertical || width / density >= 480)) View.VISIBLE else View.GONE
     }
 
     private var hasActiveScreenMusicPanel = false

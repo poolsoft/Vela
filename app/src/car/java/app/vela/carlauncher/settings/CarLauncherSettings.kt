@@ -27,6 +27,7 @@ object CarLauncherSettings {
     private const val KEY_IMMERSIVE_MODE = "car_launcher_immersive_mode"
     private const val KEY_DOCK_POSITION = "car_launcher_dock_position"
     private const val KEY_DOCK_SIZE = "car_launcher_dock_size"
+    private const val KEY_DOCK_SHOW_ASSISTANT = "car_launcher_dock_show_assistant"
     private const val KEY_PANEL_POSITION = "widget_panel_position"
     private const val KEY_EXPANSION_BEHAVIOR = "car_launcher_expansion_behavior"
     private const val KEY_PANEL_WIDTH_PERCENT = "widget_panel_width_percent"
@@ -136,6 +137,9 @@ object CarLauncherSettings {
 
     private val _dockBoyutu = MutableStateFlow(50) // 0-100 (varsayilan 50)
     val dockBoyutu: StateFlow<Int> = _dockBoyutu.asStateFlow()
+
+    private val _dockAsistanGoster = MutableStateFlow(true)
+    val dockAsistanGoster: StateFlow<Boolean> = _dockAsistanGoster.asStateFlow()
 
     private val _panelKonumu = MutableStateFlow("right") // right, left
     val panelKonumu: StateFlow<String> = _panelKonumu.asStateFlow()
@@ -263,6 +267,7 @@ object CarLauncherSettings {
             _durumCubuguGoster.value = !_tamEkranModu.value && prefs.getBoolean(KEY_STATUS_BAR, true)
             _dockKonumu.value = prefs.getString(KEY_DOCK_POSITION, "right") ?: "right"
             _dockBoyutu.value = prefs.getInt(KEY_DOCK_SIZE, 50)
+            _dockAsistanGoster.value = prefs.getBoolean(KEY_DOCK_SHOW_ASSISTANT, true)
             _panelKonumu.value = prefs.getString(KEY_PANEL_POSITION, "right") ?: "right"
             val savedExpansion = prefs.getString(KEY_EXPANSION_BEHAVIOR, "swap")
             _panelGenislemeDavranisi.value = if (savedExpansion == "overlay") "overlay" else "swap"
@@ -383,6 +388,11 @@ object CarLauncherSettings {
     fun setDockBoyutu(boyut: Int) {
         _dockBoyutu.value = boyut.coerceIn(0, 100)
         if (::prefs.isInitialized) prefs.edit().putInt(KEY_DOCK_SIZE, _dockBoyutu.value).apply()
+    }
+
+    fun setDockAsistanGoster(goster: Boolean) {
+        _dockAsistanGoster.value = goster
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_DOCK_SHOW_ASSISTANT, goster).apply()
     }
 
     fun setPanelKonumu(konum: String) {

@@ -48,6 +48,12 @@ class MusicVisualizerView @JvmOverloads constructor(
         const val TYPE_CENTER_MIRRORED = 5
         const val TYPE_PARTICLE = 6
         const val TYPE_RINGS = 7
+
+        @Volatile
+        private var largePlayerAttached = false
+        fun setLargePlayerAttached(attached: Boolean) {
+            largePlayerAttached = attached
+        }
     }
 
     private var visualizerType = TYPE_NEON_MODERN
@@ -127,6 +133,11 @@ class MusicVisualizerView @JvmOverloads constructor(
 
     private fun syncCapture() {
         if (!isPlaying || !isAttachedToWindow || !isShown || windowVisibility != VISIBLE) {
+            releaseCapture()
+            return
+        }
+        // Buyuk player ekranda aciksa, kucuk paneller audiofx capture'i buyuk playera birakir
+        if (isSmallPanel && largePlayerAttached) {
             releaseCapture()
             return
         }

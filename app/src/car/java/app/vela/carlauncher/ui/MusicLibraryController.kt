@@ -43,7 +43,6 @@ class MusicLibraryController(private val context: Context, private val root: Vie
     private val search: EditText = root.findViewById(R.id.search_input)
     private val header: View = root.findViewById(R.id.folder_header_container)
     private val title: TextView = root.findViewById(R.id.folder_header_title)
-    private val btnFolderShuffleAll: View? = root.findViewById(R.id.btn_folder_shuffle_all)
     private val btnFolderAddQueue: View? = root.findViewById(R.id.btn_folder_add_queue)
     private val adapter = LibraryAdapter()
     private val viewPrefs = context.getSharedPreferences("vela_music_library_view", Context.MODE_PRIVATE)
@@ -73,7 +72,9 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         tabViews().forEach { (item, view) -> view.setOnClickListener {
             tab = item
             viewPrefs.edit().putString("tab", item.name).apply()
-            folder = null; playlistId = null; search.setText(""); render()
+            folder = null; playlistId = null; search.setText("")
+            render()
+            recycler.scrollToPosition(0)
         } }
         root.findViewById<View>(R.id.tab_btn_search).setOnClickListener {
             root.findViewById<View>(R.id.search_bar_container).apply {
@@ -91,11 +92,12 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         search.addTextChangedListener(searchWatcher)
         root.findViewById<View>(R.id.search_clear_btn).setOnClickListener { search.setText("") }
         root.findViewById<View>(R.id.btn_back_folder).setOnClickListener {
-            folder = null; playlistId = null; search.setText(""); render()
+            folder = null; playlistId = null; search.setText("")
+            render()
+            recycler.scrollToPosition(0)
         }
         root.findViewById<View>(R.id.btn_folder_play_all).setOnClickListener { playGroup(false) }
         btnFolderAddQueue?.setOnClickListener { addGroupToQueue() }
-        btnFolderShuffleAll?.setOnClickListener { playGroup(true) }
         root.findViewById<View>(R.id.tab_btn_menu).setOnClickListener { anchor -> libraryMenu(anchor) }
         scope.launch { repository.parcalar.collectLatest { tracks = it; invalidateSortedCache(); render() } }
         scope.launch { repository.taraniyorMu.collectLatest { render() } }
@@ -211,7 +213,6 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         }
         val inside = folder != null || playlistId != null
         header.visibility = if (inside) View.VISIBLE else View.GONE
-        btnFolderShuffleAll?.visibility = if (tab == Tab.PLAYLISTS) View.GONE else View.VISIBLE
         title.text = folder?.let { File(it).name.ifBlank { it } } ?: playlist()?.let(::name).orEmpty()
         val rows = mutableListOf<LibraryRow>()
         when {

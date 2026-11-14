@@ -209,7 +209,7 @@ object CarIntegration {
             voiceAudioLevel = voiceAudioLevel,
             haritaIcerigi = {
                 if (mapless) {
-                    app.vela.carlauncher.ui.CarMaplessContent(onOpenSettings)
+                    app.vela.carlauncher.ui.CarMaplessContent(onSettings = onOpenSettings, onOpenMusic = { app.vela.carlauncher.settings.CarLauncherSettings.setMaplessMainScreen("music") })
                 } else {
                     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
                         androidx.compose.runtime.CompositionLocalProvider(

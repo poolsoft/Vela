@@ -126,6 +126,9 @@ fun CarDock(
                 if (medya.caliyorMu) R.drawable.ic_dock_pause else R.drawable.ic_dock_play
             )
 
+            val showAssistant = app.vela.carlauncher.settings.CarLauncherSettings.dockAsistanGoster.value
+            view.findViewById<View>(R.id.btn_assistant)?.visibility = if (showAssistant) View.VISIBLE else View.GONE
+
             dockClock?.text = saatMetni
 
             if (recycler != null) {

@@ -90,6 +90,7 @@ class CarMusicPlayerHost(
     private var isPlaylistVisible = false
 
     init {
+        MusicVisualizerView.setLargePlayerAttached(true)
         playerVisualizer?.setVisualizerContext(false)
         setupPanelsVisibility()
         setupSourceDock()
@@ -539,6 +540,7 @@ class CarMusicPlayerHost(
     }
 
     fun release() {
+        MusicVisualizerView.setLargePlayerAttached(false)
         sourceDialog?.dismiss()
         sourceDialog = null
         scope.cancel()
