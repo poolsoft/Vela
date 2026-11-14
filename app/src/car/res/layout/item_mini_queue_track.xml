@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:background="?android:attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:paddingVertical="8dp"
+    android:paddingHorizontal="10dp">
+
+    <!-- Sira / Caliyor simgesi -->
+    <FrameLayout
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:layout_marginEnd="8dp">
+
+        <TextView
+            android:id="@+id/mini_queue_index"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textColor="#88FFFFFF"
+            android:textSize="12sp"
+            android:fontFeatureSettings="tnum"
+            android:text="1" />
+
+        <ImageView
+            android:id="@+id/mini_queue_playing_icon"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_music_equalizer"
+            android:visibility="gone"
+            app:tint="@color/cl_primary" />
+    </FrameLayout>
+
+    <!-- Parca Bilgisi -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/mini_queue_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="Parca Adi" />
+
+        <TextView
+            android:id="@+id/mini_queue_artist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#88FFFFFF"
+            android:textSize="11sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="Sanatci" />
+    </LinearLayout>
+
+    <!-- Sure -->
+    <TextView
+        android:id="@+id/mini_queue_duration"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:textColor="#66FFFFFF"
+        android:textSize="11sp"
+        android:fontFeatureSettings="tnum"
+        android:text="3:45" />
+
+</LinearLayout>

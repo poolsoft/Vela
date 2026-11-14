@@ -312,6 +312,14 @@ fun CarLauncherHostView(
             }
             binding.unifiedHost?.updateVisualizerType(visualizerType, visualizerFps)
             binding.dualCardHost?.updateVisualizerType(visualizerType, visualizerFps)
+
+            // Akilli Kuyruk Modu: Ekranda ayni anda buyuk muzik calar ve kucuk panel varsa kucuk panelde calisir.
+            // mapless modda harita yerine buyuk player acildiginda (mapless && maplessMain == "music") veya
+            // sag panelde buyuk player acildiginda (effectiveMode == "MUSIC") devreye girer.
+            val isLargePlayerOnScreen = (mapless && maplessMain == "music") || effectiveMode == "MUSIC"
+            binding.unifiedHost?.setCompanionQueueMode(isLargePlayerOnScreen)
+            binding.dualCardHost?.setCompanionQueueMode(isLargePlayerOnScreen)
+
             map.setInterceptTouch(!mapless && contentMode != "UNIFIED" && contentMode != "CLOCK" && !fullScreenMap) { latestPanel("UNIFIED") }
 
             binding.nightDimOverlay?.let { overlay ->

@@ -4,8 +4,10 @@ import android.content.Context
 import android.graphics.Color
 import android.widget.ProgressBar
 import app.vela.carlauncher.media.MusicManager
+import app.vela.carlauncher.media.libraryKey
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.IntentFilter
@@ -62,6 +64,12 @@ class CarUnifiedPanelHost(
     private val albumArtView: ImageView? = rootView.findViewById(R.id.unified_album_art)
 
     private val musicControls: View? = rootView.findViewById(R.id.music_controls)
+    private val queueContainer: View? = rootView.findViewById(R.id.music_queue_container)
+    private val queueRecycler: androidx.recyclerview.widget.RecyclerView? = rootView.findViewById(R.id.music_queue_recycler)
+    private val queueEmptyText: TextView? = rootView.findViewById(R.id.music_queue_empty)
+    private var queueAdapter: MiniQueueAdapter? = null
+    private var isCompanionQueueMode = false
+    private var queueJob: kotlinx.coroutines.Job? = null
 
     private val preferences = context.getSharedPreferences("small_music_panel", Context.MODE_PRIVATE)
     private var clockStyle = SmallClockAppearance.read(preferences)
@@ -234,6 +242,8 @@ class CarUnifiedPanelHost(
     }
 
     fun release() {
+        queueJob?.cancel()
+        queueJob = null
         preferences.unregisterOnSharedPreferenceChangeListener(appearanceListener)
         rootView.removeCallbacks(styleUpdate)
         sourceDialog?.dismiss()
@@ -246,6 +256,73 @@ class CarUnifiedPanelHost(
         mainHandler.removeCallbacks(clockTick)
         rootView.removeCallbacks(clockTick)
         visualizer?.setPlaying(false)
+    }
+
+    fun setCompanionQueueMode(enabled: Boolean) {
+        if (isCompanionQueueMode == enabled) return
+        isCompanionQueueMode = enabled
+        applyCompanionQueueMode()
+    }
+
+    private fun applyCompanionQueueMode() {
+        if (isCompanionQueueMode) {
+            trackTitle?.visibility = View.GONE
+            trackArtist?.visibility = View.GONE
+            visualizer?.visibility = View.GONE
+            progress?.visibility = View.GONE
+            musicControls?.visibility = View.GONE
+            queueContainer?.visibility = View.VISIBLE
+            setupQueueObserver()
+        } else {
+            queueContainer?.visibility = View.GONE
+            trackTitle?.visibility = View.VISIBLE
+            trackArtist?.visibility = View.VISIBLE
+            visualizer?.visibility = if (showVisualizer) View.VISIBLE else View.INVISIBLE
+            progress?.visibility = if ((appliedMedia?.toplamSureMs ?: 0) > 0) View.VISIBLE else View.INVISIBLE
+            musicControls?.visibility = View.VISIBLE
+            queueJob?.cancel()
+            queueJob = null
+            visualizer?.setPlaying(active && showVisualizer && (appliedMedia?.caliyorMu == true))
+        }
+    }
+
+    private fun setupQueueObserver() {
+        if (queueAdapter == null) {
+            val mm = MusicManager.getInstance(context)
+            queueAdapter = MiniQueueAdapter { track ->
+                mm.playQueueTrack(track)
+            }
+            queueRecycler?.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
+            queueRecycler?.adapter = queueAdapter
+        }
+
+        val mm = MusicManager.getInstance(context)
+        queueJob?.cancel()
+        queueJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main.immediate).let { s ->
+            s.launch {
+                kotlinx.coroutines.flow.combine(
+                    mm.internalPlayer.kuyruk,
+                    mm.internalPlayer.anlikParca
+                ) { list, current ->
+                    Pair(list, current)
+                }.collect { (list, current) ->
+                    queueAdapter?.submitList(list)
+                    queueAdapter?.setCurrentPlayingKey(current?.libraryKey())
+                    if (list.isEmpty()) {
+                        queueEmptyText?.visibility = View.VISIBLE
+                        queueRecycler?.visibility = View.GONE
+                    } else {
+                        queueEmptyText?.visibility = View.GONE
+                        queueRecycler?.visibility = View.VISIBLE
+                        // Otomatik olarak calan parcaya kaydir
+                        val currentIdx = list.indexOfFirst { it.libraryKey() == current?.libraryKey() }
+                        if (currentIdx >= 0) {
+                            queueRecycler?.scrollToPosition(currentIdx)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private fun resizeContents(width: Int, height: Int) {
@@ -371,7 +448,9 @@ class CarUnifiedPanelHost(
     }
 
     fun updateMedia(m: MedyaParcasi) {
-        progress?.visibility = if (m.toplamSureMs > 0) View.VISIBLE else View.INVISIBLE
+        if (!isCompanionQueueMode) {
+            progress?.visibility = if (m.toplamSureMs > 0) View.VISIBLE else View.INVISIBLE
+        }
         progress?.progress = if (m.toplamSureMs > 0)
             ((m.anlikKonumMs.coerceIn(0, m.toplamSureMs).toDouble() / m.toplamSureMs) * 1000).toInt() else 0
         val previous = appliedMedia
@@ -397,6 +476,6 @@ class CarUnifiedPanelHost(
             if (m.caliyorMu) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         )
 
-        visualizer?.setPlaying(active && showVisualizer && m.caliyorMu)
+        visualizer?.setPlaying(active && showVisualizer && m.caliyorMu && !isCompanionQueueMode)
     }
 }

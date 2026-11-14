@@ -11,12 +11,14 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.view.ContextThemeWrapper
 import app.vela.R
+import app.vela.carlauncher.media.libraryKey
 import app.vela.carlauncher.model.HizTelemetrisi
 import app.vela.carlauncher.model.MedyaParcasi
 import app.vela.carlauncher.ui.VelaPopupMenu as PopupMenu
 import app.vela.carlauncher.widgets.InterlockingClockView
 import app.vela.carlauncher.widgets.MusicVisualizerView
 import app.vela.carlauncher.widgets.FuturisticSpeedometerView
+import kotlinx.coroutines.launch
 
 /**
  * Genis / Ultra-genis ekranlar icin (w800dp+) Ustte Telemetri, Altta Muzik Calar iceren
@@ -63,6 +65,17 @@ class CarDualCardPanelHost(
     private val btnPrev: ImageButton = rootView.findViewById(R.id.dual_music_btn_prev)
     private val btnShuffle: ImageButton? = rootView.findViewById(R.id.dual_music_btn_shuffle)
     private val btnRepeat: ImageButton? = rootView.findViewById(R.id.dual_music_btn_repeat)
+
+    private val artCard: View? = rootView.findViewById(R.id.dual_music_art_card)
+    private val infoContainer: View? = rootView.findViewById(R.id.dual_music_info)
+    private val progressGroup: View? = rootView.findViewById(R.id.dual_music_progress_group)
+    private val controlsPill: View? = rootView.findViewById(R.id.dual_music_controls_pill)
+    private val queueContainer: View? = rootView.findViewById(R.id.dual_music_queue_container)
+    private val queueRecycler: androidx.recyclerview.widget.RecyclerView? = rootView.findViewById(R.id.dual_music_queue_recycler)
+    private val queueEmptyText: TextView? = rootView.findViewById(R.id.dual_music_queue_empty)
+    private var queueAdapter: MiniQueueAdapter? = null
+    private var isCompanionQueueMode = false
+    private var queueJob: kotlinx.coroutines.Job? = null
 
     private var appliedVisualizerType: Int? = null
 
@@ -155,22 +168,25 @@ class CarDualCardPanelHost(
             if (m.caliyorMu) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         )
 
-        if (m.toplamSureMs > 0) {
-            val progress = ((m.anlikKonumMs.coerceIn(0, m.toplamSureMs).toDouble() / m.toplamSureMs) * 1000).toInt()
-            musicProgress.progress = progress.coerceIn(0, 1000)
-            musicProgress.visibility = View.VISIBLE
-            timeCurrentText?.text = formatSure(m.anlikKonumMs)
-            timeTotalText?.text = formatSure(m.toplamSureMs)
-            timeCurrentText?.visibility = View.VISIBLE
-            timeTotalText?.visibility = View.VISIBLE
+        if (!isCompanionQueueMode) {
+            if (m.toplamSureMs > 0) {
+                val progress = ((m.anlikKonumMs.coerceIn(0, m.toplamSureMs).toDouble() / m.toplamSureMs) * 1000).toInt()
+                musicProgress.progress = progress.coerceIn(0, 1000)
+                musicProgress.visibility = View.VISIBLE
+                timeCurrentText?.text = formatSure(m.anlikKonumMs)
+                timeTotalText?.text = formatSure(m.toplamSureMs)
+                timeCurrentText?.visibility = View.VISIBLE
+                timeTotalText?.visibility = View.VISIBLE
+            } else {
+                musicProgress.progress = 0
+                musicProgress.visibility = View.INVISIBLE
+                timeCurrentText?.visibility = View.INVISIBLE
+                timeTotalText?.visibility = View.INVISIBLE
+            }
+            musicVisualizer.setPlaying(m.caliyorMu)
         } else {
-            musicProgress.progress = 0
-            musicProgress.visibility = View.INVISIBLE
-            timeCurrentText?.visibility = View.INVISIBLE
-            timeTotalText?.visibility = View.INVISIBLE
+            musicVisualizer.setPlaying(false)
         }
-
-        musicVisualizer.setPlaying(m.caliyorMu)
     }
 
     private fun formatSure(sureMs: Long): String {
@@ -189,7 +205,76 @@ class CarDualCardPanelHost(
     }
 
     fun release() {
+        queueJob?.cancel()
+        queueJob = null
         musicVisualizer.setPlaying(false)
+    }
+
+    fun setCompanionQueueMode(enabled: Boolean) {
+        if (isCompanionQueueMode == enabled) return
+        isCompanionQueueMode = enabled
+        applyCompanionQueueMode()
+    }
+
+    private fun applyCompanionQueueMode() {
+        if (isCompanionQueueMode) {
+            artCard?.visibility = View.GONE
+            infoContainer?.visibility = View.GONE
+            musicSourceIcon?.visibility = View.GONE
+            musicVisualizer.visibility = View.GONE
+            progressGroup?.visibility = View.GONE
+            controlsPill?.visibility = View.GONE
+            queueContainer?.visibility = View.VISIBLE
+            setupQueueObserver()
+        } else {
+            queueContainer?.visibility = View.GONE
+            artCard?.visibility = View.VISIBLE
+            infoContainer?.visibility = View.VISIBLE
+            musicVisualizer.visibility = View.VISIBLE
+            progressGroup?.visibility = View.VISIBLE
+            controlsPill?.visibility = View.VISIBLE
+            queueJob?.cancel()
+            queueJob = null
+            musicVisualizer.setPlaying(medya.caliyorMu)
+        }
+    }
+
+    private fun setupQueueObserver() {
+        if (queueAdapter == null) {
+            val mm = app.vela.carlauncher.media.MusicManager.getInstance(context)
+            queueAdapter = MiniQueueAdapter { track ->
+                mm.playQueueTrack(track)
+            }
+            queueRecycler?.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
+            queueRecycler?.adapter = queueAdapter
+        }
+
+        val mm = app.vela.carlauncher.media.MusicManager.getInstance(context)
+        queueJob?.cancel()
+        queueJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main.immediate).let { s ->
+            s.launch {
+                kotlinx.coroutines.flow.combine(
+                    mm.internalPlayer.kuyruk,
+                    mm.internalPlayer.anlikParca
+                ) { list, current ->
+                    Pair(list, current)
+                }.collect { (list, current) ->
+                    queueAdapter?.submitList(list)
+                    queueAdapter?.setCurrentPlayingKey(current?.libraryKey())
+                    if (list.isEmpty()) {
+                        queueEmptyText?.visibility = View.VISIBLE
+                        queueRecycler?.visibility = View.GONE
+                    } else {
+                        queueEmptyText?.visibility = View.GONE
+                        queueRecycler?.visibility = View.VISIBLE
+                        val currentIdx = list.indexOfFirst { it.libraryKey() == current?.libraryKey() }
+                        if (currentIdx >= 0) {
+                            queueRecycler?.scrollToPosition(currentIdx)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private fun pusulaMetni(derece: Float): String {

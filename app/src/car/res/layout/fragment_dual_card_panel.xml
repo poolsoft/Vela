@@ -375,6 +375,48 @@
                 app:tint="#B3FFFFFF" />
         </LinearLayout>
 
+        <!-- Akilli Calma Kuyrugu Gorunumu (Buyuk player acikken devreye girer) -->
+        <LinearLayout
+            android:id="@+id/dual_music_queue_container"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:orientation="vertical"
+            android:visibility="gone"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:id="@+id/dual_music_queue_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Çalma Sırası"
+                android:textColor="#1DB954"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.05"
+                android:paddingBottom="6dp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/dual_music_queue_recycler"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:overScrollMode="never" />
+
+            <TextView
+                android:id="@+id/dual_music_queue_empty"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="Kuyruk boş"
+                android:textColor="#66FFFFFF"
+                android:textSize="14sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </LinearLayout>

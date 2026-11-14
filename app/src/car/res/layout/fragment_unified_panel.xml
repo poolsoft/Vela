@@ -306,6 +306,51 @@
                 android:scaleType="fitCenter"
                 app:tint="#FFFFFF" />
         </LinearLayout>
+
+        <!-- Akilli Calma Kuyrugu Gorunumu (Buyuk player acikken devreye girer) -->
+        <LinearLayout
+            android:id="@+id/music_queue_container"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:orientation="vertical"
+            android:paddingHorizontal="12dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@id/music_panel_date"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:id="@+id/music_queue_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Çalma Sırası"
+                android:textColor="#3FD9CA"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.05"
+                android:paddingBottom="4dp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/music_queue_recycler"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:overScrollMode="never" />
+
+            <TextView
+                android:id="@+id/music_queue_empty"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="Kuyruk boş"
+                android:textColor="#66FFFFFF"
+                android:textSize="13sp"
+                android:visibility="gone" />
+        </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
