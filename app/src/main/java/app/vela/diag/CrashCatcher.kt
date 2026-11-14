@@ -81,7 +81,7 @@ object CrashCatcher {
             writeCompleteReport(File(extLogsDir, name), report)
             extLogsDir.listFiles { f -> f.name.startsWith("crash-") &&
                 (if (suffix.isEmpty()) f.name.matches(Regex("crash-\\d+-\\d+\\.txt")) else f.name.contains("$suffix-")) }?.sortedByDescending { it.name }
-                ?.drop(5)?.forEach { it.delete() }
+                ?.drop(KEEP_REPORTS)?.forEach { it.delete() }
             FileLogger.i("CrashCatcher", "Diagnostic report saved: $kind ($name)")
         }
         prune(context)
@@ -103,11 +103,17 @@ object CrashCatcher {
         }?.forEach { it.delete() }
     }
 
-    /** Keep only the few most recent reports so this can't grow unbounded. */
-    private fun prune(context: Context, keep: Int = 5) {
+    /** Keep only the most recent reports so this can't grow unbounded. */
+    private fun prune(context: Context, keep: Int = KEEP_REPORTS) {
         val files = reports(dir(context))
         if (files.size > keep) files.dropLast(keep).forEach { runCatching { it.delete() } }
     }
+
+    /**
+     * Bir arac teybi kisa surede yeniden basladiginda tani raporlari (ozellikle ana
+     * thread kilitlenme yiginlari) silinmesin; 5 dosya tek bir arizada doluyordu.
+     */
+    private const val KEEP_REPORTS = 40
 
     /** Crash reports on disk, oldest first. */
     private fun reports(directory: File): List<File> =

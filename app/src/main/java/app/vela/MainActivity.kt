@@ -119,8 +119,22 @@ class MainActivity : ComponentActivity() {
         super.onPause()
         if (!ownsLauncherUi) return
         app.vela.diag.ProcessDiagnostics.activity("pause")
-        app.vela.util.FileLogger.i("MainActivity", "onPause - Uygulama arka plana geciyor")
+        app.vela.util.FileLogger.i("MainActivity", "onPause - Uygulama arka plana geciyor (${lifecycleDetail()})")
         CarIntegration.onPause(this)
+    }
+
+    /**
+     * Kapanma teshisi: ayni anda birden cok neden olusabiliyor (HOME yonlendirmesi,
+     * gorev kapatma, yon degisimi). Bu alanlar olmadan gunlukteki onPause/onStop
+     * satirlari birbirinden ayirt edilemiyordu.
+     */
+    private fun lifecycleDetail(): String = buildString {
+        append("task=").append(taskId)
+        append(", finishing=").append(isFinishing)
+        append(", configChange=").append(isChangingConfigurations)
+        append(", focus=").append(window?.decorView?.hasWindowFocus())
+        append(", pip=").append(isInPictureInPictureMode)
+        append(", state=").append(lifecycle.currentState.name)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -341,7 +355,7 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         if (!ownsLauncherUi) return
         app.vela.diag.ProcessDiagnostics.activity("stop", false)
-        app.vela.util.FileLogger.i("MainActivity", "onStop")
+        app.vela.util.FileLogger.i("MainActivity", "onStop (${lifecycleDetail()})")
         app.vela.ui.AppVisibility.foreground.value = false
         CarIntegration.onStop(this)
     }
@@ -354,7 +368,7 @@ class MainActivity : ComponentActivity() {
             app.vela.ui.AppLocale.onLocaleChanged = null
         }
         app.vela.diag.ProcessDiagnostics.activity("destroy finishing=$isFinishing configChange=$isChangingConfigurations task=$taskId")
-        app.vela.util.FileLogger.i("MainActivity", "onDestroy - Activity kapandi")
+        app.vela.util.FileLogger.i("MainActivity", "onDestroy - Activity kapandi (${lifecycleDetail()})")
     }
 
     /** Vela registers for `geo:` URIs and Google-Maps web links so it can be the

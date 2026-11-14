@@ -78,7 +78,9 @@ class VelaApp : Application(), coil.ImageLoaderFactory {
         app.vela.util.FileLogger.init(this)
         super.onCreate()
         app.vela.diag.ProcessDiagnostics.install(this)
-        if (BuildConfig.DIAGNOSTIC_BUILD && !app.vela.variant.CarIntegration.available)
+        // Arac teybi canary yapisi da logcat kaydeder: kapanma yalnizca orada yasanir ve
+        // kayit olmadan sistemin am_anr/am_kill satirlarini gormenin yolu yok.
+        if (BuildConfig.DIAGNOSTIC_BUILD || app.vela.variant.CarIntegration.available)
             app.vela.diag.LocalLogcatRecorder.start(this)
         if (!app.vela.util.ProcessIdentity.isMain(this)) {
             CrashCatcher.install(this) { emptyList() }
