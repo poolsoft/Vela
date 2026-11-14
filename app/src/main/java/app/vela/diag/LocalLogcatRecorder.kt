@@ -27,12 +27,25 @@ internal object LocalLogcatRecorder {
                 rotate()
                 var output = FileOutputStream(file)
                 var size = 0L
-                fun line(value: String) {
-                    val bytes = (value + "\n").toByteArray(Charsets.UTF_8)
+                // Her satirda flush etmek yavas depolamali teypte uygulamanin kendi
+                // gunlugunu de yavaslatiyordu; 8 KB / 1 saniye biriktirip yaziyoruz.
+                // Surec sertce oldurulse bile kuyruk logcat tamponunda kalir ve bir
+                // sonraki oturum `-T` ile geriye donuk okur.
+                val pending = StringBuilder()
+                var lastFlush = System.currentTimeMillis()
+                fun flushPending() {
+                    if (pending.isEmpty()) return
+                    val bytes = pending.toString().toByteArray(Charsets.UTF_8)
+                    pending.setLength(0)
                     if (size + bytes.size > 2 * 1024 * 1024) {
                         output.close(); rotate(); output = FileOutputStream(file); size = 0
                     }
                     output.write(bytes); output.flush(); size += bytes.size
+                    lastFlush = System.currentTimeMillis()
+                }
+                fun line(value: String) {
+                    pending.append(value).append('\n')
+                    if (pending.length >= 8192 || System.currentTimeMillis() - lastFlush >= 1000) flushPending()
                 }
                 try {
                     line("Vela logcat: pid=${android.os.Process.myPid()}, uid=${android.os.Process.myUid()}, time=${System.currentTimeMillis()}")
@@ -49,7 +62,9 @@ internal object LocalLogcatRecorder {
                         while (true) { val value = reader.readLine() ?: break; line(value) }
                     }
                     line("Logcat stopped: exit=${process!!.waitFor()}")
-                } finally { output.close() }
+                } finally {
+                    runCatching { flushPending(); output.close() }
+                }
             } catch (error: Exception) {
                 if (synchronized(this) { generation == session })
                     FileLogger.w("LocalLogcatRecorder", "Logcat capture unavailable: ${error.message}", error)

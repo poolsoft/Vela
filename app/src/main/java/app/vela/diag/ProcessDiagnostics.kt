@@ -26,8 +26,18 @@ object ProcessDiagnostics {
     @Volatile private var explicitlyClosed = false
     @Volatile private var heartbeat = SystemClock.uptimeMillis()
     private val heartbeatPending = java.util.concurrent.atomic.AtomicBoolean(false)
-    private var stallReported = false
-    private var lastStallReport = -60_000L
+    // Bagimsiz ana-looper sondasi: heartbeat ayni kuyrugu paylastigi icin mesgul bir
+    // cihazi kilitlenmeden ayirt edemez. Sonda yalnizca "ana looper bos bir isi son
+    // birkac saniyede calistirabildi mi" diye sorar ve sistem ANR ile sureci oldurmeden
+    // once yigini dosyaya yazar; boylece kanit kaybolmaz.
+    private val probePending = java.util.concurrent.atomic.AtomicBoolean(false)
+    @Volatile private var probePostedAt = 0L
+    private var lastProbeDump = -60_000L
+    // JVM birim testlerinde Looper yoktur; bu yuzden tembel ve null'a dayanikli.
+    private val mainThreadId: Long by lazy { Looper.getMainLooper()?.thread?.id ?: -1L }
+    private val clockTicksPerSecond = runCatching {
+        android.system.Os.sysconf(android.system.OsConstants._SC_CLK_TCK)
+    }.getOrDefault(100L).coerceAtLeast(1L)
     private var lastPersist = 0L
     private val recentStages = java.util.ArrayDeque<String>()
     private var writePending = false
@@ -51,6 +61,7 @@ object ProcessDiagnostics {
             }
             persist()
             tick.run()
+            probe.run()
         }
     }
 
@@ -137,6 +148,8 @@ object ProcessDiagnostics {
             put("availableMemoryBytes", memory.availMem)
             put("lowMemory", memory.lowMemory)
             put("mainHeartbeatAgeMs", SystemClock.uptimeMillis() - heartbeat)
+            put("mainThreadCpuMs", mainThreadCpuMs())
+            put("importance", importance())
         }
     }
 
@@ -181,28 +194,8 @@ object ProcessDiagnostics {
 
     private val tick = object : Runnable {
         override fun run() {
-            val age = SystemClock.uptimeMillis() - heartbeat
             val now = SystemClock.uptimeMillis()
-            val threshold = if (BuildConfig.DIAGNOSTIC_BUILD) 3_000 else 15_000
-            if (foreground && age >= threshold && !Debug.isDebuggerConnected() &&
-                now - lastStallReport >= (if (stallReported) 15_000 else 60_000)) {
-                lastStallReport = now
-                stallReported = true
-                runCatching {
-                    CrashCatcher.saveDiagnosticReport(context, "Main thread stall", buildString {
-                        append("Main thread has not answered for ").append(age).append(" ms. This is a watchdog observation, not a confirmed system ANR.\n")
-                        append(snapshot()).append("\n=== Main thread ===\n")
-                        Looper.getMainLooper().thread.stackTrace.forEach { append(it).append('\n') }
-                        append("=== Other threads (bounded) ===\n")
-                        Thread.getAllStackTraces().entries.take(40).forEach { (thread, frames) ->
-                            append(thread.name).append(" [").append(thread.state).append("]\n")
-                            frames.take(30).forEach { append("  ").append(it).append('\n') }
-                        }
-                    })
-                }
-            }
-            if (!foreground || age < threshold) stallReported = false
-            // One outstanding heartbeat avoids filling a stalled main-thread queue.
+            // Tek bekleyen heartbeat, kilitlenmis ana kuyrugu doldurmaz.
             if (heartbeatPending.compareAndSet(false, true)) main.post {
                 heartbeat = SystemClock.uptimeMillis()
                 heartbeatPending.set(false)
@@ -211,4 +204,67 @@ object ProcessDiagnostics {
             worker.postDelayed(this, if (BuildConfig.DIAGNOSTIC_BUILD) 1_000 else 5_000)
         }
     }
+
+    private val probe = object : Runnable {
+        override fun run() {
+            val now = SystemClock.uptimeMillis()
+            if (!probePending.get()) {
+                probePostedAt = now
+                probePending.set(true)
+                main.post { probePending.set(false) }
+            } else {
+                val age = now - probePostedAt
+                if (age >= PROBE_STALL_MS && now - lastProbeDump >= PROBE_COOLDOWN_MS) {
+                    lastProbeDump = now
+                    dumpMainThreadStall(age)
+                }
+            }
+            worker.postDelayed(this, PROBE_PERIOD_MS)
+        }
+    }
+
+    /**
+     * Ana thread yigini once vela_app.log'a yazilir: rapor dosyalari cihazda en fazla
+     * 40 tane tutulur ve kullanici yalnizca gunlugu kopyalasa bile yigin kaybolmaz.
+     */
+    private fun dumpMainThreadStall(ageMs: Long) {
+        val text = runCatching {
+            buildString {
+                append("Ana looper sondasi ").append(ageMs).append(" ms yanit vermedi.\n")
+                append("Ana thread CPU (toplam): ").append(mainThreadCpuMs()).append(" ms\n")
+                append(snapshot()).append('\n')
+                append("=== Main thread ===\n")
+                Looper.getMainLooper().thread.stackTrace?.forEach { append(it).append('\n') }
+                append("=== Threads (bounded) ===\n")
+                Thread.getAllStackTraces().entries.take(40).forEach { (thread, frames) ->
+                    append(thread.name).append(" [").append(thread.state).append("]\n")
+                    frames.take(20).forEach { append("  ").append(it).append('\n') }
+                }
+            }
+        }.getOrElse { "Ana looper sondasi $ageMs ms yanit vermedi; anlik goruntu alinamadi: $it" }
+        runCatching {
+            text.lineSequence().take(140).forEach { app.vela.util.FileLogger.e("MainThreadStall", it) }
+        }
+        runCatching { CrashCatcher.saveDiagnosticReport(context, "Main thread stall", text) }
+    }
+
+    /** /proc uzerinden ana thread'in toplam CPU suresi; -1 okunamadi demektir. */
+    private fun mainThreadCpuMs(): Long = runCatching {
+        val stat = File("/proc/self/task/$mainThreadId/stat").readText()
+        val fields = stat.substringAfter(") ").trim().split(' ')
+        if (fields.size < 13) return@runCatching -1L
+        val ticks = fields[11].toLong() + fields[12].toLong()
+        ticks * 1000L / clockTicksPerSecond
+    }.getOrDefault(-1L)
+
+    /** Sistemin bu surece verdigi onem: cached/background ise oldurulme riski yuksektir. */
+    private fun importance(): Int = runCatching {
+        val info = ActivityManager.RunningAppProcessInfo()
+        ActivityManager.getMyMemoryState(info)
+        info.importance
+    }.getOrDefault(-1)
+
+    private const val PROBE_PERIOD_MS = 1_000L
+    private const val PROBE_STALL_MS = 3_000L
+    private const val PROBE_COOLDOWN_MS = 20_000L
 }
