@@ -43,6 +43,8 @@ class MusicLibraryController(private val context: Context, private val root: Vie
     private val search: EditText = root.findViewById(R.id.search_input)
     private val header: View = root.findViewById(R.id.folder_header_container)
     private val title: TextView = root.findViewById(R.id.folder_header_title)
+    private val btnFolderShuffleAll: View? = root.findViewById(R.id.btn_folder_shuffle_all)
+    private val btnFolderAddQueue: View? = root.findViewById(R.id.btn_folder_add_queue)
     private val adapter = LibraryAdapter()
     private val viewPrefs = context.getSharedPreferences("vela_music_library_view", Context.MODE_PRIVATE)
     private var tab = runCatching { Tab.valueOf(viewPrefs.getString("tab", "TRACKS")!!) }.getOrDefault(Tab.TRACKS)
@@ -92,7 +94,8 @@ class MusicLibraryController(private val context: Context, private val root: Vie
             folder = null; playlistId = null; search.setText(""); render()
         }
         root.findViewById<View>(R.id.btn_folder_play_all).setOnClickListener { playGroup(false) }
-        root.findViewById<View>(R.id.btn_folder_shuffle_all).setOnClickListener { playGroup(true) }
+        btnFolderAddQueue?.setOnClickListener { addGroupToQueue() }
+        btnFolderShuffleAll?.setOnClickListener { playGroup(true) }
         root.findViewById<View>(R.id.tab_btn_menu).setOnClickListener { anchor -> libraryMenu(anchor) }
         scope.launch { repository.parcalar.collectLatest { tracks = it; invalidateSortedCache(); render() } }
         scope.launch { repository.taraniyorMu.collectLatest { render() } }
@@ -208,6 +211,7 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         }
         val inside = folder != null || playlistId != null
         header.visibility = if (inside) View.VISIBLE else View.GONE
+        btnFolderShuffleAll?.visibility = if (tab == Tab.PLAYLISTS) View.GONE else View.VISIBLE
         title.text = folder?.let { File(it).name.ifBlank { it } } ?: playlist()?.let(::name).orEmpty()
         val rows = mutableListOf<LibraryRow>()
         when {
@@ -228,9 +232,15 @@ class MusicLibraryController(private val context: Context, private val root: Vie
                     onClick = { createPlaylist() }
                 )
                 store.displayedPlaylists().filter { matches(name(it)) }.forEach { item ->
+                    val count = when (item.id) {
+                        MusicPlaylistStore.RECENTLY_ADDED -> tracks.size
+                        MusicPlaylistStore.MOST_PLAYED -> tracks.size.coerceAtMost(store.history.value.size)
+                        MusicPlaylistStore.RECENT -> store.history.value.size
+                        else -> item.trackKeys.size
+                    }
                     rows += LibraryRow(
                         name(item),
-                        context.getString(R.string.car_music_track_count, item.trackKeys.size),
+                        context.getString(R.string.car_music_track_count, count),
                         iconRes = R.drawable.ic_music_playlist,
                         showChevron = true,
                         onClick = { playlistId = item.id; search.setText(""); render() },
@@ -281,6 +291,13 @@ class MusicLibraryController(private val context: Context, private val root: Vie
         if (items.isEmpty()) return
         manager.setKarisikCal(shuffle)
         manager.oynatDahiliParca(if (shuffle) items.random() else items.first(), items)
+    }
+
+    private fun addGroupToQueue() {
+        val items = sourceTracks()
+        if (items.isEmpty()) return
+        manager.internalPlayer.kuyrugaEkle(items)
+        Toast.makeText(context, R.string.car_music_added_to_queue, Toast.LENGTH_SHORT).show()
     }
 
     private fun libraryMenu(anchor: View) {
