@@ -72,6 +72,7 @@ fun CarLauncherHostView(
     val dimLevel by CarLauncherSettings.geceKarartmaSeviyesi.collectAsState()
     val desktop by CarLauncherSettings.desktopModu.collectAsState()
     val dualCardSetting by CarLauncherSettings.dualCardModu.collectAsState()
+    val companionQueueSetting by CarLauncherSettings.companionQueueModu.collectAsState()
     val mapless by CarLauncherSettings.maplessMode.collectAsState()
     val maplessMain by CarLauncherSettings.maplessMainScreen.collectAsState()
     val visualizerType by CarLauncherSettings.gorsellestiriciTipi.collectAsState()
@@ -316,7 +317,7 @@ fun CarLauncherHostView(
             // Akilli Kuyruk Modu: Ekranda ayni anda buyuk muzik calar ve kucuk panel varsa kucuk panelde calisir.
             // mapless modda harita yerine buyuk player acildiginda (mapless && maplessMain == "music") veya
             // sag panelde buyuk player acildiginda (effectiveMode == "MUSIC") devreye girer.
-            val isLargePlayerOnScreen = (mapless && maplessMain == "music") || effectiveMode == "MUSIC"
+            val isLargePlayerOnScreen = companionQueueSetting && ((mapless && maplessMain == "music") || effectiveMode == "MUSIC")
             binding.unifiedHost?.setCompanionQueueMode(isLargePlayerOnScreen)
             binding.dualCardHost?.setCompanionQueueMode(isLargePlayerOnScreen)
 

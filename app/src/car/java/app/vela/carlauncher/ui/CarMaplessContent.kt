@@ -19,6 +19,8 @@ fun CarMaplessContent(onSettings: () -> Unit, onOpenMusic: () -> Unit = {}) {
     val state by telemetry.telemetriDurumu.collectAsStateWithLifecycle()
     val media by mediaManager.medyaDurumu.collectAsStateWithLifecycle()
     val screen by CarLauncherSettings.maplessScreen.collectAsState()
+    val maplessMain by CarLauncherSettings.maplessMainScreen.collectAsState()
+    val companionQueueEnabled by CarLauncherSettings.companionQueueModu.collectAsState()
     val settings by rememberUpdatedState(onSettings)
     Box(Modifier.fillMaxSize()) {
         when (screen) {
@@ -39,6 +41,8 @@ fun CarMaplessContent(onSettings: () -> Unit, onOpenMusic: () -> Unit = {}) {
                     modifier = Modifier.fillMaxSize(),
                     factory = { host.rootView },
                     update = {
+                        val isCompanionQueue = companionQueueEnabled && maplessMain == "music"
+                        host.setCompanionQueueMode(isCompanionQueue)
                         host.updateMedia(media)
                     }
                 )

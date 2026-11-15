@@ -50,6 +50,7 @@ object CarLauncherSettings {
     private const val KEY_STARTUP_SCREEN = "car_launcher_startup_screen"
     private const val KEY_WEATHER_ENABLED = "car_launcher_weather_enabled"
     private const val KEY_DUAL_CARD_MODE = "car_launcher_dual_card_mode"
+    private const val KEY_COMPANION_QUEUE = "car_launcher_companion_queue_mode"
     private const val KEY_EQUALIZER_APP = "car_launcher_equalizer_app"
 
     // Widget Gorunurluk Anahtarlari (CoMaps uyumlu)
@@ -155,6 +156,14 @@ object CarLauncherSettings {
 
     private val _dualCardModu = MutableStateFlow("auto") // auto, always, never
     val dualCardModu: StateFlow<String> = _dualCardModu.asStateFlow()
+
+    private val _companionQueueModu = MutableStateFlow(true)
+    val companionQueueModu: StateFlow<Boolean> = _companionQueueModu.asStateFlow()
+
+    fun setCompanionQueueModu(etkin: Boolean) {
+        _companionQueueModu.value = etkin
+        if (::prefs.isInitialized) prefs.edit().putBoolean(KEY_COMPANION_QUEUE, etkin).apply()
+    }
 
     private val _otomatikOynat = MutableStateFlow(false)
     val otomatikOynat: StateFlow<Boolean> = _otomatikOynat.asStateFlow()
@@ -275,6 +284,7 @@ object CarLauncherSettings {
             _panelGenislikYuzdesi.value = prefs.getFloat(KEY_PANEL_WIDTH_PERCENT, 0.35f)
             _panelYukseklikYuzdesi.value = prefs.getFloat(KEY_PANEL_HEIGHT_PERCENT, _panelGenislikYuzdesi.value).coerceIn(0.15f, 0.65f)
             _dualCardModu.value = prefs.getString(KEY_DUAL_CARD_MODE, "auto") ?: "auto"
+            _companionQueueModu.value = prefs.getBoolean(KEY_COMPANION_QUEUE, true)
             _otomatikOynat.value = prefs.getBoolean(KEY_AUTO_PLAY, false)
             val defaultMode = if (_otomatikOynat.value) "always" else "disabled"
             _muzikOtomatikOynatModu.value = prefs.getString(KEY_AUTO_PLAY_MODE, defaultMode) ?: defaultMode

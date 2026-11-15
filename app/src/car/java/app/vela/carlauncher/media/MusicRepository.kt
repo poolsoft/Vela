@@ -28,7 +28,7 @@ class MusicRepository private constructor(private val context: Context) {
 
     companion object {
         private const val TAG = "MusicRepository"
-        private val DESTEKLENEN_UZANTILAR = setOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "wma")
+        private val DESTEKLENEN_UZANTILAR = setOf("mp3", "mp4", "m4a")
 
         @Volatile
         private var instance: MusicRepository? = null
@@ -174,6 +174,8 @@ class MusicRepository private constructor(private val context: Context) {
                     while (cursor.moveToNext()) {
                         val path = cursor.getString(dataCol) ?: ""
                         if (path.isBlank()) continue
+                        val fileExt = File(path).extension.lowercase()
+                        if (fileExt !in DESTEKLENEN_UZANTILAR) continue
                         if (MusicScanFilter.excludes(path, flagged(ringtoneCol), flagged(alarmCol), flagged(notificationCol))) {
                             // Reserve excluded identities so direct scanning cannot bypass MediaStore flags.
                             val identity = musicFileIdentity(File(path))
@@ -183,9 +185,12 @@ class MusicRepository private constructor(private val context: Context) {
                         }
 
                         val id = cursor.getLong(idCol)
-                        val title = cursor.getString(titleCol) ?: File(path).nameWithoutExtension
-                        val artist = cursor.getString(artistCol) ?: "Bilinmeyen Sanatçı"
-                        val album = cursor.getString(albumCol) ?: "Bilinmeyen Albüm"
+                        val rawTitle = cursor.getString(titleCol) ?: File(path).nameWithoutExtension
+                        val rawArtist = cursor.getString(artistCol) ?: "Bilinmeyen Sanatçı"
+                        val rawAlbum = cursor.getString(albumCol) ?: "Bilinmeyen Albüm"
+                        val title = rawTitle.trim()
+                        val artist = rawArtist.trim()
+                        val album = rawAlbum.trim()
                         val duration = cursor.getLong(durationCol)
                         val dateAdded = cursor.getLong(dateCol)
                         val folderPath = File(path).parent ?: ""
@@ -355,9 +360,9 @@ class MusicRepository private constructor(private val context: Context) {
     }
 
     private fun dosyadanParcaUret(file: File, retriever: MediaMetadataRetriever, sanalId: Long): SesParcasi {
-        var title = file.nameWithoutExtension
+        var title = file.nameWithoutExtension.trim()
         var artist = "Bilinmeyen Sanatçı"
-        var album = file.parentFile?.name ?: "Bilinmeyen Albüm"
+        var album = (file.parentFile?.name ?: "Bilinmeyen Albüm").trim()
         var duration = 0L
 
         runCatching {
@@ -368,17 +373,17 @@ class MusicRepository private constructor(private val context: Context) {
             val metaAlbum = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
             val metaDuration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
 
-            if (!metaTitle.isNullOrBlank()) title = metaTitle
-            if (!metaArtist.isNullOrBlank()) artist = metaArtist
-            if (!metaAlbum.isNullOrBlank()) album = metaAlbum
+            if (!metaTitle.isNullOrBlank()) title = metaTitle.trim()
+            if (!metaArtist.isNullOrBlank()) artist = metaArtist.trim()
+            if (!metaAlbum.isNullOrBlank()) album = metaAlbum.trim()
             if (!metaDuration.isNullOrBlank()) duration = metaDuration.toLongOrNull() ?: 0L
         }
 
         return SesParcasi(
             id = sanalId,
-            baslik = title,
-            sanatci = artist,
-            album = album,
+            baslik = title.trim(),
+            sanatci = artist.trim(),
+            album = album.trim(),
             sureMs = duration,
             dosyaYolu = file.absolutePath,
             albumArtUri = null,
@@ -421,7 +426,8 @@ class MusicRepository private constructor(private val context: Context) {
                 if (i % 128 == 0) app.vela.diag.ProcessDiagnostics.checkpoint("music cache: restoring entry $i/${array.length()}")
                 val obj = array.getJSONObject(i)
                 val dosyaYolu = obj.optString("dosyaYolu", "")
-                if (dosyaYolu.isNotBlank() && !MusicScanFilter.excludes(dosyaYolu)) {
+                val ext = File(dosyaYolu).extension.lowercase()
+                if (dosyaYolu.isNotBlank() && ext in DESTEKLENEN_UZANTILAR && !MusicScanFilter.excludes(dosyaYolu)) {
                     val f = File(dosyaYolu)
                     val available = if (isUsbYolu(dosyaYolu)) {
                         val checkStarted = System.nanoTime()

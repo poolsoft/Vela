@@ -809,6 +809,7 @@ private fun CarMusicSettingsScreen(
     val buyukGorsellestirici by CarLauncherSettings.largeVisualizer.collectAsState()
     val visualizerFps by CarLauncherSettings.visualizerFps.collectAsState()
     val ambiyans by CarLauncherSettings.ambiyansGorsellestirici.collectAsState()
+    val companionQueue by CarLauncherSettings.companionQueueModu.collectAsState()
     val otomatikOynatModu by CarLauncherSettings.muzikOtomatikOynatModu.collectAsState()
     val otomatikOynatZamanAsimi by CarLauncherSettings.muzikOtomatikOynatZamanAsimiDk.collectAsState()
 
@@ -886,8 +887,16 @@ private fun CarMusicSettingsScreen(
                     detail = "Cihaz ve USB bellekteki yeni MP3/FLAC dosyalarını indeksler",
                     actionText = "Tara",
                     onClick = {
+                        app.vela.carlauncher.media.MusicRepository.muzikleriTara(context, zorla = true)
                         android.widget.Toast.makeText(context, "Müzikler taranıyor...", android.widget.Toast.LENGTH_SHORT).show()
                     }
+                )
+                GroupDivider()
+                ToggleRow(
+                    label = "Çift Panelde Çalma Sırası Göster",
+                    hint = "Büyük oynatıcı ve küçük müzik paneli aynı anda ekrandayken, küçük panelde parça kontrolleri yerine çalma sırasını (kuyruk) listeler",
+                    checked = companionQueue,
+                    onCheckedChange = { CarLauncherSettings.setCompanionQueueModu(it) }
                 )
             }
 
