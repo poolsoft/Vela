@@ -259,17 +259,21 @@ class CarDualCardPanelHost(
                 ) { list, current ->
                     Pair(list, current)
                 }.collect { (list, current) ->
-                    queueAdapter?.submitList(list)
-                    queueAdapter?.setCurrentPlayingKey(current?.libraryKey())
+                    val playingKey = current?.libraryKey()
                     if (list.isEmpty()) {
+                        queueAdapter?.updateQueue(list, playingKey)
                         queueEmptyText?.visibility = View.VISIBLE
                         queueRecycler?.visibility = View.GONE
                     } else {
                         queueEmptyText?.visibility = View.GONE
                         queueRecycler?.visibility = View.VISIBLE
-                        val currentIdx = list.indexOfFirst { it.libraryKey() == current?.libraryKey() }
-                        if (currentIdx >= 0) {
-                            queueRecycler?.scrollToPosition(currentIdx)
+                        val currentIdx = list.indexOfFirst { it.libraryKey() == playingKey }
+                        queueAdapter?.updateQueue(list, playingKey) {
+                            if (currentIdx >= 0) {
+                                queueRecycler?.post {
+                                    queueRecycler?.scrollToPosition(currentIdx)
+                                }
+                            }
                         }
                     }
                 }

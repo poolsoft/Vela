@@ -18,14 +18,21 @@ class MiniQueueAdapter(
 
     private var currentPlayingKey: String? = null
 
+    fun updateQueue(list: List<SesParcasi>, key: String?, onDone: (() -> Unit)? = null) {
+        val keyChanged = currentPlayingKey != key
+        currentPlayingKey = key
+        submitList(ArrayList(list)) {
+            if (keyChanged) {
+                notifyDataSetChanged()
+            }
+            onDone?.invoke()
+        }
+    }
+
     fun setCurrentPlayingKey(key: String?) {
         if (currentPlayingKey != key) {
-            val oldKey = currentPlayingKey
             currentPlayingKey = key
-            val oldIdx = currentList.indexOfFirst { it.libraryKey() == oldKey }
-            val newIdx = currentList.indexOfFirst { it.libraryKey() == key }
-            if (oldIdx >= 0) notifyItemChanged(oldIdx)
-            if (newIdx >= 0) notifyItemChanged(newIdx)
+            notifyDataSetChanged()
         }
     }
 
