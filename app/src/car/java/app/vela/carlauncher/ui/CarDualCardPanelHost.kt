@@ -168,6 +168,10 @@ class CarDualCardPanelHost(
             if (m.caliyorMu) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
         )
 
+        if (isCompanionQueueMode && m.baslik.isNotBlank() && m.baslik != "Müzik Çalınmıyor") {
+            queueAdapter?.updatePlaying(null, m.baslik)
+        }
+
         if (!isCompanionQueueMode) {
             if (m.toplamSureMs > 0) {
                 val progress = ((m.anlikKonumMs.coerceIn(0, m.toplamSureMs).toDouble() / m.toplamSureMs) * 1000).toInt()
@@ -243,6 +247,7 @@ class CarDualCardPanelHost(
         if (queueAdapter == null) {
             val mm = app.vela.carlauncher.media.MusicManager.getInstance(context)
             queueAdapter = MiniQueueAdapter { track ->
+                queueAdapter?.updatePlaying(track.libraryKey(), track.baslik)
                 mm.playQueueTrack(track)
             }
             queueRecycler?.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
@@ -255,20 +260,25 @@ class CarDualCardPanelHost(
             s.launch {
                 kotlinx.coroutines.flow.combine(
                     mm.internalPlayer.kuyruk,
-                    mm.internalPlayer.anlikParca
-                ) { list, current ->
-                    Pair(list, current)
-                }.collect { (list, current) ->
+                    mm.internalPlayer.anlikParca,
+                    mm.medyaDurumu
+                ) { list, current, media ->
+                    Triple(list, current, media)
+                }.collect { (list, current, media) ->
                     val playingKey = current?.libraryKey()
+                    val playingTitle = current?.baslik?.ifBlank { null } ?: media.baslik.ifBlank { null }
                     if (list.isEmpty()) {
-                        queueAdapter?.updateQueue(list, playingKey)
+                        queueAdapter?.updateQueue(list, playingKey, playingTitle)
                         queueEmptyText?.visibility = View.VISIBLE
                         queueRecycler?.visibility = View.GONE
                     } else {
                         queueEmptyText?.visibility = View.GONE
                         queueRecycler?.visibility = View.VISIBLE
-                        val currentIdx = list.indexOfFirst { it.libraryKey() == playingKey }
-                        queueAdapter?.updateQueue(list, playingKey) {
+                        val currentIdx = list.indexOfFirst {
+                            (playingKey != null && it.libraryKey() == playingKey) ||
+                                (playingTitle != null && it.baslik.isNotBlank() && it.baslik.trim().equals(playingTitle.trim(), ignoreCase = true))
+                        }
+                        queueAdapter?.updateQueue(list, playingKey, playingTitle) {
                             if (currentIdx >= 0) {
                                 queueRecycler?.post {
                                     queueRecycler?.scrollToPosition(currentIdx)

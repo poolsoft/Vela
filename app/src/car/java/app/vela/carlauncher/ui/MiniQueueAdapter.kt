@@ -5,8 +5,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.recyclerview.widget.DiffUtil
-import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import app.vela.R
 import app.vela.carlauncher.media.libraryKey
@@ -14,27 +12,33 @@ import app.vela.carlauncher.model.SesParcasi
 
 class MiniQueueAdapter(
     private val onItemClick: (SesParcasi) -> Unit
-) : ListAdapter<SesParcasi, MiniQueueAdapter.ViewHolder>(DiffCallback) {
+) : RecyclerView.Adapter<MiniQueueAdapter.ViewHolder>() {
 
+    private var items: List<SesParcasi> = emptyList()
     private var currentPlayingKey: String? = null
+    private var currentPlayingTitle: String? = null
 
-    fun updateQueue(list: List<SesParcasi>, key: String?, onDone: (() -> Unit)? = null) {
-        val keyChanged = currentPlayingKey != key
+    fun updateQueue(list: List<SesParcasi>, key: String?, title: String? = null, onDone: (() -> Unit)? = null) {
+        items = list
         currentPlayingKey = key
-        submitList(ArrayList(list)) {
-            if (keyChanged) {
-                notifyDataSetChanged()
-            }
-            onDone?.invoke()
+        currentPlayingTitle = title
+        notifyDataSetChanged()
+        onDone?.invoke()
+    }
+
+    fun updatePlaying(key: String?, title: String? = null) {
+        if (currentPlayingKey != key || currentPlayingTitle != title) {
+            currentPlayingKey = key
+            currentPlayingTitle = title
+            notifyDataSetChanged()
         }
     }
 
     fun setCurrentPlayingKey(key: String?) {
-        if (currentPlayingKey != key) {
-            currentPlayingKey = key
-            notifyDataSetChanged()
-        }
+        updatePlaying(key, currentPlayingTitle)
     }
+
+    override fun getItemCount(): Int = items.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val view = LayoutInflater.from(parent.context).inflate(R.layout.item_mini_queue_track, parent, false)
@@ -42,8 +46,12 @@ class MiniQueueAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val item = getItem(position)
-        val isPlaying = item.libraryKey() == currentPlayingKey
+        val item = items[position]
+        val isMatchKey = currentPlayingKey != null && item.libraryKey() == currentPlayingKey
+        val isMatchTitle = !currentPlayingTitle.isNullOrBlank() &&
+            item.baslik.isNotBlank() &&
+            item.baslik.trim().equals(currentPlayingTitle!!.trim(), ignoreCase = true)
+        val isPlaying = isMatchKey || isMatchTitle
         holder.bind(item, position + 1, isPlaying)
     }
 
@@ -90,13 +98,5 @@ class MiniQueueAdapter(
             val sec = totalSec % 60
             return String.format("%d:%02d", min, sec)
         }
-    }
-
-    private object DiffCallback : DiffUtil.ItemCallback<SesParcasi>() {
-        override fun areItemsTheSame(oldItem: SesParcasi, newItem: SesParcasi): Boolean =
-            oldItem.libraryKey() == newItem.libraryKey()
-
-        override fun areContentsTheSame(oldItem: SesParcasi, newItem: SesParcasi): Boolean =
-            oldItem == newItem
     }
 }
