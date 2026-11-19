@@ -83,6 +83,18 @@ class CarDualCardPanelHost(
         cardTelemetry.setOnClickListener { onDashboardAc() }
         cardMusic.setOnClickListener { onMuzikPaneliAc() }
 
+        rootView.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
+            if (r - l != or - ol || b - t != ob - ot) {
+                val density = context.resources.displayMetrics.density
+                val w = (r - l) / density
+                val qTitleSize = (13f + (w - 200f) * 0.02f).coerceIn(12f, 18f)
+                val qSubSize = (10f + (w - 200f) * 0.015f).coerceIn(10f, 15f)
+                val qIndexSize = (11f + (w - 200f) * 0.015f).coerceIn(11f, 16f)
+                val qDurationSize = (10f + (w - 200f) * 0.015f).coerceIn(10f, 15f)
+                queueAdapter?.setTextSizes(qTitleSize, qSubSize, qIndexSize, qDurationSize)
+            }
+        }
+
         btnPlay.setOnClickListener { onOynatDuraklat() }
         btnNext.setOnClickListener { onSonraki() }
         btnPrev.setOnClickListener { onOnceki() }
@@ -274,17 +286,7 @@ class CarDualCardPanelHost(
                     } else {
                         queueEmptyText?.visibility = View.GONE
                         queueRecycler?.visibility = View.VISIBLE
-                        val currentIdx = list.indexOfFirst {
-                            (playingKey != null && it.libraryKey() == playingKey) ||
-                                (playingTitle != null && it.baslik.isNotBlank() && it.baslik.trim().equals(playingTitle.trim(), ignoreCase = true))
-                        }
-                        queueAdapter?.updateQueue(list, playingKey, playingTitle) {
-                            if (currentIdx >= 0) {
-                                queueRecycler?.post {
-                                    queueRecycler?.scrollToPosition(currentIdx)
-                                }
-                            }
-                        }
+                        queueAdapter?.updateQueue(list, playingKey, playingTitle)
                     }
                 }
             }

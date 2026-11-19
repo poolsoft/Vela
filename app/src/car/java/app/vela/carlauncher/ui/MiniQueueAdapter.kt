@@ -17,6 +17,20 @@ class MiniQueueAdapter(
     private var items: List<SesParcasi> = emptyList()
     private var currentPlayingKey: String? = null
     private var currentPlayingTitle: String? = null
+    private var titleTextSizeSp: Float = 14f
+    private var subtitleTextSizeSp: Float = 11f
+    private var indexTextSizeSp: Float = 12f
+    private var durationTextSizeSp: Float = 11f
+
+    fun setTextSizes(titleSp: Float, subtitleSp: Float, indexSp: Float = 12f, durationSp: Float = 11f) {
+        if (titleTextSizeSp != titleSp || subtitleTextSizeSp != subtitleSp || indexTextSizeSp != indexSp || durationTextSizeSp != durationSp) {
+            titleTextSizeSp = titleSp
+            subtitleTextSizeSp = subtitleSp
+            indexTextSizeSp = indexSp
+            durationTextSizeSp = durationSp
+            notifyDataSetChanged()
+        }
+    }
 
     fun updateQueue(list: List<SesParcasi>, key: String?, title: String? = null, onDone: (() -> Unit)? = null) {
         items = list
@@ -52,7 +66,7 @@ class MiniQueueAdapter(
             item.baslik.isNotBlank() &&
             item.baslik.trim().equals(currentPlayingTitle!!.trim(), ignoreCase = true)
         val isPlaying = isMatchKey || isMatchTitle
-        holder.bind(item, position + 1, isPlaying)
+        holder.bind(item, position + 1, isPlaying, titleTextSizeSp, subtitleTextSizeSp, indexTextSizeSp, durationTextSizeSp)
     }
 
     class ViewHolder(
@@ -73,8 +87,21 @@ class MiniQueueAdapter(
             }
         }
 
-        fun bind(item: SesParcasi, displayIndex: Int, isPlaying: Boolean) {
+        fun bind(
+            item: SesParcasi,
+            displayIndex: Int,
+            isPlaying: Boolean,
+            titleSp: Float,
+            subtitleSp: Float,
+            indexSp: Float,
+            durationSp: Float
+        ) {
             currentItem = item
+            titleText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, titleSp)
+            artistText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, subtitleSp)
+            indexText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, indexSp)
+            durationText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, durationSp)
+
             titleText.text = if (item.baslik.isNotBlank()) item.baslik else "Bilinmeyen Parça"
             artistText.text = if (item.sanatci.isNotBlank()) item.sanatci else "Bilinmeyen Sanatçı"
             durationText.text = formatDuration(item.sureMs)

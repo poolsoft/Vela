@@ -317,17 +317,7 @@ class CarUnifiedPanelHost(
                     } else {
                         queueEmptyText?.visibility = View.GONE
                         queueRecycler?.visibility = View.VISIBLE
-                        val currentIdx = list.indexOfFirst {
-                            (playingKey != null && it.libraryKey() == playingKey) ||
-                                (playingTitle != null && it.baslik.isNotBlank() && it.baslik.trim().equals(playingTitle.trim(), ignoreCase = true))
-                        }
-                        queueAdapter?.updateQueue(list, playingKey, playingTitle) {
-                            if (currentIdx >= 0) {
-                                queueRecycler?.post {
-                                    queueRecycler?.scrollToPosition(currentIdx)
-                                }
-                            }
-                        }
+                        queueAdapter?.updateQueue(list, playingKey, playingTitle)
                     }
                 }
             }
@@ -359,6 +349,14 @@ class CarUnifiedPanelHost(
         }
         trackTitle?.textSize = if (w < 240) 16f else 18f
         trackArtist?.textSize = if (w < 240) 12f else 14f
+
+        val queueHeader = rootView.findViewById<TextView>(R.id.music_queue_header)
+        val qTitleSize = (13f + (w - 200f) * 0.02f).coerceIn(12f, 18f)
+        val qSubSize = (10f + (w - 200f) * 0.015f).coerceIn(10f, 15f)
+        val qIndexSize = (11f + (w - 200f) * 0.015f).coerceIn(11f, 16f)
+        val qDurationSize = (10f + (w - 200f) * 0.015f).coerceIn(10f, 15f)
+        queueHeader?.textSize = (11f + (w - 200f) * 0.015f).coerceIn(11f, 16f)
+        queueAdapter?.setTextSizes(qTitleSize, qSubSize, qIndexSize, qDurationSize)
     }
 
     private fun setupViews() {
