@@ -111,6 +111,7 @@ class CarMusicPlayerHost(
         if (width <= 0 || height <= 0 || (lastPlayerSize == (width to height) && lastDockPercent == dockPercent)) return
         lastPlayerSize = width to height
         lastDockPercent = dockPercent
+        val resizeStarted = android.os.SystemClock.elapsedRealtime()
         val density = context.resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
         val dockWidth = dockSidebarWidth(dockPercent, density)
@@ -169,6 +170,8 @@ class CarMusicPlayerHost(
             applyTo(center)
         }
         resizePlaybackButtons(rootView.findViewById<View>(R.id.playback_controls_layout).width)
+        app.vela.diag.ProcessDiagnostics.checkpoint(
+            "layout: player resize ms=${android.os.SystemClock.elapsedRealtime() - resizeStarted}")
     }
 
     private var lastPlaybackSize = 0
@@ -537,6 +540,13 @@ class CarMusicPlayerHost(
             if (saniye < 10) append('0')
             append(saniye)
         }.toString()
+    }
+
+    /** Gecici ayirma: kaynaklar yasamaya devam eder, sadece gorsel yakalama durur. */
+    fun detach() {
+        sourceDialog?.dismiss()
+        sourceDialog = null
+        playerVisualizer?.setPlaying(false)
     }
 
     fun release() {

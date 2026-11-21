@@ -207,7 +207,9 @@ fun CarLauncherHostView(
             )
             binding.dockHost?.setMusicPanelVisible(hasMusicPanelOnScreen)
             if (panelReady && binding.contentMode != effectiveMode) {
-                binding.releasePanel(keepUnified = effectiveMode == "CLOCK" ||
+                val panelSwitchStarted = android.os.SystemClock.elapsedRealtime()
+                app.vela.diag.ProcessDiagnostics.checkpoint("panel: leave ${binding.contentMode ?: "none"}")
+                binding.detachPanel(keepUnified = effectiveMode == "CLOCK" ||
                     (binding.contentMode == "CLOCK" && effectiveMode == "UNIFIED"))
                 binding.contentMode = effectiveMode
                 when (effectiveMode) {
@@ -233,14 +235,16 @@ fun CarLauncherHostView(
                         }.also { panel.addView(it) }
                     }
                     "MUSIC" -> {
-                        binding.musicHost = CarMusicPlayerHost(
+                        val music = binding.musicHost ?: CarMusicPlayerHost(
                             root.context, { latestPanel("UNIFIED") },
                             { latestPlay() }, { latestPrevious() }, { latestNext() }, { latestScan() }, { latestVisualizerPermission() }
-                        ).also { panel.addView(it.rootView) }
+                        ).also { binding.musicHost = it }
+                        if (music.rootView.parent == null) panel.addView(music.rootView)
                     }
                     "NEON_DASHBOARD" -> {
-                        binding.dashboardHost = CarDashboardHost(root.context) { latestPanel("UNIFIED") }
-                            .also { panel.addView(it.rootView) }
+                        val dashboard = binding.dashboardHost ?: CarDashboardHost(root.context) { latestPanel("UNIFIED") }
+                            .also { binding.dashboardHost = it }
+                        if (dashboard.rootView.parent == null) panel.addView(dashboard.rootView)
                     }
                     "ANTENNA" -> {
                         binding.panelCompose = ComposeView(root.context).apply {
@@ -261,9 +265,10 @@ fun CarLauncherHostView(
                         }.also { panel.addView(it) }
                     }
                     "APP_DRAWER" -> {
-                        binding.drawerHost = CarAppDrawerHost(
+                        val drawer = binding.drawerHost ?: CarAppDrawerHost(
                             root.context, { latestPanel("UNIFIED") }, { latestLaunch(it.paketAdi) }
-                        ).also { panel.addView(it.rootView) }
+                        ).also { binding.drawerHost = it }
+                        if (drawer.rootView.parent == null) panel.addView(drawer.rootView)
                     }
                     "CLOCK" -> {
                         val clock = binding.unifiedHost ?: CarUnifiedPanelHost(
@@ -273,7 +278,8 @@ fun CarLauncherHostView(
                             { latestSettings() }
                         ).also { binding.unifiedHost = it }
                         // Keep the real player alive above the retained map, with no duplicate clock.
-                        map.addView(clock.rootView, FrameLayout.LayoutParams(-1, -1))
+                        if (clock.rootView.parent == null)
+                            map.addView(clock.rootView, FrameLayout.LayoutParams(-1, -1))
                         binding.panelCompose = ComposeView(root.context).apply {
                             setParentCompositionContext(parentComposition)
                             setContent {
@@ -291,7 +297,8 @@ fun CarLauncherHostView(
                             { latestPanel("MUSIC") }, { latestPanel("NEON_DASHBOARD") },
                             { latestSettings() }
                         ).also { binding.dualCardHost = it }
-                        panel.addView(dual.rootView, FrameLayout.LayoutParams(-1, -1))
+                        if (dual.rootView.parent == null)
+                            panel.addView(dual.rootView, FrameLayout.LayoutParams(-1, -1))
                     }
                     else -> {
                         val clock = binding.unifiedHost ?: CarUnifiedPanelHost(
@@ -300,9 +307,12 @@ fun CarLauncherHostView(
                             { latestPanel("MUSIC") }, { latestPanel("NEON_DASHBOARD") },
                             { latestSettings() }
                         ).also { binding.unifiedHost = it }
-                        panel.addView(clock.rootView, FrameLayout.LayoutParams(-1, -1))
+                        if (clock.rootView.parent == null)
+                            panel.addView(clock.rootView, FrameLayout.LayoutParams(-1, -1))
                     }
                 }
+                app.vela.diag.ProcessDiagnostics.checkpoint(
+                    "panel: enter $effectiveMode ms=${android.os.SystemClock.elapsedRealtime() - panelSwitchStarted}")
             }
             binding.setMapContentVisible(effectiveMode != "CLOCK")
             binding.musicHost?.updateVisualizerType(largeVisualizer, visualizerFps)
@@ -377,6 +387,29 @@ private class LauncherHostBinding(
 
     fun applyLayout() {
         if (!released) manager.applyLayout(isWidgetPanelOpen = !fullScreenMap)
+    }
+
+    /**
+     * Mod degisiminde host'lari ayir, serbest birakma: buyuk oyuncu XML'ini
+     * her acilista yeniden inflate etmek yavas teypte ana thread'i olcumde
+     * bloke ediyordu. Host'lar tam kapanista releasePanel ile serbest birakilir.
+     */
+    fun detachPanel(keepUnified: Boolean = false) {
+        musicHost?.detach()
+        dualCardHost?.detach()
+        musicHost?.rootView?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        dashboardHost?.rootView?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        drawerHost?.rootView?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        unifiedHost?.rootView?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        dualCardHost?.rootView?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
+        panelCompose?.disposeComposition()
+        panelCompose = null
+        if (!keepUnified) {
+            unifiedHost?.release()
+            unifiedHost = null
+        }
+        panel.removeAllViews()
+        panel.setBackgroundResource(R.drawable.bg_panel_rounded)
     }
 
     fun releasePanel(keepUnified: Boolean = false) {

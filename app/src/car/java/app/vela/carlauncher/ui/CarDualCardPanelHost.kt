@@ -220,6 +220,11 @@ class CarDualCardPanelHost(
         }
     }
 
+    /** Gecici ayirma: host yasamaya devam eder, sadece gorsel yakalama durur. */
+    fun detach() {
+        musicVisualizer.setPlaying(false)
+    }
+
     fun release() {
         queueJob?.cancel()
         queueJob = null

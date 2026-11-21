@@ -6,6 +6,10 @@
 # persisted nav state.
 -keepnames class app.vela.core.model.** { *; }
 
+# Head-unit watchdog stacks must name the measured car UI class so a layout
+# stall can be located without a local mapping file.
+-keepnames class app.vela.carlauncher.ui.**
+
 # sherpa-onnx neural-TTS runtime (vendored AAR). Its JNI resolves the Kotlin config classes AND
 # their fields by their ORIGINAL fully-qualified names (FindClass / GetFieldID) at OfflineTts init.
 # R8 renaming/stripping them makes the native side throw ClassNotFoundError and SIGABRT the process
