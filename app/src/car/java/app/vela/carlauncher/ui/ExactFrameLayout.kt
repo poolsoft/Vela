@@ -41,6 +41,7 @@ class ExactFrameLayout @JvmOverloads constructor(
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val started = android.os.SystemClock.elapsedRealtime()
         val widthMode = MeasureSpec.getMode(widthMeasureSpec)
         val heightMode = MeasureSpec.getMode(heightMeasureSpec)
         val widthSize = MeasureSpec.getSize(widthMeasureSpec)
@@ -59,5 +60,9 @@ class ExactFrameLayout @JvmOverloads constructor(
         }
 
         super.onMeasure(exactWidth, exactHeight)
+        val elapsed = android.os.SystemClock.elapsedRealtime() - started
+        if (elapsed >= 50L)
+            app.vela.diag.ProcessDiagnostics.checkpoint(
+                "layout: exact measure ${elapsed}ms ${widthSize}x${heightSize}")
     }
 }
