@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
+import app.vela.util.FileLogger
 import java.io.File
 
 /**
@@ -31,6 +32,8 @@ class XyAutoMusicAdapter(
         override fun onReceive(ctx: Context?, intent: Intent?) {
             if (intent == null) return
             val action = intent.action ?: return
+            FileLogger.d("XyAutoMusic",
+                "action=$action keys=${intent.extras?.keySet()?.sorted()?.joinToString(",") ?: "-"}")
 
             when (action) {
                 "update.widget.playbtnstate" -> {

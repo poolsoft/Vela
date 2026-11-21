@@ -3,6 +3,7 @@ package app.vela.carlauncher.media
 import android.content.Context
 import android.media.AudioManager
 import android.media.session.MediaController
+import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -151,7 +152,7 @@ class MusicManager private constructor(private val context: Context) : InternalM
             val key = sourceKey(adapter)
             val linked = sourcePackage(adapter)?.let { pkg -> controllers.firstOrNull { it.packageName == pkg } }
             val state = linked?.playbackState?.state
-            add(SmartFocusPolicy.Source(key, if (linked != null) state == android.media.session.PlaybackState.STATE_PLAYING else adapter.caliyorMu(),
+            add(SmartFocusPolicy.Source(key, if (linked != null && state != null) state == PlaybackState.STATE_PLAYING else adapter.caliyorMu(),
                 isSourceTrackingEnabled(key) && (adapter !is app.vela.carlauncher.media.adapters.HeadUnitRadioAdapter || linked?.playbackState != null), adapter === internalAdapter || adapter.aktifMi() || linked != null,
                 (adapter === internalAdapter && internalPlayer.isPreparing) ||
                     state == android.media.session.PlaybackState.STATE_BUFFERING || state == android.media.session.PlaybackState.STATE_CONNECTING,
@@ -305,33 +306,89 @@ class MusicManager private constructor(private val context: Context) : InternalM
     }
 
     /** One owner for source changes, including a player still preparing asynchronously. */
+    private data class PendingHandoff(
+        val previous: String,
+        val target: String,
+        val packageName: String?,
+        val adapter: BaseMediaAdapter?,
+        val action: HandoffAction,
+    )
+
+    private var pendingHandoff: PendingHandoff? = null
+    private val handoffConfirmation = Runnable { confirmHandoff() }
+
+    /**
+     * Eski sahibin "caliyor" oldugunu kanitlamak gerekmez: OEM oynaticilari
+     * MediaSession state yayinlamayabilir. Sahip biliniyorsa pause gonderilir,
+     * durdurulamayan kaynak kullaniciya bildirilir. Boylece iki player ayni
+     * anda calmaz.
+     */
     private fun releaseOwnerFor(target: String) {
         playbackOwnership.start(target, sourceKey(selectedAdapter)) { previous ->
-            if (previous == "internal") {
-                // Includes asynchronous preparation and a pending transient-focus resume.
-                internalPlayer.duraklat()
-            } else {
-                val adapter = when (previous) {
-                    "bluetooth" -> bluetoothAdapter
-                    "xy_music" -> xyAutoAdapter
-                    "hcn_music" -> hcnMusicAdapter
-                    "hcn_radio" -> hcnRadioAdapter
-                    "xy_radio" -> xyRadioAdapter
-                    else -> null
-                }
-                val pkg = if (previous.startsWith("session:")) previous.removePrefix("session:")
-                    else adapter?.let { sourcePackage(it) }
-                val controller = controllers.firstOrNull { it.packageName == pkg }
-                if (controller != null && controller.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING) {
-                    val actions = controller.playbackState?.actions ?: 0L
-                    if ((actions and (android.media.session.PlaybackState.ACTION_PAUSE or
-                            android.media.session.PlaybackState.ACTION_PLAY_PAUSE)) != 0L) controller.transportControls.pause()
-                    else _sourceStatus.value = context.getString(app.vela.R.string.car_source_conflict)
-                } else if (adapter?.caliyorMu() == true) adapter.duraklat()
-                else if (adapter is app.vela.carlauncher.media.adapters.HeadUnitRadioAdapter && adapter.manuallyRequested)
+            val adapter = when (previous) {
+                "bluetooth" -> bluetoothAdapter
+                "xy_music" -> xyAutoAdapter
+                "hcn_music" -> hcnMusicAdapter
+                "hcn_radio" -> hcnRadioAdapter
+                "xy_radio" -> xyRadioAdapter
+                else -> null
+            }
+            val pkg = if (previous.startsWith("session:")) previous.removePrefix("session:")
+                else adapter?.let { sourcePackage(it) }
+            val controller = controllers.firstOrNull { it.packageName == pkg }
+            val state = controller?.playbackState?.state
+            val actions = controller?.playbackState?.actions ?: 0L
+            val canPause = (actions and (PlaybackState.ACTION_PAUSE or
+                PlaybackState.ACTION_PLAY_PAUSE)) != 0L
+            val radio = adapter as? app.vela.carlauncher.media.adapters.HeadUnitRadioAdapter
+            val action = SourceHandoff.decide(
+                previous = previous,
+                target = target,
+                controllerCanPause = canPause,
+                hasAdapter = adapter != null,
+                isRadio = radio != null,
+                radioManuallyRequested = radio?.manuallyRequested == true,
+            )
+            app.vela.util.FileLogger.i(TAG,
+                "Handoff $previous -> $target action=$action state=$state pkg=$pkg")
+            when (action) {
+                HandoffAction.NONE -> Unit
+                HandoffAction.PAUSE_INTERNAL ->
+                    // Includes asynchronous preparation and a pending transient-focus resume.
+                    internalPlayer.duraklat()
+                HandoffAction.PAUSE_CONTROLLER -> controller?.transportControls?.pause()
+                HandoffAction.PAUSE_ADAPTER -> adapter?.duraklat()
+                HandoffAction.WARN_CONFLICT ->
                     _sourceStatus.value = context.getString(app.vela.R.string.car_source_conflict)
             }
+            if (action == HandoffAction.PAUSE_CONTROLLER || action == HandoffAction.PAUSE_ADAPTER) {
+                pendingHandoff = PendingHandoff(previous, target, pkg, adapter, action)
+                anaHandler.removeCallbacks(handoffConfirmation)
+                anaHandler.postDelayed(handoffConfirmation, 700L)
+            }
         }
+    }
+
+    /** Bir kez dogrula: eski kaynak hala duyuluyorsa uyar ve son bir pause dene. */
+    private fun confirmHandoff() {
+        val pending = pendingHandoff ?: return
+        pendingHandoff = null
+        val controller = controllers.firstOrNull { it.packageName == pending.packageName }
+        val stillPlaying = controller?.playbackState?.state == PlaybackState.STATE_PLAYING ||
+            pending.adapter?.caliyorMu() == true
+        if (!stillPlaying) {
+            app.vela.util.FileLogger.i(TAG,
+                "Handoff confirmed ${pending.previous} -> ${pending.target}")
+            return
+        }
+        app.vela.util.FileLogger.w(TAG,
+            "Handoff not confirmed ${pending.previous} -> ${pending.target}; retrying pause")
+        when (pending.action) {
+            HandoffAction.PAUSE_CONTROLLER -> controller?.transportControls?.pause()
+            HandoffAction.PAUSE_ADAPTER -> pending.adapter?.duraklat()
+            else -> Unit
+        }
+        _sourceStatus.value = context.getString(app.vela.R.string.car_source_conflict)
     }
 
     private fun requestSmartFocus(source: BaseMediaAdapter) {
