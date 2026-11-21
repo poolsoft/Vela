@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.os.Build
 import app.vela.carlauncher.hardware.CarHardwareManager
+import app.vela.util.FileLogger
 
 /** Incoming phone audio on a head unit; an outgoing A2DP route is not a player. */
 class UniversalBluetoothAdapter(
@@ -28,7 +29,10 @@ class UniversalBluetoothAdapter(
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
             if (intent == null) return
-            when (intent.action) {
+            val action = intent.action ?: return
+            FileLogger.d("BluetoothSource",
+                "action=$action keys=${intent.extras?.keySet()?.sorted()?.joinToString(",") ?: "-"}")
+            when (action) {
                 android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED -> {
                     val state = intent.getStringExtra(android.telephony.TelephonyManager.EXTRA_STATE)
                     phoneCall = state != null && state != android.telephony.TelephonyManager.EXTRA_STATE_IDLE
